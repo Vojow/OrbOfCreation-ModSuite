@@ -250,11 +250,12 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
           if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            tools/check-release-policy.sh pull-request "${PR_BASE_SHA}" "${GITHUB_SHA}"
+            tools/check-release-policy.sh pull-request "${PR_BASE_SHA}" "${GITHUB_SHA}" "${PR_TITLE}"
           elif [[ -n "${PUSH_BEFORE_SHA}" && "${PUSH_BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
             tools/check-release-policy.sh push "${PUSH_BEFORE_SHA}" "${GITHUB_SHA}"
           else

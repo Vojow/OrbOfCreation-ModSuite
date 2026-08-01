@@ -41,22 +41,12 @@ jobs:
       - name: Resolve beta or full release
         id: publication
         shell: bash
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
           source tools/release-common.sh
           version="$(read_released_version VERSION)"
-          version_consistency_check "${GITHUB_WORKSPACE}" "${version}"
-
-          previous_version=""
-          if git cat-file -e "${BEFORE_SHA}:VERSION" 2>/dev/null; then
-            previous_version="$(read_released_version_at_revision "${GITHUB_WORKSPACE}" "${BEFORE_SHA}")"
-          fi
-
-          kind="beta"
-          if [[ -n "${previous_version}" && "${previous_version}" != "${version}" ]]; then
-            kind="release"
+          kind="$(publication_kind "${GITHUB_WORKSPACE}" "${version}")"
+          if [[ "${kind}" == "release" ]]; then
             tag="$(release_tag_for_version "${version}")"
             section="$(extract_changelog_section CHANGELOG.md "${version}")"
             heading="${section%%$'\n'*}"
@@ -338,15 +328,20 @@ jobs:
             printf '%s\n' "${section}" | sed '1d' >"${notes_path}"
           else
             pulls_path="${RUNNER_TEMP}/associated-pulls.json"
-            gh api \
-              -H "Accept: application/vnd.github+json" \
-              "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" >"${pulls_path}"
-            pull_body="$(
-              jq -r --arg sha "${GITHUB_SHA}" \
-                '[.[] | select(.merged_at != null)] |
-                 (map(select(.merge_commit_sha == $sha)) + .) | first | .body // empty' \
-                "${pulls_path}"
-            )"
+            pull_body=""
+            if gh api \
+                -H "Accept: application/vnd.github+json" \
+                "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+                >"${pulls_path}"; then
+              pull_body="$(
+                jq -r --arg sha "${GITHUB_SHA}" \
+                  '[.[] | select(.merged_at != null)] |
+                   (map(select(.merge_commit_sha == $sha)) + .) | first | .body // empty' \
+                  "${pulls_path}" 2>/dev/null || true
+              )"
+            else
+              echo "Associated-PR lookup failed; using the merge commit message." >&2
+            fi
             if [[ -n "${pull_body//[[:space:]]/}" ]]; then
               printf '%s\n' "${pull_body}" >"${notes_path}"
             else

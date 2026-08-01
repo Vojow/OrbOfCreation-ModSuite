@@ -8,10 +8,6 @@ validate_stable_release_version() {
     validate_release_version "$1" && [[ "$1" != *-* && "$1" != *+* ]]
 }
 
-numeric_version() {
-    printf '%s\n' "${1%%[-+]*}"
-}
-
 read_released_version() {
     local version_path="$1"
     if [[ ! -f "${version_path}" ]]; then
@@ -55,34 +51,91 @@ release_tag_for_version() {
     printf 'suite-v%s\n' "${version}"
 }
 
+stable_version_is_greater() {
+    local candidate="$1"
+    local baseline="$2"
+    if ! validate_stable_release_version "${candidate}" ||
+        ! validate_stable_release_version "${baseline}"; then
+        return 1
+    fi
+
+    local candidate_major candidate_minor candidate_patch
+    local baseline_major baseline_minor baseline_patch
+    IFS=. read -r candidate_major candidate_minor candidate_patch <<<"${candidate}"
+    IFS=. read -r baseline_major baseline_minor baseline_patch <<<"${baseline}"
+    if ((candidate_major != baseline_major)); then
+        ((candidate_major > baseline_major))
+        return
+    fi
+    if ((candidate_minor != baseline_minor)); then
+        ((candidate_minor > baseline_minor))
+        return
+    fi
+    ((candidate_patch > baseline_patch))
+}
+
+newest_stable_release_version() {
+    local repository_root="$1"
+    local newest=""
+    local tag
+    while IFS= read -r tag; do
+        [[ -n "${tag}" ]] || continue
+        local version="${tag#suite-v}"
+        if ! validate_stable_release_version "${version}"; then
+            continue
+        fi
+        if [[ -z "${newest}" ]] || stable_version_is_greater "${version}" "${newest}"; then
+            newest="${version}"
+        fi
+    done < <(git -C "${repository_root}" tag --list 'suite-v*')
+
+    if [[ -z "${newest}" ]]; then
+        echo "repository contains no stable suite-v tag" >&2
+        return 1
+    fi
+    printf '%s\n' "${newest}"
+}
+
+publication_kind() {
+    local repository_root="$1"
+    local version="$2"
+    local release_tag
+    release_tag="$(release_tag_for_version "${version}")" || return 1
+    if git -C "${repository_root}" show-ref --verify --quiet "refs/tags/${release_tag}"; then
+        printf 'beta\n'
+    else
+        printf 'release\n'
+    fi
+}
+
 derive_beta_tag() {
     local repository_root="$1"
     local version="$2"
     local revision="$3"
-    local release_tag
-    release_tag="$(release_tag_for_version "${version}")" || return 1
+    local beta_prefix
+    beta_prefix="$(release_tag_for_version "${version}")" || return 1
 
     local description
     description="$(
-        git -C "${repository_root}" describe --long --match "${release_tag}" "${revision}"
+        git -C "${repository_root}" describe --tags --long \
+            --match 'suite-v*' --exclude '*+main.*' --exclude 'suite-v*-*' \
+            "${revision}"
     )" || {
-        echo "could not describe ${revision} from ${release_tag}" >&2
+        echo "could not describe ${revision} from an existing stable suite-v tag" >&2
         return 1
     }
-    local prefix="${release_tag}-"
-    if [[ "${description}" != "${prefix}"* ]]; then
-        echo "unexpected git describe result for ${release_tag}: ${description}" >&2
-        return 1
-    fi
-    local suffix="${description#${prefix}}"
-    local commit_count="${suffix%%-*}"
-    local abbreviated_commit="${suffix#*-}"
+    local abbreviated_commit="${description##*-}"
+    local tag_and_count="${description%-*}"
+    local commit_count="${tag_and_count##*-}"
+    local described_tag="${tag_and_count%-*}"
+    local described_version="${described_tag#suite-v}"
     if [[ ! "${commit_count}" =~ ^[0-9]+$ ||
-        ! "${abbreviated_commit}" =~ ^g[0-9a-f]+$ ]]; then
-        echo "unexpected git describe result for ${release_tag}: ${description}" >&2
+        ! "${abbreviated_commit}" =~ ^g[0-9a-f]+$ ]] ||
+        ! validate_stable_release_version "${described_version}"; then
+        echo "unexpected stable git describe result: ${description}" >&2
         return 1
     fi
-    printf '%s+main.%s\n' "${release_tag}" "${commit_count}"
+    printf '%s+main.%s\n' "${beta_prefix}" "${commit_count}"
 }
 
 extract_changelog_section() {
@@ -115,114 +168,6 @@ assert_no_unreleased_changelog() {
         echo "${changelog_path} must not contain an Unreleased section" >&2
         return 1
     fi
-}
-
-read_xml_value() {
-    local element="$1"
-    local path="$2"
-    local value
-    value="$(sed -n "s:.*<${element}>\\([^<]*\\)</${element}>.*:\\1:p" "${path}")" ||
-        return 1
-    if [[ -z "${value}" || "${value}" == *$'\n'* ]]; then
-        return 1
-    fi
-    printf '%s\n' "${value}"
-}
-
-read_plugin_constant() {
-    local constant_name="$1"
-    local path="$2"
-    local value
-    value="$(
-        sed -n \
-            "s/.*public const string ${constant_name} = \"\\([^\"]*\\)\";.*/\\1/p" \
-            "${path}"
-    )" || return 1
-    if [[ -z "${value}" || "${value}" == *$'\n'* ]]; then
-        return 1
-    fi
-    printf '%s\n' "${value}"
-}
-
-check_version_value() {
-    local label="$1"
-    local actual="$2"
-    local expected="$3"
-    if [[ "${actual}" == "${expected}" ]]; then
-        return 0
-    fi
-    echo "${label} is '${actual}', expected '${expected}'" >&2
-    return 1
-}
-
-version_consistency_check() {
-    local root="$1"
-    local expected="$2"
-    local expected_numeric
-    expected_numeric="$(numeric_version "${expected}")"
-    local expected_assembly="${expected_numeric}.0"
-    local failed=0
-    local actual
-
-    if ! actual="$(read_released_version "${root}/VERSION")"; then
-        failed=1
-    elif ! check_version_value "VERSION" "${actual}" "${expected}"; then
-        failed=1
-    fi
-
-    if ! actual="$(read_xml_value SuiteVersion "${root}/Directory.Build.props")"; then
-        echo "could not read one SuiteVersion from Directory.Build.props" >&2
-        failed=1
-    elif ! check_version_value "Directory.Build.props SuiteVersion" "${actual}" "${expected}"; then
-        failed=1
-    fi
-
-    if ! actual="$(read_xml_value Version "${root}/src/OrbModSuite.csproj")"; then
-        echo "could not read one Version from src/OrbModSuite.csproj" >&2
-        failed=1
-    elif ! check_version_value "src/OrbModSuite.csproj Version" "${actual}" "${expected}"; then
-        failed=1
-    fi
-
-    if ! actual="$(read_xml_value InformationalVersion "${root}/src/OrbModSuite.csproj")"; then
-        echo "could not read one InformationalVersion from src/OrbModSuite.csproj" >&2
-        failed=1
-    elif ! check_version_value \
-        "src/OrbModSuite.csproj InformationalVersion" "${actual}" "${expected}"; then
-        failed=1
-    fi
-
-    if ! actual="$(read_xml_value AssemblyVersion "${root}/src/OrbModSuite.csproj")"; then
-        echo "could not read one AssemblyVersion from src/OrbModSuite.csproj" >&2
-        failed=1
-    elif ! check_version_value \
-        "src/OrbModSuite.csproj AssemblyVersion" "${actual}" "${expected_assembly}"; then
-        failed=1
-    fi
-
-    if ! actual="$(read_xml_value FileVersion "${root}/src/OrbModSuite.csproj")"; then
-        echo "could not read one FileVersion from src/OrbModSuite.csproj" >&2
-        failed=1
-    elif ! check_version_value \
-        "src/OrbModSuite.csproj FileVersion" "${actual}" "${expected_assembly}"; then
-        failed=1
-    fi
-
-    if ! actual="$(read_plugin_constant ReleaseVersion "${root}/src/Common/PluginIds.cs")"; then
-        echo "could not read PluginIds.ReleaseVersion" >&2
-        failed=1
-    elif ! check_version_value "PluginIds.ReleaseVersion" "${actual}" "${expected}"; then
-        failed=1
-    fi
-
-    if ! actual="$(read_plugin_constant Version "${root}/src/Common/PluginIds.cs")"; then
-        echo "could not read PluginIds.Version" >&2
-        failed=1
-    elif ! check_version_value "PluginIds.Version" "${actual}" "${expected_numeric}"; then
-        failed=1
-    fi
-
-    return "${failed}"
 }
 
 sha256_file() {
