@@ -154,12 +154,33 @@ jobs:
       - name: Reject proprietary or generated artifacts
         shell: pwsh
         run: |
+          $allowedGameRefs = @(
+            'lib/game-refs/v1.0.5/0Harmony.dll',
+            'lib/game-refs/v1.0.5/Assembly-CSharp-firstpass.dll',
+            'lib/game-refs/v1.0.5/Assembly-CSharp.dll',
+            'lib/game-refs/v1.0.5/BepInEx.dll',
+            'lib/game-refs/v1.0.5/Unity.TextMeshPro.dll',
+            'lib/game-refs/v1.0.5/UnityEngine.CoreModule.dll',
+            'lib/game-refs/v1.0.5/UnityEngine.UI.dll',
+            'lib/game-refs/v1.0.5/UnityEngine.UIModule.dll',
+            'lib/game-refs/v1.0.5/UnityEngine.dll',
+            'lib/game-refs/v1.0.5/manifest.json'
+          )
           $forbidden = git ls-files | Where-Object {
             $_ -match '(^|/)(bin|obj|bin-stubs|obj-stubs|bin-profile|obj-profile|bin-profile-stubs|obj-profile-stubs)/' -or
-            $_ -match '\.(dll|exe|pdb|sav|pfx|p12|pem|key)$'
+            ($_ -match '\.(dll|exe|pdb|sav|pfx|p12|pem|key)$' -and $_ -notin $allowedGameRefs)
           }
           if ($forbidden) {
             $forbidden | ForEach-Object { Write-Error "Forbidden tracked artifact: $_" }
+            exit 1
+          }
+
+          $trackedGameRefs = @(git ls-files 'lib/game-refs/**')
+          $gameRefDelta = Compare-Object $allowedGameRefs $trackedGameRefs
+          if ($gameRefDelta) {
+            $gameRefDelta | ForEach-Object {
+              Write-Error "Checked-in game-reference set mismatch: $($_.SideIndicator) $($_.InputObject)"
+            }
             exit 1
           }
 
