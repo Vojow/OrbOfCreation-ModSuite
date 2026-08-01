@@ -18,10 +18,7 @@ for command_name in dotnet env grep cp mkdir awk; do
 done
 
 version="$(read_released_version "${repository_root}/VERSION")"
-if ! version_consistency_check "${repository_root}" "${version}"; then
-    echo "Release asset versions are inconsistent with VERSION=${version}." >&2
-    exit 1
-fi
+echo "Building publication assets for VERSION=${version}."
 
 output_directory="$1"
 mkdir -p "${output_directory}"

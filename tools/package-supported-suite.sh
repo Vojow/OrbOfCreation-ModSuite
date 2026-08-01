@@ -5,6 +5,8 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output_directory="${repository_root}/artifacts/releases"
 game_root="${OOC_GAME_DIR:-${repository_root}/lib}"
 checked_in_references="${repository_root}/lib/game-refs/v1.0.5"
+# shellcheck source=release-common.sh
+source "${repository_root}/tools/release-common.sh"
 
 if [[ "$#" -ne 0 ]]; then
     echo "Usage: ./script/package" >&2
@@ -67,66 +69,7 @@ for required_reference in \
     fi
 done
 
-read_project_version() {
-    local project_path="$1"
-    local version
-    version="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "${project_path}")"
-    if [[ -z "${version}" || "${version}" == *$'\n'* ]]; then
-        echo "Could not read one project version from ${project_path}." >&2
-        exit 1
-    fi
-    printf '%s' "${version}"
-}
-
-read_suite_version() {
-    local version
-    version="$(sed -n 's:.*<SuiteVersion>\([^<]*\)</SuiteVersion>.*:\1:p' \
-        "${repository_root}/Directory.Build.props")"
-    if [[ -z "${version}" || "${version}" == *$'\n'* ]]; then
-        echo "Could not read one SuiteVersion from Directory.Build.props." >&2
-        exit 1
-    fi
-    printf '%s' "${version}"
-}
-
-read_plugin_version() {
-    local constant_name="$1"
-    local version
-    version="$(sed -n "s/.*public const string ${constant_name} = \"\([^\"]*\)\";.*/\1/p" \
-        "${repository_root}/src/Common/PluginIds.cs")"
-    if [[ -z "${version}" || "${version}" == *$'\n'* ]]; then
-        echo "Could not read PluginIds.${constant_name}." >&2
-        exit 1
-    fi
-    printf '%s' "${version}"
-}
-
-assert_version() {
-    local component="$1"
-    local project_version="$2"
-    local plugin_version="$3"
-    if [[ "${project_version}" != "${plugin_version}" ]]; then
-        echo "${component} version mismatch: project=${project_version}, PluginIds=${plugin_version}" >&2
-        exit 1
-    fi
-}
-
-suite_project_version="$(read_project_version "${repository_root}/src/OrbModSuite.csproj")"
-suite_version="$(read_suite_version)"
-suite_numeric_version="${suite_project_version%%[-+]*}"
-assert_version "Orb Of Creation ModSuite release" \
-    "${suite_project_version}" "$(read_plugin_version ReleaseVersion)"
-assert_version "Orb Of Creation ModSuite loader" \
-    "${suite_numeric_version}" "$(read_plugin_version Version)"
-
-# The archive is named from SuiteVersion, the assembly informational version and user-visible
-# surfaces carry the csproj Version, and BepInEx receives the numeric core through PluginIds.Version
-# because BepInEx 5 parses it as System.Version.
-if [[ "${suite_version}" != "${suite_project_version}" ]]; then
-    echo "Package version mismatch: Directory.Build.props SuiteVersion=${suite_version}," >&2
-    echo "src/OrbModSuite.csproj Version=${suite_project_version}." >&2
-    exit 1
-fi
+suite_version="$(read_released_version "${repository_root}/VERSION")"
 
 package_name="OrbOfCreation-ModSuite-${suite_version}"
 zip_path="${output_directory}/${package_name}.zip"

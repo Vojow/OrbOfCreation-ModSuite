@@ -1,6 +1,6 @@
 namespace OrbModding.Common;
 
-public static class PluginIds
+public static partial class PluginIds
 {
     public const string Author = "Vojow";
 
@@ -13,8 +13,4 @@ public static class PluginIds
 
     public const string SuiteName = "Orb Of Creation ModSuite";
 
-    // BepInEx 5 parses this with System.Version, which cannot carry a SemVer prerelease suffix.
-    public const string Version = "0.5.0";
-
-    public const string ReleaseVersion = "0.5.0";
 }

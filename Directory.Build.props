@@ -12,7 +12,7 @@
     <Authors>Vojow</Authors>
     <RepositoryUrl>https://github.com/Vojow/OrbOfCreation-ModSuite</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <SuiteVersion>0.5.0</SuiteVersion>
+    <SuiteVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</SuiteVersion>
     <GameRoot>$(OOC_GAME_DIR)</GameRoot>
     <WindowsManagedDir>$(GameRoot)/Orb Of Creation_Data/Managed</WindowsManagedDir>
     <MacAppManagedDir>$(GameRoot)/Contents/Resources/Data/Managed</MacAppManagedDir>
