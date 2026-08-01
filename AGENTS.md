@@ -1,41 +1,42 @@
 # Orb Of Creation ModSuite agent guidance
 
-BepInEx 5 mods for Orb Of Creation. Preserve native game progression, action
-queues, saves, and player control. Fail closed when a game contract is unknown.
+BepInEx 5 mods for Orb Of Creation. Preserve native progression, action queues,
+saves, and player control; fail closed when a game contract is unknown.
 
-## Hard rules
+## Boundaries
 
-- Never install DLLs into the game, create tags, publish releases, or push
-  unless the user explicitly asks for that action.
-- Nested `AGENTS.md` files apply to their subtrees (`src/`, `tools/`).
-
-## Runtime invariants
-
+- Never install DLLs into the game, edit an active save, create tags, publish a
+  release, or push unless the user explicitly asks for that action.
 - Unity objects and game APIs stay on the Unity main thread.
-- Never edit an active save file.
 - Identity is stable UUID plus expected native type; names are diagnostics only.
-- The game stays authoritative for availability, quantity, queue room, and
-  completion; revalidate native state immediately before mutating it. Cost is
-  the one exception: the suite computes it, which is why an unaudited game build
-  refuses to load.
-- Scene, save-load, reset, and NG+ transitions invalidate cached native
-  references.
+- The game owns identity, structure, and transaction execution. The suite owns
+  only audited math and policy. Revalidate mutable native facts at the action
+  boundary and verify every mutation's postcondition.
+- Scene, save-load, reset, and NG+ transitions invalidate native references.
+- One capability has one GameAction; features, tooling, and tests use that same
+  mutation boundary.
+
+## Change discipline
+
+- Follow [the engineering doctrine](docs/development/engineering-doctrine.md).
+- Keep changes focused and leave unrelated work untouched.
+- Update maintained behavior documentation with behavior changes. Plans contain
+  open work only; delete a plan when nothing remains open.
+- Nested `AGENTS.md` files add rules for their subtrees.
 
 ## Verification
 
-- `./script/test` runs the complete portable gate (hard 60-second limit).
-- `dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStubs=true`
-  runs the portable tests directly.
-- Only report a test as passing if it ran against the current working tree.
+- `./script/test` is the complete portable and profile gate, with a hard
+  60-second limit per attempt.
+- Native-boundary changes also run installed-game contracts against the audited
+  game copy, after the portable gate and never in parallel with it.
+- Reconcile test, contract, exemption, entity, and compiler-warning counts; an
+  unexplained delta is a failure, not a new baseline.
+- Report a gate as passing only when it ran against the current working tree.
 
-## House rules
+## References
 
-- Keep pre-existing and unrelated changes out of your task.
-- Update behavior documentation alongside behavior changes. Change project
-  versions only when the task calls for it.
-
-## Reference docs (read when relevant, not before every task)
-
-- Plans and lifecycle status: `docs/plans/README.md`
-- Testing hub and runtime validation gates: `docs/testing/README.md`
+- Development workflow: `CONTRIBUTING.md`
+- Testing and runtime validation: `docs/testing/README.md`
+- Native boundary: `docs/runtime-architecture/game-boundary-doctrine.md`
 - Runtime architecture: `docs/runtime-architecture/README.md`

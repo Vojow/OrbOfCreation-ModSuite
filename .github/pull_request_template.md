@@ -1,15 +1,32 @@
-## Summary
+## Why?
 
-- What changed and why?
+- What problem does this solve, and why is this the right scope?
 
-## Validation
+## How?
 
-- [ ] Portable tests pass with `UseGameStubs=true`.
-- [ ] Real-game assembly contracts pass, or the change does not affect them.
-- [ ] Runtime behavior was tested with a backed-up save when required.
-- [ ] Public configuration or installation changes are documented.
-- [ ] No game binaries, saves, local configuration, or unredacted personal data are included.
+- What changed?
+- Which gates ran, and how did their test, contract, exemption, entity, and
+  warning counts compare with `develop`?
 
-## Runtime evidence
+## Decisions
 
-Describe the game, BepInEx, and plugin versions plus the scenarios tested. Write `Not required` for documentation-only changes.
+<!-- Delete this section when the change makes no durable design ruling. -->
+
+- What ruling should later work preserve, and which alternative was rejected?
+
+## Callouts
+
+<!-- Delete this section when reviewers need no special evidence or warning. -->
+
+- What deserves focused review, runtime evidence, or follow-up?
+
+## Review checklist
+
+- [ ] Portable and profile tests pass.
+- [ ] Installed-game contracts pass, or the change cannot affect native
+      boundaries.
+- [ ] Required runtime behavior was observed with a backed-up save.
+- [ ] Behavior, configuration, installation, and release documentation changed
+      with the product.
+- [ ] No game binaries, saves, local configuration, credentials, user paths, or
+      unredacted personal data are included.

@@ -1,37 +1,67 @@
 # Contributing
 
-Thanks for helping improve OrbOfCreation-ModSuite. This is an unofficial modding project built against the Windows Mono version of Orb of Creation.
+Thanks for helping improve OrbOfCreation-ModSuite. This is an unofficial BepInEx
+5 project for the Windows Mono build of Orb of Creation.
 
-## Before opening a change
+## Branches and scope
 
-- Search existing issues and pull requests.
-- Keep each pull request focused on one feature or fix.
-- For behavior changes, describe the player-visible effect, safety implications, and runtime validation performed.
-- Never commit Orb of Creation assemblies, BepInEx binaries, save files, local configuration, decompiler output, or other proprietary game assets.
-- Remove usernames, email addresses, local paths, and unrelated save data from logs before attaching them.
+`develop` is the integration branch. Open small, focused pull requests against
+`develop`; `main` carries released versions. Release work follows both the
+[release procedure](docs/releasing.md) and the
+[release review checklist](docs/development/releases.md).
 
-## Development setup
+Keep each pull request to one coherent change. Commit subjects use a lowercase
+area prefix followed by an imperative summary, for example `autoharvest: validate
+prerequisites`, `ui: repair native navigation`, `build: isolate outputs`, or
+`docs: remove retired guidance`.
 
-Follow the [development setup](docs/development/setup.md) for local prerequisites and portable tests. Work that depends on real game state must also follow the [runtime validation protocol](docs/testing/runtime-validation.md).
+Do not commit game assemblies, BepInEx binaries, save files, local configuration,
+decompiler output, credentials, user-specific paths, or other proprietary game
+assets. Sanitize logs before attaching them.
 
-The test-stub build writes to `bin-stubs/` and `obj-stubs/`; deployable game builds write to the normal `bin/` directory. Never install a stub-linked DLL into BepInEx. Maintainers should use the documented [release process](docs/development/releases.md).
+## Engineering rules
 
-## Runtime testing
-
-- Back up the save directory.
-- Test one automatic buyer at a time.
-- Begin risky tests with a narrow UUID allowlist or harmless spell loadout.
-- Include the game, Unity, BepInEx, and plugin versions in reports.
-- Convert reproducible bugs into portable tests or sanitized fixtures whenever possible.
+Read the [engineering doctrine](docs/development/engineering-doctrine.md) and the
+[game-boundary doctrine](docs/runtime-architecture/game-boundary-doctrine.md)
+before changing runtime behavior. Preserve the game's progression, queues, saves,
+and player control. Convert a live defect into a portable red-green regression
+whenever its contract can be represented faithfully.
 
 ## Pull requests
 
-A pull request should include:
+Use the release PR #101 shape:
 
-- a concise summary and motivation;
-- tests added or updated;
-- automated test output;
-- runtime evidence when the behavior depends on Unity or native game state;
-- documentation changes for public configuration or installation behavior.
+- `Why?` — the problem, user impact, and why this scope is the right unit;
+- `How?` — the implementation and verification approach;
+- `Decisions` — durable rulings and rejected alternatives that future work must
+  not re-derive;
+- `Callouts` — reviewer attention, runtime evidence, limitations, or follow-up
+  work that materially affects review.
 
-By contributing, you confirm that you have the right to submit the contribution under the repository's license.
+Omit `Decisions` or `Callouts` when there is nothing meaningful to say. Include
+the exact commands and reconciled counts from the current tree.
+
+## Required gate
+
+Run these lanes serially; do not overlap builds or test processes:
+
+```bash
+ORB_TEST_ATTEMPTS=1 ./script/test
+OOC_GAME_DIR=/path/to/audited/game dotnet test \
+  tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj \
+  --configuration Release
+```
+
+The first command runs ordinary portable tests, the isolated profile tests, and
+the profiled trace-tool build. The second verifies the audited assembly pair and
+every installed native contract. Reconcile ordinary, profile, installed,
+manifest-schema, contract, source-exemption, known-entity, and compiler-warning
+counts with the target branch; explain every delta.
+
+Portable success proves behavior against the source-only stubs, not Unity or the
+installed game. Follow the [runtime validation protocol](docs/testing/runtime-validation.md)
+for behavior that depends on native state, UI, Harmony, save/load, or player
+control. Never install a stub-linked DLL.
+
+By contributing, you confirm that you have the right to submit the contribution
+under the repository's license.
