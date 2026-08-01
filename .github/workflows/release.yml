@@ -1,0 +1,182 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'suite-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  portable-tests:
+    name: Portable tests
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up pinned .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.302
+
+      - name: Restore locked portable dependencies
+        run: dotnet restore tests/OrbModding.Tests/OrbModding.Tests.csproj --locked-mode -p:UseGameStubs=true
+
+      - name: Restore locked profiling dependencies
+        run: >-
+          dotnet restore tests/OrbModding.ProfileTests/OrbModding.ProfileTests.csproj
+          --locked-mode -p:UseGameStubs=true -p:EnableServiceCycleProfiler=true
+
+      - name: Restore locked contract-test dependencies
+        run: dotnet restore tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj --locked-mode -p:UseGameStubs=true
+
+      - name: Run fast game-independent tests
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Fast -NoRestore
+
+      - name: Run compile-time profiling tests
+        run: >-
+          dotnet test tests/OrbModding.ProfileTests/OrbModding.ProfileTests.csproj
+          --configuration Release --no-restore -p:UseGameStubs=true -p:EnableServiceCycleProfiler=true
+          --results-directory artifacts/test-results/profile
+          --logger "trx;LogFileName=profile.trx"
+
+      - name: Run external-process repository contracts
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane ExternalProcess -NoBuild -NoRestore
+
+      - name: Audit native contract manifest and reflection declarations
+        run: >-
+          dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj
+          --configuration Release --no-restore -p:UseGameStubs=true
+          --results-directory artifacts/test-results/contracts
+          --logger "trx;LogFileName=portable-contracts.trx"
+
+      - name: Retain portable test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-portable-test-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/test-results
+          if-no-files-found: warn
+          retention-days: 30
+
+  publish:
+    name: Rebuild and publish canonical artifact
+    needs: portable-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out annotated tag
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up pinned .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.302
+
+      - name: Read expected DLL SHA-256 from annotated tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(git cat-file -t "${GITHUB_REF_NAME}")" != "tag" ]]; then
+            echo "${GITHUB_REF_NAME} is not an annotated tag." >&2
+            exit 1
+          fi
+          source tools/release-common.sh
+          annotation="$(git for-each-ref --format='%(contents)' "refs/tags/${GITHUB_REF_NAME}")"
+          expected_sha="$(extract_release_dll_sha "${annotation}")"
+          echo "expected_sha=${expected_sha}" >>"${GITHUB_OUTPUT}"
+          echo "Annotated tag expects OrbModSuite.dll SHA-256: ${expected_sha}"
+
+      - name: Restore canonical checked-in-reference build
+        run: >-
+          env -u OOC_GAME_DIR dotnet restore src/OrbModSuite.csproj
+          --force-evaluate --disable-build-servers -p:EnableServiceCycleProfiler=false
+
+      - name: Build canonical checked-in-reference artifact
+        run: >-
+          env -u OOC_GAME_DIR dotnet build src/OrbModSuite.csproj
+          --configuration Release --no-restore --disable-build-servers
+          -m:1 --no-incremental -p:EnableServiceCycleProfiler=false
+
+      - name: Verify rebuilt DLL against annotated tag
+        id: dll
+        shell: bash
+        run: |
+          set -euo pipefail
+          dll_path="src/bin/Release/netstandard2.1/OrbModSuite.dll"
+          actual_sha="$(sha256sum "${dll_path}" | awk '{print $1}')"
+          if [[ "${actual_sha}" != "${{ steps.tag.outputs.expected_sha }}" ]]; then
+            echo "Canonical DLL SHA-256 mismatch: expected ${{ steps.tag.outputs.expected_sha }}, actual ${actual_sha}." >&2
+            exit 1
+          fi
+          echo "sha256=${actual_sha}" >>"${GITHUB_OUTPUT}"
+          echo "OrbModSuite.dll SHA-256: ${actual_sha}"
+          printf '### Canonical release DLL\n\n`OrbModSuite.dll` SHA-256: `%s`\n' "${actual_sha}" >>"${GITHUB_STEP_SUMMARY}"
+
+      # Installed-game contracts require the full audited assemblies. tools/release.sh enforces
+      # that private pre-tag gate; this workflow deliberately does not claim to repeat it.
+      - name: Package canonical artifact through the supported path
+        env:
+          ORB_PACKAGE_REFERENCE_ONLY: 'true'
+        run: ./script/package
+
+      - name: Recheck packaged build and prepare release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/release-common.sh
+          version="${GITHUB_REF_NAME#suite-v}"
+          if ! validate_release_version "${version}"; then
+            echo "Tag version '${version}' is not valid SemVer." >&2
+            exit 1
+          fi
+          packaged_sha="$(sha256sum src/bin/Release/netstandard2.1/OrbModSuite.dll | awk '{print $1}')"
+          if [[ "${packaged_sha}" != "${{ steps.tag.outputs.expected_sha }}" ]]; then
+            echo "Packaged DLL SHA-256 mismatch: expected ${{ steps.tag.outputs.expected_sha }}, actual ${packaged_sha}." >&2
+            exit 1
+          fi
+          changelog_section="$(extract_changelog_section CHANGELOG.md "${version}")"
+          changelog_heading="${changelog_section%%$'\n'*}"
+          release_title="${changelog_heading#\#\# }"
+          notes_path="${RUNNER_TEMP}/release-notes.md"
+          printf '%s\n' "${changelog_section}" | sed '1d' >"${notes_path}"
+          printf '\n### Reproducible build\n\n`OrbModSuite.dll` SHA-256: `%s`\n' "${packaged_sha}" >>"${notes_path}"
+          echo "title=${release_title}" >>"${GITHUB_OUTPUT}"
+          echo "notes_path=${notes_path}" >>"${GITHUB_OUTPUT}"
+          if is_prerelease "${version}"; then
+            echo "prerelease=true" >>"${GITHUB_OUTPUT}"
+          else
+            echo "prerelease=false" >>"${GITHUB_OUTPUT}"
+          fi
+
+      - name: Create GitHub release and attach artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_args=(
+            "${GITHUB_REF_NAME}"
+            "src/bin/Release/netstandard2.1/OrbModSuite.dll#OrbModSuite.dll"
+            artifacts/releases/*.zip
+            artifacts/releases/*-SHA256SUMS.txt
+            --verify-tag
+            --title "${{ steps.notes.outputs.title }}"
+            --notes-file "${{ steps.notes.outputs.notes_path }}"
+          )
+          if [[ "${{ steps.notes.outputs.prerelease }}" == "true" ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh release create "${release_args[@]}"
+          echo "Published ${GITHUB_REF_NAME}; OrbModSuite.dll SHA-256: ${{ steps.tag.outputs.expected_sha }}"

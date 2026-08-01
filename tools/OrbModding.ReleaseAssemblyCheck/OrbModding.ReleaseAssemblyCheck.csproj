@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>OrbModding.ReleaseAssemblyCheck</AssemblyName>
+    <RootNamespace>OrbModding.ReleaseAssemblyCheck</RootNamespace>
+    <RequireGameReferences>false</RequireGameReferences>
+  </PropertyGroup>
+</Project>

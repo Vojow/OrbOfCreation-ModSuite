@@ -3,6 +3,8 @@ set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 release_temporary_root=""
+# shellcheck source=release-common.sh
+source "${repository_root}/tools/release-common.sh"
 
 usage() {
     echo "Usage: tools/release.sh <version> [--dry-run]" >&2
@@ -12,42 +14,6 @@ usage() {
 fail() {
     echo "Release check failed: $*" >&2
     exit 1
-}
-
-validate_release_version() {
-    [[ "$1" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]
-}
-
-numeric_version() {
-    printf '%s\n' "${1%%[-+]*}"
-}
-
-is_prerelease() {
-    [[ "$1" == *-* ]]
-}
-
-extract_changelog_section() {
-    local changelog_path="$1"
-    local version="$2"
-    local heading_prefix="## Orb Of Creation ModSuite ${version} — "
-    local heading_count
-    heading_count="$(
-        awk -v prefix="${heading_prefix}" \
-            '$0 ~ /^## / && index($0, prefix) == 1 { count++ } END { print count + 0 }' \
-            "${changelog_path}"
-    )" || return 1
-    if [[ "${heading_count}" -ne 1 ]]; then
-        echo "expected one changelog heading beginning '${heading_prefix}', found ${heading_count}" >&2
-        return 1
-    fi
-
-    awk -v prefix="${heading_prefix}" '
-        $0 ~ /^## / {
-            if (capturing) exit
-            if (index($0, prefix) == 1) capturing = 1
-        }
-        capturing { print }
-    ' "${changelog_path}"
 }
 
 read_xml_value() {
@@ -393,7 +359,7 @@ main() {
     fi
 
     local command_name
-    for command_name in git gh dotnet awk sed grep mktemp mkdir ln; do
+    for command_name in git gh dotnet awk sed grep mktemp mkdir ln cp cmp env; do
         if ! command -v "${command_name}" >/dev/null 2>&1; then
             fail "required command is unavailable: ${command_name}"
         fi
@@ -505,6 +471,9 @@ main() {
         "${reference_root}/Orb Of Creation_Data/Managed/Assembly-CSharp-firstpass.dll" \
         "${reference_root}/Orb Of Creation_Data/Managed/UnityEngine.dll" \
         "${reference_root}/Orb Of Creation_Data/Managed/UnityEngine.CoreModule.dll" \
+        "${reference_root}/Orb Of Creation_Data/Managed/UnityEngine.UI.dll" \
+        "${reference_root}/Orb Of Creation_Data/Managed/UnityEngine.UIModule.dll" \
+        "${reference_root}/Orb Of Creation_Data/Managed/Unity.TextMeshPro.dll" \
         "${reference_root}/BepInEx/core/BepInEx.dll" \
         "${reference_root}/BepInEx/core/0Harmony.dll"; do
         if [[ ! -f "${required_reference}" ]]; then
@@ -562,29 +531,108 @@ main() {
     assert_release_source_unchanged \
         "${repository_root}" "${initial_head}" "post-gate source check"
 
-    echo "Restoring the release build..."
+    local suite_dll="${repository_root}/src/bin/Release/netstandard2.1/OrbModSuite.dll"
+    local game_built_dll="${release_temporary_root}/OrbModSuite-game-built.dll"
+    local first_refs_built_dll="${release_temporary_root}/OrbModSuite-refs-build-one.dll"
+
+    echo "Restoring the real-game faithfulness build..."
     if ! OOC_GAME_DIR="${reference_root}" dotnet restore \
         "${repository_root}/src/OrbModSuite.csproj" \
         --force-evaluate \
         --disable-build-servers \
         -p:EnableServiceCycleProfiler=false; then
-        fail "release-build restore failed"
+        fail "real-game release-build restore failed"
     fi
-    echo "Building the release-mode suite..."
+    echo "Building the real-game faithfulness artifact..."
     if ! OOC_GAME_DIR="${reference_root}" dotnet build \
         "${repository_root}/src/OrbModSuite.csproj" \
         --configuration Release \
         --disable-build-servers \
         -m:1 \
         --no-incremental \
+        --no-restore \
         -p:EnableServiceCycleProfiler=false; then
-        fail "release build failed"
+        fail "real-game release build failed"
+    fi
+    if [[ ! -f "${suite_dll}" ]]; then
+        fail "real-game release output is missing: ${suite_dll}"
+    fi
+    cp "${suite_dll}" "${game_built_dll}" ||
+        fail "could not retain the real-game faithfulness artifact"
+
+    echo "Cleaning before the first canonical refs build..."
+    if ! env -u OOC_GAME_DIR dotnet clean \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --configuration Release \
+        -p:EnableServiceCycleProfiler=false; then
+        fail "first canonical refs-build clean failed"
+    fi
+    echo "Restoring the first canonical refs build..."
+    if ! env -u OOC_GAME_DIR dotnet restore \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --force-evaluate \
+        --disable-build-servers \
+        -p:EnableServiceCycleProfiler=false; then
+        fail "first canonical refs-build restore failed"
+    fi
+    echo "Building the first canonical refs artifact..."
+    if ! env -u OOC_GAME_DIR dotnet build \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --configuration Release \
+        --disable-build-servers \
+        -m:1 \
+        --no-incremental \
+        --no-restore \
+        -p:EnableServiceCycleProfiler=false; then
+        fail "first canonical refs build failed"
+    fi
+    if [[ ! -f "${suite_dll}" ]]; then
+        fail "first canonical refs output is missing: ${suite_dll}"
+    fi
+    cp "${suite_dll}" "${first_refs_built_dll}" ||
+        fail "could not retain the first canonical refs artifact"
+
+    echo "Cleaning before the second canonical refs build..."
+    if ! env -u OOC_GAME_DIR dotnet clean \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --configuration Release \
+        -p:EnableServiceCycleProfiler=false; then
+        fail "second canonical refs-build clean failed"
+    fi
+    echo "Restoring the second canonical refs build..."
+    if ! env -u OOC_GAME_DIR dotnet restore \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --force-evaluate \
+        --disable-build-servers \
+        -p:EnableServiceCycleProfiler=false; then
+        fail "second canonical refs-build restore failed"
+    fi
+    echo "Building the second canonical refs artifact..."
+    if ! env -u OOC_GAME_DIR dotnet build \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --configuration Release \
+        --disable-build-servers \
+        -m:1 \
+        --no-incremental \
+        --no-restore \
+        -p:EnableServiceCycleProfiler=false; then
+        fail "second canonical refs build failed"
+    fi
+    if [[ ! -f "${suite_dll}" ]]; then
+        fail "second canonical refs output is missing: ${suite_dll}"
+    fi
+    if ! cmp -s "${first_refs_built_dll}" "${suite_dll}"; then
+        fail "canonical refs builds were not byte-identical"
     fi
 
-    local suite_dll="${repository_root}/src/bin/Release/netstandard2.1/OrbModSuite.dll"
-    if [[ ! -f "${suite_dll}" ]]; then
-        fail "release output is missing: ${suite_dll}"
+    echo "Comparing real-game and canonical refs artifacts outside debug identity..."
+    if ! dotnet run \
+        --project "${repository_root}/tools/OrbModding.ReleaseAssemblyCheck/OrbModding.ReleaseAssemblyCheck.csproj" \
+        --configuration Release \
+        -- "${suite_dll}" "${game_built_dll}"; then
+        fail "real-game and canonical refs artifacts differ outside debug identity"
     fi
+
     if grep -a -q "AutomataServiceCycleProfileController" "${suite_dll}" ||
         grep -a -q "ServiceCycleProfileRuntimeSession" "${suite_dll}"; then
         fail "release output unexpectedly contains ServiceCycle profiling components"
@@ -593,6 +641,9 @@ main() {
     local dll_sha
     dll_sha="$(sha256_file "${suite_dll}")" ||
         fail "DLL SHA-256 calculation failed"
+    local tag_sha_line
+    tag_sha_line="$(release_dll_sha_line "${dll_sha}")" ||
+        fail "could not format the annotated-tag DLL SHA-256"
     assert_release_source_unchanged \
         "${repository_root}" "${initial_head}" "post-build source check"
 
@@ -610,13 +661,15 @@ main() {
     echo "  Kind: ${release_kind}"
     echo "  Asset: ${suite_dll}"
     echo "  DLL SHA-256: ${dll_sha}"
+    echo "  Tag annotation: ${tag_sha_line}"
     echo "  Notes: CHANGELOG.md section for ${version}"
 
     if [[ "${dry_run}" -eq 1 ]]; then
         echo
-        echo "Dry run complete. No tag, push, or GitHub release was created."
-        echo "A real run would create annotated tag ${tag} at ${initial_head}, push that tag"
-        echo "to origin (${repo_target}), and create the ${release_kind} with OrbModSuite.dll attached."
+        echo "Dry run complete. No tag or push occurred, so the release workflow did not run."
+        echo "A real run would create annotated tag ${tag} at ${initial_head}, record"
+        echo "${tag_sha_line}, and push the tag to origin (${repo_target})."
+        echo "The tag-triggered workflow would then rebuild that exact SHA and create the ${release_kind}."
         return 0
     fi
 
@@ -638,30 +691,17 @@ main() {
         fail "pre-publish process check found Orb of Creation running"
     fi
 
-    if ! git -C "${repository_root}" tag -a "${tag}" "${initial_head}" -m "${release_title}"; then
+    local tag_message="${release_title}"$'\n\n'"${tag_sha_line}"
+    if ! git -C "${repository_root}" tag -a "${tag}" "${initial_head}" -m "${tag_message}"; then
         fail "publish step could not create annotated tag ${tag}"
     fi
     if ! git -C "${repository_root}" push origin "refs/tags/${tag}"; then
         fail "publish step could not push ${tag} to origin; the local annotated tag remains"
     fi
 
-    local release_arguments=(
-        release create "${tag}" "${suite_dll}"
-        --repo "${repo_target}"
-        --verify-tag
-        --target "${initial_head}"
-        --title "${release_title}"
-        --notes-file "${notes_file}"
-    )
-    if is_prerelease "${version}"; then
-        release_arguments+=(--prerelease)
-    fi
-    if ! gh "${release_arguments[@]}"; then
-        fail "publish step could not create the GitHub release; the pushed tag remains"
-    fi
-
-    echo "Published ${tag} from ${initial_head} to ${repo_target}."
-    echo "OrbModSuite.dll SHA-256: ${dll_sha}"
+    echo "Pushed ${tag} from ${initial_head} to ${repo_target}."
+    echo "The release workflow now owns rebuild verification and GitHub release creation."
+    echo "${tag_sha_line}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
