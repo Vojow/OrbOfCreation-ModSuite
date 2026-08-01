@@ -276,6 +276,11 @@ OOC_GAME_DIR="${reference_root}" dotnet test \
     --no-restore
 
 if [[ "${mode}" == "release" ]]; then
+    echo "Cleaning the canonical release build..."
+    env -u OOC_GAME_DIR dotnet clean \
+        "${repository_root}/src/OrbModSuite.csproj" \
+        --configuration "${configuration}" \
+        "${profile_build_arguments[@]}"
     echo "Building the canonical release artifact from checked-in game references..."
     env -u OOC_GAME_DIR dotnet restore \
         "${repository_root}/src/OrbModSuite.csproj" \

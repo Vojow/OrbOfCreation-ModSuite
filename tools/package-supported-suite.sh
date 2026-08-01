@@ -162,6 +162,12 @@ else
     echo "Skipping installed-game contracts in reference-only CI packaging; the pre-tag gate owns them."
 fi
 
+echo "Cleaning the canonical checked-in-reference build..."
+env -u OOC_GAME_DIR dotnet clean \
+    "${repository_root}/src/OrbModSuite.csproj" \
+    --configuration Release \
+    -p:EnableServiceCycleProfiler=false
+
 echo "Restoring the canonical checked-in-reference build..."
 env -u OOC_GAME_DIR dotnet restore \
     "${repository_root}/src/OrbModSuite.csproj" \
