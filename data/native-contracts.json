@@ -132,6 +132,25 @@
       "place": "capture"
     },
     {
+      "id": "abstract-ref-instance.is-empty",
+      "assembly": "assembly-csharp",
+      "type": "AbstractRefInstance`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsEmpty",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "abstract-ref-instance.reference",
       "assembly": "assembly-csharp",
       "type": "AbstractRefInstance`1",

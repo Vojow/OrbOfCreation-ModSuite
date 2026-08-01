@@ -1401,19 +1401,21 @@ public sealed class ExperienceContainer
     private static int Compare(BigDouble left, BigDouble right) => left.CompareTo(right);
 }
 
-public sealed class AlchemyInstance
+public sealed class AlchemyInstance : AbstractRefInstance<AlchemyRecipeSO>
 {
+    public AlchemyInstance()
+    {
+    }
+
     public AlchemyInstance(AlchemyRecipeSO reference)
     {
         this.reference = reference;
     }
 
-    public AlchemyRecipeSO reference;
     public int quantity;
     public int queuedQuantity;
     public ConceptDrainState resourceDrain = new ConceptDrainState();
 
-    public AlchemyRecipeSO get_reference() => reference;
     public ConceptDrainMultiplier GetDrainCostMod() => new ConceptDrainMultiplier(this);
 }
 
@@ -1440,6 +1442,7 @@ public sealed class AlchemyInstanceListVariable : IdScriptableObject
     public int GetNumOfType(AlchemyTypeSO type) =>
         value.Count(item =>
             Math.Max(item.quantity, item.queuedQuantity) > 0 &&
+            item.reference is not null &&
             item.reference.alchemyTypes.Contains(type));
 
     public int GetSlotsOnlyForType(AlchemyTypeSO type) =>

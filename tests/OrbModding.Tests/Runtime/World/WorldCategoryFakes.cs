@@ -576,19 +576,39 @@ internal sealed class FakeAlchemyInstanceList
     public bool CanAddInstance(FakeAlchemyRecipe recipe) => true;
 }
 
-internal sealed class FakeAlchemyInstance
+internal class FakeAbstractRefInstance<T>
+    where T : class
 {
-    public FakeAlchemyInstance(FakeAlchemyRecipe recipe)
+    protected FakeAbstractRefInstance(T? recipe)
     {
         reference = recipe;
     }
 
-    public FakeAlchemyRecipe reference;
+    public T? reference;
+
+    public T? get_reference() => reference;
+
+    public bool IsEmpty() => reference is null;
+}
+
+internal class FakeAlchemyInstance : FakeAbstractRefInstance<FakeAlchemyRecipe>
+{
+    public FakeAlchemyInstance(FakeAlchemyRecipe? recipe)
+        : base(recipe)
+    {
+    }
+
     public int quantity;
     public int queuedQuantity;
     public FakeAlchemyDrain resourceDrain = new();
+}
 
-    public FakeAlchemyRecipe get_reference() => reference;
+internal sealed class FakeUnexpectedAlchemyInstance : FakeAlchemyInstance
+{
+    internal FakeUnexpectedAlchemyInstance(FakeAlchemyRecipe recipe)
+        : base(recipe)
+    {
+    }
 }
 
 internal sealed class FakeAlchemyDrain
