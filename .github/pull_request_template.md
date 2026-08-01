@@ -1,32 +1,15 @@
-## Why?
+### Why?
 
-- What problem does this solve, and why is this the right scope?
+<!-- 1–3 sentences: the actual problem or motivation. -->
 
-## How?
+### How?
 
-- What changed?
-- Which gates ran, and how did their test, contract, exemption, entity, and
-  warning counts compare with `develop`?
+<!-- 1–2 sentences: short technical summary for a technical reader. -->
 
-## Decisions
+### Decisions
 
-<!-- Delete this section when the change makes no durable design ruling. -->
+<!-- One bullet per meaningful tradeoff, abandoned alternative, or scope choice, with the reason. `N/A` if none. -->
 
-- What ruling should later work preserve, and which alternative was rejected?
+### Callouts
 
-## Callouts
-
-<!-- Delete this section when reviewers need no special evidence or warning. -->
-
-- What deserves focused review, runtime evidence, or follow-up?
-
-## Review checklist
-
-- [ ] Portable and profile tests pass.
-- [ ] Installed-game contracts pass, or the change cannot affect native
-      boundaries.
-- [ ] Required runtime behavior was observed with a backed-up save.
-- [ ] Behavior, configuration, installation, and release documentation changed
-      with the product.
-- [ ] No game binaries, saves, local configuration, credentials, user paths, or
-      unredacted personal data are included.
+<!-- One bullet per spot a reviewer should look harder at, or that looks innocuous but has knock-on effects. `N/A` if none. -->

@@ -29,34 +29,29 @@ whenever its contract can be represented faithfully.
 
 ## Pull requests
 
-Use the release PR #101 shape:
+Fill in the pull request template:
 
-- `Why?` — the problem, user impact, and why this scope is the right unit;
-- `How?` — the implementation and verification approach;
-- `Decisions` — durable rulings and rejected alternatives that future work must
-  not re-derive;
-- `Callouts` — reviewer attention, runtime evidence, limitations, or follow-up
-  work that materially affects review.
+- `Why?` — the problem or motivation, in one to three sentences;
+- `How?` — a short technical summary of the change;
+- `Decisions` — one bullet per meaningful tradeoff, abandoned alternative, or
+  scope choice, with the reason; `N/A` if none;
+- `Callouts` — one bullet per spot a reviewer should look harder at, or that
+  looks innocuous but has knock-on effects; `N/A` if none.
 
-Omit `Decisions` or `Callouts` when there is nothing meaningful to say. Include
-the exact commands and reconciled counts from the current tree.
+## Verification
 
-## Required gate
-
-Run these lanes serially; do not overlap builds or test processes:
+Run the portable suite before opening a pull request:
 
 ```bash
-ORB_TEST_ATTEMPTS=1 ./script/test
-OOC_GAME_DIR=/path/to/audited/game dotnet test \
-  tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj \
-  --configuration Release
+./script/test
 ```
 
-The first command runs ordinary portable tests, the isolated profile tests, and
-the profiled trace-tool build. The second verifies the audited assembly pair and
-every installed native contract. Reconcile ordinary, profile, installed,
-manifest-schema, contract, source-exemption, known-entity, and compiler-warning
-counts with the target branch; explain every delta.
+Changes that touch native game boundaries also need the installed-game contract
+tests against your own game copy:
+
+```bash
+OOC_GAME_DIR=/path/to/game dotnet test tests/OrbModding.GameContractTests
+```
 
 Portable success proves behavior against the source-only stubs, not Unity or the
 installed game. Follow the [runtime validation protocol](docs/testing/runtime-validation.md)
