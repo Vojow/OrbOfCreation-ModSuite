@@ -100,6 +100,7 @@ does not refresh it by hidden navigation.
 | `suite_configuration` | Read the single committed configuration and writable setting catalog |
 | `trace_health` | Read trace-writer health, segment, record, and byte counters |
 | `chronicle_status` | Read the Chronicle clock, archive/comparison, major splits, and first-visible feature-resource KPI subsections |
+| `chronicle_runes` | Filter current, PB, comparison, or exact archived time-rune history by archetype with pagination |
 | `game_purchase` | Buy a structure or upgrade derived from its UUID |
 | `game_cast` | Fire or release one equipped spell |
 | `game_concept` | Add, remove, or rotate one concept assignment |
@@ -135,9 +136,18 @@ discover Arcanum under Magic or Ore under World without waiting for or rewriting
 Captured resource rows expose
 visibility, quantity, true quantity, true net rate, and capacity/fill facts; `resourceSchemaId`
 identifies the curated catalog required for future KPI comparisons.
+Status also exposes the `orb-time-rune-build-v1` schema, current and archived build-mix summaries,
+and bounded event counts. Detailed rune events stay out of the recurring status payload; query them
+with `chronicle_runes`. Each event is an observed 250 ms publication transition with exact UUID,
+label, archetype, elapsed ticks, level before/after, levels gained, mastery, and discovery rarity.
+Tempo/Scaling/Investment ratios are weighted by levels gained; `Other` isolates ambiguous or
+non-core type membership.
 
 ```sh
 tools/game-mcp-client.py chronicle-status
+tools/game-mcp-client.py chronicle-runes Current --archetype Tempo --limit 50
+tools/game-mcp-client.py chronicle-runes PersonalBest --archetype All
+tools/game-mcp-client.py chronicle-runes Selected --run-id <run-id> --archetype Investment
 tools/game-mcp-client.py chronicle-start
 tools/game-mcp-client.py chronicle-pause
 tools/game-mcp-client.py chronicle-resume

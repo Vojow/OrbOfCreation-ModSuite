@@ -15,7 +15,8 @@ internal readonly struct ChronicleWorldObservation
         ulong reachedMask,
         ulong blockedMask,
         bool worldRestored,
-        PublicationTable<WorldResource> resources)
+        PublicationTable<WorldResource> resources,
+        PublicationTable<WorldTimeRune> timeRunes)
     {
         Available = available;
         UnavailableReason = unavailableReason;
@@ -26,6 +27,7 @@ internal readonly struct ChronicleWorldObservation
         BlockedMask = blockedMask;
         WorldRestored = worldRestored;
         Resources = resources;
+        TimeRunes = timeRunes;
     }
 
     internal bool Available { get; }
@@ -37,6 +39,7 @@ internal readonly struct ChronicleWorldObservation
     internal ulong BlockedMask { get; }
     internal bool WorldRestored { get; }
     internal PublicationTable<WorldResource> Resources { get; }
+    internal PublicationTable<WorldTimeRune> TimeRunes { get; }
 
     internal static ChronicleWorldObservation Create(
         ulong worldGeneration,
@@ -52,7 +55,8 @@ internal readonly struct ChronicleWorldObservation
             reachedMask,
             blockedMask,
             worldRestored,
-            PublicationTable<WorldResource>.Empty);
+            PublicationTable<WorldResource>.Empty,
+            PublicationTable<WorldTimeRune>.Empty);
 
     internal static ChronicleWorldObservation Create(
         ulong worldGeneration,
@@ -62,8 +66,28 @@ internal readonly struct ChronicleWorldObservation
         ulong blockedMask,
         bool worldRestored,
         PublicationTable<WorldResource> resources)
+        => Create(
+            worldGeneration,
+            lifecycleGeneration,
+            observedAtTicks,
+            reachedMask,
+            blockedMask,
+            worldRestored,
+            resources,
+            PublicationTable<WorldTimeRune>.Empty);
+
+    internal static ChronicleWorldObservation Create(
+        ulong worldGeneration,
+        long lifecycleGeneration,
+        long observedAtTicks,
+        ulong reachedMask,
+        ulong blockedMask,
+        bool worldRestored,
+        PublicationTable<WorldResource> resources,
+        PublicationTable<WorldTimeRune> timeRunes)
     {
         if (resources is null) throw new ArgumentNullException(nameof(resources));
+        if (timeRunes is null) throw new ArgumentNullException(nameof(timeRunes));
         if (worldGeneration == 0) throw new ArgumentOutOfRangeException(nameof(worldGeneration));
         if (lifecycleGeneration <= 0)
             throw new ArgumentOutOfRangeException(nameof(lifecycleGeneration));
@@ -91,7 +115,8 @@ internal readonly struct ChronicleWorldObservation
             reachedMask,
             blockedMask,
             worldRestored,
-            resources);
+            resources,
+            timeRunes);
     }
 
     internal static ChronicleWorldObservation Unavailable(string reason)
@@ -107,7 +132,8 @@ internal readonly struct ChronicleWorldObservation
             0,
             0,
             false,
-            PublicationTable<WorldResource>.Empty);
+            PublicationTable<WorldResource>.Empty,
+            PublicationTable<WorldTimeRune>.Empty);
     }
 }
 
@@ -117,6 +143,7 @@ internal static class ChronicleWorldObservationProjector
     private const string UpgradesCategory = "upgrades";
     private const string BoolVariablesCategory = "bool variables";
     private const string ResourcesCategory = "resources";
+    private const string TimeRunesCategory = "time runes";
 
     internal static ChronicleWorldObservation Project(
         GameWorldState world,
@@ -140,7 +167,8 @@ internal static class ChronicleWorldObservationProjector
         if (!TryRequireCleanCategory(world, ViewsCategory, out var categoryFailure) ||
             !TryRequireCleanCategory(world, UpgradesCategory, out categoryFailure) ||
             !TryRequireCleanCategory(world, BoolVariablesCategory, out categoryFailure) ||
-            !TryRequireCleanCategory(world, ResourcesCategory, out categoryFailure))
+            !TryRequireCleanCategory(world, ResourcesCategory, out categoryFailure) ||
+            !TryRequireCleanCategory(world, TimeRunesCategory, out categoryFailure))
         {
             return ChronicleWorldObservation.Unavailable(categoryFailure);
         }
@@ -185,7 +213,8 @@ internal static class ChronicleWorldObservationProjector
             reached,
             blocked,
             worldRestored,
-            world.Resources);
+            world.Resources,
+            world.TimeRunes);
     }
 
     private static bool TryRequireCleanCategory(

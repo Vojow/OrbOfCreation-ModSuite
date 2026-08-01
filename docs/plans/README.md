@@ -9,7 +9,7 @@ than marked done.
 | Plan | Status | Scope |
 |---|---|---|
 | [Project roadmap](roadmap.md) | Active | Portfolio direction and sequencing. |
-| [Chronicle run comparison](chronicle.md) | Active implementation | Published-world splits, Restoration finish detection, comparisons, Runs UI, and Game MCP controls. |
+| [Chronicle run comparison](chronicle.md) | Active implementation | Published-world splits, Restoration finish detection, resource KPIs, time-rune build ratios/timelines, Runs UI, and Game MCP controls. |
 | [Auto Buy MVP deferrals](autobuy-servicecycle-mvp-deferrals.md) | Active | What the Auto Buy port deliberately left out, and what has to come back. |
 | [Full-trace world store](full-trace-world-store.md) | Open decision | The raw-capture stream of the full-trace mandate has no store: the volume and the codec are the ruling it waits on. |
 

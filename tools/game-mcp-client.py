@@ -231,6 +231,19 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("catalog")
     commands.add_parser("continue")
     commands.add_parser("chronicle-status")
+    runes = commands.add_parser("chronicle-runes")
+    runes.add_argument(
+        "source",
+        choices=("Current", "PersonalBest", "Comparison", "Selected"),
+    )
+    runes.add_argument(
+        "--archetype",
+        choices=("All", "Tempo", "Scaling", "Investment", "Other"),
+        default="All",
+    )
+    runes.add_argument("--run-id", default="")
+    runes.add_argument("--offset", type=int, default=0)
+    runes.add_argument("--limit", type=int, default=50)
     commands.add_parser("chronicle-start")
     commands.add_parser("chronicle-pause")
     commands.add_parser("chronicle-resume")
@@ -539,6 +552,16 @@ def main() -> int:
             result = client.call_tool("game_continue", {})
         elif args.command == "chronicle-status":
             result = client.call_tool("chronicle_status", {})
+        elif args.command == "chronicle-runes":
+            arguments = {
+                "source": args.source,
+                "archetype": args.archetype,
+                "offset": args.offset,
+                "limit": args.limit,
+            }
+            if args.run_id:
+                arguments["runId"] = args.run_id
+            result = client.call_tool("chronicle_runes", arguments)
         elif args.command == "chronicle-start":
             result = client.call_tool("chronicle_start", {})
         elif args.command == "chronicle-pause":

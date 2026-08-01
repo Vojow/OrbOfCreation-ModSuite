@@ -211,6 +211,34 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    public void TimeRunesPublishLocalizedLabelAndExactAuthoredArchetypeMembership()
+    {
+        var runeId = Guid.NewGuid();
+        FakeTimeRune.All.Add(new FakeTimeRune
+        {
+            Identity = runeId,
+            Name = "Magic Tempo",
+            level = 3,
+            timeRuneTypes = new List<FakeTimeRuneType>
+            {
+                new()
+                {
+                    Identity = Guid.Parse("fe1b6c9f-a827-422e-8bc7-9da640409d02"),
+                },
+            },
+        });
+
+        var collector = Collector();
+        collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(WorldLookup.TryFind(world.TimeRunes, runeId, out var rune));
+        Assert.Equal("Magic Tempo", rune.Label);
+        Assert.Equal(WorldTimeRuneArchetype.Tempo, rune.Archetypes);
+        Assert.Equal(3, rune.Level);
+    }
+
+    [Fact]
     public void AStateEnumTravelsAsItsUnderlyingInteger()
     {
         // The suite deliberately does not mirror the game's enums. A copied enum would keep compiling

@@ -1,6 +1,7 @@
 #if SERVICE_CYCLE_PROFILE
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -60,6 +61,7 @@ internal sealed class GameMcpStateStore
         var chronicleObject = GameMcpObjectProjector.Project(chronicle) as JObject ?? new JObject();
         if (chronicleHistory is not null)
             chronicleObject["history"] = GameMcpObjectProjector.Project(chronicleHistory);
+        CompactRuneTimelines(chronicleObject);
         var chronicleJson = chronicleObject.ToString(Formatting.None);
 
         Volatile.Write(
@@ -77,7 +79,32 @@ internal sealed class GameMcpStateStore
                 runtime is null
                     ? "the ServiceCycle runtime has not published a world in this scene"
                     : string.Empty,
-                chronicleJson));
+                chronicleJson,
+                chronicle,
+                chronicleHistory));
+    }
+
+    private static void CompactRuneTimelines(JObject value)
+    {
+        if (value["runeTimeline"] is JArray timeline)
+        {
+            value["runeEventCount"] = timeline.Count;
+            value.Remove("runeTimeline");
+        }
+        if (value["history"] is not JObject history) return;
+        if (history["personalBest"] is JObject personalBest) CompactRecordedRun(personalBest);
+        if (history["comparison"] is JObject comparison) CompactRecordedRun(comparison);
+        if (history["runs"] is JArray runs)
+        {
+            foreach (var run in runs.OfType<JObject>()) CompactRecordedRun(run);
+        }
+    }
+
+    private static void CompactRecordedRun(JObject run)
+    {
+        if (run["runeTimeline"] is not JArray timeline) return;
+        run["runeEventCount"] = timeline.Count;
+        run.Remove("runeTimeline");
     }
 
     private static JObject BuildHealth(
@@ -145,7 +172,9 @@ internal sealed class GameMcpStateSnapshot
         string traceHealthJson,
         bool runtimeAvailable,
         string runtimeNotAvailableReason,
-        string chronicleJson = "{}")
+        string chronicleJson = "{}",
+        ChronicleRunSnapshot? chronicle = null,
+        ChronicleHistorySnapshot? chronicleHistory = null)
     {
         World = world;
         ConfigurationGeneration = configurationGeneration;
@@ -158,6 +187,8 @@ internal sealed class GameMcpStateSnapshot
         RuntimeAvailable = runtimeAvailable;
         RuntimeNotAvailableReason = runtimeNotAvailableReason;
         ChronicleJson = chronicleJson ?? "{}";
+        Chronicle = chronicle;
+        ChronicleHistory = chronicleHistory;
     }
 
     internal GameMcpStateSnapshot(
@@ -172,7 +203,9 @@ internal sealed class GameMcpStateSnapshot
         string traceHealthJson,
         bool runtimeAvailable,
         string runtimeNotAvailableReason,
-        string chronicleJson = "{}")
+        string chronicleJson = "{}",
+        ChronicleRunSnapshot? chronicle = null,
+        ChronicleHistorySnapshot? chronicleHistory = null)
         : this(
             world is null ? null : new ServiceWorldPublication(world),
             configurationGeneration,
@@ -184,7 +217,9 @@ internal sealed class GameMcpStateSnapshot
             traceHealthJson,
             runtimeAvailable,
             runtimeNotAvailableReason,
-            chronicleJson)
+            chronicleJson,
+            chronicle,
+            chronicleHistory)
     {
     }
 
@@ -199,6 +234,8 @@ internal sealed class GameMcpStateSnapshot
     internal bool RuntimeAvailable { get; }
     internal string RuntimeNotAvailableReason { get; }
     internal string ChronicleJson { get; }
+    internal ChronicleRunSnapshot? Chronicle { get; }
+    internal ChronicleHistorySnapshot? ChronicleHistory { get; }
 
     internal static GameMcpStateSnapshot Unavailable(string reason) =>
         new(

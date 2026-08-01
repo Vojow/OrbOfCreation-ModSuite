@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using OrbChronicle;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.World;
@@ -175,6 +177,80 @@ public sealed class ChronicleRunTrackerTests
         Assert.Equal(
             worldReading.Quantity!.Value.ToDouble(),
             restorationReading.Quantity!.Value.ToDouble());
+    }
+
+    [Fact]
+    public void TimeRuneLevelTransitionsCaptureObservedTimeLevelAndLevelWeightedMix()
+    {
+        var runeId = Guid.NewGuid();
+        var tracker = Started(timeRunes: TimeRunes(
+            Rune(runeId, "Magic Tempo", WorldTimeRuneArchetype.Tempo, level: 0)));
+
+        tracker.Observe(Observation(
+            reached: 0,
+            restored: false,
+            world: 3,
+            observedAtTicks: Seconds(10),
+            timeRunes: TimeRunes(
+                Rune(runeId, "Magic Tempo", WorldTimeRuneArchetype.Tempo, level: 3, mastery: 4))));
+
+        var snapshot = tracker.Snapshot;
+        var item = Assert.Single(snapshot.RuneTimeline);
+        Assert.Equal(10, item.ElapsedSeconds);
+        Assert.Equal("Magic Tempo", item.Label);
+        Assert.Equal(ChronicleRuneArchetype.Tempo, item.Archetype);
+        Assert.Equal(0, item.LevelBefore);
+        Assert.Equal(3, item.LevelAfter);
+        Assert.Equal(3, item.LevelsGained);
+        Assert.Equal(4, item.MasteryLevel);
+        Assert.Equal(3, snapshot.RuneMix.TempoLevels);
+        Assert.Equal(1d, snapshot.RuneMix.TempoRatio);
+        Assert.Equal(0, snapshot.RuneMix.OtherLevels);
+    }
+
+    [Fact]
+    public void AmbiguousCoreRuneTypeIsIsolatedAsOther()
+    {
+        var runeId = Guid.NewGuid();
+        var types = WorldTimeRuneArchetype.Tempo | WorldTimeRuneArchetype.Scaling;
+        var tracker = Started(timeRunes: TimeRunes(Rune(runeId, "Odd rune", types, 1)));
+
+        tracker.Observe(Observation(
+            reached: 0,
+            restored: false,
+            world: 3,
+            observedAtTicks: Seconds(2),
+            timeRunes: TimeRunes(Rune(runeId, "Odd rune", types, 2))));
+
+        Assert.Equal(ChronicleRuneArchetype.Other, Assert.Single(tracker.Snapshot.RuneTimeline).Archetype);
+        Assert.Equal(1, tracker.Snapshot.RuneMix.OtherLevels);
+        Assert.Equal(0, tracker.Snapshot.RuneMix.CoreLevels);
+    }
+
+    [Fact]
+    public void TimeRuneRegressionPausesWithoutAddingTheRegressedInterval()
+    {
+        var runeId = Guid.NewGuid();
+        var tracker = Started(timeRunes: TimeRunes(
+            Rune(runeId, "Magic Scaling", WorldTimeRuneArchetype.Scaling, 2)));
+        tracker.Observe(Observation(
+            reached: 0,
+            restored: false,
+            world: 3,
+            observedAtTicks: Seconds(2),
+            timeRunes: TimeRunes(
+                Rune(runeId, "Magic Scaling", WorldTimeRuneArchetype.Scaling, 3))));
+        tracker.Observe(Observation(
+            reached: 0,
+            restored: false,
+            world: 4,
+            observedAtTicks: Seconds(8),
+            timeRunes: TimeRunes(
+                Rune(runeId, "Magic Scaling", WorldTimeRuneArchetype.Scaling, 1))));
+
+        Assert.Equal(ChronicleRunState.Paused, tracker.Snapshot.State);
+        Assert.Equal(2, tracker.Snapshot.ElapsedSeconds);
+        Assert.Contains("time-rune progression regressed", tracker.Snapshot.Reason);
     }
 
     [Fact]
@@ -399,12 +475,16 @@ public sealed class ChronicleRunTrackerTests
         var path = Path.Combine(directory, "history.json");
         try
         {
-            var tracker = Started();
+            var runeId = Guid.NewGuid();
+            var tracker = Started(timeRunes: TimeRunes(
+                Rune(runeId, "Capacity Investment", WorldTimeRuneArchetype.Investment, 0)));
             tracker.Observe(Observation(
                 reached: ChronicleMilestones.NativeMask,
                 restored: true,
                 world: 3,
-                observedAtTicks: Seconds(42)));
+                observedAtTicks: Seconds(42),
+                timeRunes: TimeRunes(
+                    Rune(runeId, "Capacity Investment", WorldTimeRuneArchetype.Investment, 5))));
             Assert.Equal(ChronicleRunState.Finished, tracker.Snapshot.State);
 
             var history = new ChronicleHistory(path, _ => { });
@@ -416,7 +496,10 @@ public sealed class ChronicleRunTrackerTests
             var run = Assert.Single(reloaded.Runs);
             Assert.Equal(tracker.Snapshot.RunId, run.RunId);
             Assert.Equal(42, run.ElapsedSeconds);
+            Assert.Equal(5, run.RuneMix.InvestmentLevels);
+            Assert.Single(run.RuneTimeline);
             Assert.Same(run, reloaded.Comparison);
+            Assert.Same(run, reloaded.PersonalBest);
             Assert.Equal(ChronicleComparisonMode.PersonalBest, reloaded.ComparisonMode);
         }
         finally
@@ -449,11 +532,57 @@ public sealed class ChronicleRunTrackerTests
         }
     }
 
+    [Fact]
+    public void LegacySchemaOneRunRemainsReadableWithoutInventedRuneHistory()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "orb-chronicle-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "history.json");
+        Directory.CreateDirectory(directory);
+        var current = Started().Snapshot;
+        var root = new JObject
+        {
+            ["schemaVersion"] = 1,
+            ["comparisonMode"] = "PersonalBest",
+            ["selectedRunId"] = string.Empty,
+            ["active"] = new JObject { ["state"] = "Dormant" },
+            ["runs"] = new JArray(new JObject
+            {
+                ["runId"] = Guid.NewGuid().ToString("D"),
+                ["completedAtUtcTicks"] = DateTime.UtcNow.Ticks,
+                ["elapsedTicks"] = Seconds(30),
+                ["milestoneSchemaId"] = current.MilestoneSchemaId,
+                ["resourceSchemaId"] = current.ResourceSchemaId,
+                ["clockId"] = current.ClockId,
+                ["milestones"] = new JArray(),
+                ["resources"] = new JArray(),
+            }),
+        };
+        File.WriteAllText(path, root.ToString(Formatting.Indented));
+        try
+        {
+            var projected = new ChronicleHistory(path, _ => { }).Project(current);
+            var run = Assert.Single(projected.Runs);
+            Assert.Same(run, projected.PersonalBest);
+            Assert.Empty(run.RuneTimeline);
+            Assert.Equal(string.Empty, run.RuneSchemaId);
+            Assert.False(run.IsRuneCompatible(current));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static ChronicleRunTracker Started(
-        PublicationTable<WorldResource>? resources = null)
+        PublicationTable<WorldResource>? resources = null,
+        PublicationTable<WorldTimeRune>? timeRunes = null)
     {
         var tracker = new ChronicleRunTracker();
-        tracker.Observe(Observation(reached: 0, restored: false, resources: resources));
+        tracker.Observe(Observation(
+            reached: 0,
+            restored: false,
+            resources: resources,
+            timeRunes: timeRunes));
         Assert.True(tracker.Start().Accepted);
         return tracker;
     }
@@ -464,7 +593,8 @@ public sealed class ChronicleRunTrackerTests
         ulong world = 2,
         long lifecycle = 1,
         long observedAtTicks = 0,
-        PublicationTable<WorldResource>? resources = null) =>
+        PublicationTable<WorldResource>? resources = null,
+        PublicationTable<WorldTimeRune>? timeRunes = null) =>
         ChronicleWorldObservation.Create(
             world,
             lifecycle,
@@ -472,7 +602,36 @@ public sealed class ChronicleRunTrackerTests
             reached,
             0,
             restored,
-            resources ?? PublicationTable<WorldResource>.Empty);
+            resources ?? PublicationTable<WorldResource>.Empty,
+            timeRunes ?? PublicationTable<WorldTimeRune>.Empty);
+
+    private static PublicationTable<WorldTimeRune> TimeRunes(params WorldTimeRune[] runes)
+    {
+        Array.Sort(runes, static (left, right) => left.EntityId.CompareTo(right.EntityId));
+        return PublicationTable<WorldTimeRune>.Create(runes);
+    }
+
+    private static WorldTimeRune Rune(
+        Guid id,
+        string label,
+        WorldTimeRuneArchetype archetypes,
+        int level,
+        int mastery = 0) =>
+        new(
+            id,
+            label,
+            archetypes,
+            discovered: level > 0,
+            level,
+            discRarityLevel: 0,
+            masteryXp: default,
+            masteryLevel: mastery,
+            isDiscoverRequired: false,
+            seen: level > 0,
+            freeUsages: default,
+            power: default,
+            powerScalingMod: default,
+            masteryXpMod: default);
 
     private static WorldResource Resource(
         Guid id,
@@ -740,6 +899,7 @@ public sealed class ChronicleWorldObservationProjectorTests
             Status("upgrades", WorldCategoryOutcome.Collected, sampled: 1, skipped: 0),
             Status("bool variables", WorldCategoryOutcome.Collected, sampled: 1, skipped: 0),
             Status("resources", WorldCategoryOutcome.Collected, sampled: 80, skipped: 0),
+            Status("time runes", WorldCategoryOutcome.Collected, sampled: 62, skipped: 0),
         });
 
     private static WorldCollectionCategoryStatus Status(

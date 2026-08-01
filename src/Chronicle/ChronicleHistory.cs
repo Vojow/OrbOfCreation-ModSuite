@@ -72,7 +72,11 @@ internal sealed class ChronicleRunRecord
         string resourceSchemaId,
         string clockId,
         ChronicleRecordedMilestone[] milestones,
-        ChronicleRecordedResource[] resources)
+        ChronicleRecordedResource[] resources,
+        string runeSchemaId,
+        ChronicleRuneLevelEvent[] runeTimeline,
+        ChronicleRuneBuildMix runeMix,
+        bool runeTimelineTruncated)
     {
         if (!Guid.TryParseExact(runId, "D", out _))
             throw new ArgumentException("A recorded run requires a canonical run ID.", nameof(runId));
@@ -84,8 +88,12 @@ internal sealed class ChronicleRunRecord
         MilestoneSchemaId = milestoneSchemaId;
         ResourceSchemaId = resourceSchemaId;
         ClockId = clockId;
+        RuneSchemaId = runeSchemaId ?? string.Empty;
         Milestones = Array.AsReadOnly((ChronicleRecordedMilestone[])milestones.Clone());
         Resources = Array.AsReadOnly((ChronicleRecordedResource[])resources.Clone());
+        RuneTimeline = Array.AsReadOnly((ChronicleRuneLevelEvent[])runeTimeline.Clone());
+        RuneMix = runeMix ?? throw new ArgumentNullException(nameof(runeMix));
+        RuneTimelineTruncated = runeTimelineTruncated;
     }
 
     internal string RunId { get; }
@@ -95,13 +103,20 @@ internal sealed class ChronicleRunRecord
     internal string MilestoneSchemaId { get; }
     internal string ResourceSchemaId { get; }
     internal string ClockId { get; }
+    internal string RuneSchemaId { get; }
     internal IReadOnlyList<ChronicleRecordedMilestone> Milestones { get; }
     internal IReadOnlyList<ChronicleRecordedResource> Resources { get; }
+    internal IReadOnlyList<ChronicleRuneLevelEvent> RuneTimeline { get; }
+    internal ChronicleRuneBuildMix RuneMix { get; }
+    internal bool RuneTimelineTruncated { get; }
 
     internal bool IsCompatible(ChronicleRunSnapshot current) =>
         string.Equals(MilestoneSchemaId, current.MilestoneSchemaId, StringComparison.Ordinal) &&
         string.Equals(ResourceSchemaId, current.ResourceSchemaId, StringComparison.Ordinal) &&
         string.Equals(ClockId, current.ClockId, StringComparison.Ordinal);
+
+    internal bool IsRuneCompatible(ChronicleRunSnapshot current) =>
+        string.Equals(RuneSchemaId, current.RuneSchemaId, StringComparison.Ordinal);
 
     internal static ChronicleRunRecord Capture(ChronicleRunSnapshot snapshot, long completedAtUtcTicks)
     {
@@ -128,7 +143,11 @@ internal sealed class ChronicleRunRecord
             snapshot.ResourceSchemaId,
             snapshot.ClockId,
             milestones,
-            resources);
+            resources,
+            snapshot.RuneSchemaId,
+            snapshot.RuneTimeline.ToArray(),
+            snapshot.RuneMix,
+            snapshot.RuneTimelineTruncated);
     }
 }
 
@@ -174,6 +193,7 @@ internal sealed class ChronicleHistorySnapshot
         ChronicleComparisonMode comparisonMode,
         string selectedRunId,
         string status,
+        ChronicleRunRecord? personalBest,
         ChronicleRunRecord? comparison,
         ChronicleResourceComparison[] resourceComparisons,
         ChronicleRunRecord[] runs)
@@ -182,6 +202,7 @@ internal sealed class ChronicleHistorySnapshot
         ComparisonMode = comparisonMode;
         SelectedRunId = selectedRunId;
         Status = status;
+        PersonalBest = personalBest;
         Comparison = comparison;
         ResourceComparisons = Array.AsReadOnly(
             (ChronicleResourceComparison[])resourceComparisons.Clone());
@@ -192,6 +213,7 @@ internal sealed class ChronicleHistorySnapshot
     internal ChronicleComparisonMode ComparisonMode { get; }
     internal string SelectedRunId { get; }
     internal string Status { get; }
+    internal ChronicleRunRecord? PersonalBest { get; }
     internal ChronicleRunRecord? Comparison { get; }
     internal IReadOnlyList<ChronicleResourceComparison> ResourceComparisons { get; }
     internal IReadOnlyList<ChronicleRunRecord> Runs { get; }
@@ -222,9 +244,10 @@ internal sealed class ChronicleHistory
     internal ChronicleHistorySnapshot Project(ChronicleRunSnapshot current)
     {
         var compatible = _runs.Where(run => run.IsCompatible(current)).ToArray();
+        var personalBest = compatible.OrderBy(run => run.ElapsedTicks).FirstOrDefault();
         ChronicleRunRecord? comparison = _comparisonMode switch
         {
-            ChronicleComparisonMode.PersonalBest => compatible.OrderBy(run => run.ElapsedTicks).FirstOrDefault(),
+            ChronicleComparisonMode.PersonalBest => personalBest,
             ChronicleComparisonMode.Previous => compatible.LastOrDefault(run =>
                 !string.Equals(run.RunId, current.RunId, StringComparison.Ordinal)),
             ChronicleComparisonMode.Selected => compatible.FirstOrDefault(run =>
@@ -236,6 +259,7 @@ internal sealed class ChronicleHistory
             _comparisonMode,
             _selectedRunId,
             _status,
+            personalBest,
             comparison,
             BuildResourceComparisons(current, comparison),
             _runs.ToArray());
@@ -338,7 +362,8 @@ internal sealed class ChronicleHistory
         try
         {
             var root = JObject.Parse(File.ReadAllText(_path));
-            if ((int?)root["schemaVersion"] != 1) throw new InvalidDataException("unsupported schema");
+            var schemaVersion = (int?)root["schemaVersion"] ?? 0;
+            if (schemaVersion is not (1 or 2)) throw new InvalidDataException("unsupported schema");
             _comparisonMode = Enum.TryParse(
                 (string?)root["comparisonMode"], true, out ChronicleComparisonMode parsed)
                 ? parsed
@@ -349,7 +374,9 @@ internal sealed class ChronicleHistory
                 throw new InvalidDataException("history retention limit exceeded");
             foreach (var token in runTokens)
             {
-                var run = ParseRun(token as JObject ?? throw new InvalidDataException("run entry invalid"));
+                var run = ParseRun(
+                    token as JObject ?? throw new InvalidDataException("run entry invalid"),
+                    schemaVersion);
                 if (_runs.Any(candidate => string.Equals(candidate.RunId, run.RunId, StringComparison.Ordinal)))
                     throw new InvalidDataException("duplicate run ID");
                 _runs.Add(run);
@@ -361,7 +388,9 @@ internal sealed class ChronicleHistory
                 _status = "An interrupted run was preserved but not resumed because save identity is not proven.";
             }
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or FormatException or OverflowException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
+            JsonException or InvalidDataException or FormatException or OverflowException or
+            ArgumentException)
         {
             _writeBlocked = true;
             _status = "History is read-only because its sidecar is invalid: " + exception.Message;
@@ -379,7 +408,7 @@ internal sealed class ChronicleHistory
             var temporary = _path + ".tmp";
             var root = new JObject
             {
-                ["schemaVersion"] = 1,
+                ["schemaVersion"] = 2,
                 ["comparisonMode"] = _comparisonMode.ToString(),
                 ["selectedRunId"] = _selectedRunId,
                 ["active"] = SerializeActive(current),
@@ -403,6 +432,7 @@ internal sealed class ChronicleHistory
         ["elapsedTicks"] = snapshot.ElapsedTicks,
         ["milestoneSchemaId"] = snapshot.MilestoneSchemaId,
         ["resourceSchemaId"] = snapshot.ResourceSchemaId,
+        ["runeSchemaId"] = snapshot.RuneSchemaId,
         ["clockId"] = snapshot.ClockId,
     };
 
@@ -413,6 +443,7 @@ internal sealed class ChronicleHistory
         ["elapsedTicks"] = run.ElapsedTicks,
         ["milestoneSchemaId"] = run.MilestoneSchemaId,
         ["resourceSchemaId"] = run.ResourceSchemaId,
+        ["runeSchemaId"] = run.RuneSchemaId,
         ["clockId"] = run.ClockId,
         ["milestones"] = new JArray(run.Milestones.Select(item => new JObject
         {
@@ -430,15 +461,33 @@ internal sealed class ChronicleHistory
             ["trueRate"] = SerializeBig(item.TrueRate),
             ["capacity"] = SerializeBig(item.Capacity),
         })),
+        ["runeTimelineTruncated"] = run.RuneTimelineTruncated,
+        ["runeMix"] = SerializeRuneMix(run.RuneMix),
+        ["runeTimeline"] = new JArray(run.RuneTimeline.Select(item => new JObject
+        {
+            ["sequence"] = item.Sequence,
+            ["targetUuid"] = item.TargetUuid,
+            ["label"] = item.Label,
+            ["archetype"] = item.Archetype.ToString(),
+            ["elapsedTicks"] = item.ElapsedTicks,
+            ["levelBefore"] = item.LevelBefore,
+            ["levelAfter"] = item.LevelAfter,
+            ["masteryLevel"] = item.MasteryLevel,
+            ["discoveryRarityLevel"] = item.DiscoveryRarityLevel,
+        })),
     };
 
-    private static ChronicleRunRecord ParseRun(JObject value)
+    private static ChronicleRunRecord ParseRun(JObject value, int schemaVersion)
     {
         var milestones = value["milestones"] as JArray ??
                          throw new InvalidDataException("milestones missing");
         var resources = value["resources"] as JArray ??
                         throw new InvalidDataException("resources missing");
-        if (milestones.Count > 64 || resources.Count > 256)
+        var runeTimeline = schemaVersion >= 2
+            ? value["runeTimeline"] as JArray ?? throw new InvalidDataException("rune timeline missing")
+            : new JArray();
+        if (milestones.Count > 64 || resources.Count > 256 ||
+            runeTimeline.Count > ChronicleRunTracker.MaximumRuneEvents)
             throw new InvalidDataException("run entry exceeds bounded schema size");
         return new ChronicleRunRecord(
             RequireString(value, "runId"),
@@ -458,7 +507,51 @@ internal sealed class ChronicleHistory
                 (long?)item["elapsedTicks"],
                 ParseBig(item["quantity"]),
                 ParseBig(item["trueRate"]),
-                ParseBig(item["capacity"]))).ToArray());
+                ParseBig(item["capacity"]))).ToArray(),
+            schemaVersion >= 2 ? RequireString(value, "runeSchemaId") : string.Empty,
+            runeTimeline.Cast<JObject>().Select(ParseRuneEvent).ToArray(),
+            schemaVersion >= 2
+                ? ParseRuneMix(value["runeMix"] as JObject ??
+                    throw new InvalidDataException("rune mix missing"))
+                : new ChronicleRuneBuildMix(0, 0, 0, 0),
+            schemaVersion >= 2 && ((bool?)value["runeTimelineTruncated"] ?? false));
+    }
+
+    private static JObject SerializeRuneMix(ChronicleRuneBuildMix mix) => new()
+    {
+        ["tempoLevels"] = mix.TempoLevels,
+        ["scalingLevels"] = mix.ScalingLevels,
+        ["investmentLevels"] = mix.InvestmentLevels,
+        ["otherLevels"] = mix.OtherLevels,
+    };
+
+    private static ChronicleRuneBuildMix ParseRuneMix(JObject value) => new(
+        RequireLong(value, "tempoLevels"),
+        RequireLong(value, "scalingLevels"),
+        RequireLong(value, "investmentLevels"),
+        RequireLong(value, "otherLevels"));
+
+    private static ChronicleRuneLevelEvent ParseRuneEvent(JObject value)
+    {
+        if (!Guid.TryParseExact(RequireString(value, "targetUuid"), "D", out var targetId))
+            throw new InvalidDataException("rune target UUID invalid");
+        if (!Enum.TryParse(
+                RequireString(value, "archetype"),
+                ignoreCase: false,
+                out ChronicleRuneArchetype archetype))
+        {
+            throw new InvalidDataException("rune archetype invalid");
+        }
+        return new ChronicleRuneLevelEvent(
+            RequireInt(value, "sequence"),
+            targetId,
+            RequireString(value, "label"),
+            archetype,
+            RequireLong(value, "elapsedTicks"),
+            RequireInt(value, "levelBefore"),
+            RequireInt(value, "levelAfter"),
+            RequireInt(value, "masteryLevel"),
+            RequireInt(value, "discoveryRarityLevel"));
     }
 
     private static JToken SerializeBig(BigDouble? value) => !value.HasValue
@@ -480,7 +573,9 @@ internal sealed class ChronicleHistory
         current.RunId + "|" + current.State + "|" +
         string.Join(",", current.Milestones.Select(item => item.State + ":" + item.ElapsedTicks)) + "|" +
         string.Join(",", current.ResourceSections.SelectMany(section => section.Resources)
-            .Select(item => item.State + ":" + item.ElapsedTicks));
+            .Select(item => item.State + ":" + item.ElapsedTicks)) + "|" +
+        current.RuneTimeline.Count + ":" + current.RuneMix.TotalLevels + ":" +
+        current.RuneTimelineTruncated;
 
     private static string RequireString(JObject value, string property) =>
         (string?)value[property] is { Length: > 0 } result
@@ -489,4 +584,7 @@ internal sealed class ChronicleHistory
 
     private static long RequireLong(JObject value, string property) =>
         (long?)value[property] ?? throw new InvalidDataException(property + " missing");
+
+    private static int RequireInt(JObject value, string property) =>
+        (int?)value[property] ?? throw new InvalidDataException(property + " missing");
 }

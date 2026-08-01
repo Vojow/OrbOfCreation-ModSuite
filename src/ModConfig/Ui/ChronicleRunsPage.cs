@@ -15,6 +15,7 @@ namespace OrbModConfig;
 /// </summary>
 internal sealed class ChronicleRunsPage : IDisposable
 {
+    private const int RuneRowsPerPage = 18;
     private readonly RectTransform _content;
     private readonly ScrollRect _scroll;
     private readonly TextMeshProUGUI _template;
@@ -25,6 +26,8 @@ internal sealed class ChronicleRunsPage : IDisposable
     private string _structureKey = string.Empty;
     private float _rememberedOffset;
     private bool _confirmAbandon;
+    private ChronicleRuneArchetype? _runeFilter;
+    private int _runePage;
     private bool _visible;
 
     internal ChronicleRunsPage(
@@ -82,6 +85,7 @@ internal sealed class ChronicleRunsPage : IDisposable
         var top = 6f;
 
         top += BuildHero(snapshot, history, top);
+        top += BuildRuneSection(snapshot, history, top);
         top += BuildMilestones(snapshot, history.Comparison, top);
         foreach (var section in snapshot.ResourceSections)
             top += BuildResourceSection(section, history.Comparison, top);
@@ -117,8 +121,9 @@ internal sealed class ChronicleRunsPage : IDisposable
         Text(card.transform, "Pace", .48f, .57f, .975f, .91f,
             delta, .72f, TextAlignmentOptions.Midline);
         Text(card.transform, "Schemas", .48f, .35f, .975f, .58f,
-            snapshot.MilestoneSchemaId + "\n" + snapshot.ResourceSchemaId,
-            .48f, TextAlignmentOptions.Midline);
+            snapshot.MilestoneSchemaId + "\n" + snapshot.ResourceSchemaId + "\n" +
+            snapshot.RuneSchemaId,
+            .42f, TextAlignmentOptions.Midline);
 
         var canStart = snapshot.State is ChronicleRunState.Dormant or ChronicleRunState.Finished or ChronicleRunState.Abandoned;
         Button(card.transform, "Start", .025f, .07f, .20f, .31f, "Start run", canStart,
@@ -149,6 +154,88 @@ internal sealed class ChronicleRunsPage : IDisposable
                 Status = "Comparison changed.";
                 Rebuild(resetScroll: false);
             });
+        return height + 8f;
+    }
+
+    private float BuildRuneSection(
+        ChronicleRunSnapshot snapshot,
+        ChronicleHistorySnapshot history,
+        float top)
+    {
+        var filtered = snapshot.RuneTimeline
+            .Where(item => !_runeFilter.HasValue || item.Archetype == _runeFilter.Value)
+            .ToArray();
+        var pageCount = Math.Max(1, (filtered.Length + RuneRowsPerPage - 1) / RuneRowsPerPage);
+        _runePage = Math.Max(0, Math.Min(_runePage, pageCount - 1));
+        var page = filtered.Skip(_runePage * RuneRowsPerPage).Take(RuneRowsPerPage).ToArray();
+        const float headerHeight = 146f;
+        const float rowHeight = 32f;
+        var height = headerHeight + Math.Max(1, page.Length) * rowHeight + 8f;
+        var card = Rect("RuneBuild", top, height, new Color(0.075f, 0.065f, 0.115f, .98f));
+        Text(card.transform, "Title", .025f, 1f - 45f / height, .46f, 1f,
+            "TIME-RUNE BUILD  ·  OBSERVED LEVEL TRANSITIONS", .78f,
+            TextAlignmentOptions.MidlineLeft);
+        Text(card.transform, "CurrentMix", .025f, 1f - 76f / height, .975f, 1f - 43f / height,
+            "CURRENT  " + FormatMix(snapshot.RuneMix), .56f, TextAlignmentOptions.MidlineLeft);
+        var personalBest = history.PersonalBest;
+        var pbMix = personalBest is not null && personalBest.IsRuneCompatible(snapshot)
+            ? FormatMix(personalBest.RuneMix)
+            : "unavailable until a rune-schema run finishes";
+        Text(card.transform, "PbMix", .025f, 1f - 106f / height, .975f, 1f - 75f / height,
+            "PB       " + pbMix, .56f, TextAlignmentOptions.MidlineLeft);
+
+        Button(card.transform, "RuneFilter", .025f, 1f - 139f / height, .35f, 1f - 108f / height,
+            "Filter: " + (_runeFilter?.ToString() ?? "All"), true,
+            () =>
+            {
+                _runeFilter = _runeFilter switch
+                {
+                    null => ChronicleRuneArchetype.Tempo,
+                    ChronicleRuneArchetype.Tempo => ChronicleRuneArchetype.Scaling,
+                    ChronicleRuneArchetype.Scaling => ChronicleRuneArchetype.Investment,
+                    ChronicleRuneArchetype.Investment => ChronicleRuneArchetype.Other,
+                    _ => null,
+                };
+                _runePage = 0;
+                Rebuild(resetScroll: false);
+            });
+        Button(card.transform, "RunePrevious", .37f, 1f - 139f / height, .49f, 1f - 108f / height,
+            "<", _runePage > 0,
+            () => { _runePage--; Rebuild(resetScroll: false); });
+        Text(card.transform, "RunePage", .50f, 1f - 139f / height, .72f, 1f - 108f / height,
+            "PAGE " + (_runePage + 1) + "/" + pageCount + "  ·  " + filtered.Length,
+            .48f, TextAlignmentOptions.Midline);
+        Button(card.transform, "RuneNext", .73f, 1f - 139f / height, .85f, 1f - 108f / height,
+            ">", _runePage + 1 < pageCount,
+            () => { _runePage++; Rebuild(resetScroll: false); });
+        Button(card.transform, "RuneLatest", .86f, 1f - 139f / height, .975f, 1f - 108f / height,
+            "Latest", _runePage + 1 < pageCount,
+            () => { _runePage = pageCount - 1; Rebuild(resetScroll: false); });
+
+        if (page.Length == 0)
+        {
+            Text(card.transform, "RuneEmpty", .025f, .015f, .975f, 1f - headerHeight / height,
+                "No matching rune levels have been observed in this run.", .55f,
+                TextAlignmentOptions.MidlineLeft);
+        }
+        for (var index = 0; index < page.Length; index++)
+        {
+            var item = page[index];
+            var yMax = 1f - (headerHeight + index * rowHeight) / height;
+            var yMin = 1f - (headerHeight + (index + 1) * rowHeight) / height;
+            Text(card.transform, "RuneTime" + index, .025f, yMin, .17f, yMax,
+                FormatDuration(item.ElapsedTicks), .50f, TextAlignmentOptions.MidlineLeft);
+            Text(card.transform, "RuneName" + index, .18f, yMin, .55f, yMax,
+                item.Label, .52f, TextAlignmentOptions.MidlineLeft);
+            Text(card.transform, "RuneLevel" + index, .56f, yMin, .975f, yMax,
+                "L" + item.LevelBefore + " -> L" + item.LevelAfter + "  (+" +
+                item.LevelsGained + ")   M" + item.MasteryLevel + "   " + item.Archetype,
+                .49f, TextAlignmentOptions.MidlineLeft);
+        }
+        if (snapshot.RuneTimelineTruncated)
+        {
+            Status = "Rune timeline reached its bounded 512-event detail limit; build ratios remain complete.";
+        }
         return height + 8f;
     }
 
@@ -311,7 +398,20 @@ internal sealed class ChronicleRunsPage : IDisposable
         snapshot.State + "|" + history.Revision + "|" +
         string.Join(",", snapshot.Milestones.Select(item => item.State + ":" + item.ElapsedTicks)) + "|" +
         string.Join(",", snapshot.ResourceSections.SelectMany(item => item.Resources)
-            .Select(item => item.State + ":" + item.ElapsedTicks));
+            .Select(item => item.State + ":" + item.ElapsedTicks)) + "|" +
+        snapshot.RuneTimeline.Count + ":" + snapshot.RuneMix.TotalLevels + ":" +
+        snapshot.RuneTimelineTruncated;
+
+    private static string FormatMix(ChronicleRuneBuildMix mix) =>
+        "T:S:I " + mix.TempoLevels + ":" + mix.ScalingLevels + ":" +
+        mix.InvestmentLevels + "  ·  " + Percent(mix.TempoRatio) + "/" +
+        Percent(mix.ScalingRatio) + "/" + Percent(mix.InvestmentRatio) +
+        (mix.OtherLevels > 0 ? "  ·  Other " + mix.OtherLevels : string.Empty);
+
+    private static string Percent(double? ratio) =>
+        ratio.HasValue
+            ? ratio.Value.ToString("P0", CultureInfo.InvariantCulture)
+            : "n/a";
 
     private static string StateGlyph(object state) => state.ToString() switch
     {

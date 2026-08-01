@@ -24,6 +24,10 @@ tracked separately in Slice 4.
 
 ![Chronicle open at Mods and Runs](../screenshots/chronicle-runs.png)
 
+[Download the full-resolution time-rune build capture](../screenshots/chronicle-rune-build.png).
+
+![Chronicle time-rune ratios and filters](../screenshots/chronicle-rune-build.png)
+
 ## Verified supported-build contracts
 
 The exact supported Windows Steam pair was re-audited on 2026-08-01:
@@ -77,12 +81,12 @@ flowchart LR
 - The projector runs on Unity's main thread after the ordinary ServiceCycle host tick and reads
   only the world, generation, lifecycle, and monotonic timestamp exposed by a neutral capture port.
   Automata does not interpret Chronicle policy. The projector emits primitive availability,
-  blocked, and reached masks plus the pinned immutable resource table used to observe curated
-  resource discoveries. It retains no native object.
+  blocked, and reached masks plus the pinned immutable resource and time-rune tables used to
+  observe curated resource discoveries and rune-level transitions. It retains no native object.
 - The projector trusts a predicate only when the exact `views`, `upgrades`, `bool variables`, and
-  `resources` category collections are clean. A transient partial collection makes the whole
-  observation unavailable instead of permanently blocking a split or producing a partial
-  resource discovery.
+  `resources`, and `time runes` category collections are clean. A transient partial collection
+  makes the whole observation unavailable instead of permanently blocking a split or producing a
+  partial resource or rune observation.
 - The tracker owns exact ticks from the ServiceCycle monotonic clock (`gameplay-active-monotonic-v1`).
   It counts only while the run is `Running` and gameplay is lifecycle-ready in `Main`; it performs
   no game call.
@@ -164,6 +168,7 @@ Game MCP is perf-debug only, but it must expose the same Chronicle port as Mods:
 | Tool/resource | Behavior |
 |---|---|
 | `chronicle_status` / `orb://chronicle/status` | immutable current run, archive/comparison, split, first-visible KPI, and ratio/delta snapshot |
+| `chronicle_runes` | immutable current/PB/comparison/selected rune timeline with archetype filtering and bounded paging |
 | `chronicle_start` | start from the latest complete observation; reject if unavailable |
 | `chronicle_pause` | pause a running run |
 | `chronicle_resume` | resume only with a current compatible lifecycle observation |
@@ -211,11 +216,29 @@ No arbitrary path, member name, save operation, or native action is accepted.
   screen catalog, navigate there through Game MCP, and capture the rendered Chronicle frame.
 - [x] Validate the live MCP status includes all eight major splits, all seven resource subsections,
   and the exact archived-run comparison selector.
+- [x] Validate the installed time-rune build card, 29-tool MCP catalog, compact Chronicle status,
+  and filtered `chronicle_runes` query while the suite emergency stop is engaged.
 - [ ] Validate a disposable fresh run through each split and Restoration completion.
 - [ ] Validate title/load/reset/NG+ transitions and another save without mixed histories.
 - [ ] Validate Chronomancer speeds and manual/Automata progression paths.
 - [ ] Consider an optional exact-frame `CompleteWorldCycle` postfix only if measured 250 ms
   publication precision is insufficient; it would require a new manifest contract and UAT.
+
+### Slice 5 — time-rune build snapshots
+
+- [x] Capture ordered time-rune level transitions from the clean shared `time runes` publication,
+  including observation time, exact rune UUID/type, display label, level before/after, levels gained,
+  mastery level, and the authored Tempo/Scaling/Investment archetype.
+- [x] Treat the 250 ms publication as an observation boundary rather than claiming an exact purchase
+  event; aggregate multiple levels seen in one publication and pause fail-closed on missing or
+  regressed rune evidence.
+- [x] Persist a bounded rune timeline and complete level-weighted build totals in backward-readable
+  history schema v2. Legacy schema-v1 runs remain valid for splits/resources but expose no invented
+  rune history.
+- [x] Show current and personal-best `Tempo : Scaling : Investment` level ratios, with ambiguous or
+  non-core rune types isolated as `Other` rather than double-counted.
+- [x] Add an archetype-filtered, paged rune timeline to Mods / Runs and a read-only
+  `chronicle_runes` MCP/CLI query with source, archetype, offset, and limit filters.
 
 ## Verification boundary
 

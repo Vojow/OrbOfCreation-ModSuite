@@ -22,10 +22,15 @@ Harmony patch, game save, or progression action.
 | Resource KPI discovery time and quantity/rate/capacity facts freeze exactly once | `ChronicleRunTrackerTests` |
 | Preexisting resources receive no fabricated discovery or resource reading | `ChronicleRunTrackerTests` |
 | Missing curated resources affect only their KPI row | `ChronicleRunTrackerTests` |
+| Rune level jumps retain observed time, before/after levels, mastery, and level-weighted archetype mix | `ChronicleRunTrackerTests` |
+| Ambiguous core type membership is isolated as Other and rune regressions pause before counting time | `ChronicleRunTrackerTests` |
 | Completed history round-trips through the atomic sidecar and becomes a compatible PB | `ChronicleRunTrackerTests` |
+| Schema-v1 history remains readable with an explicitly unavailable rune schema | `ChronicleRunTrackerTests` |
 | Invalid history is preserved and blocks further writes | `ChronicleRunTrackerTests` |
 | Runs remains a distinct native Mods page and its rail glyph is audited/distinct | `ModConfigTests` |
 | Exact comparison selection crosses the bounded MCP mailbox | `GameMcpChronicleTests` |
+| Filtered/paged rune reads use compact status plus the exact immutable timeline | `GameMcpChronicleTests` |
+| Installed Runs card and `chronicle_runes Current --archetype Tempo` load with the emergency stop engaged and no runtime errors | 2026-08-01 MCP capture and BepInEx log audit |
 | Partial resource collection pauses before a discovery can be captured | `ChronicleWorldObservationProjectorTests` |
 | MCP discovery, resource, annotations, mailbox, and terminal result | `GameMcpChronicleTests` and `GameMcpStreamableHttpProtocolTests` |
 | New source remains under native-contract source audit | `NativeContractManifestTests` |

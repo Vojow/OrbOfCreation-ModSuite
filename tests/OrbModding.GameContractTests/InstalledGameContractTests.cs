@@ -584,6 +584,19 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void ChronicleRuneBuildCapture_MatchesTimeRuneIdentityTypeAndLabelContracts()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal(
+            "System.Collections.Generic.List`1<TimeRuneTypeSO>",
+            assembly.GetFieldType("TimeRuneSO", "timeRuneTypes"));
+        AssertMethod(assembly, "TooltipableObject", "GetName", false, "System.String");
+        AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
+        Assert.True(assembly.HasType("TimeRuneTypeSO"));
+    }
+
+    [GameAssemblyFact]
     public void OrbMentorAlchemy_MatchesNativeMasteryContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

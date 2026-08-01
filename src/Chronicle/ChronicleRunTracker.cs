@@ -36,6 +36,89 @@ internal enum ChronicleResourceKpiState
     Missing = 3,
 }
 
+internal enum ChronicleRuneArchetype
+{
+    Tempo = 0,
+    Scaling = 1,
+    Investment = 2,
+    Other = 3,
+}
+
+internal sealed class ChronicleRuneLevelEvent
+{
+    internal ChronicleRuneLevelEvent(
+        int sequence,
+        Guid targetId,
+        string label,
+        ChronicleRuneArchetype archetype,
+        long elapsedTicks,
+        int levelBefore,
+        int levelAfter,
+        int masteryLevel,
+        int discoveryRarityLevel)
+    {
+        if (sequence <= 0) throw new ArgumentOutOfRangeException(nameof(sequence));
+        if (targetId == Guid.Empty) throw new ArgumentException("A rune event requires an identity.", nameof(targetId));
+        if (elapsedTicks < 0 || levelBefore < 0 || levelAfter <= levelBefore || masteryLevel < 0 ||
+            discoveryRarityLevel < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(levelAfter));
+        }
+        Sequence = sequence;
+        TargetUuid = targetId.ToString("D");
+        ExpectedNativeType = "TimeRuneSO";
+        Label = string.IsNullOrWhiteSpace(label) ? TargetUuid.Substring(0, 8) : label;
+        Archetype = archetype;
+        ElapsedTicks = elapsedTicks;
+        ElapsedSeconds = elapsedTicks / (double)TimeSpan.TicksPerSecond;
+        LevelBefore = levelBefore;
+        LevelAfter = levelAfter;
+        LevelsGained = levelAfter - levelBefore;
+        MasteryLevel = masteryLevel;
+        DiscoveryRarityLevel = discoveryRarityLevel;
+    }
+
+    internal int Sequence { get; }
+    internal string TargetUuid { get; }
+    internal string ExpectedNativeType { get; }
+    internal string Label { get; }
+    internal ChronicleRuneArchetype Archetype { get; }
+    internal long ElapsedTicks { get; }
+    internal double ElapsedSeconds { get; }
+    internal int LevelBefore { get; }
+    internal int LevelAfter { get; }
+    internal int LevelsGained { get; }
+    internal int MasteryLevel { get; }
+    internal int DiscoveryRarityLevel { get; }
+}
+
+internal sealed class ChronicleRuneBuildMix
+{
+    internal ChronicleRuneBuildMix(long tempoLevels, long scalingLevels, long investmentLevels, long otherLevels)
+    {
+        if (tempoLevels < 0 || scalingLevels < 0 || investmentLevels < 0 || otherLevels < 0)
+            throw new ArgumentOutOfRangeException(nameof(tempoLevels));
+        TempoLevels = tempoLevels;
+        ScalingLevels = scalingLevels;
+        InvestmentLevels = investmentLevels;
+        OtherLevels = otherLevels;
+        CoreLevels = checked(tempoLevels + scalingLevels + investmentLevels);
+        TotalLevels = checked(CoreLevels + otherLevels);
+    }
+
+    internal long TempoLevels { get; }
+    internal long ScalingLevels { get; }
+    internal long InvestmentLevels { get; }
+    internal long OtherLevels { get; }
+    internal long CoreLevels { get; }
+    internal long TotalLevels { get; }
+    internal double? TempoRatio => Ratio(TempoLevels);
+    internal double? ScalingRatio => Ratio(ScalingLevels);
+    internal double? InvestmentRatio => Ratio(InvestmentLevels);
+
+    private double? Ratio(long levels) => CoreLevels == 0 ? null : levels / (double)CoreLevels;
+}
+
 internal readonly struct ChronicleResourceKpiReading
 {
     internal ChronicleResourceKpiReading(in WorldResource resource)
@@ -187,10 +270,15 @@ internal sealed class ChronicleRunSnapshot
         ulong worldGeneration,
         string reason,
         ChronicleMilestoneSnapshot[] milestones,
-        ChronicleResourceSectionSnapshot[] resourceSections)
+        ChronicleResourceSectionSnapshot[] resourceSections,
+        ChronicleRuneLevelEvent[] runeTimeline,
+        ChronicleRuneBuildMix runeMix,
+        bool runeTimelineTruncated)
     {
         if (milestones is null) throw new ArgumentNullException(nameof(milestones));
         if (resourceSections is null) throw new ArgumentNullException(nameof(resourceSections));
+        if (runeTimeline is null) throw new ArgumentNullException(nameof(runeTimeline));
+        if (runeMix is null) throw new ArgumentNullException(nameof(runeMix));
         if (elapsedTicks < 0) throw new ArgumentOutOfRangeException(nameof(elapsedTicks));
 
         Revision = revision;
@@ -204,9 +292,13 @@ internal sealed class ChronicleRunSnapshot
         MilestoneSchemaId = ChronicleMilestones.SchemaId;
         ClockId = ChronicleMilestones.ClockId;
         ResourceSchemaId = ChronicleResources.SchemaId;
+        RuneSchemaId = "orb-time-rune-build-v1";
         Milestones = Array.AsReadOnly((ChronicleMilestoneSnapshot[])milestones.Clone());
         ResourceSections = Array.AsReadOnly(
             (ChronicleResourceSectionSnapshot[])resourceSections.Clone());
+        RuneTimeline = Array.AsReadOnly((ChronicleRuneLevelEvent[])runeTimeline.Clone());
+        RuneMix = runeMix;
+        RuneTimelineTruncated = runeTimelineTruncated;
     }
 
     internal long Revision { get; }
@@ -220,12 +312,17 @@ internal sealed class ChronicleRunSnapshot
     internal string MilestoneSchemaId { get; }
     internal string ClockId { get; }
     internal string ResourceSchemaId { get; }
+    internal string RuneSchemaId { get; }
     internal IReadOnlyList<ChronicleMilestoneSnapshot> Milestones { get; }
     internal IReadOnlyList<ChronicleResourceSectionSnapshot> ResourceSections { get; }
+    internal IReadOnlyList<ChronicleRuneLevelEvent> RuneTimeline { get; }
+    internal ChronicleRuneBuildMix RuneMix { get; }
+    internal bool RuneTimelineTruncated { get; }
 }
 
 internal sealed class ChronicleRunTracker
 {
+    internal const int MaximumRuneEvents = 512;
     private readonly ChronicleMilestoneState[] _states =
         new ChronicleMilestoneState[ChronicleMilestones.Count];
     private readonly long?[] _elapsedTicks = new long?[ChronicleMilestones.Count];
@@ -235,6 +332,8 @@ internal sealed class ChronicleRunTracker
         new long?[ChronicleResources.Count][];
     private readonly ChronicleResourceKpiReading?[][] _resourceReadings =
         new ChronicleResourceKpiReading?[ChronicleResources.Count][];
+    private readonly Dictionary<Guid, int> _runeLevels = new();
+    private readonly List<ChronicleRuneLevelEvent> _runeTimeline = new();
     private ChronicleWorldObservation _latestObservation =
         ChronicleWorldObservation.Unavailable("the shared world has not been observed");
     private ChronicleRunState _state;
@@ -246,6 +345,12 @@ internal sealed class ChronicleRunTracker
     private ulong _requiredReachedMask;
     private string _reason = "no run has been started";
     private bool _sawWorldRestoredFalse;
+    private int _runeEventSequence;
+    private long _tempoLevels;
+    private long _scalingLevels;
+    private long _investmentLevels;
+    private long _otherLevels;
+    private bool _runeTimelineTruncated;
     private long _revision = 1;
 
     internal ChronicleRunTracker()
@@ -286,7 +391,14 @@ internal sealed class ChronicleRunTracker
                 _worldGeneration,
                 _reason,
                 milestones,
-                resourceSections);
+                resourceSections,
+                _runeTimeline.ToArray(),
+                new ChronicleRuneBuildMix(
+                    _tempoLevels,
+                    _scalingLevels,
+                    _investmentLevels,
+                    _otherLevels),
+                _runeTimelineTruncated);
         }
     }
 
@@ -324,6 +436,11 @@ internal sealed class ChronicleRunTracker
                 "run paused because previously observed native progression regressed without a lifecycle transition");
             return;
         }
+        if (!TryValidateRuneProgression(observation.TimeRunes, out var runeFailure))
+        {
+            PauseAutomatically("run paused because time-rune progression regressed: " + runeFailure);
+            return;
+        }
 
         var elapsedSinceLast = observation.ObservedAtTicks - _lastObservedAtTicks;
         if (_elapsedTicksTotal > long.MaxValue - elapsedSinceLast)
@@ -339,6 +456,7 @@ internal sealed class ChronicleRunTracker
 
         changed |= ApplyMilestones(in observation);
         changed |= ApplyResourceDiscoveries(observation.Resources);
+        changed |= ApplyRuneProgression(observation.TimeRunes);
 
         if (changed) _revision++;
     }
@@ -353,6 +471,8 @@ internal sealed class ChronicleRunTracker
         }
         if (_state is ChronicleRunState.Running or ChronicleRunState.Paused)
             return Rejected("chronicle_run_active", "a Chronicle run is already active");
+        if (!TryValidateRuneTable(_latestObservation.TimeRunes, out var runeFailure))
+            return Rejected("chronicle_runes_not_available", runeFailure);
 
         ResetMilestones();
         _runId = Guid.NewGuid();
@@ -377,6 +497,7 @@ internal sealed class ChronicleRunTracker
             }
         }
         InitializeResources(_latestObservation.Resources);
+        InitializeRunes(_latestObservation.TimeRunes);
         _sawWorldRestoredFalse = !_latestObservation.WorldRestored;
         _revision++;
         return Accepted("chronicle_started", "Chronicle run started");
@@ -423,6 +544,8 @@ internal sealed class ChronicleRunTracker
                 "chronicle_progress_regressed",
                 "previously observed native progression is absent from the current world");
         }
+        if (!TryValidateRuneProgression(_latestObservation.TimeRunes, out var runeFailure))
+            return Rejected("chronicle_runes_regressed", runeFailure);
 
         _state = ChronicleRunState.Running;
         _lastObservedAtTicks = _latestObservation.ObservedAtTicks;
@@ -430,6 +553,7 @@ internal sealed class ChronicleRunTracker
         _reason = "run is active";
         ApplyMilestones(in _latestObservation);
         ApplyResourceDiscoveries(_latestObservation.Resources);
+        ApplyRuneProgression(_latestObservation.TimeRunes);
         _revision++;
         return _state == ChronicleRunState.Finished
             ? Accepted(
@@ -500,6 +624,123 @@ internal sealed class ChronicleRunTracker
                 _resourceElapsedTicks[sectionIndex].Length);
             Array.Clear(_resourceReadings[sectionIndex], 0, _resourceReadings[sectionIndex].Length);
         }
+        _runeLevels.Clear();
+        _runeTimeline.Clear();
+        _runeEventSequence = 0;
+        _tempoLevels = 0;
+        _scalingLevels = 0;
+        _investmentLevels = 0;
+        _otherLevels = 0;
+        _runeTimelineTruncated = false;
+    }
+
+    private void InitializeRunes(PublicationTable<WorldTimeRune> timeRunes)
+    {
+        for (var index = 0; index < timeRunes.Count; index++)
+        {
+            var rune = timeRunes[index];
+            _runeLevels[rune.TimeRuneId] = rune.Level;
+        }
+    }
+
+    private static bool TryValidateRuneTable(
+        PublicationTable<WorldTimeRune> timeRunes,
+        out string reason)
+    {
+        for (var index = 0; index < timeRunes.Count; index++)
+        {
+            var rune = timeRunes[index];
+            if (rune.TimeRuneId == Guid.Empty || rune.Level < 0 || rune.MasteryLevel < 0 ||
+                rune.DiscRarityLevel < 0)
+            {
+                reason = "the published time-rune table contains an invalid identity or level";
+                return false;
+            }
+        }
+        reason = string.Empty;
+        return true;
+    }
+
+    private bool TryValidateRuneProgression(
+        PublicationTable<WorldTimeRune> timeRunes,
+        out string reason)
+    {
+        if (!TryValidateRuneTable(timeRunes, out reason)) return false;
+        foreach (var prior in _runeLevels)
+        {
+            if (!WorldLookup.TryFind(timeRunes, prior.Key, out var rune))
+            {
+                reason = "previously observed rune " + prior.Key.ToString("D") + " is missing";
+                return false;
+            }
+            if (rune.Level < prior.Value)
+            {
+                reason = "rune " + prior.Key.ToString("D") + " moved from level " +
+                    prior.Value + " to " + rune.Level;
+                return false;
+            }
+        }
+        reason = string.Empty;
+        return true;
+    }
+
+    private bool ApplyRuneProgression(PublicationTable<WorldTimeRune> timeRunes)
+    {
+        var changed = false;
+        for (var index = 0; index < timeRunes.Count; index++)
+        {
+            var rune = timeRunes[index];
+            if (!_runeLevels.TryGetValue(rune.TimeRuneId, out var priorLevel))
+            {
+                _runeLevels[rune.TimeRuneId] = rune.Level;
+                continue;
+            }
+            if (rune.Level == priorLevel) continue;
+
+            var archetype = ClassifyRune(rune.Archetypes);
+            var gained = rune.Level - priorLevel;
+            switch (archetype)
+            {
+                case ChronicleRuneArchetype.Tempo: _tempoLevels = checked(_tempoLevels + gained); break;
+                case ChronicleRuneArchetype.Scaling: _scalingLevels = checked(_scalingLevels + gained); break;
+                case ChronicleRuneArchetype.Investment: _investmentLevels = checked(_investmentLevels + gained); break;
+                default: _otherLevels = checked(_otherLevels + gained); break;
+            }
+            _runeLevels[rune.TimeRuneId] = rune.Level;
+            _runeEventSequence++;
+            if (_runeTimeline.Count < MaximumRuneEvents)
+            {
+                _runeTimeline.Add(new ChronicleRuneLevelEvent(
+                    _runeEventSequence,
+                    rune.TimeRuneId,
+                    rune.Label,
+                    archetype,
+                    _elapsedTicksTotal,
+                    priorLevel,
+                    rune.Level,
+                    rune.MasteryLevel,
+                    rune.DiscRarityLevel));
+            }
+            else
+            {
+                _runeTimelineTruncated = true;
+            }
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static ChronicleRuneArchetype ClassifyRune(WorldTimeRuneArchetype archetypes)
+    {
+        var core = archetypes & (WorldTimeRuneArchetype.Tempo |
+            WorldTimeRuneArchetype.Scaling | WorldTimeRuneArchetype.Investment);
+        return core switch
+        {
+            WorldTimeRuneArchetype.Tempo => ChronicleRuneArchetype.Tempo,
+            WorldTimeRuneArchetype.Scaling => ChronicleRuneArchetype.Scaling,
+            WorldTimeRuneArchetype.Investment => ChronicleRuneArchetype.Investment,
+            _ => ChronicleRuneArchetype.Other,
+        };
     }
 
     private void InitializeResources(PublicationTable<WorldResource> resources)

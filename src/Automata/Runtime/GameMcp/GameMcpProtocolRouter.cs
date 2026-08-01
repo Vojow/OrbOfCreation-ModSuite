@@ -6,6 +6,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.World;
+using OrbChronicle;
 
 namespace OrbAutomata.GameMcp;
 
@@ -145,6 +146,7 @@ internal sealed class GameMcpProtocolRouter
             "suite_configuration" => GameMcpToolExecution.Read(Configuration(state)),
             "trace_health" => GameMcpToolExecution.Read(TraceHealth(state)),
             "chronicle_status" => GameMcpToolExecution.Read(ChronicleStatus(state)),
+            "chronicle_runes" => GameMcpToolExecution.Read(ChronicleRunes(state, arguments)),
             "game_purchase" => SubmitPurchase(state, arguments),
             "game_cast" => SubmitCast(state, arguments),
             "game_concept" => SubmitConcept(state, arguments),
@@ -293,6 +295,84 @@ internal sealed class GameMcpProtocolRouter
 
     private static JObject ChronicleStatus(GameMcpStateSnapshot state) =>
         GameMcpWorldQuery.WithEnvelope(state, ParseObject(state.ChronicleJson));
+
+    private static JObject ChronicleRunes(GameMcpStateSnapshot state, JObject arguments)
+    {
+        var source = RequireOneOf(
+            arguments,
+            "source",
+            "Current",
+            "PersonalBest",
+            "Comparison",
+            "Selected");
+        var archetype = RequireOneOf(
+            arguments,
+            "archetype",
+            "All",
+            "Tempo",
+            "Scaling",
+            "Investment",
+            "Other");
+        var selectedRunId = string.Equals(source, "Selected", StringComparison.Ordinal)
+            ? RequireString(arguments, "runId")
+            : string.Empty;
+        var current = state.Chronicle;
+        var history = state.ChronicleHistory;
+        ChronicleRunRecord? recorded = source switch
+        {
+            "PersonalBest" => history?.PersonalBest,
+            "Comparison" => history?.Comparison,
+            "Selected" => history?.Runs.FirstOrDefault(run =>
+                string.Equals(
+                    run.RunId,
+                    selectedRunId,
+                    StringComparison.Ordinal)),
+            _ => null,
+        };
+        if ((source == "Current" && current is null) || (source != "Current" && recorded is null))
+        {
+            return GameMcpWorldQuery.WithEnvelope(state, new JObject
+            {
+                ["status"] = "not_available",
+                ["code"] = "chronicle_rune_source_unavailable",
+                ["reason"] = "the requested Chronicle rune source is not available",
+                ["source"] = source,
+            });
+        }
+
+        var timeline = source == "Current" ? current!.RuneTimeline : recorded!.RuneTimeline;
+        var filtered = timeline.Where(item =>
+            string.Equals(archetype, "All", StringComparison.Ordinal) ||
+            string.Equals(item.Archetype.ToString(), archetype, StringComparison.Ordinal)).ToArray();
+        var offset = Math.Max(0, OptionalInt(arguments, "offset", 0));
+        var limit = Math.Max(1, Math.Min(200, OptionalInt(arguments, "limit", 50)));
+        var runeSchemaId = source == "Current" ? current!.RuneSchemaId : recorded!.RuneSchemaId;
+        var runId = source == "Current" ? current!.RunId : recorded!.RunId;
+        var timelineTruncated = source == "Current"
+            ? current!.RuneTimelineTruncated
+            : recorded!.RuneTimelineTruncated;
+        var mix = source == "Current" ? current!.RuneMix : recorded!.RuneMix;
+        var result = new JObject
+        {
+            ["status"] = "available",
+            ["source"] = source,
+            ["runId"] = runId.Length == 0 ? JValue.CreateNull() : new JValue(runId),
+            ["runeSchemaId"] = runeSchemaId,
+            ["runeDataAvailable"] = runeSchemaId.Length > 0,
+            ["archetype"] = archetype,
+            ["offset"] = offset,
+            ["limit"] = limit,
+            ["total"] = filtered.Length,
+            ["returned"] = Math.Max(0, Math.Min(limit, filtered.Length - offset)),
+            ["timelineTruncated"] = timelineTruncated,
+            ["mix"] = GameMcpObjectProjector.Project(mix),
+            ["events"] = new JArray(filtered.Skip(offset).Take(limit)
+                .Select(GameMcpObjectProjector.Project)),
+        };
+        if (runeSchemaId.Length == 0)
+            result["reason"] = "this legacy run predates time-rune capture";
+        return GameMcpWorldQuery.WithEnvelope(state, result);
+    }
 
     private static JArray CompactFeatures(JArray? captured)
     {
@@ -917,8 +997,22 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "chronicle_status",
                 "Read Chronicle run status",
-                "Read the immutable active run, clock, lifecycle, major splits, and first-visible feature-resource KPIs.",
+                "Read the immutable active run, clock, lifecycle, major splits, time-rune build, and first-visible feature-resource KPIs.",
                 ObjectSchema()),
+            Tool(
+                "chronicle_runes",
+                "Filter Chronicle time-rune history",
+                "Read one current, PB, comparison, or exact archived rune timeline with archetype filtering and bounded pagination.",
+                ObjectSchema(
+                    new JObject
+                    {
+                        ["source"] = EnumSchema("Current", "PersonalBest", "Comparison", "Selected"),
+                        ["runId"] = StringSchema("Required only for Selected; canonical archived run ID."),
+                        ["archetype"] = EnumSchema("All", "Tempo", "Scaling", "Investment", "Other"),
+                        ["offset"] = IntegerSchema(0, int.MaxValue),
+                        ["limit"] = IntegerSchema(1, 200),
+                    },
+                    "source", "archetype")),
             Tool(
                 "game_purchase",
                 "Purchase a structure or upgrade",

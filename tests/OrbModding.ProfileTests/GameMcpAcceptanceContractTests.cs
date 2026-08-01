@@ -430,6 +430,10 @@ public sealed class GameMcpChronicleTests
         Assert.Equal(
             "orb-feature-resource-discoveries-v2",
             (string?)result["resourceSchemaId"]);
+        Assert.Equal("orb-time-rune-build-v1", (string?)result["runeSchemaId"]);
+        Assert.Equal(0, (int?)result["runeEventCount"]);
+        Assert.Null(result["runeTimeline"]);
+        Assert.Equal(0, (long?)result["runeMix"]!["coreLevels"]);
         Assert.Equal(8, result["milestones"]!.Count());
         Assert.Equal(7, result["resourceSections"]!.Count());
         Assert.Equal("magic", (string?)result["resourceSections"]![0]!["id"]);
@@ -441,6 +445,60 @@ public sealed class GameMcpChronicleTests
         Assert.Equal(
             "ResourceSO",
             (string?)result["resourceSections"]![0]!["resources"]![0]!["expectedNativeType"]);
+    }
+
+    [Fact]
+    public void RuneQueryExposesBoundedSourceArchetypeAndPagingFilters()
+    {
+        var events = new[]
+        {
+            new ChronicleRuneLevelEvent(
+                1, Guid.NewGuid(), "Magic Tempo", ChronicleRuneArchetype.Tempo,
+                TimeSpan.FromSeconds(4).Ticks, 0, 2, 3, 0),
+            new ChronicleRuneLevelEvent(
+                2, Guid.NewGuid(), "Magic Scaling", ChronicleRuneArchetype.Scaling,
+                TimeSpan.FromSeconds(6).Ticks, 1, 4, 2, 0),
+        };
+        var chronicle = new ChronicleRunSnapshot(
+            2,
+            Guid.NewGuid(),
+            ChronicleRunState.Running,
+            TimeSpan.FromSeconds(6).Ticks,
+            9,
+            1,
+            "run is active",
+            Array.Empty<ChronicleMilestoneSnapshot>(),
+            Array.Empty<ChronicleResourceSectionSnapshot>(),
+            events,
+            new ChronicleRuneBuildMix(2, 3, 0, 0),
+            runeTimelineTruncated: false);
+        var router = new GameMcpProtocolRouter(
+            GameMcpAcceptanceFixture.ConfiguredStore(chronicle),
+            new GameMcpCommandBus());
+
+        var result = GameMcpAcceptanceFixture.Call(
+            router,
+            "chronicle_runes",
+            new JObject
+            {
+                ["source"] = "Current",
+                ["archetype"] = "Tempo",
+                ["offset"] = 0,
+                ["limit"] = 25,
+            });
+
+        Assert.Equal("available", (string?)result["status"]);
+        Assert.Equal("Current", (string?)result["source"]);
+        Assert.Equal("Tempo", (string?)result["archetype"]);
+        Assert.True((bool?)result["runeDataAvailable"]);
+        Assert.Equal(1, (int?)result["total"]);
+        Assert.Equal(25, (int?)result["limit"]);
+        var item = Assert.Single(result["events"]!);
+        Assert.Equal("Magic Tempo", (string?)item!["label"]);
+        Assert.Equal(2, (int?)item["levelsGained"]);
+        Assert.Contains(
+            GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "chronicle_runes");
     }
 
     [Fact]
@@ -568,7 +626,12 @@ internal static class GameMcpAcceptanceFixture
         return (JObject)response.Body!["result"]!["structuredContent"]!;
     }
 
-    internal static GameMcpStateStore ConfiguredStore(string writableConfiguration = "[]")
+    internal static GameMcpStateStore ConfiguredStore(string writableConfiguration = "[]") =>
+        ConfiguredStore(new ChronicleRunTracker().Snapshot, writableConfiguration);
+
+    internal static GameMcpStateStore ConfiguredStore(
+        ChronicleRunSnapshot chronicle,
+        string writableConfiguration = "[]")
     {
         var store = new GameMcpStateStore();
         store.Capture(
@@ -582,7 +645,7 @@ internal static class GameMcpAcceptanceFixture
             DecisionJournalStatus.Unavailable,
             journalRevision: 2,
             runtime: null,
-            chronicle: new ChronicleRunTracker().Snapshot);
+            chronicle: chronicle);
         return store;
     }
 
