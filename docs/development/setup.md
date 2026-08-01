@@ -30,15 +30,16 @@ dotnet build src/OrbModSuite.csproj --configuration Release
 `global.json` pins the exact SDK used for release builds. Install that SDK
 version rather than allowing the compiler to float.
 
-The canonical release entry points also set
+The canonical publication build also sets
 `ContinuousIntegrationBuild=true`. That normalizes SourceLink document roots
 to `/_/`, so the full DLL is byte-identical across checkout locations. A plain
 development build remains deterministic within its checkout but is not the
 cross-checkout release-byte reproduction command.
 
-Set `OOC_GAME_DIR` only for gates that inspect the full installed assemblies,
-including installed contracts, release faithfulness, and perf-debug builds.
-The game is never launched by the contract gate.
+Set `OOC_GAME_DIR` only for operations that need the real installation: local
+installation, installed contracts, refs regeneration, and the per-refs-change
+faithfulness comparison. Both CI publication flavors compile from committed
+refs without a game. The game is never launched by the contract gate.
 
 On Windows, point `OOC_GAME_DIR` at the game root:
 
@@ -73,13 +74,13 @@ OOC_GAME_DIR="$PWD/lib" dotnet test \
 The first command has a 60-second wall-clock limit and runs the ordinary suite,
 the compile-time profile suite, and the profiled trace-tool build. The second
 reads PE metadata from the audited game copy without launching Unity. Record and
-reconcile all test and manifest counts; when compiler-warning counts matter, use
-the serial, non-incremental build commands from `tools/release.sh` so caching
-cannot hide a delta.
+reconcile all test and manifest counts; when compiler-warning counts matter,
+use `tools/build-release-assets.sh` or the serial, non-incremental command in
+[the release procedure](../releasing.md) so caching cannot hide a delta.
 
 Stub-linked outputs live under `bin-stubs/` and `obj-stubs/`; metadata-true
-reference builds use the normal `bin/` tree. The canonical release entry
-points add the cross-checkout setting above. Never install a
+reference builds use the normal `bin/` tree. The canonical publication build
+adds the cross-checkout setting above. Never install a
 hand-written-stub-linked DLL. Continue with the
 [testing hub](../testing/README.md) and
 [runtime validation protocol](../testing/runtime-validation.md).
@@ -96,9 +97,11 @@ Only after the user explicitly authorizes a local installation:
 Both modes refuse to run while the game is open, run the gates, back up saves and
 installed DLLs, reject duplicate or retired DLLs, install the verified output,
 and print SHA-256 hashes. `release` installs the same committed-reference build
-that ships. `perf-debug` includes ServiceCycle profiling and still resolves its
-extra debug-only dependencies from the game. Neither command tags, publishes,
-or launches the game.
+that ships. The local `perf-debug` installer includes ServiceCycle profiling
+and continues to compile against the real game closure; the CI perf-debug asset
+uses the matching committed profile refs. Both installers also need the game
+directory as the destination and for installed-contract validation. Neither
+command tags, publishes, or launches the game.
 
 From a clean commit, rehearse the supported package without installing it:
 
@@ -109,3 +112,8 @@ From a clean commit, rehearse the supported package without installing it:
 The package rehearsal runs the portable and installed-contract gates, then
 builds the canonical Release DLL from committed references before writing an
 allowlisted archive and hash manifest under `artifacts/releases/`.
+
+When a new audited game version requires regenerating `lib/game-refs`, run the
+`ReleaseAssemblyCheck` comparison in
+[the release procedure](../releasing.md#reference-change-faithfulness) in that
+same refs change. It is a reference-faithfulness gate, not a per-release gate.
