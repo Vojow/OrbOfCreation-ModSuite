@@ -63,10 +63,9 @@ rechecks that every `VERSION`/`CHANGELOG.md` change belongs to a `release:`
 commit.
 
 Because `suite-v<new VERSION>` does not exist, the state-based classifier takes
-the full-release path. It independently builds both flavors on Ubuntu and
-Windows and requires complete byte equality for both DLLs. Only then does CI
-create annotated tag `suite-v<VERSION>` and the full GitHub release with notes
-from the matching changelog section.
+the full-release path. CI builds both flavors once from the committed refs,
+then creates annotated tag `suite-v<VERSION>` and the full GitHub release with
+notes from the matching changelog section.
 
 Classification never depends on the before/after edge that introduced
 `VERSION`. If the stable tag remains absent, every later main merge attempts
@@ -84,7 +83,8 @@ Both publication flavors compile from `lib/game-refs/v1.0.5` with
 The committed refs are full-surface metadata derivations of audited assemblies,
 not the hand-written test stubs. Test stubs are never installed or published.
 There is no SHA-in-tag attestation: stable-release trust comes from the
-cross-OS reproducibility comparison, the SHA-locked refs, and the pinned SDK.
+SHA-locked refs, the pinned SDK, and the checksums published with every
+release.
 
 ## Private pre-release gates
 
@@ -145,9 +145,6 @@ All source fixes use PRs; recovery never directly pushes a commit to `main`.
 - **Transient CI failure before tag creation:** re-run the failed workflow. If
   source changes are needed, merge a normal fix PR. With no stable tag, the
   next main push retries the stable release automatically.
-- **Reproducibility mismatch:** do not bypass or post-process it. Fix forward in
-  a PR while keeping `VERSION` at the intended release value. Each subsequent
-  main merge re-attempts the stable release until both builds match.
 - **Annotated tag pushed but GitHub release creation failed:** the tag makes the
   repository look released, so an explicitly authorized maintainer deletes
   that exact remote tag (`git push origin :refs/tags/suite-v<VERSION>`), and any

@@ -57,9 +57,9 @@ For every main push, confirm the workflow:
 If `suite-v<VERSION>` exists, verify a prerelease tag
 `suite-v<VERSION>+main.<N>` whose count comes from the newest stable tag and
 whose notes use the associated PR body or merge-message fallback. If the stable
-tag is absent, verify exact Ubuntu/Windows byte identity for both flavors,
-stable tag `suite-v<VERSION>`, and notes from the matching changelog section.
+tag is absent, verify stable tag `suite-v<VERSION>` and notes from the matching
+changelog section.
 
 `script/package` remains a local archive rehearsal, not a publication owner.
-For partial tags, transient failures, or reproducibility mismatches, follow the
+For partial tags or transient failures, follow the
 [recovery runbook](../releasing.md#recovery-runbook).
