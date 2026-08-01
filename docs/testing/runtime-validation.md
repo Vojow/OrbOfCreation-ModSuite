@@ -1,7 +1,6 @@
 # Local runtime validation protocol
 
-[Testing hub](README.md) · [Repository strategy](strategy.md) ·
-[Module guides](README.md#module-guides)
+[Testing doctrine](README.md) · [Native contract workflow](native-contracts.md)
 
 Portable and metadata tests cannot prove behavior inside Unity. Runtime
 validation therefore proceeds in order; a later success never excuses an earlier
@@ -55,12 +54,23 @@ fail the gate.
 - Confirm exactly two closed suite buttons appear below the native help buttons:
   immediate STOP and disclosure. Opening disclosure creates the seven feature
   controls; closing it removes them.
+- From Main's first playable boundary, both suite surfaces remain in loading
+  while the six native icon sources appear, then become available together
+  within one 100 ms observation interval. Absence may remain loading for 30
+  seconds; a real mismatch or expiry follows the named three-attempt failure
+  path instead of rendering substitute controls.
 - Confirm the Mods rail, staged Apply/Revert/Default behavior, scroll position,
   external-edit conflicts, Runtime actions, tooltips, and keyboard navigation.
 - Verify native frames remain pointer targets across row gaps and padding, while
   child decoration does not steal input.
 - Verify a contained fault has both structural and color cues, and all genuine
   native capture failures name the failing contract in both log and Runtime.
+- Confirm the temporary-item editor exposes only discovered exact-item approval,
+  an explicit count, and removable unresolved entries; it has no raw, family,
+  or bulk approval path and persists only through Apply.
+- Confirm the activity timeline counts committed ordinary automation only,
+  excludes World collection and Mentor, keeps quiet minutes visible, and marks
+  faults without relying on color. Its processing summary remains text.
 - Confirm the release build exposes no profiling-only action or player-facing
   debug capability.
 
@@ -89,8 +99,9 @@ retries.
   whitelist behavior, and item-scoped quarantine.
 - **Auto Scribe:** role selection, cost rank, carry limit, payment-last ordering,
   queue/instant completion, and lifecycle quarantine.
-- **Mentor:** spells, artifacts, and ordinary alchemy independently; exact XP,
-  recursion suppression, source ceiling, domain isolation, and persistence.
+- **Mentor:** spells under both source-selection policies, artifacts, and
+  ordinary alchemy independently; exact XP, recursion suppression, source
+  ceiling, domain isolation, and persistence.
 
 ## V5 — persistence and rollback
 

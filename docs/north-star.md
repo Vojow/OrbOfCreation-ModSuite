@@ -89,16 +89,15 @@ schedulers, fallback renderers, or mutation adapters.
 
 Prefer an explicit refusal over partial operation whose truth cannot be proved.
 Prefer a clean pinned input over machinery that reacts a few frames sooner.
-Prefer deleting a completed plan, retired compatibility seam, or duplicate guide
-over preserving history in the active reading path.
+Prefer deleting a retired compatibility seam or duplicate guide over preserving
+history in the active reading path.
 
 ## Observability
 
 - **Performance profile:** compile-time opt-in measurements for owner and worker
   stages; absent from release builds.
 - **Manual full trace:** opt-in semantic events plus configuration and strategy
-  publication stores. Raw world payloads are not recorded; that remains the
-  explicit [world-store decision](plans/full-trace-world-store.md).
+  publication stores. Raw world payloads are not recorded.
 - **Decision journal:** bounded rolling numeric service decisions with durable
   health and lifecycle evidence.
 - **Recent-event dump:** an on-demand bounded snapshot of current host evidence
@@ -110,8 +109,6 @@ system; deterministic scenarios own reproducible re-execution.
 
 ## Direction
 
-Keep the released runtime small, measure before optimizing, and add the
-strategist as another publication rather than another engine. New capabilities
+Keep the released runtime small and measure before optimizing. New capabilities
 reuse lifecycle, ownership, binding, verification, freshness, diagnostics, and
-GameAction infrastructure. The [active plans](plans/README.md) contain only work
-that has not landed.
+GameAction infrastructure.

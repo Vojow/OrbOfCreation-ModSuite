@@ -2,8 +2,8 @@
 
 Supplements the root `AGENTS.md` for work under `src/`.
 
-- Read the affected feature README and its current testing guide before changing
-  behavior.
+- Read the affected feature README and the testing doctrine before changing
+  behavior; use the runtime protocol when the claim needs live evidence.
 - `Common` owns gameplay-neutral contracts and infrastructure only; feature
   policy stays with the feature.
 - Add no alternate scheduler, configuration authority, native mutation path, or

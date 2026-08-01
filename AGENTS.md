@@ -20,8 +20,7 @@ saves, and player control; fail closed when a game contract is unknown.
 
 - Follow [the engineering doctrine](docs/development/engineering-doctrine.md).
 - Keep changes focused and leave unrelated work untouched.
-- Update maintained behavior documentation with behavior changes. Plans contain
-  open work only; delete a plan when nothing remains open.
+- Update maintained behavior documentation with behavior changes.
 - Nested `AGENTS.md` files add rules for their subtrees.
 
 ## Verification
