@@ -75,6 +75,21 @@ internal enum AutoBuyExclusion
     /// about the snapshot.
     /// </summary>
     Unpriceable = 6,
+
+    /// <summary>The exact owning view exists, but its progression prerequisites are locked.</summary>
+    OwningViewUnavailable = 7,
+
+    /// <summary>No candidate-to-list/view relation was authored or published.</summary>
+    OwningViewRelationMissing = 8,
+
+    /// <summary>The candidate-to-list/view graph could not be read completely.</summary>
+    OwningViewRelationUnreadable = 9,
+
+    /// <summary>More than one distinct list/view route claimed the candidate.</summary>
+    OwningViewRelationAmbiguous = 10,
+
+    /// <summary>The route contradicted exact candidate, category, list, or view identity.</summary>
+    OwningViewRelationContradictory = 11,
 }
 
 /// <summary>How many candidates each exclusion term accounted for in one cycle.</summary>
@@ -90,7 +105,12 @@ internal readonly struct AutoBuyExclusionHistogram
         int requirementsUnmet,
         int terminal,
         int unaffordable,
-        int unpriceable)
+        int unpriceable,
+        int owningViewUnavailable,
+        int owningViewRelationMissing,
+        int owningViewRelationUnreadable,
+        int owningViewRelationAmbiguous,
+        int owningViewRelationContradictory)
     {
         KindNotSelected = kindNotSelected;
         Unavailable = unavailable;
@@ -98,6 +118,11 @@ internal readonly struct AutoBuyExclusionHistogram
         Terminal = terminal;
         Unaffordable = unaffordable;
         Unpriceable = unpriceable;
+        OwningViewUnavailable = owningViewUnavailable;
+        OwningViewRelationMissing = owningViewRelationMissing;
+        OwningViewRelationUnreadable = owningViewRelationUnreadable;
+        OwningViewRelationAmbiguous = owningViewRelationAmbiguous;
+        OwningViewRelationContradictory = owningViewRelationContradictory;
     }
 
     public int KindNotSelected { get; }
@@ -106,9 +131,17 @@ internal readonly struct AutoBuyExclusionHistogram
     public int Terminal { get; }
     public int Unaffordable { get; }
     public int Unpriceable { get; }
+    public int OwningViewUnavailable { get; }
+    public int OwningViewRelationMissing { get; }
+    public int OwningViewRelationUnreadable { get; }
+    public int OwningViewRelationAmbiguous { get; }
+    public int OwningViewRelationContradictory { get; }
 
     public int Total => KindNotSelected + Unavailable +
-        RequirementsUnmet + Terminal + Unaffordable + Unpriceable;
+        RequirementsUnmet + Terminal + Unaffordable + Unpriceable +
+        OwningViewUnavailable + OwningViewRelationMissing +
+        OwningViewRelationUnreadable + OwningViewRelationAmbiguous +
+        OwningViewRelationContradictory;
 
     public int For(AutoBuyExclusion exclusion) => exclusion switch
     {
@@ -118,6 +151,11 @@ internal readonly struct AutoBuyExclusionHistogram
         AutoBuyExclusion.Terminal => Terminal,
         AutoBuyExclusion.Unaffordable => Unaffordable,
         AutoBuyExclusion.Unpriceable => Unpriceable,
+        AutoBuyExclusion.OwningViewUnavailable => OwningViewUnavailable,
+        AutoBuyExclusion.OwningViewRelationMissing => OwningViewRelationMissing,
+        AutoBuyExclusion.OwningViewRelationUnreadable => OwningViewRelationUnreadable,
+        AutoBuyExclusion.OwningViewRelationAmbiguous => OwningViewRelationAmbiguous,
+        AutoBuyExclusion.OwningViewRelationContradictory => OwningViewRelationContradictory,
         _ => 0,
     };
 }

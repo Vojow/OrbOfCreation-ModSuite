@@ -174,7 +174,7 @@ internal static class AutoBuyRefusalBundle
         text.Append("Classification: ").Append(report.Diagnosis.Classification).AppendLine();
         text.AppendLine();
 
-        text.AppendLine("Live admission terms, read one at a time after CanPurchase() refused:");
+        text.AppendLine("Live diagnostic terms, read one at a time after the type-specific CanPurchase() refused:");
         AppendTerm(text, "IsAvailable()", report.Diagnosis.IsAvailable);
         AppendTerm(text, "IsMaxLevel()", report.Diagnosis.IsMaxLevel);
         AppendTerm(text, "IsMaxQueuedLevel()", report.Diagnosis.IsMaxQueuedLevel);

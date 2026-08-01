@@ -14,8 +14,8 @@ namespace OrbAutomata;
 /// Nothing here asks the game anything. The candidates are the snapshot's structures and upgrades,
 /// which is the same population the collector read <c>StructureSO.All</c> and <c>UpgradeSO.All</c>
 /// for; every fact about one comes from its published row, its published price, or the published
-/// effects it authors. The facts that describe the live action queue — <c>CanPurchase()</c> and the
-/// remaining room — are taken at the action boundary; see W39.
+/// effects it authors. The type-specific native <c>CanPurchase()</c> fold and the live action
+/// queue's remaining room are taken at the action boundary; see W39.
 /// </para>
 /// <para>
 /// So is the exact-type guard. An entry whose type is not exactly the audited <c>StructureSO</c> or
@@ -68,6 +68,7 @@ internal static class AutoBuyFrameProjector
                 AppendCandidate(
                     AutoBuyCandidateKind.Structure,
                     structures[index].EntityId,
+                    structures[index].Reading.StructureTypeId,
                     Levels(world, in structures[index]),
                     world,
                     ref candidates,
@@ -89,6 +90,7 @@ internal static class AutoBuyFrameProjector
                 AppendCandidate(
                     AutoBuyCandidateKind.Upgrade,
                     upgrades[index].EntityId,
+                    Guid.Empty,
                     Levels(world, in upgrades[index]),
                     world,
                     ref candidates,
@@ -122,6 +124,7 @@ internal static class AutoBuyFrameProjector
     private static void AppendCandidate(
         AutoBuyCandidateKind kind,
         Guid uuid,
+        Guid categoryId,
         in AutoBuyCandidateLevels levels,
         GameWorldState world,
         ref AutoBuyCandidateRow[] candidates,
@@ -150,6 +153,7 @@ internal static class AutoBuyFrameProjector
             new AutoBuyCandidateRow(
                 kind,
                 uuid,
+                OwningView(world, kind, uuid, categoryId),
                 levels.IsAvailable,
                 levels.CurrentLevel,
                 levels.QueuedLevels,
@@ -160,6 +164,68 @@ internal static class AutoBuyFrameProjector
                 costStart,
                 costRowCount));
         candidateCount++;
+    }
+
+    private static AutoBuyOwningViewStatus OwningView(
+        GameWorldState world,
+        AutoBuyCandidateKind kind,
+        Guid candidateId,
+        Guid categoryId)
+    {
+        if (!WorldLookup.TryFind(
+                world.PurchaseViewRelations,
+                candidateId,
+                out var relation))
+        {
+            return RelationCategoryWasClean(world)
+                ? AutoBuyOwningViewStatus.RelationMissing
+                : AutoBuyOwningViewStatus.RelationUnreadable;
+        }
+
+        var expectedKind = kind == AutoBuyCandidateKind.Structure
+            ? WorldPurchaseCandidateKind.Structure
+            : WorldPurchaseCandidateKind.Upgrade;
+        if (relation.Kind != expectedKind || relation.CategoryId != categoryId)
+            return AutoBuyOwningViewStatus.RelationContradictory;
+
+        switch (relation.Status)
+        {
+            case WorldPurchaseViewRelationStatus.Missing:
+                return AutoBuyOwningViewStatus.RelationMissing;
+            case WorldPurchaseViewRelationStatus.Unreadable:
+                return AutoBuyOwningViewStatus.RelationUnreadable;
+            case WorldPurchaseViewRelationStatus.Ambiguous:
+                return AutoBuyOwningViewStatus.RelationAmbiguous;
+            case WorldPurchaseViewRelationStatus.Contradictory:
+                return AutoBuyOwningViewStatus.RelationContradictory;
+            case WorldPurchaseViewRelationStatus.Resolved:
+                break;
+            default:
+                return AutoBuyOwningViewStatus.RelationUnreadable;
+        }
+
+        if (relation.ViewId == Guid.Empty || relation.ListId == Guid.Empty ||
+            !WorldLookup.TryFind(world.Views, relation.ViewId, out var view))
+            return AutoBuyOwningViewStatus.RelationUnreadable;
+        return view.Available
+            ? AutoBuyOwningViewStatus.Available
+            : AutoBuyOwningViewStatus.Unavailable;
+    }
+
+    private static bool RelationCategoryWasClean(GameWorldState world)
+    {
+        var categories = world.CollectionCategories.AsSpan();
+        for (var index = 0; index < categories.Length; index++)
+        {
+            var category = categories[index];
+            if (!string.Equals(
+                    category.Category,
+                    WorldPurchaseViewRelationReader.CategoryName,
+                    StringComparison.Ordinal))
+                continue;
+            return category.IsClean;
+        }
+        return false;
     }
 
     /// <summary>

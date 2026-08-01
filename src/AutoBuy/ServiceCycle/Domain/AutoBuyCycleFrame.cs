@@ -3,6 +3,17 @@ using OrbModding.Common.Runtime;
 
 namespace OrbAutomata;
 
+/// <summary>The owning-view term the planner carries for one candidate.</summary>
+internal enum AutoBuyOwningViewStatus
+{
+    Available = 0,
+    Unavailable,
+    RelationMissing,
+    RelationUnreadable,
+    RelationAmbiguous,
+    RelationContradictory,
+}
+
 /// <summary>
 /// One global row for an Auto Buy cycle frame: the once-per-frame facts the worker needs for
 /// grouping and lifecycle gating.
@@ -60,9 +71,10 @@ internal readonly struct AutoBuyGlobalRow
 /// <see cref="CostRowStart"/>/<see cref="CostRowCount"/>.
 /// </summary>
 /// <remarks>
-/// The game's <c>CanPurchase()</c> verdict used to be here. It is a live requirements-and-queue-room
-/// check whose answer changes between the pass that read it and the action that would use it, so the
-/// purchase adapter asks it instead, immediately before mutating. See W39.
+/// The game's <c>CanPurchase()</c> verdict used to be here. Its exact fold is type-specific:
+/// structures ask only per-level requirements and action-load admission, while upgrades also ask
+/// max-queued level, affordability, own availability, and queued-level requirements. Every term is
+/// live, so the purchase adapter asks the fold immediately before mutating. See W39.
 /// </remarks>
 internal readonly struct AutoBuyCandidateRow
 {
@@ -78,9 +90,39 @@ internal readonly struct AutoBuyCandidateRow
         bool meetsNextLevelRequirements,
         int costRowStart,
         int costRowCount)
+        : this(
+            kind,
+            uuid,
+            AutoBuyOwningViewStatus.Available,
+            isAvailable,
+            currentLevel,
+            queuedLevels,
+            hasFiniteLevels,
+            isMaxLevel,
+            isMaxQueuedLevel,
+            meetsNextLevelRequirements,
+            costRowStart,
+            costRowCount)
+    {
+    }
+
+    public AutoBuyCandidateRow(
+        AutoBuyCandidateKind kind,
+        Guid uuid,
+        AutoBuyOwningViewStatus owningView,
+        bool isAvailable,
+        int currentLevel,
+        int queuedLevels,
+        bool hasFiniteLevels,
+        bool isMaxLevel,
+        bool isMaxQueuedLevel,
+        bool meetsNextLevelRequirements,
+        int costRowStart,
+        int costRowCount)
     {
         Kind = kind;
         Uuid = uuid;
+        OwningView = owningView;
         IsAvailable = isAvailable;
         CurrentLevel = currentLevel;
         QueuedLevels = queuedLevels;
@@ -94,6 +136,12 @@ internal readonly struct AutoBuyCandidateRow
 
     public AutoBuyCandidateKind Kind { get; }
     public Guid Uuid { get; }
+
+    /// <summary>
+    /// The exact owning-view/list relation and the owning view's published availability. Every
+    /// non-available member maps one-to-one to a planner exclusion reason.
+    /// </summary>
+    public AutoBuyOwningViewStatus OwningView { get; }
     public bool IsAvailable { get; }
     public int CurrentLevel { get; }
     public int QueuedLevels { get; }

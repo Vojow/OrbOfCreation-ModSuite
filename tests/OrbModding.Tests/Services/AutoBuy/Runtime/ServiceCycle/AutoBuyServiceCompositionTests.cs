@@ -122,12 +122,30 @@ public sealed class AutoBuyServiceCompositionTests
     private static GameWorldState AffordableStructureWorld()
     {
         var structureId = Guid.NewGuid();
+        var structureTypeId = Guid.NewGuid();
+        var listId = Guid.NewGuid();
+        var viewId = Guid.NewGuid();
         var resourceId = Guid.NewGuid();
         var costs = new[] { new WorldPurchaseCost(structureId, resourceId, new BigDouble(1.0, 0)) };
+        var relation = new WorldPurchaseViewRelation(
+            structureId,
+            WorldPurchaseCandidateKind.Structure,
+            structureTypeId,
+            listId,
+            viewId,
+            WorldPurchaseViewRelationStatus.Resolved);
         return new GameWorldState
         {
             Structures = WorldTable.Create(
-                new[] { WorldStructureDeriver.Shared.Derive(WorldSamples.Structure(structureId)) }),
+                new[]
+                {
+                    WorldStructureDeriver.Shared.Derive(
+                        WorldSamples.Structure(structureId, structureTypeId: structureTypeId)),
+                }),
+            Views = WorldTable.Create(new[] { new WorldView(viewId, false, false, true) }),
+            PurchaseViewRelations = PublicationTable<WorldPurchaseViewRelation>.Create(
+                new[] { relation },
+                1),
             Resources = WorldTable.Create(
                 new[]
                 {

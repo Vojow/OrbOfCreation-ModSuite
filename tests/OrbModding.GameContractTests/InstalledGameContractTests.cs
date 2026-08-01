@@ -101,6 +101,51 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void AutoBuyUiGateAdmission_MatchesCompleteNativeBindingSet()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal("TooltipableObject", assembly.GetBaseType("AbstractListVariable"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<AbstractListVariable>",
+            assembly.GetFieldType("ViewSO", "relevantLists"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<AbstractListVariable>",
+            assembly.GetFieldType("ViewSO", "availableLists"));
+        Assert.Equal("StructureTypeSO", assembly.GetFieldType("StructureSO", "structureType"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<StructureSO>",
+            assembly.GetFieldType("StructureTypeSO", "structures"));
+        AssertMethod(
+            assembly,
+            "StructureListVariable",
+            "GetAll",
+            false,
+            "System.Collections.Generic.List`1<StructureSO>");
+        AssertMethod(
+            assembly,
+            "UpgradeListVariable",
+            "GetAll",
+            false,
+            "System.Collections.Generic.List`1<UpgradeSO>");
+        AssertMethod(assembly, "ViewSO", "IsAvailable", false, "System.Boolean");
+        AssertMethod(assembly, "StructureSO", "IsAvailable", false, "System.Boolean");
+
+        Assert.Equal(
+            "System.Collections.Generic.List`1<ViewListVariable+ListTuple>",
+            assembly.GetFieldType("UpgradeSO", "viewListAdditions"));
+        Assert.Equal("GenericListVariable`1<ViewSO>", assembly.GetBaseType("ViewListVariable"));
+        Assert.Equal(
+            "GenericListVariable`1+AdditionTuple`1<ViewSO,ViewListVariable>",
+            assembly.GetBaseType("ViewListVariable+ListTuple"));
+        Assert.Equal("!1", assembly.GetFieldType("GenericListVariable`1+AdditionTuple`1", "list"));
+        Assert.Equal("!0", assembly.GetFieldType("GenericListVariable`1+AdditionTuple`1", "element"));
+        Assert.Equal("IntVariable", assembly.GetFieldType("AbstractListVariable`1", "maxSizeVariable"));
+        AssertMethod(assembly, "GenericListVariable`1", "HasEmptySpot", false, "System.Boolean");
+        AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
+    }
+
+    [GameAssemblyFact]
     public void AutoCast_MatchesNativeLoadoutCastResourceAndTargetContracts()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

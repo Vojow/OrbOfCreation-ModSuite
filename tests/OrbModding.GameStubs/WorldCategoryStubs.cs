@@ -3,6 +3,14 @@ using System.Collections.Generic;
 
 public sealed class StructureTypeSO : UpgradeableObject
 {
+    private List<StructureSO> structures = StructureSO.All;
+
+    public void RegisterStructure(StructureSO structure) => structures.Add(structure);
+    public List<StructureSO> GetAllStructures() => structures;
+
+    // Purpose-built malformed fixtures can replace the authored membership without reflecting the
+    // private game field themselves.
+    public void SetStructuresForTests(List<StructureSO> value) => structures = value;
 }
 
 public sealed class SpellTypeSO : IdScriptableObject

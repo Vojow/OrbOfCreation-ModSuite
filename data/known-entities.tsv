@@ -12,6 +12,7 @@ BulkDevelopment	0ed119bf-0449-4d64-9989-1a3f68c7b8a2	BulkDevelopment	IntVariable
 CompletionScalingWeight	be446180-242f-40d2-910e-91e735fc20ad	SpecialScaling	ScalingWeightSO
 ConceptRecipes	c8ff8e01-c042-49c2-86a2-e374f82c280c	ConceptRecipes	AlchemyRecipeListVariable
 Conceptualization	69842862-dfce-4a9e-a73b-f757c72e49dc	Conceptualization	AlchemyTypeSO
+CreatedWorldAspects	74ec1f90-e94c-4cd7-a1d0-7b35016b57ff	CreatedWorldAspects	ViewListVariable
 ConsumableFruitType	46e0ab83-df7c-4f35-8012-3d9a3c97b753	Fruit	ConsumableTypeSO
 ConsumablePotionType	8103dae4-6945-4d18-b562-d2ffcd7ef49e	Potion	ConsumableTypeSO
 ConsumableRelicType	5d27b76e-eed3-49cc-a069-b9106000ede4	Relic	ConsumableTypeSO
@@ -59,3 +60,4 @@ TreasureTreePlot	2d41cfc1-bffa-43b5-b3a8-5e4d5ad85434	PlotTreasureTree	PlotNodeS
 TreasureTreeRewardPool	1a370ff9-fea7-4a2a-bca7-57fdb2862356	CoreTreasurePool	TreasurePoolSO
 UnlockLevelAllSpells	b5efd19a-9655-4359-ad27-f391bb86c2e4	UnlockLevelAllSpells	UpgradeSO
 WorkshopArtifact	668a2a7a-468f-4e0e-b182-979b12a4b0ad	WorkshopArtifact	ViewSO
+WorldAspectSlots	4b1bb2de-723a-4360-827c-8e4483f3ff8d	WorldAspectSlots	IntVariable

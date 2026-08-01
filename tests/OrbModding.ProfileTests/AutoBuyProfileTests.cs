@@ -51,12 +51,14 @@ public sealed class AutoBuyProfileTests : IDisposable
                 ServiceCycleProfileSpan.AutoBuyActionCandidateResolution,
                 stableIdReads: 2,
                 listEntries: 1),
-            // One call, not two: IsAvailable() is on the snapshot the worker planned from, so only
-            // CanPurchase() is asked here.
+            // The shared view resolver walks the exact category/list/view chain, then the boundary
+            // asks both live availability terms and the thin StructureSO.CanPurchase() fold.
             item => AssertStage(
                 item,
                 ServiceCycleProfileSpan.AutoBuyActionAdmissionRevalidation,
-                methodCalls: 1),
+                fieldReads: 5,
+                methodCalls: 10,
+                listEntries: 5),
             item => AssertStage(
                 item,
                 ServiceCycleProfileSpan.AutoBuyActionNativeSubmission,
@@ -158,6 +160,7 @@ public sealed class AutoBuyProfileTests : IDisposable
     private static void AssertStage(
         in CapturedMeasurement item,
         ServiceCycleProfileSpan span,
+        uint fieldReads = 0,
         uint methodCalls = 0,
         uint stableIdReads = 0,
         uint listEntries = 0,
@@ -167,7 +170,7 @@ public sealed class AutoBuyProfileTests : IDisposable
         Assert.Equal(1, item.Context.ServiceOrdinal);
         Assert.Equal((ulong)41, item.Context.Frame);
         Assert.Equal(ServiceCycleProfileTemperature.Warm, item.Context.Temperature);
-        Assert.Equal((uint)0, item.Operations.ReflectedFieldReads);
+        Assert.Equal(fieldReads, item.Operations.ReflectedFieldReads);
         Assert.Equal(methodCalls, item.Operations.ReflectedMethodCalls);
         Assert.Equal(stableIdReads, item.Operations.StableIdReads);
         Assert.Equal(listEntries, item.Operations.ListEntries);
@@ -179,12 +182,25 @@ public sealed class AutoBuyProfileTests : IDisposable
     {
         global::StructureSO.All.Clear();
         global::UpgradeSO.All.Clear();
+        global::ViewSO.All.Clear();
         global::ResourceSO.All.Clear();
         global::ValueModifierVariable.All.Clear();
         global::ActionManager.instance = new global::ActionManager();
         global::ActionManager.RemainingRoom = 0;
         global::GlobalVariables.MultiBuy = new global::IntVariable();
         global::Player.BulkDevelopment = new global::IntVariable();
+        var structureList = new global::StructureListVariable
+        {
+            value = global::StructureSO.All,
+        };
+        var upgradeList = new global::UpgradeListVariable
+        {
+            value = global::UpgradeSO.All,
+        };
+        var owningView = new global::ViewSO { available = true };
+        owningView.relevantLists.Add(structureList);
+        owningView.relevantLists.Add(upgradeList);
+        global::ViewSO.All.Add(owningView);
         NativeMultiBuyScope.ResetQuarantineForTests();
     }
 }

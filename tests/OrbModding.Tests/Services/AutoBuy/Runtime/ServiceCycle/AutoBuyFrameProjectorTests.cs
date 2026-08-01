@@ -75,6 +75,27 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
     }
 
     [Fact]
+    public void Project_LockedOwningView_PublishesNamedPlannerGate()
+    {
+        global::ViewSO.All[0].available = false;
+        var resource = Resource();
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        PriceStructure(structure, resource, new BigDouble(1.0, 0));
+        global::StructureSO.All.Add(structure);
+
+        var candidate = Assert.Single(
+            Project(Config(structures: true, upgrades: false)).Candidates.ToArray());
+
+        Assert.True(candidate.IsAvailable);
+        Assert.Equal(AutoBuyOwningViewStatus.Unavailable, candidate.OwningView);
+    }
+
+    [Fact]
     public void Project_UpgradeQueuedLevelsAreQueuedMinusCurrent()
     {
         var upgrade = new global::UpgradeSO
@@ -515,6 +536,13 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
     {
         global::StructureSO.All.Clear();
         global::UpgradeSO.All.Clear();
+        global::ViewSO.All.Clear();
+        var structures = new global::StructureListVariable { value = global::StructureSO.All };
+        var upgrades = new global::UpgradeListVariable { value = global::UpgradeSO.All };
+        var owningView = new global::ViewSO { available = true };
+        owningView.relevantLists.Add(structures);
+        owningView.relevantLists.Add(upgrades);
+        global::ViewSO.All.Add(owningView);
         global::ResearchSO.All.Clear();
         global::ResourceSO.All.Clear();
         global::ValueModifierVariable.All.Clear();

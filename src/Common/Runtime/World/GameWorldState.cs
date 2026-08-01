@@ -187,6 +187,13 @@ public sealed record GameWorldState
     internal PublicationTable<WorldView> Views { get; init; } =
         PublicationTable<WorldView>.Empty;
 
+    /// <summary>
+    /// The exact authored list and owning view for each native Auto Buy candidate. Non-resolved rows
+    /// are published too, so a planner can fail closed with the relation's named status.
+    /// </summary>
+    internal PublicationTable<WorldPurchaseViewRelation> PurchaseViewRelations { get; init; } =
+        PublicationTable<WorldPurchaseViewRelation>.Empty;
+
     internal PublicationTable<WorldPlotNodeAction> PlotNodeActions { get; init; } =
         PublicationTable<WorldPlotNodeAction>.Empty;
 
