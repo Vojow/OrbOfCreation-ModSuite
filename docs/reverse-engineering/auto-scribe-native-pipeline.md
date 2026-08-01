@@ -145,15 +145,44 @@ row's scaling level and `GetQuantity()` supplies its quantity. Aggregated consum
 insufficient because native Scroll use selects the strongest count and carries that count's scaling
 through the use.
 
-For one role and its independent Scroll frontier, coverage demand is:
+Scrolls are a consumption pipeline. Their value is realized by applying them to eligible
+structures, and each structure retains its applied enchantment level. Stock at or below every
+remaining target's level creates no coverage. For one role and its independent Scroll frontier,
+coverage demand is therefore:
 
 ```text
-desired = max(uncovered eligible structures, maximum carry load when positive)
+when maximum carry load > 0:
+    desired = min(uncovered eligible structures, maximum carry load)
+otherwise:
+    desired = 0 and block with NonPositiveCarryLimit
+
 deficit = max(0, desired
                  - owned Scrolls at or above target level
                  - active one-shot work at or above target level
                  - pending Auto Items uses at or above target level)
 ```
+
+The positive carry limit is an in-flight clamp, not a stock target. Demand below capacity produces
+only the uncovered count; demand above capacity produces at most one carry load. A gift naturally
+reduces the next publication's deficit. Full target-level stock makes the deficit zero, so the
+suite never pays for an equal-level replacement that would leave coverage unchanged. Weaker stock
+does not subtract from frontier demand and does not create a cleanup action.
+
+The audited v1.0.5 `ConsumableSO.Gain()` path defines “weakest” by level only. At capacity, an
+incoming level strictly above the weakest removes that weakest unit and admits the stronger unit;
+an equal level also replaces a unit but does not change level coverage; and a strictly weaker level
+decrements the incoming amount to zero, silently dropping it. `Gain()` first clamps its positive
+incoming amount to `maximumCarryLoad`, so a non-positive limit guarantees lost output. Native
+`UICraftingPage.QueueCraft` pays `CraftingRecipeSO.PurchaseQuantity` before construction and
+completion, and both instant and queued `CraftingInstance` completion execute the identical
+`ConsumableGainEffect -> ConsumableSO.Gain()` path. The capacity decision therefore happens after
+payment on both paths.
+
+Demand-driven frontier crafting makes positive capacity self-cleaning: a needed frontier Scroll is
+strictly stronger than dead stock, so native gain replaces the weakest as a side effect of the
+craft the uncovered structure already required. No speculative inventory fill and no suite
+`Discard()` call are necessary. Non-positive carry is instead a named fail-closed refusal because
+no crafted output can survive that native clamp.
 
 Automatic Scribe work at or above the target does not subtract a guessed quantity. It changes the
 role disposition to external production, causing the suite to yield until a later publication

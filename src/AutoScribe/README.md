@@ -22,9 +22,22 @@ Each visible recipe owns an independent progression frontier derived from that S
 `maxStartingLevel` is not copied onto every recipe. A covered stable role probes its next level;
 the guarded action then brackets and binary-searches the monotonic native affordability boundary
 and crafts the strongest affordable level at or above that request. This advances cheaper and more
-expensive Scroll families independently. For a positive native carry limit, coverage maintains at
-least one Scroll while reserving one inventory slot; a zero/unbounded limit continues to follow
-uncovered demand.
+expensive Scroll families independently.
+
+Scroll coverage is a consumption pipeline, not an inventory target. For a positive native carry
+limit, desired supply is the smaller of uncovered eligible structures and carry capacity. Owned
+Scrolls, queued work, and pending uses at or above the frontier subtract from that demand; gifts are
+therefore absorbed by the next publication without special handling. A non-positive carry limit
+blocks the role with `NonPositiveCarryLimit`, because audited native `Gain()` clamps positive output
+to that limit and silently drops it.
+
+The same audit establishes that native “weakest” is level-only. At capacity, a strictly stronger
+Scroll replaces the weakest, an equal-level Scroll replaces without changing coverage, and a
+strictly weaker Scroll is silently lost after payment. Queue and instant completion execute the
+same gain path, and crafting cost is paid before that capacity decision. Demand-driven production
+never requests equal-level stock churn: frontier crafts are needed for uncovered structures and
+replace dead weaker stock for free when capacity is full. Auto Scribe never calls `Discard()` and
+owns no cleanup action.
 
 `AutoScribeOneShotCraftGameAction` owns the only mutation boundary. It resolves one complete
 lifecycle-scoped binding set before use, re-resolves the action's recipe, Scroll, enchantment,
