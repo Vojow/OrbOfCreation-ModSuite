@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.World;
 #if SERVICE_CYCLE_PROFILE
 using OrbAutomata.Runtime.ServiceCycle.Profile;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
@@ -22,6 +23,15 @@ internal enum AutoBuyPurchasePreflight
     CandidateUnavailable,
     NotAdmissible,
     SingleBuyUnavailable,
+    OwningViewUnavailable,
+    OwningViewRelationMissing,
+    OwningViewRelationUnreadable,
+    OwningViewRelationAmbiguous,
+    OwningViewRelationContradictory,
+    StructureUnavailable,
+    DestinationCapacityFull,
+    DestinationCapacityContractUnavailable,
+    DestinationCapacityIdentityMismatch,
 }
 
 /// <summary>
@@ -155,6 +165,7 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
     private readonly System.Collections.Generic.Dictionary<Type, PurchaseAccessors?> _accessors =
         new System.Collections.Generic.Dictionary<Type, PurchaseAccessors?>();
     private readonly CandidateIndex?[] _candidateIndices = new CandidateIndex?[2];
+    private readonly NativePurchaseViewAdmissionResolver? _viewAdmission;
 #if SERVICE_CYCLE_PROFILE
     private readonly AutomataProfileOperations _profileOperations;
 
@@ -162,6 +173,18 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
     {
         _profileOperations = profileOperations ??
             throw new ArgumentNullException(nameof(profileOperations));
+        NativePurchaseViewAdmissionResolver.TryCreate(
+            ReflectionUtil.FindLoadedType,
+            out _viewAdmission,
+            out _);
+    }
+#else
+    public AutoBuyNativePurchaseAdapter()
+    {
+        NativePurchaseViewAdmissionResolver.TryCreate(
+            ReflectionUtil.FindLoadedType,
+            out _viewAdmission,
+            out _);
     }
 #endif
 
@@ -205,11 +228,19 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
             ServiceCycleProfileTemperature.Warm);
         try
         {
-            _profileOperations.AddReflectedMethodCalls(1);
 #endif
-        // The one live question the plan cannot answer for itself. CanPurchase() folds together
-        // availability, the level caps, the price and the per-level prerequisites, and every one of
-        // them can move between the world the worker planned from and this call.
+        var gate = ReadLiveGate(kind, uuid, source, accessors);
+        if (gate != AutoBuyPurchasePreflight.Proceeded)
+            return AutoBuyPurchaseSubmission.Rejected(gate);
+
+        // The shipped CanPurchase contracts differ materially. StructureSO checks only its
+        // per-level requirements and ActionManager.CanLoadAction(); it checks neither IsAvailable()
+        // nor affordability. UpgradeSO checks max queued level, affordability, IsAvailable(), queued
+        // level requirements, and ActionManager.CanLoadAction(). The explicit gates above close the
+        // structure gap and keep the owning view outside both methods visible at this boundary.
+#if SERVICE_CYCLE_PROFILE
+        _profileOperations.AddReflectedMethodCall();
+#endif
         readable = accessors.TryReadAdmission(source, out admitted);
 #if SERVICE_CYCLE_PROFILE
         }
@@ -224,6 +255,13 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
             // native object is in hand.
             return AutoBuyPurchaseSubmission.Rejected(
                 AutoBuyPurchasePreflight.NotAdmissible, accessors.Diagnose(source));
+        }
+
+        if (kind == AutoBuyCandidateKind.Upgrade)
+        {
+            var capacity = accessors.ReadDestinationCapacity(source);
+            if (capacity != AutoBuyPurchasePreflight.Proceeded)
+                return AutoBuyPurchaseSubmission.Rejected(capacity);
         }
 
         // Preserve the resource identities and first-level terms before the native call spends them.
@@ -259,6 +297,72 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
 #endif
     }
 
+    private AutoBuyPurchasePreflight ReadLiveGate(
+        AutoBuyCandidateKind kind,
+        Guid uuid,
+        object source,
+        PurchaseAccessors accessors)
+    {
+        var reads = default(NativePurchaseViewAdmissionReadCounts);
+        try
+        {
+            if (_viewAdmission is null)
+                return AutoBuyPurchasePreflight.OwningViewRelationUnreadable;
+
+            var resolution = _viewAdmission.ResolveProfiled(
+                kind == AutoBuyCandidateKind.Structure
+                    ? WorldPurchaseCandidateKind.Structure
+                    : WorldPurchaseCandidateKind.Upgrade,
+                uuid,
+                source,
+                ref reads);
+            switch (resolution.Relation.Status)
+            {
+                case WorldPurchaseViewRelationStatus.Missing:
+                    return AutoBuyPurchasePreflight.OwningViewRelationMissing;
+                case WorldPurchaseViewRelationStatus.Unreadable:
+                    return AutoBuyPurchasePreflight.OwningViewRelationUnreadable;
+                case WorldPurchaseViewRelationStatus.Ambiguous:
+                    return AutoBuyPurchasePreflight.OwningViewRelationAmbiguous;
+                case WorldPurchaseViewRelationStatus.Contradictory:
+                    return AutoBuyPurchasePreflight.OwningViewRelationContradictory;
+                case WorldPurchaseViewRelationStatus.Resolved:
+                    break;
+                default:
+                    return AutoBuyPurchasePreflight.OwningViewRelationUnreadable;
+            }
+
+            if (!_viewAdmission.TryReadAvailabilityProfiled(
+                    in resolution,
+                    ref reads,
+                    out var viewAvailable))
+                return AutoBuyPurchasePreflight.OwningViewRelationUnreadable;
+            if (!viewAvailable)
+                return AutoBuyPurchasePreflight.OwningViewUnavailable;
+
+            if (kind == AutoBuyCandidateKind.Structure)
+            {
+                reads.AddMethodCall();
+                if (!accessors.TryReadStructureAvailability(source, out var structureAvailable))
+                    return AutoBuyPurchasePreflight.CandidateUnavailable;
+                if (!structureAvailable)
+                    return AutoBuyPurchasePreflight.StructureUnavailable;
+            }
+
+            return AutoBuyPurchasePreflight.Proceeded;
+        }
+        finally
+        {
+#if SERVICE_CYCLE_PROFILE
+            for (var index = 0u; index < reads.FieldReads; index++)
+                _profileOperations.AddReflectedFieldRead();
+            _profileOperations.AddReflectedMethodCalls(reads.MethodCalls);
+            for (var index = 0u; index < reads.ListEntries; index++)
+                _profileOperations.AddListEntry();
+#endif
+        }
+    }
+
     /// <summary>
     /// Queues up to <paramref name="count"/> structure levels as one audited mutation.
     /// </summary>
@@ -270,7 +374,7 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
     /// because the next level is unaffordable is a partial success, exactly like an upgrade
     /// multi-buy, not a refusal.
     /// </remarks>
-    private static AutoBuyPurchaseSubmission SubmitStructure(
+    private AutoBuyPurchaseSubmission SubmitStructure(
         Guid uuid,
         object source,
         PurchaseAccessors accessors,
@@ -289,7 +393,10 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
                 accessors.InvokePurchase(source);
                 for (var level = 1; level < count; level++)
                 {
-                    if (!accessors.TryReadAdmission(source, out var admitted) || !admitted) break;
+                    if (ReadLiveGate(AutoBuyCandidateKind.Structure, uuid, source, accessors) !=
+                            AutoBuyPurchasePreflight.Proceeded ||
+                        !accessors.TryReadAdmission(source, out var admitted) || !admitted)
+                        break;
                     accessors.InvokePurchase(source);
                 }
             },
@@ -458,6 +565,7 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
         private readonly MethodInfo? _isMaxLevel;
         private readonly MethodInfo? _isMaxQueuedLevel;
         private readonly MethodInfo? _purchaseCost;
+        private readonly DestinationCapacityAccessors? _destinationCapacity;
         private Type? _costListType;
         private MethodInfo? _hasEnough;
         private MethodInfo? _getEntries;
@@ -478,7 +586,8 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
             MethodInfo? isAvailable,
             MethodInfo? isMaxLevel,
             MethodInfo? isMaxQueuedLevel,
-            MethodInfo? purchaseCost)
+            MethodInfo? purchaseCost,
+            DestinationCapacityAccessors? destinationCapacity)
         {
             _kind = kind;
             _canPurchase = canPurchase;
@@ -488,6 +597,7 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
             _isMaxLevel = isMaxLevel;
             _isMaxQueuedLevel = isMaxQueuedLevel;
             _purchaseCost = purchaseCost;
+            _destinationCapacity = destinationCapacity;
         }
 
         public static PurchaseAccessors? TryCreate(Type type, AutoBuyCandidateKind kind)
@@ -521,11 +631,27 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
                 FindNoArg(type, "IsAvailable", typeof(bool)),
                 FindNoArg(type, "IsMaxLevel", typeof(bool)),
                 FindNoArg(type, "IsMaxQueuedLevel", typeof(bool)),
-                FindNoArgReturning(type, "GetPurchaseCost"));
+                FindNoArgReturning(type, "GetPurchaseCost"),
+                kind == AutoBuyCandidateKind.Upgrade
+                    ? DestinationCapacityAccessors.TryCreate(type)
+                    : null);
         }
 
         public bool TryReadAdmission(object source, out bool admitted) =>
             TryInvokeBool(_canPurchase, source, out admitted);
+
+        public bool TryReadStructureAvailability(object source, out bool available)
+        {
+            available = false;
+            return _kind == AutoBuyCandidateKind.Structure && _isAvailable is not null &&
+                TryInvokeBool(_isAvailable, source, out available);
+        }
+
+        public AutoBuyPurchasePreflight ReadDestinationCapacity(object source) =>
+            _kind != AutoBuyCandidateKind.Upgrade
+                ? AutoBuyPurchasePreflight.Proceeded
+                : _destinationCapacity?.Read(source) ??
+                  AutoBuyPurchasePreflight.DestinationCapacityContractUnavailable;
 
         /// <summary>
         /// Reads each admission term the game exposes on its own, so a refusal can name a cause. Only
@@ -785,6 +911,235 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
                 _getTrueQuantity is not null &&
                 _getMissing is not null &&
                 _getGuid is not null;
+        }
+
+        /// <summary>
+        /// The exact authored addition tuple and destination-capacity contract used by upgrades.
+        /// A bound destination is admitted only when its exact list/max-variable pair is in the
+        /// audited profile and the live list reports an empty spot.
+        /// </summary>
+        private sealed class DestinationCapacityAccessors
+        {
+            private const BindingFlags Instance =
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            private readonly Type _tupleType;
+            private readonly Type _viewListType;
+            private readonly Type _viewType;
+            private readonly Type _intVariableType;
+            private readonly FieldInfo _additions;
+            private readonly FieldInfo _tupleList;
+            private readonly FieldInfo _tupleElement;
+            private readonly FieldInfo _maxSizeVariable;
+            private readonly MethodInfo _listIdentity;
+            private readonly MethodInfo _viewIdentity;
+            private readonly MethodInfo _variableIdentity;
+            private readonly MethodInfo _hasEmptySpot;
+
+            private DestinationCapacityAccessors(
+                Type tupleType,
+                Type viewListType,
+                Type viewType,
+                Type intVariableType,
+                FieldInfo additions,
+                FieldInfo tupleList,
+                FieldInfo tupleElement,
+                FieldInfo maxSizeVariable,
+                MethodInfo listIdentity,
+                MethodInfo viewIdentity,
+                MethodInfo variableIdentity,
+                MethodInfo hasEmptySpot)
+            {
+                _tupleType = tupleType;
+                _viewListType = viewListType;
+                _viewType = viewType;
+                _intVariableType = intVariableType;
+                _additions = additions;
+                _tupleList = tupleList;
+                _tupleElement = tupleElement;
+                _maxSizeVariable = maxSizeVariable;
+                _listIdentity = listIdentity;
+                _viewIdentity = viewIdentity;
+                _variableIdentity = variableIdentity;
+                _hasEmptySpot = hasEmptySpot;
+            }
+
+            internal static DestinationCapacityAccessors? TryCreate(Type upgradeType)
+            {
+                try
+                {
+                    var viewList = ExactGameType("ViewListVariable");
+                    var view = ExactGameType("ViewSO");
+                    var intVariable = ExactGameType("IntVariable");
+                    var tuple = viewList.GetNestedType(
+                        "ListTuple",
+                        BindingFlags.Public | BindingFlags.NonPublic) ??
+                        throw new InvalidOperationException("ViewListVariable.ListTuple was unavailable.");
+                    if (!IsGameType(tuple, "ViewListVariable+ListTuple"))
+                        throw new InvalidOperationException("ViewListVariable.ListTuple identity was unavailable.");
+
+                    var tupleBase = tuple.BaseType ??
+                        throw new InvalidOperationException("ViewListVariable.ListTuple base was unavailable.");
+                    if (!tupleBase.IsGenericType || tupleBase.GetGenericArguments().Length != 2 ||
+                        tupleBase.GetGenericArguments()[0] != view ||
+                        tupleBase.GetGenericArguments()[1] != viewList ||
+                        !string.Equals(
+                            tupleBase.GetGenericTypeDefinition().FullName,
+                            "GenericListVariable`1+AdditionTuple`1",
+                            StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            "GenericListVariable<ViewSO>.AdditionTuple<ViewListVariable> was unavailable.");
+                    }
+
+                    var additions = ExactField(
+                        upgradeType,
+                        "viewListAdditions",
+                        typeof(List<>).MakeGenericType(tuple),
+                        declaredOnly: true);
+                    var tupleList = ExactField(tupleBase, "list", viewList, declaredOnly: true);
+                    var tupleElement = ExactField(tupleBase, "element", view, declaredOnly: true);
+                    var abstractList = FindGenericBase(viewList, "AbstractListVariable`1", view);
+                    var genericList = FindGenericBase(viewList, "GenericListVariable`1", view);
+                    var maxSize = ExactField(
+                        abstractList,
+                        "maxSizeVariable",
+                        intVariable,
+                        declaredOnly: true);
+                    var hasEmptySpot = ExactNoArg(
+                        genericList,
+                        "HasEmptySpot",
+                        typeof(bool),
+                        declaredOnly: true);
+
+                    return new DestinationCapacityAccessors(
+                        tuple,
+                        viewList,
+                        view,
+                        intVariable,
+                        additions,
+                        tupleList,
+                        tupleElement,
+                        maxSize,
+                        ExactNoArg(viewList, "GetGuid", typeof(Guid), declaredOnly: false),
+                        ExactNoArg(view, "GetGuid", typeof(Guid), declaredOnly: false),
+                        ExactNoArg(intVariable, "GetGuid", typeof(Guid), declaredOnly: false),
+                        hasEmptySpot);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or AmbiguousMatchException)
+                {
+                    return null;
+                }
+            }
+
+            internal AutoBuyPurchasePreflight Read(object source)
+            {
+                try
+                {
+                    if (_additions.GetValue(source) is not IList additions)
+                        return AutoBuyPurchasePreflight.DestinationCapacityContractUnavailable;
+                    for (var index = 0; index < additions.Count; index++)
+                    {
+                        var tuple = additions[index];
+                        if (tuple is null || tuple.GetType() != _tupleType)
+                            return AutoBuyPurchasePreflight.DestinationCapacityContractUnavailable;
+                        var list = _tupleList.GetValue(tuple);
+                        var element = _tupleElement.GetValue(tuple);
+                        if (list is null || list.GetType() != _viewListType ||
+                            element is null || element.GetType() != _viewType)
+                        {
+                            return AutoBuyPurchasePreflight.DestinationCapacityContractUnavailable;
+                        }
+
+                        if (!TryIdentity(_listIdentity, list, out var listId) ||
+                            !TryIdentity(_viewIdentity, element, out _))
+                        {
+                            return AutoBuyPurchasePreflight.DestinationCapacityIdentityMismatch;
+                        }
+
+                        var maximum = _maxSizeVariable.GetValue(list);
+                        if (maximum is null) continue;
+                        if (maximum.GetType() != _intVariableType ||
+                            !TryIdentity(_variableIdentity, maximum, out var maximumId))
+                        {
+                            return AutoBuyPurchasePreflight.DestinationCapacityIdentityMismatch;
+                        }
+
+                        var knownList = listId == KnownEntities.CreatedWorldAspects.Uuid;
+                        var knownMaximum = maximumId == KnownEntities.WorldAspectSlots.Uuid;
+                        if (knownList != knownMaximum)
+                            return AutoBuyPurchasePreflight.DestinationCapacityIdentityMismatch;
+                        if (!knownList)
+                            return AutoBuyPurchasePreflight.DestinationCapacityContractUnavailable;
+
+                        if (_hasEmptySpot.Invoke(list, Array.Empty<object>()) is not bool empty)
+                            return AutoBuyPurchasePreflight.DestinationCapacityContractUnavailable;
+                        if (!empty)
+                            return AutoBuyPurchasePreflight.DestinationCapacityFull;
+                    }
+
+                    return AutoBuyPurchasePreflight.Proceeded;
+                }
+                catch (Exception ex) when (ex is TargetInvocationException or ArgumentException or
+                                           InvalidOperationException or TargetException or
+                                           MemberAccessException)
+                {
+                    return AutoBuyPurchasePreflight.DestinationCapacityContractUnavailable;
+                }
+            }
+
+            private static Type ExactGameType(string name) =>
+                ReflectionUtil.FindLoadedType(name) is { } type && IsGameType(type, name)
+                    ? type
+                    : throw new InvalidOperationException(name + " was unavailable.");
+
+            private static Type FindGenericBase(Type type, string definitionName, Type argument)
+            {
+                for (var current = type.BaseType; current is not null; current = current.BaseType)
+                {
+                    if (!current.IsGenericType) continue;
+                    var definition = current.GetGenericTypeDefinition();
+                    var arguments = current.GetGenericArguments();
+                    if (string.Equals(definition.FullName, definitionName, StringComparison.Ordinal) &&
+                        arguments.Length == 1 && arguments[0] == argument)
+                        return current;
+                }
+                throw new InvalidOperationException(definitionName + " was unavailable.");
+            }
+
+            private static FieldInfo ExactField(
+                Type owner,
+                string name,
+                Type fieldType,
+                bool declaredOnly)
+            {
+                var flags = Instance | (declaredOnly ? BindingFlags.DeclaredOnly : 0);
+                var field = owner.GetField(name, flags);
+                return field is not null && field.FieldType == fieldType
+                    ? field
+                    : throw new InvalidOperationException(owner.Name + "." + name + " was unavailable.");
+            }
+
+            private static MethodInfo ExactNoArg(
+                Type owner,
+                string name,
+                Type returnType,
+                bool declaredOnly)
+            {
+                var flags = Instance | (declaredOnly ? BindingFlags.DeclaredOnly : 0);
+                var method = owner.GetMethod(name, flags, null, Type.EmptyTypes, null);
+                return method is not null && method.ReturnType == returnType
+                    ? method
+                    : throw new InvalidOperationException(owner.Name + "." + name + " was unavailable.");
+            }
+
+            private static bool TryIdentity(MethodInfo method, object source, out Guid identity)
+            {
+                identity = Guid.Empty;
+                if (method.Invoke(source, Array.Empty<object>()) is not Guid value || value == Guid.Empty)
+                    return false;
+                identity = value;
+                return true;
+            }
         }
 
         private static bool IsGameType(Type type, string fullName) =>

@@ -98,12 +98,35 @@ internal readonly struct AutoBuyPurchaseNarration
             AutoBuyPurchasePreflight.CandidateUnavailable => new AutoBuyPurchaseNarration(
                 AutoBuyPurchaseNarrationLevel.Warning,
                 $"Auto Buy failed to purchase {candidate}: candidate could not be resolved."),
+            AutoBuyPurchasePreflight.OwningViewUnavailable => Refusal(
+                candidate, "owning view unavailable"),
+            AutoBuyPurchasePreflight.OwningViewRelationMissing => Refusal(
+                candidate, "owning view relation missing"),
+            AutoBuyPurchasePreflight.OwningViewRelationUnreadable => Refusal(
+                candidate, "owning view relation unreadable"),
+            AutoBuyPurchasePreflight.OwningViewRelationAmbiguous => Refusal(
+                candidate, "owning view relation ambiguous"),
+            AutoBuyPurchasePreflight.OwningViewRelationContradictory => Refusal(
+                candidate, "owning view relation contradictory"),
+            AutoBuyPurchasePreflight.StructureUnavailable => Refusal(
+                candidate, "structure unavailable"),
+            AutoBuyPurchasePreflight.DestinationCapacityFull => Refusal(
+                candidate, "destination capacity full"),
+            AutoBuyPurchasePreflight.DestinationCapacityContractUnavailable => Refusal(
+                candidate, "destination capacity contract unavailable"),
+            AutoBuyPurchasePreflight.DestinationCapacityIdentityMismatch => Refusal(
+                candidate, "destination capacity identity mismatch"),
             // Proceeded but not verified with a nonzero incoherent delta.
             _ => new AutoBuyPurchaseNarration(
                 AutoBuyPurchaseNarrationLevel.Warning,
                 $"Auto Buy failed to purchase {submission.RequestedLevels} levels for {candidate}: native mutation did not apply."),
         };
     }
+
+    private static AutoBuyPurchaseNarration Refusal(string candidate, string reason) =>
+        new(
+            AutoBuyPurchaseNarrationLevel.Warning,
+            $"Auto Buy failed to purchase {candidate}: {reason}.");
 
     /// <summary>
     /// What the plan believed about the price, in the terms it actually compared.

@@ -62,6 +62,10 @@ public sealed class GameWorldCollectorTests : IDisposable
             ["DoubleVariable"] = typeof(FakeNumber),
             ["IntVariable"] = typeof(FakeCount),
             ["BoolVariable"] = typeof(FakeFlag),
+            ["AbstractListVariable"] = typeof(FakeAbstractListVariable),
+            ["StructureTypeSO"] = typeof(FakeStructureType),
+            ["StructureListVariable"] = typeof(FakeStructureListVariable),
+            ["UpgradeListVariable"] = typeof(FakeUpgradeListVariable),
 
             // Not categories: the frame-wide globals reader resolves these two by name, and a
             // collector that cannot reach them silently prices every structure at parity.
@@ -106,7 +110,11 @@ public sealed class GameWorldCollectorTests : IDisposable
         FakeStructure.All.Add(new FakeStructure
         {
             Identity = cauldron,
-            structureType = new FakeReferencedEntity { Identity = scholar },
+            structureType = new FakeStructureType
+            {
+                Identity = scholar,
+                structures = FakeStructure.All,
+            },
             Level = 12,
             Queued = 3,
             Available = true,
@@ -122,7 +130,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(report.IsComplete, report.Describe());
         // Five primary entities plus two Scribe queues and eight complete zero-candidate
         // Scroll-target evidence rows.
-        Assert.Equal(15, report.TotalSampled);
+        Assert.Equal(17, report.TotalSampled);
 
         Assert.True(WorldLookup.TryFind(world.Resources, mana, out var resource));
         Assert.Equal(60d, resource.Reading.Quantity.ToDouble());
@@ -171,7 +179,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Forty-five passes: the four categories
+        // The scope claim, asserted rather than described. Forty-six passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -183,13 +191,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(45, report.Categories.Length);
+        Assert.Equal(46, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -1033,12 +1041,31 @@ public sealed class GameWorldCollectorTests : IDisposable
     // The member shape each binder requires, stated once. Field names that a binder reads as fields
     // are spelled exactly as the game spells them; everything else is reached through an accessor, so
     // the property names here are free to read well.
-    private sealed class FakeStructure
+    private sealed class FakeStructureType : FakeIdRegistry
+    {
+        internal static readonly FakeStructureType Shared = new()
+        {
+            structures = FakeStructure.All,
+        };
+
+        public List<FakeStructure> structures = new();
+    }
+
+    private sealed class FakeStructureListVariable : FakeAbstractListVariable
+    {
+        public List<FakeStructure> GetAll() => FakeStructure.All;
+    }
+
+    private sealed class FakeUpgradeListVariable : FakeAbstractListVariable
+    {
+        public List<FakeUpgrade> GetAll() => FakeUpgrade.All;
+    }
+
+    private sealed class FakeStructure : FakeIdRegistry
     {
         public static readonly List<FakeStructure> All = new();
 
-        public Guid Identity = Guid.NewGuid();
-        public FakeReferencedEntity structureType = new();
+        public FakeStructureType structureType = FakeStructureType.Shared;
         public int Level;
         public int Queued;
         public bool Available = true;
@@ -1073,8 +1100,6 @@ public sealed class GameWorldCollectorTests : IDisposable
         public FakeModifierRef costPerQuantity = new();
         public FakePrerequisites prerequisitesPerLevel = new();
         public FakeScribeEnchantTable enchantTable = new();
-
-        public Guid GetGuid() => Identity;
 
         public int GetPurchaseLevel() => Level;
 
@@ -1111,11 +1136,10 @@ public sealed class GameWorldCollectorTests : IDisposable
         public FakeModifierVariable? variable;
     }
 
-    private sealed class FakeUpgrade
+    private sealed class FakeUpgrade : FakeIdRegistry
     {
         public static readonly List<FakeUpgrade> All = new();
 
-        public Guid Identity = Guid.NewGuid();
         public int Level;
         public int maxLevel;
         public bool Available = true;
@@ -1126,8 +1150,6 @@ public sealed class GameWorldCollectorTests : IDisposable
         public FakeCostList resourceCost = new();
         public FakeModifierListRef resourceCostModPerLevel = new();
         public FakePrerequisites prerequisitesPerLevel = new();
-
-        public Guid GetGuid() => Identity;
 
         public int GetPurchaseLevel() => Level;
 

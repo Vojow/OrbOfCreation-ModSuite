@@ -366,6 +366,26 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
                     : ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
             case AutoBuyPurchasePreflight.SingleBuyUnavailable:
                 return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
+            case AutoBuyPurchasePreflight.OwningViewUnavailable:
+                return ServiceActionResult.Rejected(AutoBuyActionResultCodes.OwningViewUnavailable);
+            case AutoBuyPurchasePreflight.OwningViewRelationMissing:
+                return ServiceActionResult.Rejected(AutoBuyActionResultCodes.OwningViewRelationMissing);
+            case AutoBuyPurchasePreflight.OwningViewRelationUnreadable:
+                return ServiceActionResult.Rejected(AutoBuyActionResultCodes.OwningViewRelationUnreadable);
+            case AutoBuyPurchasePreflight.OwningViewRelationAmbiguous:
+                return ServiceActionResult.Rejected(AutoBuyActionResultCodes.OwningViewRelationAmbiguous);
+            case AutoBuyPurchasePreflight.OwningViewRelationContradictory:
+                return ServiceActionResult.Rejected(AutoBuyActionResultCodes.OwningViewRelationContradictory);
+            case AutoBuyPurchasePreflight.StructureUnavailable:
+                return ServiceActionResult.Rejected(AutoBuyActionResultCodes.StructureUnavailable);
+            case AutoBuyPurchasePreflight.DestinationCapacityFull:
+                return ServiceActionResult.Rejected(AutoBuyActionResultCodes.DestinationCapacityFull);
+            case AutoBuyPurchasePreflight.DestinationCapacityContractUnavailable:
+                return ServiceActionResult.Rejected(
+                    AutoBuyActionResultCodes.DestinationCapacityContractUnavailable);
+            case AutoBuyPurchasePreflight.DestinationCapacityIdentityMismatch:
+                return ServiceActionResult.Rejected(
+                    AutoBuyActionResultCodes.DestinationCapacityIdentityMismatch);
         }
 
         var evidence = ServiceNativeMutationEvidence.Observed(submission.Outcome, submission.CallOutcome);

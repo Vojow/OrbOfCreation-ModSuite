@@ -102,12 +102,10 @@ public sealed class AutoBuyCycleEvaluatorTests
         AutoBuyServiceProjection.Write(in state, output);
 
         var projection = output.CaptureSnapshot();
-        Assert.Equal(16, projection.Count);
+        Assert.Equal(15, projection.Count);
         Assert.Collection(
             Enumerable.Range(0, projection.Count).Select(projection.GetEntry),
             entry => AssertProjection(entry, AutoBuyServiceProjection.CapturedCandidatesKey, 3),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.CapturedStructuresKey, 2),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.CapturedUpgradesKey, 1),
             entry => AssertProjection(entry, AutoBuyServiceProjection.EligibleCandidatesKey, 2),
             entry => AssertProjection(entry, AutoBuyServiceProjection.PlannedActionsKey, 2),
             entry => AssertProjection(entry, AutoBuyServiceProjection.RequestedLevelsKey, 5),
@@ -117,10 +115,11 @@ public sealed class AutoBuyCycleEvaluatorTests
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedTerminalKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedUnaffordableKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedUnpriceableKey, 0),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.FullGroupsKey, 2),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.ReducedGroupsKey, 0),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.ReducedGroupLevelsKey, 0),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.LedgerStarvedKey, 0));
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedOwningViewUnavailableKey, 0),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedOwningViewRelationMissingKey, 0),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedOwningViewRelationUnreadableKey, 0),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedOwningViewRelationAmbiguousKey, 0),
+            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedOwningViewRelationContradictoryKey, 0));
     }
 
     /// <summary>
@@ -155,6 +154,32 @@ public sealed class AutoBuyCycleEvaluatorTests
         Assert.Equal(1, values[AutoBuyServiceProjection.ExcludedUnpriceableKey]);
         Assert.Equal(1, values[AutoBuyServiceProjection.ExcludedUnaffordableKey]);
         Assert.Equal(1, values[AutoBuyServiceProjection.ExcludedUnavailableKey]);
+    }
+
+    [Theory]
+    [InlineData((int)AutoBuyOwningViewStatus.Unavailable, (int)AutoBuyExclusion.OwningViewUnavailable)]
+    [InlineData((int)AutoBuyOwningViewStatus.RelationMissing, (int)AutoBuyExclusion.OwningViewRelationMissing)]
+    [InlineData((int)AutoBuyOwningViewStatus.RelationUnreadable, (int)AutoBuyExclusion.OwningViewRelationUnreadable)]
+    [InlineData((int)AutoBuyOwningViewStatus.RelationAmbiguous, (int)AutoBuyExclusion.OwningViewRelationAmbiguous)]
+    [InlineData((int)AutoBuyOwningViewStatus.RelationContradictory, (int)AutoBuyExclusion.OwningViewRelationContradictory)]
+    public void Planner_ExcludesOwningViewFailuresWithTheirNamedReason(
+        int owningViewValue,
+        int reasonValue)
+    {
+        var owningView = (AutoBuyOwningViewStatus)owningViewValue;
+        var reason = (AutoBuyExclusion)reasonValue;
+        var builder = new FrameBuilder();
+        var resource = builder.Resource(1_000);
+        builder.Structure(
+            StructureA,
+            new[] { (resource, 1.0) },
+            owningView: owningView);
+
+        var actions = Plan(builder.Build(), Config(), out _, out var metrics);
+
+        Assert.Empty(actions);
+        Assert.Equal(1, metrics.Exclusions.For(reason));
+        Assert.Equal(metrics.CapturedCandidates, metrics.Exclusions.Total);
     }
 
     // ---- Reserve floor -------------------------------------------------------------------------
@@ -1149,10 +1174,12 @@ public sealed class AutoBuyCycleEvaluatorTests
             bool isMaxLevel = false,
             bool isMaxQueuedLevel = false,
             int queuedLevels = 0,
-            bool meetsNextLevelRequirements = true) =>
+            bool meetsNextLevelRequirements = true,
+            AutoBuyOwningViewStatus owningView = AutoBuyOwningViewStatus.Available) =>
             Candidate(
                 AutoBuyCandidateKind.Structure, uuid, costs, available, hasFiniteLevels,
-                isMaxLevel, isMaxQueuedLevel, queuedLevels, meetsNextLevelRequirements);
+                isMaxLevel, isMaxQueuedLevel, queuedLevels, meetsNextLevelRequirements,
+                owningView: owningView);
 
         public FrameBuilder Upgrade(
             Guid uuid,
@@ -1162,10 +1189,12 @@ public sealed class AutoBuyCycleEvaluatorTests
             bool isMaxLevel = false,
             bool isMaxQueuedLevel = false,
             int queuedLevels = 0,
-            bool meetsNextLevelRequirements = true) =>
+            bool meetsNextLevelRequirements = true,
+            AutoBuyOwningViewStatus owningView = AutoBuyOwningViewStatus.Available) =>
             Candidate(
                 AutoBuyCandidateKind.Upgrade, uuid, costs, available,
-                hasFiniteLevels, isMaxLevel, isMaxQueuedLevel, queuedLevels, meetsNextLevelRequirements);
+                hasFiniteLevels, isMaxLevel, isMaxQueuedLevel, queuedLevels,
+                meetsNextLevelRequirements, owningView: owningView);
 
         public FrameBuilder GroupedStructure(
             Guid uuid,
@@ -1197,7 +1226,8 @@ public sealed class AutoBuyCycleEvaluatorTests
             int queuedLevels,
             bool meetsNextLevelRequirements,
             double[]? exactGroupedCosts = null,
-            int? publishedGroupedLevels = null)
+            int? publishedGroupedLevels = null,
+            AutoBuyOwningViewStatus owningView = AutoBuyOwningViewStatus.Available)
         {
             var start = _costs.Count;
             var groupedLevels = publishedGroupedLevels ?? Math.Max(
@@ -1215,6 +1245,7 @@ public sealed class AutoBuyCycleEvaluatorTests
             _candidates.Add(new AutoBuyCandidateRow(
                 kind,
                 uuid,
+                owningView,
                 available,
                 currentLevel: 0,
                 queuedLevels,
