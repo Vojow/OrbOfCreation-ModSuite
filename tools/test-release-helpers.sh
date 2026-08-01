@@ -90,6 +90,23 @@ if is_prerelease "0.5.0"; then
     exit 1
 fi
 
+expected_dll_sha="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+sha_line="$(release_dll_sha_line "${expected_dll_sha}")"
+annotation="Release title"$'\n\n'"${sha_line}"
+actual_dll_sha="$(extract_release_dll_sha "${annotation}")"
+if [[ "${actual_dll_sha}" != "${expected_dll_sha}" ]]; then
+    echo "tag-annotation SHA extraction returned '${actual_dll_sha}'" >&2
+    exit 1
+fi
+if extract_release_dll_sha "${annotation}"$'\n'"${sha_line}" >/dev/null 2>&1; then
+    echo "tag-annotation SHA extraction accepted duplicate SHA lines" >&2
+    exit 1
+fi
+if release_dll_sha_line "ABC" >/dev/null 2>&1; then
+    echo "tag-annotation SHA formatting accepted an invalid digest" >&2
+    exit 1
+fi
+
 fake_bin="${temporary_root}/fake-bin"
 mkdir -p "${fake_bin}"
 cat >"${fake_bin}/git" <<'EOF'
@@ -121,4 +138,4 @@ if [[ "${resolved_target}" != "Vojow/OrbOfCreation-ModSuite" ]]; then
     exit 1
 fi
 
-echo "changelog-extraction=pass version-consistency=pass prerelease-detection=pass repo-target-resolution=pass"
+echo "changelog-extraction=pass version-consistency=pass prerelease-detection=pass tag-sha=pass repo-target-resolution=pass"

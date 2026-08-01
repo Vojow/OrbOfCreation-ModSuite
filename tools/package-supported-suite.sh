@@ -4,13 +4,20 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output_directory="${repository_root}/artifacts/releases"
 game_root="${OOC_GAME_DIR:-${repository_root}/lib}"
+checked_in_references="${repository_root}/lib/game-refs/v1.0.5"
+reference_only="${ORB_PACKAGE_REFERENCE_ONLY:-false}"
 
 if [[ "$#" -ne 0 ]]; then
     echo "Usage: ./script/package" >&2
     exit 2
 fi
 
-for command_name in dotnet git zip unzip shasum; do
+if [[ "${reference_only}" != "true" && "${reference_only}" != "false" ]]; then
+    echo "ORB_PACKAGE_REFERENCE_ONLY must be 'true' or 'false'." >&2
+    exit 2
+fi
+
+for command_name in dotnet git zip unzip shasum env; do
     if ! command -v "${command_name}" >/dev/null 2>&1; then
         echo "Required command is unavailable: ${command_name}" >&2
         exit 1
@@ -32,14 +39,35 @@ assert_clean_head() {
 }
 assert_clean_head
 
+for required_reference in \
+    Assembly-CSharp.dll \
+    Assembly-CSharp-firstpass.dll \
+    UnityEngine.dll \
+    UnityEngine.CoreModule.dll \
+    UnityEngine.UI.dll \
+    UnityEngine.UIModule.dll \
+    Unity.TextMeshPro.dll \
+    BepInEx.dll \
+    0Harmony.dll; do
+    if [[ ! -f "${checked_in_references}/${required_reference}" ]]; then
+        echo "Required checked-in reference is missing: ${checked_in_references}/${required_reference}" >&2
+        exit 1
+    fi
+done
+
 managed_directory="${game_root}/Orb Of Creation_Data/Managed"
 bepinex_core_directory="${game_root}/BepInEx/core"
 for required_reference in \
     "${managed_directory}/Assembly-CSharp.dll" \
     "${managed_directory}/Assembly-CSharp-firstpass.dll" \
+    "${managed_directory}/UnityEngine.dll" \
+    "${managed_directory}/UnityEngine.CoreModule.dll" \
+    "${managed_directory}/UnityEngine.UI.dll" \
+    "${managed_directory}/UnityEngine.UIModule.dll" \
+    "${managed_directory}/Unity.TextMeshPro.dll" \
     "${bepinex_core_directory}/BepInEx.dll" \
     "${bepinex_core_directory}/0Harmony.dll"; do
-    if [[ ! -f "${required_reference}" ]]; then
+    if [[ "${reference_only}" != "true" && ! -f "${required_reference}" ]]; then
         echo "Required real-reference file is missing: ${required_reference}" >&2
         exit 1
     fi
@@ -117,26 +145,40 @@ fi
 echo "Running the bounded portable gate..."
 "${repository_root}/script/test"
 
-# The portable gate above restores the stub configuration only. The two commands below are the
-# real-reference one, and they pass --no-restore deliberately: a release build must not quietly
-# acquire a package mid-flight. That makes this the only place their dependencies are fetched, and
-# without it packaging a clean checkout fails on the first of them.
-echo "Restoring the real-reference configuration..."
-for project in \
-    "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
-    "${repository_root}/src/OrbModSuite.csproj"; do
-    OOC_GAME_DIR="${game_root}" dotnet restore "${project}" -p:Configuration=Release
-done
+# Installed contracts are intentionally local and inspect the audited full assemblies. The
+# tag-triggered workflow sets ORB_PACKAGE_REFERENCE_ONLY=true because tools/release.sh already ran
+# this gate before pushing the tag; CI must not claim that metadata-only refs repeat it.
+if [[ "${reference_only}" != "true" ]]; then
+    echo "Restoring the installed-game contract configuration..."
+    OOC_GAME_DIR="${game_root}" dotnet restore \
+        "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
+        -p:Configuration=Release
 
-echo "Running installed-game contracts against staged references..."
-OOC_GAME_DIR="${game_root}" dotnet test \
-    "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
-    --configuration Release --no-restore
+    echo "Running installed-game contracts against the audited game assemblies..."
+    OOC_GAME_DIR="${game_root}" dotnet test \
+        "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
+        --configuration Release --no-restore
+else
+    echo "Skipping installed-game contracts in reference-only CI packaging; the pre-tag gate owns them."
+fi
 
-echo "Building the supported suite against staged references..."
-OOC_GAME_DIR="${game_root}" dotnet build \
+echo "Restoring the canonical checked-in-reference build..."
+env -u OOC_GAME_DIR dotnet restore \
     "${repository_root}/src/OrbModSuite.csproj" \
-    --configuration Release --no-restore
+    --force-evaluate \
+    --disable-build-servers \
+    -p:Configuration=Release \
+    -p:EnableServiceCycleProfiler=false
+
+echo "Building the canonical suite against checked-in references..."
+env -u OOC_GAME_DIR dotnet build \
+    "${repository_root}/src/OrbModSuite.csproj" \
+    --configuration Release \
+    --disable-build-servers \
+    -m:1 \
+    --no-incremental \
+    --no-restore \
+    -p:EnableServiceCycleProfiler=false
 
 assert_plugin_output() {
     local output="${repository_root}/src/bin/Release/netstandard2.1"
