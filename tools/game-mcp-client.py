@@ -235,6 +235,9 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("chronicle-pause")
     commands.add_parser("chronicle-resume")
     commands.add_parser("chronicle-abandon")
+    comparison = commands.add_parser("chronicle-select-comparison")
+    comparison.add_argument("mode", choices=("PersonalBest", "Previous", "Selected"))
+    comparison.add_argument("--run-id", default="")
     tooltips = commands.add_parser("tooltips")
     tooltips.add_argument("--offset", type=int, default=0)
     tooltips.add_argument("--limit", type=int, default=25)
@@ -544,6 +547,14 @@ def main() -> int:
             result = client.call_tool("chronicle_resume", {})
         elif args.command == "chronicle-abandon":
             result = client.call_tool("chronicle_abandon", {})
+        elif args.command == "chronicle-select-comparison":
+            arguments = {"mode": args.mode}
+            if args.run_id:
+                arguments["runId"] = args.run_id
+            result = client.call_tool(
+                "chronicle_select_comparison",
+                arguments,
+            )
         elif args.command == "tooltips":
             result = client.call_tool(
                 "game_tooltips",

@@ -40,7 +40,7 @@
       <HintPath>$(ManagedDir)/Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="Newtonsoft.Json" Condition="'$(EnableServiceCycleProfiler)' == 'true'">
+    <Reference Include="Newtonsoft.Json">
       <HintPath>$(ManagedDir)/Newtonsoft.Json.dll</HintPath>
       <Private>false</Private>
     </Reference>
@@ -57,11 +57,11 @@
   </ItemGroup>
 
   <!--
-    The game MCP exists only in profiler builds. Installed builds bind to the Newtonsoft.Json copy
-    the game already ships; portable profiler builds use the matching package as a compile asset.
+    Chronicle history and the profiler-only game MCP bind to the Newtonsoft.Json copy the game
+    already ships; portable stub builds use the matching package as a compile asset.
     Excluding its runtime asset keeps the suite project from pretending it owns or deploys that DLL.
   -->
-  <ItemGroup Condition="'$(EnableServiceCycleProfiler)' == 'true' and '$(UseGameStubs)' == 'true'">
+  <ItemGroup Condition="'$(UseGameStubs)' == 'true'">
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1"
                       PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>

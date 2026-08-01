@@ -19,6 +19,8 @@ internal static class NativeFeatureIconResolver
     {
         if (pageLabel.StartsWith("Runtime", StringComparison.Ordinal))
             return FromCaptured(capturedRail?.RuntimeIcon, "ScreenTime", out icon, out reason);
+        if (string.Equals(pageLabel, "Runs", StringComparison.Ordinal))
+            return FromCaptured(capturedRail?.RunsIcon, "ScreenRituals", out icon, out reason);
         return pageLabel switch
         {
             "General" => FromCaptured(

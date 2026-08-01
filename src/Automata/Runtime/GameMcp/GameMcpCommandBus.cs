@@ -28,6 +28,7 @@ internal enum GameMcpCommandKind
     ChroniclePause = 16,
     ChronicleResume = 17,
     ChronicleAbandon = 18,
+    ChronicleSelectComparison = 19,
 }
 
 /// <summary>
@@ -508,7 +509,7 @@ internal sealed class GameMcpCommandBus
         bool capture,
         bool saveCapture)
     {
-        if (kind is < GameMcpCommandKind.Screenshot or > GameMcpCommandKind.ChronicleAbandon)
+        if (kind is < GameMcpCommandKind.Screenshot or > GameMcpCommandKind.ChronicleSelectComparison)
             throw new ArgumentOutOfRangeException(nameof(kind));
         return Enqueue(NewCommand(
             kind,

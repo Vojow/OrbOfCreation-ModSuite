@@ -92,8 +92,9 @@ internal sealed class ModSettingsPage : IDisposable
     public void RestoreBookmark(ModConfigNavigationBookmark bookmark)
     {
         if (bookmark.IsRuntime) return;
-        var pluginIndex = ModConfigNavigationBookmarkPolicy.ResolveTopPageIndex(_catalog, bookmark) - 1;
-        if (pluginIndex < 0) return;
+        var pageIndex = ModConfigNavigationBookmarkPolicy.ResolveTopPageIndex(_catalog, bookmark);
+        if (pageIndex < 2) return;
+        var pluginIndex = ModConfigTopNavigation.Build(_catalog, attentionCount: 0)[pageIndex].PluginIndex;
         var mod = _catalog.Mods[pluginIndex];
         _navigation[pluginIndex] = new ModSettingsNavigationState(
             ModConfigNavigationBookmarkPolicy.ResolveSectionIndex(mod, bookmark),

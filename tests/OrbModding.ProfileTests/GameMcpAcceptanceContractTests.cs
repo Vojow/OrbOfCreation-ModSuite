@@ -481,6 +481,35 @@ public sealed class GameMcpChronicleTests
         Assert.True((bool?)tool["annotations"]?["destructiveHint"]);
         Assert.False((bool?)tool["annotations"]?["openWorldHint"]);
     }
+
+    [Fact]
+    public async Task ComparisonSelectionUsesTheBoundedMainThreadMailbox()
+    {
+        var commands = new GameMcpCommandBus();
+        var router = new GameMcpProtocolRouter(
+            GameMcpAcceptanceFixture.ConfiguredStore(),
+            commands);
+        var call = Task.Run(() => GameMcpAcceptanceFixture.Call(
+            router,
+            "chronicle_select_comparison",
+            new JObject { ["mode"] = "Previous" }));
+
+        Assert.True(SpinWait.SpinUntil(() => commands.PendingCount == 1, 500));
+        Assert.True(commands.TryDequeue(out var command));
+        Assert.Equal(GameMcpCommandKind.ChronicleSelectComparison, command.Kind);
+        Assert.Equal("Previous", command.Mode);
+        Assert.Empty(command.PayloadValue);
+        commands.Complete(command, GameMcpCommandResult.Committed(
+            "chronicle_comparison_selected",
+            "comparison changed",
+            0,
+            9,
+            3));
+
+        var result = await call;
+        Assert.Equal("committed", (string?)result["status"]);
+        Assert.Equal("chronicle_comparison_selected", (string?)result["resultCode"]);
+    }
 }
 
 public sealed class GameMcpForbiddenSurfaceTests

@@ -18,6 +18,7 @@ internal sealed record NativeFeatureRailVisualPrimitives(
     Sprite FeatureRailBaseFrame,
     Sprite FeatureRailActiveFrame,
     Sprite RuntimeIcon,
+    Sprite RunsIcon,
     Sprite GeneralIcon,
     Sprite ConceptIcon,
     Sprite AdvancedIcon,

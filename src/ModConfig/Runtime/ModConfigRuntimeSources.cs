@@ -1,4 +1,5 @@
 using System;
+using OrbChronicle;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
@@ -24,7 +25,8 @@ internal sealed class ModConfigRuntimeSources
         IManualFullTraceControl manualFullTrace,
         IHostTraceDumpControl hostTraceDump,
         IDifferentialVerificationControl differentialVerification,
-        IDecisionJournalStatusSource decisionJournal
+        IDecisionJournalStatusSource decisionJournal,
+        IChronicleRuntime chronicle
 #if SERVICE_CYCLE_PROFILE
         , IPerformanceProfileControl performanceProfile
 #endif
@@ -40,6 +42,7 @@ internal sealed class ModConfigRuntimeSources
         DifferentialVerification = differentialVerification ??
                                    throw new ArgumentNullException(nameof(differentialVerification));
         DecisionJournal = decisionJournal ?? throw new ArgumentNullException(nameof(decisionJournal));
+        Chronicle = chronicle ?? throw new ArgumentNullException(nameof(chronicle));
 #if SERVICE_CYCLE_PROFILE
         PerformanceProfile = performanceProfile ?? throw new ArgumentNullException(nameof(performanceProfile));
 #endif
@@ -54,6 +57,7 @@ internal sealed class ModConfigRuntimeSources
     public IHostTraceDumpControl HostTraceDump { get; }
     public IDifferentialVerificationControl DifferentialVerification { get; }
     public IDecisionJournalStatusSource DecisionJournal { get; }
+    public IChronicleRuntime Chronicle { get; }
 #if SERVICE_CYCLE_PROFILE
     public IPerformanceProfileControl PerformanceProfile { get; }
 #endif

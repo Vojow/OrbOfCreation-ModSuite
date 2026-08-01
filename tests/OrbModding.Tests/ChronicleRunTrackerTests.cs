@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using OrbChronicle;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.World;
@@ -389,6 +390,63 @@ public sealed class ChronicleRunTrackerTests
             candidate.Id == "ore");
         Assert.Contains(ChronicleResources.At(6).Resources, candidate =>
             candidate.Id == "ore");
+    }
+
+    [Fact]
+    public void FinishedRunIsAtomicallyArchivedAndReloadedForPersonalBestComparison()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "orb-chronicle-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "history.json");
+        try
+        {
+            var tracker = Started();
+            tracker.Observe(Observation(
+                reached: ChronicleMilestones.NativeMask,
+                restored: true,
+                world: 3,
+                observedAtTicks: Seconds(42)));
+            Assert.Equal(ChronicleRunState.Finished, tracker.Snapshot.State);
+
+            var history = new ChronicleHistory(path, _ => { });
+            history.Observe(tracker.Snapshot);
+            Assert.True(File.Exists(path));
+            Assert.False(File.Exists(path + ".tmp"));
+
+            var reloaded = new ChronicleHistory(path, _ => { }).Project(tracker.Snapshot);
+            var run = Assert.Single(reloaded.Runs);
+            Assert.Equal(tracker.Snapshot.RunId, run.RunId);
+            Assert.Equal(42, run.ElapsedSeconds);
+            Assert.Same(run, reloaded.Comparison);
+            Assert.Equal(ChronicleComparisonMode.PersonalBest, reloaded.ComparisonMode);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void InvalidSidecarIsPreservedAndBlocksWrites()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "orb-chronicle-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "history.json");
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(path, "{ definitely-not-json }");
+        try
+        {
+            var warnings = new List<string>();
+            var history = new ChronicleHistory(path, warnings.Add);
+            var tracker = Started();
+            history.Observe(tracker.Snapshot);
+
+            Assert.Equal("{ definitely-not-json }", File.ReadAllText(path));
+            Assert.Single(warnings);
+            Assert.Contains("read-only", history.Project(tracker.Snapshot).Status);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     private static ChronicleRunTracker Started(

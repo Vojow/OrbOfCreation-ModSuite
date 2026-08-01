@@ -7,7 +7,7 @@ The page edits the suite's own settings and, because it discovers loaded plugins
 ## Settings editor
 
 - Discovers loaded plugins and typed BepInEx configuration entries.
-- Groups settings into Runtime, General, seven automation feature pages, and Advanced while preserving the original section/key contract.
+- Groups the suite into live Runtime and Chronicle Runs pages plus General, seven automation feature pages, and Advanced while preserving the original section/key contract.
 - Renders feature mode once in the page header as an immediate committed-store command; mode is not repeated in the staged setting list.
 - Supports booleans, enums, bounded and unbounded numbers, strings, and keyboard shortcuts.
 - Replaces the Auto Items temporary allowlist's generic string editor with a whitelist-only picker

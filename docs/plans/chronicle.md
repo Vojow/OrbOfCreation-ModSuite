@@ -14,8 +14,9 @@ personal best, previous run, or selected compatible run, and finishes when the w
 Chronicle observes immutable published world state and never purchases, unlocks, completes,
 resets, or edits a game save.
 
-The first implementation slice supplies the trustworthy backend and Game MCP controls before the
-comparison UI and sidecar history are added.
+The current implementation supplies the trustworthy backend, bounded sidecar history,
+comparison projection, native Mods UI, and Game MCP controls. Interactive end-to-end evidence is
+tracked separately in Slice 4.
 
 ## Verified supported-build contracts
 
@@ -84,8 +85,10 @@ flowchart LR
   duration across an unobserved interval.
 - UI receives neutral Chronicle snapshot and command interfaces. It gets no pump, world, writer,
   or filesystem authority.
-- Sidecar persistence will live under the suite BepInEx configuration directory and will use
-  write-temp plus atomic replacement. It never opens an Orb save.
+- Sidecar persistence lives at `BepInEx/config/OrbModSuite/chronicle-history.json`, uses
+  write-temp plus atomic replacement, retains at most 50 completed runs, and becomes read-only
+  instead of overwriting an invalid file. It never opens an Orb save. An interrupted active-run
+  summary is diagnosed but never auto-resumed because Chronicle cannot prove save identity.
 
 This read-only observer is not registered as an ordinary ServiceCycle automation service because
 it cannot produce a `GameAction`. It shares the same published-world boundary and lifecycle
@@ -154,19 +157,18 @@ Game MCP is perf-debug only, but it must expose the same Chronicle port as Mods:
 
 | Tool/resource | Behavior |
 |---|---|
-| `chronicle_status` / `orb://chronicle/status` | immutable current run, split, and first-visible resource KPI snapshot |
+| `chronicle_status` / `orb://chronicle/status` | immutable current run, archive/comparison, split, first-visible KPI, and ratio/delta snapshot |
 | `chronicle_start` | start from the latest complete observation; reject if unavailable |
 | `chronicle_pause` | pause a running run |
 | `chronicle_resume` | resume only with a current compatible lifecycle observation |
 | `chronicle_abandon` | end the active run without changing the game |
+| `chronicle_select_comparison` | choose PersonalBest, Previous, or one exact compatible archived run ID |
 
 Commands cross the existing bounded primitive-only Game MCP mailbox, execute on Unity's main
 thread, and return a terminal result inline within the existing two-second budget. They report zero
 native calls and mutations. The HTTP worker never calls the tracker directly.
 
-When history lands, `chronicle_status` gains compatible comparison summaries and
-`chronicle_select_comparison` becomes an explicit command. No arbitrary path, member name, save
-operation, or native action is accepted.
+No arbitrary path, member name, save operation, or native action is accepted.
 
 ## Delivery slices
 
@@ -183,19 +185,19 @@ operation, or native action is accepted.
 
 ### Slice 2 — durable history and comparisons
 
-- [ ] Add validated schema-v1 active/history sidecars with atomic event-driven writes.
-- [ ] Recover the last valid state without ever touching game saves.
-- [ ] Add PB, previous, selected-compatible comparison selection and delta projection.
-- [ ] Add resource quantity/rate/capacity ratios and deltas for schema-compatible discoveries.
-- [ ] Define bounded retention and corruption diagnostics.
+- [x] Add validated schema-v1 active/history sidecars with atomic event-driven writes.
+- [x] Recover valid completed history without ever touching game saves; diagnose but do not resume an unproven active run.
+- [x] Add PB, previous, selected-compatible comparison selection and delta projection.
+- [x] Add resource quantity/rate/capacity ratios and deltas for schema-compatible discoveries.
+- [x] Define 50-run retention and fail-closed corruption diagnostics.
 
 ### Slice 3 — Mods / Runs page
 
-- [ ] Add Runs to the existing native-styled Mods rail.
-- [ ] Render the comparison table from neutral ports at the normal open-page cadence.
-- [ ] Render collapsible resource KPI subsections beneath each major feature.
-- [ ] Add start, pause/resume, abandon confirmation, and comparison selection controls.
-- [ ] Keep staged configuration, Runtime, quick controls, and native navigation ownership intact.
+- [x] Add Runs to the existing native-styled Mods rail with its own audited Rituals glyph.
+- [x] Render the comparison table from neutral ports at the normal open-page cadence.
+- [x] Render collapsible resource KPI subsections beneath each major feature.
+- [x] Add start, pause/resume, abandon confirmation, comparison cycling, and archived-run selection controls.
+- [x] Keep staged configuration, Runtime, quick controls, and native navigation ownership intact.
 
 ### Slice 4 — runtime evidence and refinements
 

@@ -101,6 +101,8 @@ internal static class NativeViewAdapter
 
             var hasRuntimeIcon = TryReadNamedTopBarIcon(
                 allViewButtons, "ScreenTime", out var runtimeIcon, out var runtimeReason);
+            var hasRunsIcon = TryReadNamedTopBarIcon(
+                allViewButtons, "ScreenRituals", out var runsIcon, out var runsReason);
             var hasGeneralIcon = TryReadNamedTopBarIcon(
                 allViewButtons, "ScreenMagic", out var generalIcon, out var generalReason);
             var hasConceptIcon = TryReadNamedTopBarIcon(
@@ -111,7 +113,7 @@ internal static class NativeViewAdapter
                 allViewButtons, "ScreenWorld", out var worldIcon, out var worldReason);
             var hasWorkshopIcon = TryReadNamedTopBarIcon(
                 allViewButtons, "ScreenWorkshop", out var workshopIcon, out var workshopReason);
-            if (!hasRuntimeIcon || !hasGeneralIcon || !hasConceptIcon || !hasAdvancedIcon ||
+            if (!hasRuntimeIcon || !hasRunsIcon || !hasGeneralIcon || !hasConceptIcon || !hasAdvancedIcon ||
                 !hasWorldIcon || !hasWorkshopIcon)
             {
                 reason = "audited top-bar rail icon unavailable: " +
@@ -120,6 +122,7 @@ internal static class NativeViewAdapter
                              new[]
                              {
                                  runtimeReason,
+                                 runsReason,
                                  generalReason,
                                  conceptReason,
                                  advancedReason,
@@ -137,6 +140,7 @@ internal static class NativeViewAdapter
                 railBaseFrame!,
                 railActiveFrame!,
                 runtimeIcon!,
+                runsIcon!,
                 generalIcon!,
                 conceptIcon!,
                 advancedIcon!,

@@ -21,7 +21,7 @@ quantity, true net rate, and capacity/fill state. Resources visible when a run s
 `Preexisting` and receive no invented discovery or reading. Each section exposes an explicit
 producer/usage relationship so cross-feature links remain understandable to UI and MCP consumers.
 
-The first slice is an in-memory run tracker with explicit start, pause, resume, and abandon
+The run engine has explicit start, pause, resume, and abandon
 commands. It records Magic at zero, marks already-satisfied predicates `Preexisting`, records new
 predicates exactly once, and finishes only on a false-to-true observation of the saved
 `PersistenceHasCompletedWorld` flag. Lifecycle replacement or loss of a valid world publication
@@ -30,6 +30,13 @@ monotonic ticks while Chronicle is running; title scenes, incomplete collections
 and automatically paused intervals do not count. A backward clock, world generation, or previously
 observed native progression also pauses fail-closed.
 
-Perf-debug Game MCP exposes the same snapshot and command boundary through its bounded main-thread
-mailbox. Durable sidecar history, compatible-run comparison projection, and the Mods **Runs** page
-are the next slices tracked in [the active plan](../../docs/plans/chronicle.md).
+Completed runs are retained in a validated schema-v1 sidecar under the suite configuration
+directory. Writes occur only on Chronicle events and use atomic replacement; invalid content is
+preserved and makes history read-only. Compatible PB, previous, and exact selected-run comparisons
+include split deltas plus resource quantity/rate/capacity deltas and ratios.
+
+Mods exposes a native-skinned **Runs** rail page with a live timer, split matrix, expandable
+feature-resource subsections, an archive, and explicit controls. Perf-debug Game MCP exposes the
+same snapshot and command boundary—including `chronicle_select_comparison`—through its bounded
+main-thread mailbox. Runtime validation remains tracked in
+[the active plan](../../docs/plans/chronicle.md).

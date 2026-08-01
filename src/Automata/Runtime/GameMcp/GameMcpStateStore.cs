@@ -33,7 +33,8 @@ internal sealed class GameMcpStateStore
         DecisionJournalStatus journalStatus,
         long journalRevision,
         GameMcpRuntimeState? runtime,
-        ChronicleRunSnapshot chronicle)
+        ChronicleRunSnapshot chronicle,
+        ChronicleHistorySnapshot? chronicleHistory = null)
     {
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
         if (writableConfigurationJson is null)
@@ -56,7 +57,10 @@ internal sealed class GameMcpStateStore
             runtime);
         var traceHealth = GameMcpObjectProjector.Project(journalStatus) as JObject ?? new JObject();
         traceHealth["revision"] = journalRevision;
-        var chronicleJson = GameMcpObjectProjector.Project(chronicle).ToString(Formatting.None);
+        var chronicleObject = GameMcpObjectProjector.Project(chronicle) as JObject ?? new JObject();
+        if (chronicleHistory is not null)
+            chronicleObject["history"] = GameMcpObjectProjector.Project(chronicleHistory);
+        var chronicleJson = chronicleObject.ToString(Formatting.None);
 
         Volatile.Write(
             ref _latest,

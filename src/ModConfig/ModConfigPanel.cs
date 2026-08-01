@@ -39,6 +39,7 @@ internal sealed class ModConfigPanel : IDisposable
     private readonly RectTransform _settingsContent;
     private readonly ModConfigRuntimeSources _runtimeSources;
     private readonly RuntimeDiagnosticsPage _runtimePage;
+    private readonly ChronicleRunsPage _runsPage;
     private readonly ModSettingsPage _settingsPage;
     private readonly TextMeshProUGUI _statusText;
     private readonly TextMeshProUGUI _pageTitle;
@@ -85,6 +86,7 @@ internal sealed class ModConfigPanel : IDisposable
         _revertButton = revertButton;
         _nativeRail = nativeRail;
         RuntimeDiagnosticsPage? runtimePage = null;
+        ChronicleRunsPage? runsPage = null;
         ModSettingsPage? settingsPage = null;
         var subscribed = false;
         try
@@ -103,6 +105,11 @@ internal sealed class ModConfigPanel : IDisposable
                 , runtimeSources.PerformanceProfile
 #endif
                 );
+            runsPage = new ChronicleRunsPage(
+                settingsContent,
+                settingsScroll,
+                labelTemplate,
+                runtimeSources.Chronicle);
             settingsPage = new ModSettingsPage(
                 catalog,
                 labelTemplate,
@@ -115,6 +122,7 @@ internal sealed class ModConfigPanel : IDisposable
                 invalidationBus,
                 featureCommands);
             _runtimePage = runtimePage;
+            _runsPage = runsPage;
             _settingsPage = settingsPage;
             _runtimeSources.SchemaStatuses.Transitioned += OnSchemaStatusTransitioned;
             _runtimeSources.FeatureStatuses.Transitioned += OnFeatureStatusTransitioned;
@@ -139,6 +147,7 @@ internal sealed class ModConfigPanel : IDisposable
             }
             try { settingsPage?.Dispose(); } catch { }
             try { runtimePage?.Dispose(); } catch { }
+            try { runsPage?.Dispose(); } catch { }
             try { ModConfigUiFactory.ClearObjects(_topTabObjects); } catch { }
             throw;
         }
@@ -149,7 +158,9 @@ internal sealed class ModConfigPanel : IDisposable
     public ModConfigNavigationBookmark CaptureNavigation() =>
         IsRuntimeSelected
             ? ModConfigNavigationBookmark.Runtime
-            : _settingsPage.CaptureBookmark();
+            : IsRunsSelected
+                ? ModConfigNavigationBookmark.Runs
+                : _settingsPage.CaptureBookmark();
 
     public void RestoreNavigation(ModConfigNavigationBookmark bookmark)
     {
@@ -355,6 +366,11 @@ internal sealed class ModConfigPanel : IDisposable
     public void RefreshResponsiveLayout()
     {
         if (_disposed || !Root.activeInHierarchy) return;
+        if (IsRunsSelected)
+        {
+            _runsPage.Refresh();
+            return;
+        }
         if (!IsRuntimeSelected)
         {
             _settingsPage.RefreshResponsiveLayout();
@@ -370,6 +386,11 @@ internal sealed class ModConfigPanel : IDisposable
     public void RefreshRuntimeDashboardIfNeeded()
     {
         if (_disposed) return;
+        if (IsRunsSelected)
+        {
+            _runsPage.Refresh();
+            _statusText.text = _runsPage.Status;
+        }
         if (IsRuntimeSelected) _runtimePage.RefreshActivity();
         // Consume both latches independently. Short-circuiting here would leave an
         // overflow pending and force the same authoritative rebuild on the next pass.
@@ -413,6 +434,7 @@ internal sealed class ModConfigPanel : IDisposable
         _runtimeSources.Diagnostics.Transitioned -= OnRuntimeDiagnosticsTransitioned;
         _settingsPage.Dispose();
         _runtimePage.Dispose();
+        _runsPage.Dispose();
         ModConfigUiFactory.ClearObjects(_topTabObjects);
         UnityEngine.Object.Destroy(Root);
     }
@@ -442,6 +464,7 @@ internal sealed class ModConfigPanel : IDisposable
         ModSettingsLayout.DescriptionWidthChanged(previousWidth, currentWidth);
 
     private bool IsRuntimeSelected => _selectedTopPageIndex == 0;
+    private bool IsRunsSelected => _selectedTopPageIndex == 1;
 
     private void RebuildTopTabs()
     {
@@ -468,6 +491,7 @@ internal sealed class ModConfigPanel : IDisposable
         if (page.Kind == ModConfigTopPageKind.Runtime)
         {
             _settingsPage.Hide();
+            _runsPage.Hide();
             _applyButton.gameObject.SetActive(false);
             _revertButton.gameObject.SetActive(false);
             ((RectTransform)_statusText.transform).anchorMax = new Vector2(0.98f, 0.88f);
@@ -484,7 +508,25 @@ internal sealed class ModConfigPanel : IDisposable
             return;
         }
 
+        if (page.Kind == ModConfigTopPageKind.Runs)
+        {
+            _settingsPage.Hide();
+            _runtimePage.Hide();
+            _applyButton.gameObject.SetActive(false);
+            _revertButton.gameObject.SetActive(false);
+            ((RectTransform)_statusText.transform).anchorMax = new Vector2(0.98f, 0.88f);
+            _settingsViewport.anchorMax = new Vector2(
+                _settingsViewport.anchorMax.x,
+                ModConfigShellLayout.BodyTop);
+            _pageTitle.text = ModConfigTopNavigation.DetailTitle(_catalog, page);
+            _runsPage.Show(resetScroll: false);
+            _statusText.color = _labelTemplate.color;
+            _statusText.text = _runsPage.Status;
+            return;
+        }
+
         _runtimePage.Hide();
+        _runsPage.Hide();
         _applyButton.gameObject.SetActive(true);
         _revertButton.gameObject.SetActive(true);
         ((RectTransform)_statusText.transform).anchorMax = new Vector2(0.62f, 0.88f);

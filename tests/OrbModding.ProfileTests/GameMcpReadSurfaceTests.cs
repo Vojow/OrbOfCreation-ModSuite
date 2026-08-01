@@ -84,6 +84,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Contains("chronicle_pause", toolNames);
         Assert.Contains("chronicle_resume", toolNames);
         Assert.Contains("chronicle_abandon", toolNames);
+        Assert.Contains("chronicle_select_comparison", toolNames);
 
         var resources = router.Handle(Request(3, "resources/list", new JObject()));
         Assert.Contains(

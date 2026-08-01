@@ -99,7 +99,7 @@ does not refresh it by hidden navigation.
 | `suite_health` | Compact runtime, feature, service, STOP, and mailbox health; optional exact service detail |
 | `suite_configuration` | Read the single committed configuration and writable setting catalog |
 | `trace_health` | Read trace-writer health, segment, record, and byte counters |
-| `chronicle_status` | Read the Chronicle clock, major splits, and first-visible feature-resource KPI subsections |
+| `chronicle_status` | Read the Chronicle clock, archive/comparison, major splits, and first-visible feature-resource KPI subsections |
 | `game_purchase` | Buy a structure or upgrade derived from its UUID |
 | `game_cast` | Fire or release one equipped spell |
 | `game_concept` | Add, remove, or rotate one concept assignment |
@@ -118,6 +118,7 @@ does not refresh it by hidden navigation.
 | `chronicle_pause` | Pause the active Chronicle clock |
 | `chronicle_resume` | Resume only on the run's original lifecycle |
 | `chronicle_abandon` | Abandon active timing without changing or resetting the game |
+| `chronicle_select_comparison` | Select `PersonalBest`, `Previous`, or an exact compatible archived `runId` |
 
 `chronicle_status` is also available as `orb://chronicle/status`. Chronicle commands use the same
 bounded main-thread mailbox and inline terminal-result contract as the other commands, but they
@@ -141,6 +142,8 @@ tools/game-mcp-client.py chronicle-start
 tools/game-mcp-client.py chronicle-pause
 tools/game-mcp-client.py chronicle-resume
 tools/game-mcp-client.py chronicle-abandon
+tools/game-mcp-client.py chronicle-select-comparison PersonalBest
+tools/game-mcp-client.py chronicle-select-comparison Selected --run-id <run-id>
 ```
 
 `world_overview` deliberately contains only facts a strategist normally wants before choosing a

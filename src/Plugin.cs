@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Bootstrap;
@@ -109,7 +110,7 @@ public sealed class Plugin : BaseUnityPlugin
     private readonly MentorMasteryEventJournal _mentorMasteryJournal = new();
     private AutomataActionFamilyOwnership? _automataActionFamilyOwnership;
     private AutomataServiceCycleActivation? _serviceCycleActivation;
-    private readonly ChronicleRunTracker _chronicle = new();
+    private ChronicleRuntime? _chronicle;
     private AutomationFeatureControlRegistry? _automationFeatureControls;
     private QuickControlColumn? _quickControls;
     private EmergencyStopControl? _emergencyStopControl;
@@ -215,6 +216,9 @@ public sealed class Plugin : BaseUnityPlugin
             _buildCompatibilityRuntimeAllowed,
             _automaticSaveBackup);
         _nativeContractsAvailable = _runtimeActivationAllowed;
+        _chronicle = new ChronicleRuntime(
+            Path.Combine(Paths.ConfigPath, "OrbModSuite", "chronicle-history.json"),
+            message => Logger.LogWarning(message));
         foreach (var diagnostic in configuration.Diagnostics)
             Logger.LogInfo($"Configuration migration {diagnostic.Kind}: {diagnostic.Source}; {diagnostic.Detail}");
 
@@ -550,7 +554,8 @@ public sealed class Plugin : BaseUnityPlugin
             HostTraceDumpRegistry.Shared,
             _mathVerification ??
             throw new InvalidOperationException("Differential verification control was not composed."),
-            DecisionJournalStatusSources.Shared
+            DecisionJournalStatusSources.Shared,
+            _chronicle ?? throw new InvalidOperationException("Chronicle runtime was not composed.")
 #if SERVICE_CYCLE_PROFILE
             , PerformanceProfileControlRegistry.Shared
 #endif
@@ -850,7 +855,7 @@ public sealed class Plugin : BaseUnityPlugin
             observation = ChronicleWorldObservation.Unavailable(
                 "the ServiceCycle runtime is not active in this scene");
         }
-        _chronicle.Observe(in observation);
+        _chronicle?.Observe(in observation);
     }
 
     private void UpdateMentor()
@@ -1236,7 +1241,7 @@ public sealed class Plugin : BaseUnityPlugin
                     result = ExecuteAdministrativeGameMcp(command);
                 }
                 else if (command.Kind is >= GameMcpCommandKind.Screenshot and
-                         <= GameMcpCommandKind.ChronicleAbandon)
+                         <= GameMcpCommandKind.ChronicleSelectComparison)
                 {
                     completeNow = TryExecuteGameMcpGadget(command, out result);
                 }
@@ -1380,7 +1385,8 @@ public sealed class Plugin : BaseUnityPlugin
             GameMcpCommandKind.ChronicleStart or
             GameMcpCommandKind.ChroniclePause or
             GameMcpCommandKind.ChronicleResume or
-            GameMcpCommandKind.ChronicleAbandon => ExecuteChronicleGameMcp(command),
+            GameMcpCommandKind.ChronicleAbandon or
+            GameMcpCommandKind.ChronicleSelectComparison => ExecuteChronicleGameMcp(command),
             _ => GameMcpCommandResult.Rejected(
                 "unsupported_gadget",
                 "the requested gadget is not allowlisted",
@@ -1398,15 +1404,32 @@ public sealed class Plugin : BaseUnityPlugin
 
     private GameMcpCommandResult ExecuteChronicleGameMcp(GameMcpCommand command)
     {
+        var chronicle = _chronicle ?? throw new InvalidOperationException("Chronicle runtime is unavailable.");
+        if (command.Kind == GameMcpCommandKind.ChronicleSelectComparison)
+        {
+            if (!chronicle.TrySelectComparison(command.Mode, command.PayloadValue, out var reason))
+                return GameMcpCommandResult.Rejected(
+                    "chronicle_comparison_rejected",
+                    reason,
+                    observedLifecycleGeneration: _lifecycleGeneration,
+                    observedConfigurationGeneration: _configurationStore?.CurrentGeneration.Value ?? 0);
+            return GameMcpCommandResult.Committed(
+                "chronicle_comparison_selected",
+                "Chronicle comparison changed to " + command.Mode + ".",
+                observedWorldGeneration: chronicle.LatestObservation.WorldGeneration,
+                observedLifecycleGeneration: _lifecycleGeneration,
+                observedConfigurationGeneration: _configurationStore?.CurrentGeneration.Value ?? 0,
+                detailsJson: GameMcpObjectProjector.Project(chronicle.History).ToString(Formatting.None));
+        }
         var outcome = command.Kind switch
         {
-            GameMcpCommandKind.ChronicleStart => _chronicle.Start(),
-            GameMcpCommandKind.ChroniclePause => _chronicle.Pause(),
-            GameMcpCommandKind.ChronicleResume => _chronicle.Resume(),
-            GameMcpCommandKind.ChronicleAbandon => _chronicle.Abandon(),
+            GameMcpCommandKind.ChronicleStart => chronicle.Start(),
+            GameMcpCommandKind.ChroniclePause => chronicle.Pause(),
+            GameMcpCommandKind.ChronicleResume => chronicle.Resume(),
+            GameMcpCommandKind.ChronicleAbandon => chronicle.Abandon(),
             _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
         };
-        var observation = _chronicle.LatestObservation;
+        var observation = chronicle.LatestObservation;
         if (!outcome.Accepted)
         {
             return GameMcpCommandResult.Rejected(
@@ -1416,7 +1439,7 @@ public sealed class Plugin : BaseUnityPlugin
                 observation.LifecycleGeneration,
                 _configurationStore?.CurrentGeneration.Value ?? 0);
         }
-        var details = GameMcpObjectProjector.Project(_chronicle.Snapshot)
+        var details = GameMcpObjectProjector.Project(chronicle.Snapshot)
             .ToString(Formatting.None);
         return GameMcpCommandResult.Committed(
             outcome.Code,
@@ -2166,7 +2189,8 @@ public sealed class Plugin : BaseUnityPlugin
             DecisionJournalStatusRegistry.Shared.Status,
             DecisionJournalStatusRegistry.Shared.Revision,
             runtime,
-            _chronicle.Snapshot);
+            _chronicle?.Snapshot ?? throw new InvalidOperationException("Chronicle runtime is unavailable."),
+            _chronicle.History);
     }
 #endif
 

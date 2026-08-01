@@ -187,6 +187,15 @@ internal sealed class GameMcpProtocolRouter
             "chronicle_pause" => SubmitChronicle(state, GameMcpCommandKind.ChroniclePause, "pause"),
             "chronicle_resume" => SubmitChronicle(state, GameMcpCommandKind.ChronicleResume, "resume"),
             "chronicle_abandon" => SubmitChronicle(state, GameMcpCommandKind.ChronicleAbandon, "abandon"),
+            "chronicle_select_comparison" => SubmitGadget(
+                state,
+                GameMcpCommandKind.ChronicleSelectComparison,
+                RequireOneOf(arguments, "mode", "PersonalBest", "Previous", "Selected"),
+                Guid.Empty,
+                1,
+                OptionalString(arguments, "runId"),
+                capture: false,
+                saveCapture: false),
             _ => GameMcpToolExecution.Error(GameMcpWorldQuery.WithEnvelope(
                 state,
                 new JObject
@@ -1090,6 +1099,19 @@ internal sealed class GameMcpProtocolRouter
                 readOnly: false,
                 idempotent: false,
                 destructive: true),
+            Tool(
+                "chronicle_select_comparison",
+                "Select Chronicle comparison",
+                "Choose personal best, previous, or one exact compatible archived run for split and resource deltas.",
+                ObjectSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("PersonalBest", "Previous", "Selected"),
+                        ["runId"] = StringSchema("Required for Selected; canonical run ID from chronicle_status."),
+                    },
+                    "mode"),
+                readOnly: false,
+                idempotent: true),
         },
     };
 

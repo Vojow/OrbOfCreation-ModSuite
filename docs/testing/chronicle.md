@@ -22,6 +22,10 @@ Harmony patch, game save, or progression action.
 | Resource KPI discovery time and quantity/rate/capacity facts freeze exactly once | `ChronicleRunTrackerTests` |
 | Preexisting resources receive no fabricated discovery or resource reading | `ChronicleRunTrackerTests` |
 | Missing curated resources affect only their KPI row | `ChronicleRunTrackerTests` |
+| Completed history round-trips through the atomic sidecar and becomes a compatible PB | `ChronicleRunTrackerTests` |
+| Invalid history is preserved and blocks further writes | `ChronicleRunTrackerTests` |
+| Runs remains a distinct native Mods page and its rail glyph is audited/distinct | `ModConfigTests` |
+| Exact comparison selection crosses the bounded MCP mailbox | `GameMcpChronicleTests` |
 | Partial resource collection pauses before a discovery can be captured | `ChronicleWorldObservationProjectorTests` |
 | MCP discovery, resource, annotations, mailbox, and terminal result | `GameMcpChronicleTests` and `GameMcpStreamableHttpProtocolTests` |
 | New source remains under native-contract source audit | `NativeContractManifestTests` |
