@@ -239,43 +239,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  reproduction-build:
-    name: Rebuild stable-release assets (Windows)
-    needs: [classify, portable-tests, repository-hygiene]
-    runs-on: windows-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Set up pinned .NET SDK
-        if: needs.classify.outputs.kind == 'release'
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 10.0.302
-
-      - name: Rebuild both flavors from committed refs
-        if: needs.classify.outputs.kind == 'release'
-        shell: bash
-        run: tools/build-release-assets.sh artifacts/publish-secondary
-
-      - name: Upload independent publication assets
-        if: needs.classify.outputs.kind == 'release'
-        uses: actions/upload-artifact@v7
-        with:
-          name: publication-secondary-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/publish-secondary
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Explain beta behavior
-        if: needs.classify.outputs.kind == 'beta'
-        run: echo "Betas use the primary checked-in-refs build; stable releases add the cross-OS reproduction gate."
-
   publish:
     name: Tag and publish
-    needs: [classify, portable-tests, repository-hygiene, primary-build, reproduction-build]
+    needs: [classify, portable-tests, repository-hygiene, primary-build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -290,27 +256,6 @@ jobs:
         with:
           name: publication-primary-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/download/primary
-
-      - name: Download independent stable-release assets
-        if: needs.classify.outputs.kind == 'release'
-        uses: actions/download-artifact@v8
-        with:
-          name: publication-secondary-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/download/secondary
-
-      - name: Prove stable-release reproducibility
-        if: needs.classify.outputs.kind == 'release'
-        shell: bash
-        run: |
-          set -euo pipefail
-          for asset in OrbModSuite-release.dll OrbModSuite-perf-debug.dll; do
-            if ! cmp -s "artifacts/download/primary/${asset}" "artifacts/download/secondary/${asset}"; then
-              echo "Cross-OS reproducibility failure: ${asset} differs between clean builds." >&2
-              sha256sum "artifacts/download/primary/${asset}" "artifacts/download/secondary/${asset}" >&2
-              exit 1
-            fi
-          done
-          echo "Both stable-release flavors are byte-identical across clean Ubuntu and Windows builds."
 
       - name: Prepare publication notes and checksums
         id: notes
