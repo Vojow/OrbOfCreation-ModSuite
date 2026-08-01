@@ -778,11 +778,7 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
             _getMissing = FindNoArg(type, "GetMissing", typeof(BigDouble));
             _getGuid = FindInheritedNoArg(
                 type,
-#if USE_GAME_STUBS
-                "UpgradeableObject",
-#else
                 "IdScriptableObject",
-#endif
                 "GetGuid",
                 typeof(Guid));
             return _isBandwidth is not null &&

@@ -130,6 +130,11 @@ public class SpellRecipeSO : IdScriptableObject
 {
     public static List<SpellRecipeSO> All = new List<SpellRecipeSO>();
     private string stableUuid = Guid.NewGuid().ToString();
+    /// <summary>
+    /// Fixture-facing string form of the inherited identity. The game declares <c>GetGuid()</c> on
+    /// <see cref="IdScriptableObject"/>, so this surface keeps that base identity synchronized and
+    /// deliberately does not redeclare the method.
+    /// </summary>
     public new string uuid
     {
         get => stableUuid;
@@ -773,6 +778,13 @@ public class Prerequisites
 /// </summary>
 public abstract class UpgradeableObject : TooltipableObject
 {
+    private string stableUuid;
+
+    protected UpgradeableObject()
+    {
+        stableUuid = base.GetGuid().ToString("D");
+    }
+
     /// <summary>One effect's modification of one named property of one upgradeable object.</summary>
     /// <remarks>
     /// The property is a string here because it is a string in the game: the names come from each
@@ -787,9 +799,15 @@ public abstract class UpgradeableObject : TooltipableObject
         public bool useTargetRef;
     }
 
-    public new string uuid = Guid.NewGuid().ToString();
-
-    public new Guid GetGuid() => Guid.Parse(uuid);
+    public new string uuid
+    {
+        get => stableUuid;
+        set
+        {
+            stableUuid = value;
+            if (Guid.TryParse(value, out var guid)) base.SetGuid(guid);
+        }
+    }
 
 }
 
