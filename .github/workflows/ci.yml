@@ -230,3 +230,33 @@ jobs:
               exit 1
             }
           }
+
+  release-policy:
+    name: Release promotion policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out release history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Test release helpers
+        run: tools/test-release-helpers.sh
+
+      - name: Guard VERSION and CHANGELOG ownership
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            tools/check-release-policy.sh pull-request "${PR_BASE_SHA}" "${GITHUB_SHA}"
+          elif [[ -n "${PUSH_BEFORE_SHA}" && "${PUSH_BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+            tools/check-release-policy.sh push "${PUSH_BEFORE_SHA}" "${GITHUB_SHA}"
+          else
+            tools/check-release-policy.sh push "${GITHUB_SHA}^" "${GITHUB_SHA}"
+          fi

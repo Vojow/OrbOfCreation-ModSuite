@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repository_root="${ORB_PROMOTE_REPOSITORY_ROOT:-${script_repository_root}}"
+# shellcheck source=../tools/release-common.sh
+source "${script_repository_root}/tools/release-common.sh"
+
+usage() {
+    echo "Usage: script/promote <new-stable-version>" >&2
+}
+
+fail() {
+    echo "Promotion draft failed: $*" >&2
+    exit 1
+}
+
+if [[ "$#" -ne 1 ]]; then
+    usage
+    exit 2
+fi
+new_version="$1"
+if ! validate_stable_release_version "${new_version}"; then
+    fail "version '${new_version}' is not stable SemVer"
+fi
+
+for command_name in git gh jq awk sed mktemp cp date; do
+    if ! command -v "${command_name}" >/dev/null 2>&1; then
+        fail "required command is unavailable: ${command_name}"
+    fi
+done
+
+current_version="$(read_released_version "${repository_root}/VERSION")" ||
+    fail "could not read the last released version"
+current_branch="$(git -C "${repository_root}" branch --show-current)"
+if [[ "${current_branch}" != "main" ]]; then
+    fail "promotion drafts must start on main; current branch is '${current_branch:-detached}'"
+fi
+if [[ "${new_version}" == "${current_version}" ]]; then
+    fail "new version must differ from last released version ${current_version}"
+fi
+if ! version_consistency_check "${repository_root}" "${current_version}"; then
+    fail "current version surfaces are inconsistent"
+fi
+assert_no_unreleased_changelog "${repository_root}/CHANGELOG.md" ||
+    fail "changelog policy is not satisfied"
+extract_changelog_section "${repository_root}/CHANGELOG.md" "${current_version}" \
+    >/dev/null || fail "the last released version has no unique changelog section"
+if [[ -n "$(git -C "${repository_root}" status --porcelain --untracked-files=no)" ]]; then
+    fail "tracked working tree must be clean before drafting a promotion"
+fi
+
+last_release_tag="$(release_tag_for_version "${current_version}")"
+git -C "${repository_root}" rev-parse --verify "refs/tags/${last_release_tag}^{commit}" >/dev/null ||
+    fail "last release tag is missing: ${last_release_tag}"
+git -C "${repository_root}" merge-base --is-ancestor \
+    "refs/tags/${last_release_tag}^{commit}" HEAD ||
+    fail "last release tag is not an ancestor of HEAD: ${last_release_tag}"
+new_release_tag="$(release_tag_for_version "${new_version}")"
+if git -C "${repository_root}" rev-parse --verify "refs/tags/${new_release_tag}" >/dev/null 2>&1; then
+    fail "new release tag already exists locally: ${new_release_tag}"
+fi
+
+origin_url="$(git -C "${repository_root}" remote get-url origin)" ||
+    fail "could not read the repository origin"
+repo_target="$(gh repo view "${origin_url}" --json nameWithOwner --jq .nameWithOwner)" ||
+    fail "GitHub CLI could not resolve the current repository"
+if [[ -z "${repo_target}" || "${repo_target}" != */* ]]; then
+    fail "GitHub CLI returned an invalid repository target: ${repo_target}"
+fi
+
+temporary_root="$(mktemp -d "${TMPDIR:-/tmp}/orbmodsuite-promote.XXXXXX")"
+cleanup() {
+    rm -rf -- "${temporary_root}"
+}
+trap cleanup EXIT INT TERM
+
+commit_list="${temporary_root}/commits"
+git -C "${repository_root}" rev-list --reverse --first-parent \
+    "${last_release_tag}..HEAD" >"${commit_list}"
+if [[ ! -s "${commit_list}" ]]; then
+    fail "there are no commits after ${last_release_tag}"
+fi
+
+draft_body="${temporary_root}/draft-body.md"
+: >"${draft_body}"
+seen_pull_requests=" "
+while IFS= read -r commit; do
+    [[ -n "${commit}" ]] || continue
+    pulls_json="${temporary_root}/pulls-${commit}.json"
+    gh api \
+        -H "Accept: application/vnd.github+json" \
+        "/repos/${repo_target}/commits/${commit}/pulls" >"${pulls_json}" ||
+        fail "could not resolve the pull request for ${commit}"
+
+    pull_number="$(
+        jq -r '[.[] | select(.merged_at != null)] | first | .number // empty' "${pulls_json}"
+    )"
+    if [[ -n "${pull_number}" ]]; then
+        if [[ "${seen_pull_requests}" == *" ${pull_number} "* ]]; then
+            continue
+        fi
+        seen_pull_requests+="${pull_number} "
+        pull_title="$(
+            jq -r --argjson number "${pull_number}" \
+                '.[] | select(.number == $number) | .title' "${pulls_json}" | head -n 1
+        )"
+        pull_body="$(
+            jq -r --argjson number "${pull_number}" \
+                '.[] | select(.number == $number) | .body // ""' "${pulls_json}"
+        )"
+        printf '### #%s %s\n\n' "${pull_number}" "${pull_title}" >>"${draft_body}"
+        if [[ -n "${pull_body//[[:space:]]/}" ]]; then
+            printf '%s\n\n' "${pull_body}" >>"${draft_body}"
+        else
+            printf '_No pull request description._\n\n' >>"${draft_body}"
+        fi
+        continue
+    fi
+
+    commit_subject="$(git -C "${repository_root}" show -s --format=%s "${commit}")"
+    commit_body="$(git -C "${repository_root}" show -s --format=%b "${commit}")"
+    printf '### Commit %s — %s\n\n' "${commit:0:12}" "${commit_subject}" >>"${draft_body}"
+    if [[ -n "${commit_body//[[:space:]]/}" ]]; then
+        printf '%s\n\n' "${commit_body}" >>"${draft_body}"
+    else
+        printf '_No commit body._\n\n' >>"${draft_body}"
+    fi
+done <"${commit_list}"
+
+if [[ ! -s "${draft_body}" ]]; then
+    fail "no release-note material was found after ${last_release_tag}"
+fi
+
+new_heading_prefix="## Orb Of Creation ModSuite ${new_version} — "
+new_heading_count="$(
+    awk -v prefix="${new_heading_prefix}" \
+        '$0 ~ /^## / && index($0, prefix) == 1 { count++ } END { print count + 0 }' \
+        "${repository_root}/CHANGELOG.md"
+)"
+if [[ "${new_heading_count}" -ne 0 ]]; then
+    fail "CHANGELOG.md already contains a section for ${new_version}"
+fi
+
+release_date="${ORB_PROMOTE_DATE:-$(date +%Y-%m-%d)}"
+staged_changelog="${temporary_root}/CHANGELOG.md"
+{
+    printf '# Changelog\n\n'
+    printf '## Orb Of Creation ModSuite %s — %s\n\n' "${new_version}" "${release_date}"
+    cat "${draft_body}"
+    awk 'NR == 1 { next } NR == 2 && $0 == "" { next } { print }' \
+        "${repository_root}/CHANGELOG.md"
+} >"${staged_changelog}"
+
+staged_props="${temporary_root}/Directory.Build.props"
+awk -v version="${new_version}" '
+    { line = $0 }
+    line ~ /<SuiteVersion>[^<]*<\/SuiteVersion>/ {
+        count++
+        sub(/<SuiteVersion>[^<]*<\/SuiteVersion>/,
+            "<SuiteVersion>" version "</SuiteVersion>", line)
+    }
+    { print line }
+    END { if (count != 1) exit 42 }
+' "${repository_root}/Directory.Build.props" >"${staged_props}" ||
+    fail "could not update exactly one SuiteVersion"
+
+numeric="$(numeric_version "${new_version}")"
+assembly_version="${numeric}.0"
+staged_project="${temporary_root}/OrbModSuite.csproj"
+awk -v version="${new_version}" -v assembly="${assembly_version}" '
+    { line = $0 }
+    line ~ /<Version>[^<]*<\/Version>/ {
+        version_count++
+        sub(/<Version>[^<]*<\/Version>/, "<Version>" version "</Version>", line)
+    }
+    line ~ /<AssemblyVersion>[^<]*<\/AssemblyVersion>/ {
+        assembly_count++
+        sub(/<AssemblyVersion>[^<]*<\/AssemblyVersion>/,
+            "<AssemblyVersion>" assembly "</AssemblyVersion>", line)
+    }
+    line ~ /<FileVersion>[^<]*<\/FileVersion>/ {
+        file_count++
+        sub(/<FileVersion>[^<]*<\/FileVersion>/,
+            "<FileVersion>" assembly "</FileVersion>", line)
+    }
+    line ~ /<InformationalVersion>[^<]*<\/InformationalVersion>/ {
+        info_count++
+        sub(/<InformationalVersion>[^<]*<\/InformationalVersion>/,
+            "<InformationalVersion>" version "</InformationalVersion>", line)
+    }
+    { print line }
+    END {
+        if (version_count != 1 || assembly_count != 1 || file_count != 1 || info_count != 1) {
+            exit 42
+        }
+    }
+' "${repository_root}/src/OrbModSuite.csproj" >"${staged_project}" ||
+    fail "could not update every project version exactly once"
+
+staged_plugin_ids="${temporary_root}/PluginIds.cs"
+awk -v version="${new_version}" -v numeric="${numeric}" '
+    { line = $0 }
+    line ~ /public const string Version = "[^"]*";/ {
+        version_count++
+        sub(/public const string Version = "[^"]*";/,
+            "public const string Version = \"" numeric "\";", line)
+    }
+    line ~ /public const string ReleaseVersion = "[^"]*";/ {
+        release_count++
+        sub(/public const string ReleaseVersion = "[^"]*";/,
+            "public const string ReleaseVersion = \"" version "\";", line)
+    }
+    { print line }
+    END { if (version_count != 1 || release_count != 1) exit 42 }
+' "${repository_root}/src/Common/PluginIds.cs" >"${staged_plugin_ids}" ||
+    fail "could not update every plugin version exactly once"
+
+printf '%s\n' "${new_version}" >"${temporary_root}/VERSION"
+
+cp "${temporary_root}/VERSION" "${repository_root}/VERSION"
+cp "${staged_changelog}" "${repository_root}/CHANGELOG.md"
+cp "${staged_props}" "${repository_root}/Directory.Build.props"
+cp "${staged_project}" "${repository_root}/src/OrbModSuite.csproj"
+cp "${staged_plugin_ids}" "${repository_root}/src/Common/PluginIds.cs"
+
+if ! version_consistency_check "${repository_root}" "${new_version}"; then
+    fail "drafted version surfaces are inconsistent"
+fi
+
+echo "Drafted Orb Of Creation ModSuite ${new_version} in the working tree."
+echo "Curate the new CHANGELOG.md section, run the full release gates, then commit with:"
+echo "  release: promote ${new_version}"
+echo "No commit, tag, push, or GitHub release was created."

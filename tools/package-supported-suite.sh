@@ -5,15 +5,9 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output_directory="${repository_root}/artifacts/releases"
 game_root="${OOC_GAME_DIR:-${repository_root}/lib}"
 checked_in_references="${repository_root}/lib/game-refs/v1.0.5"
-reference_only="${ORB_PACKAGE_REFERENCE_ONLY:-false}"
 
 if [[ "$#" -ne 0 ]]; then
     echo "Usage: ./script/package" >&2
-    exit 2
-fi
-
-if [[ "${reference_only}" != "true" && "${reference_only}" != "false" ]]; then
-    echo "ORB_PACKAGE_REFERENCE_ONLY must be 'true' or 'false'." >&2
     exit 2
 fi
 
@@ -67,7 +61,7 @@ for required_reference in \
     "${managed_directory}/Unity.TextMeshPro.dll" \
     "${bepinex_core_directory}/BepInEx.dll" \
     "${bepinex_core_directory}/0Harmony.dll"; do
-    if [[ "${reference_only}" != "true" && ! -f "${required_reference}" ]]; then
+    if [[ ! -f "${required_reference}" ]]; then
         echo "Required real-reference file is missing: ${required_reference}" >&2
         exit 1
     fi
@@ -145,22 +139,17 @@ fi
 echo "Running the bounded portable gate..."
 "${repository_root}/script/test"
 
-# Installed contracts are intentionally local and inspect the audited full assemblies. The
-# tag-triggered workflow sets ORB_PACKAGE_REFERENCE_ONLY=true because tools/release.sh already ran
-# this gate before pushing the tag; CI must not claim that metadata-only refs repeat it.
-if [[ "${reference_only}" != "true" ]]; then
-    echo "Restoring the installed-game contract configuration..."
-    OOC_GAME_DIR="${game_root}" dotnet restore \
-        "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
-        -p:Configuration=Release
+# Installed contracts are intentionally local and inspect the audited full assemblies. CI
+# publication does not use this package path and must not claim metadata-only refs repeat them.
+echo "Restoring the installed-game contract configuration..."
+OOC_GAME_DIR="${game_root}" dotnet restore \
+    "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
+    -p:Configuration=Release
 
-    echo "Running installed-game contracts against the audited game assemblies..."
-    OOC_GAME_DIR="${game_root}" dotnet test \
-        "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
-        --configuration Release --no-restore
-else
-    echo "Skipping installed-game contracts in reference-only CI packaging; the pre-tag gate owns them."
-fi
+echo "Running installed-game contracts against the audited game assemblies..."
+OOC_GAME_DIR="${game_root}" dotnet test \
+    "${repository_root}/tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj" \
+    --configuration Release --no-restore
 
 echo "Cleaning the canonical checked-in-reference build..."
 env -u OOC_GAME_DIR dotnet clean \
