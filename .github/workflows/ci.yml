@@ -151,24 +151,63 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Reject proprietary or generated artifacts
+      - name: Enforce tracked artifact boundaries
         shell: pwsh
         run: |
-          $allowedGameRefs = @(
-            'lib/game-refs/v1.0.5/0Harmony.dll',
-            'lib/game-refs/v1.0.5/Assembly-CSharp-firstpass.dll',
-            'lib/game-refs/v1.0.5/Assembly-CSharp.dll',
-            'lib/game-refs/v1.0.5/BepInEx.dll',
-            'lib/game-refs/v1.0.5/Unity.TextMeshPro.dll',
-            'lib/game-refs/v1.0.5/UnityEngine.CoreModule.dll',
-            'lib/game-refs/v1.0.5/UnityEngine.UI.dll',
-            'lib/game-refs/v1.0.5/UnityEngine.UIModule.dll',
-            'lib/game-refs/v1.0.5/UnityEngine.dll',
-            'lib/game-refs/v1.0.5/manifest.json'
+          $manifestPath = 'lib/game-refs/v1.0.5/manifest.json'
+          if (-not (Test-Path -LiteralPath $manifestPath)) {
+            Write-Error "Checked-in game-reference manifest is missing: $manifestPath"
+            exit 1
+          }
+
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          $manifestAssemblies = @($manifest.assemblies)
+          if ($manifestAssemblies.Count -eq 0) {
+            Write-Error 'Checked-in game-reference manifest lists no assemblies.'
+            exit 1
+          }
+
+          $manifestFiles = @(
+            foreach ($assembly in $manifestAssemblies) {
+              $file = [string]$assembly.file
+              if ([string]::IsNullOrWhiteSpace($file) -or
+                  $file -ne [IO.Path]::GetFileName($file) -or
+                  -not $file.EndsWith('.dll', [StringComparison]::OrdinalIgnoreCase)) {
+                Write-Error "Invalid game-reference manifest file name: '$file'"
+                exit 1
+              }
+
+              $expectedHash = [string]$assembly.outputSha256
+              if ($expectedHash -notmatch '^[a-fA-F0-9]{64}$') {
+                Write-Error "Invalid output SHA-256 for game reference: $file"
+                exit 1
+              }
+
+              $path = "lib/game-refs/v1.0.5/$file"
+              if (-not (Test-Path -LiteralPath $path)) {
+                Write-Error "Manifest-listed game reference is missing: $path"
+                exit 1
+              }
+
+              $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+              if ($actualHash -ne $expectedHash) {
+                Write-Error "Game-reference SHA-256 mismatch for ${path}: expected $expectedHash, actual $actualHash"
+                exit 1
+              }
+
+              $path
+            }
           )
-          $forbidden = git ls-files | Where-Object {
+          if (@($manifestFiles | Sort-Object -Unique).Count -ne $manifestFiles.Count) {
+            Write-Error 'Checked-in game-reference manifest contains duplicate file names.'
+            exit 1
+          }
+
+          $expectedGameRefs = @($manifestPath) + $manifestFiles
+          $trackedFiles = @(git ls-files)
+          $forbidden = $trackedFiles | Where-Object {
             $_ -match '(^|/)(bin|obj|bin-stubs|obj-stubs|bin-profile|obj-profile|bin-profile-stubs|obj-profile-stubs)/' -or
-            ($_ -match '\.(dll|exe|pdb|sav|pfx|p12|pem|key)$' -and $_ -notin $allowedGameRefs)
+            ($_ -match '\.(dll|exe|pdb|sav|pfx|p12|pem|key)$' -and $_ -notin $manifestFiles)
           }
           if ($forbidden) {
             $forbidden | ForEach-Object { Write-Error "Forbidden tracked artifact: $_" }
@@ -176,7 +215,7 @@ jobs:
           }
 
           $trackedGameRefs = @(git ls-files 'lib/game-refs/**')
-          $gameRefDelta = Compare-Object $allowedGameRefs $trackedGameRefs
+          $gameRefDelta = Compare-Object $expectedGameRefs $trackedGameRefs
           if ($gameRefDelta) {
             $gameRefDelta | ForEach-Object {
               Write-Error "Checked-in game-reference set mismatch: $($_.SideIndicator) $($_.InputObject)"
