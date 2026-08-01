@@ -38,7 +38,12 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
 #endif
         )
     {
-        var current = resolved;
+        if (!_stateReader.TryResolveCurrentPair(resolved, out var current))
+        {
+            return new AutoHarvestSubmissionResult(
+                AutoHarvestSubmissionFailureCode.NativePairIdentityRevalidationRefused);
+        }
+
         var prerequisiteFailure = ValidatePrerequisites(
             current,
             out var prerequisiteValidation);
@@ -71,6 +76,18 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
         finally { beforeSnapshot.Complete(); }
 #endif
 
+        var decision = AutoHarvestPolicy.EvaluateSubmission(
+            current.Target.Pair,
+            facts,
+            safety,
+            before);
+        if (!decision.ShouldSubmit)
+        {
+            return new AutoHarvestSubmissionResult(
+                AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected,
+                prerequisiteValidation);
+        }
+
         object? prototype;
 #if SERVICE_CYCLE_PROFILE
         var revalidation = _profileOperations.Begin(
@@ -80,16 +97,13 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
 #endif
         try
         {
-            prototype = _stateReader.ReadPrototype(current);
-            var decision = AutoHarvestPolicy.EvaluateSubmission(
-                current.Target.Pair,
-                facts,
-                safety,
-                before);
-            if (!decision.ShouldSubmit || prototype is null)
+            var admissionFailure = _stateReader.ValidateClickAdmission(
+                current,
+                out prototype);
+            if (admissionFailure != AutoHarvestSubmissionFailureCode.None)
             {
                 return new AutoHarvestSubmissionResult(
-                    AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected,
+                    admissionFailure,
                     prerequisiteValidation);
             }
         }

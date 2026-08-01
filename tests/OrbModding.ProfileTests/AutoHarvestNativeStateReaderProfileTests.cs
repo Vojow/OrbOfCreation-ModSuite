@@ -42,9 +42,10 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
             context,
             ServiceCycleProfileTemperature.Warm);
         object? prototype;
+        AutoHarvestSubmissionFailureCode admission;
         try
         {
-            prototype = reader.ReadPrototype(fixture.Resolved);
+            admission = reader.ValidateClickAdmission(fixture.Resolved, out prototype);
             prototypeStage.Complete();
         }
         finally
@@ -53,6 +54,7 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
         }
 
         Assert.True(active.IsValid);
+        Assert.Equal(AutoHarvestSubmissionFailureCode.None, admission);
         Assert.NotNull(prototype);
         Assert.Collection(
             measurement.Completed,
@@ -64,14 +66,13 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
                 stableIdReads: 2,
                 listEntries: 1,
                 argumentArrays: 0),
-            // Was 1 field read, 9 method calls, 4 stable-id reads, 2 list entries and 1 argument
-            // array when the boundary re-derived the pair's facts here. What is left is resolving
-            // the instance to submit into.
+            // Exact plot/row visibility, offered membership, affordability and remaining capacity
+            // are all live action-boundary work.
             item => AssertOperations(
                 item,
                 ServiceCycleProfileSpan.AutoHarvestActionPrototypeResolution,
                 fieldReads: 0,
-                methodCalls: 3,
+                methodCalls: 7,
                 stableIdReads: 2,
                 listEntries: 1,
                 argumentArrays: 0));
@@ -151,12 +152,20 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
                 AutoHarvestStableIdAccessor.Bind(typeof(ProfilePlot)));
             Set(contract, nameof(AutoHarvestReflectionContract.ActionStableId),
                 AutoHarvestStableIdAccessor.Bind(typeof(ProfileAction)));
+            Set(contract, nameof(AutoHarvestReflectionContract.PlotIsVisible),
+                Method<ProfilePlot>(nameof(ProfilePlot.IsVisible)));
             Set(contract, nameof(AutoHarvestReflectionContract.PlotGetActionInstances),
                 Method<ProfilePlot>(nameof(ProfilePlot.GetActionInstances)));
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceGetAction),
                 Method<ProfileInstance>(nameof(ProfileInstance.GetAction)));
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceGetElement),
                 Method<ProfileInstance>(nameof(ProfileInstance.GetElement)));
+            Set(contract, nameof(AutoHarvestReflectionContract.InstanceIsVisible),
+                Method<ProfileInstance>(nameof(ProfileInstance.IsVisible)));
+            Set(contract, nameof(AutoHarvestReflectionContract.InstanceHasEnoughForOneInstance),
+                Method<ProfileInstance>(nameof(ProfileInstance.HasEnoughForOneInstance)));
+            Set(contract, nameof(AutoHarvestReflectionContract.InstanceGetMaximumRemInstances),
+                Method<ProfileInstance>(nameof(ProfileInstance.GetMaximumRemInstances)));
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceIsEmpty),
                 Method<ProfileInstance>(nameof(ProfileInstance.IsEmpty)));
             Set(contract, nameof(AutoHarvestReflectionContract.InstanceIsEngaged),
@@ -184,6 +193,7 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
     private sealed class ProfilePlot : IdScriptableObject
     {
         public readonly List<ProfileInstance> instances = new();
+        public bool IsVisible() => true;
         public List<ProfileInstance> GetActionInstances() => instances;
     }
 
@@ -204,6 +214,9 @@ public sealed class AutoHarvestNativeStateReaderProfileTests
 
         public ProfileAction GetAction() => _action;
         public ProfilePlot GetElement() => _plot;
+        public bool IsVisible() => true;
+        public bool HasEnoughForOneInstance() => true;
+        public int GetMaximumRemInstances() => 1;
         public bool IsEmpty() => false;
         public bool IsEngaged() => false;
         public int GetActualQuantity() => 1;
