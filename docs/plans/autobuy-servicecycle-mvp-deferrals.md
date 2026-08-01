@@ -43,10 +43,10 @@ publicized references — no discovery at all. That removes the one-time audit c
 indirection, and would show whether the game exposes cheaper bulk-read entry points the suite
 currently reconstructs candidate by candidate.
 
-The graceful-degradation guards (runtime audit, "contract not audited" fallbacks, per-invoke
-try/catch) exist so a game update fails soft. Since the suite quarantines mutation against an
-unaudited build unless the player explicitly accepts that exact pair, removing them is a coherent
-option only if the acknowledged-build path remains fail-closed at each adapter.
+The defensive guards (runtime audit, explicit unaudited-contract refusal, per-invoke
+exception containment) exist so a game update fails closed with evidence. Since the suite
+quarantines mutation against an unaudited build unless the player explicitly accepts that exact
+pair, removing them is coherent only if each adapter still refuses unknown shapes.
 Quantify the per-candidate cost of the audit and try/catch branches before deciding.
 
 ## Deferred (post-baseline)
@@ -72,13 +72,7 @@ Quantify the per-candidate cost of the audit and try/catch branches before decid
   owner-thread affine and a worker definition may hold no runtime-owned storage, so worker stages
   need a different probe than the suite has.
 
-### 3. Structure bulk purchasing — only the operator-defined grouping modes are left
-- **What is left:** the `Single` and `Fixed` grouping modes still request one level. They are
-  operator-set counts rather than a native mechanism, so nothing forced them alongside the bulk work.
-  `BulkDevelopment` raises a Structure's preferred level count to the game's own count, capped at
-  100; Upgrades intentionally remain one level.
-
-### 4. Dynamic grouping beyond the native preferred count
+### 3. Dynamic grouping beyond the native preferred count
 - **What:** decide whether Auto Buy should ever expand beyond the live Bulk Development preference
   when still more levels are affordable.
 - **Why deferred:** the worker now descends from that preferred count and emits the largest positive
@@ -87,7 +81,7 @@ Quantify the per-candidate cost of the audit and try/catch branches before decid
   one-level row remains the safe floor. Expanding beyond the player's native preference would be a
   new policy, not completion of the affordability fix.
 
-### 5. Replicating the last game formula in the worker
+### 4. Replicating the last game formula in the worker
 - **What is left:** `CanPurchase()` is the one live game call on the action path, by design — it
   folds availability, the level caps, the price and the per-level prerequisites, each of which can
   move between the world the worker planned from and the mutation. The cost chain is ported and
@@ -96,13 +90,13 @@ Quantify the per-candidate cost of the audit and try/catch branches before decid
 - **Why deferred:** blocked on serialized prerequisite and topology evidence that portable tooling
   cannot extract. Asking the game at the moment of mutation carries no parity risk.
 
-### 6. Worker-side `LeaveQueueSlots` subtraction
+### 5. Worker-side `LeaveQueueSlots` subtraction
 - **What:** the worker plans against raw captured room; the action adapter is the sole authority that
   reserves slots. Purchases are identical either way, but the worker over-plans by up to the reserve
   — one extra rejected journal entry per full-queue cycle.
 - **Why deferred:** cosmetic and efficiency only; not worth churning the parity-tested evaluator.
 
-### 7. Reserve semantics rethink
+### 6. Reserve semantics rethink
 - **What:** an empty or malformed `AbsoluteReserve` resolves to the config default of 0, a deliberate
   break from the legacy reject-everything path. The whole reserve model is flagged for a later
   redesign.

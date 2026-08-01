@@ -1,97 +1,69 @@
 # Testing documentation
 
-This directory is the maintained entry point for test strategy, test selection,
-module ownership, installed-game contracts, and runtime validation.
+This directory contains executable test selection and runtime-validation
+guidance. Historical implementation checklists do not belong here.
 
-## Start here
+## Required development gate
 
-- [Repository test strategy](strategy.md) — evidence layers, merge policy,
-  coverage, compatibility, and release gates.
-- [Headless E2E](headless-e2e.md) — deterministic simulation boundaries,
-  scenarios, metrics, and performance reports.
-- [ServiceCycle observability](../runtime-architecture/observability.md) — decode a
-  production trace artifact into bounded timing and causal evidence.
-- [Native contracts](native-contracts.md) — manifest and installed-assembly
-  verification.
-- [Runtime validation](runtime-validation.md) — ordered V0–V7 Unity/UAT gates.
-- [UI overhaul validation](ui-overhaul-validation.md) — post-install native styling,
-  interaction ownership, emergency resume, responsive layout, and Runtime-action checks.
-Run the complete normal-development feedback loop with:
+Run the portable/profile lane and installed-game contracts serially:
 
 ```bash
-./script/test
+ORB_TEST_ATTEMPTS=1 ./script/test
+OOC_GAME_DIR=/path/to/audited/game dotnet test \
+  tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj \
+  --configuration Release
 ```
 
-This runs every portable partition with a hard 60-second wall-clock deadline,
-including deterministic performance/allocation simulations and external-process
-tests. The deadline exposes deadlocks or accidental soak behavior promptly.
-It is per attempt, not for the whole gate: a failing run is retried up to
-`ORB_TEST_ATTEMPTS` times (default 3), and a pass-after-retry is a broken test
-rather than a pass. Set `ORB_TEST_ATTEMPTS=1` when you want the first answer.
+`./script/test` runs the ordinary portable suite, the compile-time profile suite,
+and the profiled trace-tool build under a 60-second deadline. The installed lane
+reads the audited assemblies without launching Unity. Do not run these commands
+in parallel: they share restore and output trees.
 
-On Windows, the equivalent lane helper remains:
+Record ordinary, profile, and installed totals together with manifest schema,
+contract, source-exemption, known-entity, and compiler-warning totals. Compare
+them with the target branch in both directions and explain every change. A retry
+that turns red into green is a flake report, not clean evidence.
+
+On Windows, the supported lane wrapper is:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane All
 ```
 
-Run a focused risk lane with:
+## Evidence layers
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane Reliability
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoBuyReliability
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-portable.ps1 -Lane AutoConceptReliability
+```text
+component -> native-shaped integration -> headless journey -> installed metadata -> Unity UAT
 ```
+
+- Portable tests prove behavior against source-only stubs whose job is to model
+  the runtime accurately.
+- Installed contracts prove the accepted assembly hashes and exact metadata
+  shape, not Unity behavior.
+- Runtime validation proves Harmony wiring, native effects, save/load, UI,
+  player control, and responsiveness on a disposable save.
+
+See [repository strategy](strategy.md), [headless E2E](headless-e2e.md),
+[native contracts](native-contracts.md), and
+[runtime validation](runtime-validation.md).
 
 ## Module guides
 
-| Change area | Test guide | First focused scope |
+| Area | Guide | Focused selector |
 |---|---|---|
-| Orb Automata | [Automata test map](automata/README.md) | select the changed feature below |
-| Auto Buy policy, safety, throughput | [Auto Buy](automata/auto-buy.md) | `FullyQualifiedName~AutoBuy`, then `AutoBuyReliability` |
-| Auto Cast | [Auto Cast](automata/auto-cast.md) | `FullyQualifiedName~AutoCastTests` |
-| Auto Concept ServiceCycle planner and boundary | [Auto Concept](automata/auto-concept.md) | `AutoConceptReliability`, then `FullyQualifiedName~AutoConcept` |
-| Auto Items Scroll/Relic/temporary planner and GameAction | [Auto Items](automata/auto-items.md) | `FullyQualifiedName~AutoItems` |
-| Auto Scribe coverage planner and crafting GameAction | [Auto Scribe](automata/auto-scribe.md) | `FullyQualifiedName~AutoScribe` |
+| Automata | [Feature map](automata/README.md) | select the affected feature |
+| Auto Buy | [Auto Buy](automata/auto-buy.md) | `FullyQualifiedName~AutoBuy` |
+| Auto Cast | [Auto Cast](automata/auto-cast.md) | `FullyQualifiedName~AutoCast` |
+| Auto Concept | [Auto Concept](automata/auto-concept.md) | `FullyQualifiedName~AutoConcept` |
+| Auto Items | [Auto Items](automata/auto-items.md) | `FullyQualifiedName~AutoItems` |
+| Auto Scribe | [Auto Scribe](automata/auto-scribe.md) | `FullyQualifiedName~AutoScribe` |
 | Spell leveling | [Spell leveling](automata/spell-leveling.md) | `FullyQualifiedName~SpellLevel` |
-| Automata configuration/coordinator/status | [Automata integration](automata/integration.md) | `FullyQualifiedName~Automata` |
-| Orb Mentor | [Mentor](mentor.md) | `FullyQualifiedName~Mentor` |
-| Orb Mod Config | [Mod Config](mod-config.md) | `FullyQualifiedName~ModConfig` |
-| Orb Modding Common | [Common](common.md) | select the changed Common contract |
-| Cross-feature scheduling/ownership/lifecycle | [Suite integration](suite-integration.md) | `FullyQualifiedName~ServiceCycle|FullyQualifiedName~ActionFamilyIntegration` |
+| Shared Automata composition | [Automata integration](automata/integration.md) | `FullyQualifiedName~Automata` |
+| Mentor | [Mentor](mentor.md) | `FullyQualifiedName~Mentor` |
+| Mod Config and suite UI | [Mod Config](mod-config.md) | `FullyQualifiedName~ModConfig` |
+| Common | [Common](common.md) | select the changed contract |
+| Cross-feature runtime | [Suite integration](suite-integration.md) | `FullyQualifiedName~ServiceCycle` |
 
-The fully qualified name filters are navigation aids, not complete merge gates.
-After the focused scope passes, use the guide’s required portable, contract, and
-runtime gates.
-
-## Evidence boundaries
-
-```text
-policy/component → headless adapter → headless E2E → installed contract → Unity UAT
-```
-
-- Portable success proves only game-independent behavior against stubs and
-  deterministic models.
-- Installed contracts prove exact audited metadata without launching Unity.
-- Runtime UAT proves Harmony wiring, save behavior, controls, native side
-  effects, and visible responsiveness on a disposable save.
-- Deterministic performance uses modeled frames and operation counts. Host
-  wall-clock timing is diagnostic and cannot replace desktop/Deck profiling.
-
-## Maintaining these guides
-
-When a test is added or its ownership changes:
-
-1. Put it in the narrowest module/feature guide that explains its risk.
-2. Add a stable category when the test belongs to a reusable risk lane.
-3. Put allocation probes, large deterministic stress workloads, and soak-style
-   iteration counts in `PerformanceSimulation`, even when they happen to run
-   quickly on one machine.
-4. Keep `PerformanceSimulation` and `ExternalProcess` mutually exclusive.
-5. Update the relevant runtime handoff when portable evidence changes what UAT
-   must still prove.
-6. Record results only when they ran on the current tree or exact release
-   artifact.
-
-Do not duplicate large test inventories across pages. Feature pages own detailed
-file maps; this hub owns navigation and shared rules.
+Focused filters are diagnostic navigation, never substitutes for the complete
+gate. A testing page stays only while its commands, paths, and claimed ownership
+can be checked against the current tree.

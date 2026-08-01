@@ -1,150 +1,124 @@
 # Local runtime validation protocol
 
-[Back to testing hub](README.md) · [Repository strategy](strategy.md) · [Module test guides](README.md#module-guides)
+[Testing hub](README.md) · [Repository strategy](strategy.md) ·
+[Module guides](README.md#module-guides)
 
-## Purpose
+Portable and metadata tests cannot prove behavior inside Unity. Runtime
+validation therefore proceeds in order; a later success never excuses an earlier
+failure.
 
-Portable tests cannot prove that a plugin compiles against, loads into, or behaves correctly with the installed game. Runtime validation therefore proceeds through ordered gates. A failure stops the affected module at that gate; a later success never excuses an earlier failure.
-
-## Safety rules
+## Safety
 
 - Close the game before copying, restoring, or hashing saves and installed DLLs.
-- Never edit an active save file.
-- Use a disposable save for active automation checks.
-- Back up the save, configuration, installed plugins, and log before mutation testing.
-- Install only the supported plugin allowlist and remove overlapping automation mods.
-- Begin with gameplay modules disabled and `Safety.EmergencyDisable = true`.
-- A rendered game without successful BepInEx chainloader records is not a mod load.
+- Never edit an active save; use a disposable save for mutation tests.
+- Back up saves, configuration, plugins, and logs before active testing.
+- Install only the supported suite and remove overlapping automation mods.
+- Start with automation disabled and emergency stop engaged.
+- Record commit/archive hash, suite and game versions, assembly hashes, BepInEx
+  version, settings, save, and exact commands.
 
-## Gate V0 — repository and real-reference build
+## V0 — repository and installed contract gate
 
-1. Run `./script/test`.
-2. Stage the installed game and BepInEx references under ignored `lib/` or set `OOC_GAME_DIR`.
-3. Run installed-game contract tests.
-4. Build every supported project in Release against those references.
-5. Rehearse the supported-suite package and inspect its explicit DLL allowlist.
+Run serially:
 
-Record the commit, game version, assembly hashes, BepInEx version, project versions, and command results.
+```bash
+ORB_TEST_ATTEMPTS=1 ./script/test
+OOC_GAME_DIR=/path/to/audited/game dotnet test \
+  tests/OrbModding.GameContractTests/OrbModding.GameContractTests.csproj \
+  --configuration Release
+```
 
-## Gate V1 — static contract audit
+Reconcile every test, manifest, entity, exemption, and warning count. Then build
+the supported Release project against the same references and inspect the
+package allowlist. Stop on any unexplained delta.
 
-Review every changed reflection or Harmony boundary against the admitted game assemblies. Confirm:
+## V1 — boundary audit
 
-- member names, signatures, and declaring types;
-- stable UUID plus expected native type identity;
-- main-thread ownership for Unity objects and game APIs;
-- queue, cost, availability, completion, and mutation postconditions;
-- lifecycle invalidation of cached native references; and
-- restoration of native global state on every exit.
+For each changed native touch, confirm exact owner/member/overload/types, stable
+UUID plus native type identity, main-thread ownership, lifecycle invalidation,
+fresh preflights, mutation ordering, and verified before/after evidence. Unknown
+or contradictory evidence refuses with its own reason and result code.
 
-Unknown or contradictory evidence must fail closed.
+## V2 — load smoke
 
-## Gate V2 — load smoke test
+With emergency stop engaged, launch to Start, confirm one suite plugin load and
+successful configuration/backup state, open Mods and Runtime, load a disposable
+save, return to Start, close normally, and inspect the complete log. Duplicate
+plugins, schema faults, backup blocks, Harmony faults, and UI construction errors
+fail the gate.
 
-With gameplay disabled and emergency stop engaged:
+## V3 — read-only surfaces
 
-1. launch to the title screen;
-2. confirm BepInEx and each expected plugin load exactly once;
-3. confirm configuration generation/migration succeeds;
-4. open Orb Mod Config and its Runtime page;
-5. load a disposable save and return to the title screen; and
-6. close the game and inspect the complete log.
+- Confirm configured intent and runtime health remain separate everywhere.
+- Confirm lifecycle state settles across Start, load, scene, reset, and NG+.
+- Confirm disabled features do not perform gameplay scans or mutations.
+- Confirm exactly two closed suite buttons appear below the native help buttons:
+  immediate STOP and disclosure. Opening disclosure creates the seven feature
+  controls; closing it removes them.
+- Confirm the Mods rail, staged Apply/Revert/Default behavior, scroll position,
+  external-edit conflicts, Runtime actions, tooltips, and keyboard navigation.
+- Verify native frames remain pointer targets across row gaps and padding, while
+  child decoration does not steal input.
+- Verify a contained fault has both structural and color cues, and all genuine
+  native capture failures name the failing contract in both log and Runtime.
+- Confirm the release build exposes no profiling-only action or player-facing
+  debug capability.
 
-Loader, Harmony, duplicate-plugin, schema, lifecycle, or construction errors fail this gate.
+Check supported resolution and UI-scale extremes. Portable geometry tests do not
+prove Unity text measurement, clipping, raycasts, or native sprite identity.
 
-## Gate V3 — read-only behavior probes
+## V4 — isolated active capabilities
 
-Keep emergency stop engaged. Verify:
+Enable one capability at a time. For each, exercise a normal action, native-not-
+ready state, insufficient resource or capacity, emergency stop, manual
+interference, and lifecycle replacement. Verify the visible game effect, exact
+postcondition, truthful waiting/refusal state, bounded log, and absence of stale
+retries.
 
-- controls and Runtime cards reflect configured intent separately from runtime health;
-- lifecycle transitions settle after title, load, scene, and reset boundaries;
-- disabled modules do not scan or rebuild catalogs;
-- service diagnostics update without per-frame log noise;
-- queue, resource, registry, and feature-health views match visible game state; and
-- opening and closing Mod Config does not change gameplay or discard staged settings unexpectedly.
+- **Auto Harvest:** fruit and treasure independently; exact one-action insertion,
+  quantity, sibling isolation, and no planting or destructive plot behavior.
+- **Auto Buy and Spell Leveling:** Structure/Upgrade separation, reserves, queue
+  room, Bulk Development count, rising costs, Single/All capability, and
+  queued-versus-completed unlock state.
+- **Auto Cast:** resource deduction, charge hold/release, targets, manual pause,
+  and audited fire evidence.
+- **Auto Concept:** breadth, depth, rotation, training, manual preservation,
+  drain rollback, mastery limits, and assignment settlement.
+- **Auto Items:** Scroll, Relic, and explicitly approved temporary items;
+  targeting/native-busy refusals, exact stock/queue/usage evidence, picker
+  whitelist behavior, and item-scoped quarantine.
+- **Auto Scribe:** role selection, cost rank, carry limit, payment-last ordering,
+  queue/instant completion, and lifecycle quarantine.
+- **Mentor:** spells, artifacts, and ordinary alchemy independently; exact XP,
+  recursion suppression, source ceiling, domain isolation, and persistence.
 
-### Control-surface regression checks
+## V5 — persistence and rollback
 
-Run these independently; they do not block the portable or installed-game gates.
+Save and reload after verified actions. Exercise Apply/Revert and copied
+configuration migrations. Close the game, restore original save/configuration/
+plugin backups, verify hashes, remove the suite, and confirm the unmodded game
+loads the save.
 
-1. **Quick controls (Q):** confirm one native-size `power-lightning` emergency square and its attached 32-pixel disclosure footer begin below the native top-left gear and character buttons. Open the 4x2 panel below the compound control and, with Auto Cast off and emergency clear, keep its control and Mods Runtime card visible. Click once and confirm exactly one saved transition, with the setting, raised frame, and configured-status axis all becoming On and no intervening or release-time Off repaint. Repeat with `F8`, then repeat On-to-Off and confirm the recessed frame returns. Close the drawer and simulate or observe a contained feature fault/block; the disclosure must add both its structural marker and red cue. Engage emergency stop and confirm desired state remains `ON / STOPPED`, both compound frames repaint from deep green to deep red immediately, and the emergency square never exceeds the adjacent native button size; press STOP once more and confirm immediate resume with no armed state. A stale button with a current Runtime card isolates Unity control lifetime/rendering; both stale while cycle evidence advances requires a host trace.
-2. **Mods refresh (M):** repeat ten unstaged external AC toggles while idle and ten under load. The row should normally follow near the 100 ms cadence; use Runtime pending/last-refresh age to distinguish bounded coordinator delay from shell failure. Verify staged external conflict actions, selected-mod Apply/Revert scope, invalid-shortcut rejection, one catalog rebuild for a late definition, and master off/on without losing Mods.
-3. **Input/tooltip differential (H):** confirm `F8` toggles Auto Cast without opening Inventory or changing native Max Buy/More Info state. Confirm the differential verifier runs only from its Runtime button. The historical Alt calculated-sum concern is closed: spell tooltips support the native Alt view with the suite installed, while time-rune tooltips do not provide an Alt view with or without the suite. Do not use suite quick-button or time-rune tooltips as a native Alt-view oracle.
+## V6 — combined suite
 
-## Gate V4 — isolated active gameplay tests
+Enable representative features together. Confirm one shared runtime, fair action
+turns, action-family conflict isolation, lifecycle cancellation, responsive Mods,
+bounded logs, manual-action room, and an extended representative session. Use a
+profile build only when scheduling or hot-path behavior changed; portable timing
+does not replace observed desktop and Steam Deck/Proton evidence.
 
-Enable one capability at a time on a disposable save. Exercise its normal action, a native-not-ready state, an insufficient-resource or capacity state, emergency stop, and a lifecycle transition. Verify the visible game effect, native postcondition, quiet log, and absence of repeated stale actions.
+## V7 — release candidate
 
-### Auto Harvest
+From the exact clean candidate, repeat V0, install the exact package into a clean
+BepInEx profile, repeat affected V2–V6 gates, and inspect archive entries,
+versions, hashes, logs, and backup restoration. Tagging, publishing, or installing
+outside the authorized test profile requires explicit owner approval.
 
-- Test fruit and treasure independently, then together.
-- Use naturally unlocked content; do not edit save fields to manufacture readiness.
-- Verify one exact native plot action, quantity-one postconditions, sibling isolation, and no replanting or destructive plot behavior.
-- Confirm emergency stop prevents new actions and releasing it resumes only when native readiness permits.
+## Diagnostic captures
 
-### Auto Buy
-
-- Test Structure and Upgrade purchases separately.
-- Cover reserves, queue reservation, live Bulk Development grouping, single-level Upgrade submission, native multi-buy restoration, and live rising costs.
-- Confirm one accepted mutation never exceeds queue room or crosses a newly observed reserve/emergency/lifecycle boundary.
-- Verify definite pre-call rejection does not starve healthy lower-ranked candidates.
-
-### Auto Cast, Auto Concept, and Spell Leveling
-
-- Verify native readiness, resource, queue, and ownership gates.
-- Confirm concept assignment does not churn compatible slots.
-- Confirm Spell Leveling remains governed by Auto Buy configuration and uses the audited native purchase behavior.
-
-### Orb Mentor
-
-- Test spells, artifacts, and alchemy independently before combining them.
-- Confirm exact configured XP, native progression, recursion suppression, disabled-domain silence, and feature-local failure isolation.
-
-## Optional observability capture
-
-Observability is diagnostic and must not alter gameplay.
-
-- Start and stop manual full traces and performance profiles from the Runtime page; neither uses a fixed capture duration.
-- Profiler-enabled debug builds start both sessions automatically when the
-  ServiceCycle runtime is created. Closing the game stops them with a
-  runtime-shutdown terminal reason and flushes the accepted prefix; manual
-  controls remain available for deliberate mid-session windows.
-- Let the rolling decision journal run normally.
-- After the desired action occurs, stop finite sessions, wait for `Complete`, close the game, and copy the session directories.
-- Decode with `./script/trace --full`, `--performance`, `--journal`, or `--dashboard` as appropriate.
-- Treat missing manifests, incomplete status, invalid checksums, writer faults, gameplay changes, or main-thread stalls as failures of that diagnostic product.
-
-Manual traces may begin mid-session, so they are not rooted at a known initial state and their manifest marks them `DiagnosticOnly`.
-
-## Gate V5 — persistence and rollback
-
-1. Save and reload after each active module has performed a verified action.
-2. Confirm native progression and configuration persist.
-3. Exercise configuration Apply/Revert and schema migration using copied configuration files.
-4. Close the game, restore the original save/configuration/plugin backups, and verify their hashes.
-5. Remove the suite and confirm the unmodded game still loads the save.
-
-## Gate V6 — combined compatibility
-
-Install only the supported suite and enable representative Automata and Mentor features together. Confirm:
-
-- one suite mutation owner per frame;
-- no starvation under sustained queue activity;
-- action-family ownership prevents overlapping native mutations;
-- lifecycle replacement cancels stale work across modules;
-- Mod Config remains responsive; and
-- logs remain bounded during an extended representative session.
-
-Use the checked performance profile when the change affects scheduling or hot paths. Modeled portable performance remains separate from observed desktop/runtime timing.
-
-## Gate V7 — release candidate
-
-From the exact clean candidate commit:
-
-1. repeat V0;
-2. install the exact packaged archive into a clean BepInEx profile;
-3. repeat the affected V2–V6 gates;
-4. inspect archive entries, versions, hashes, logs, and backup restoration; and
-5. record known limitations and prerelease/stable status.
-
-Tagging, publishing, replacing a release, or installing into another game profile requires the owner’s explicit authorization.
+Manual full traces, performance profiles, the rolling decision journal, and
+recent-event dumps are evidence tools, not gameplay dependencies. Capture the
+smallest useful window, stop finite sessions, wait for completion, close the
+game, and decode with `./script/trace`. Missing manifests, invalid checksums,
+writer faults, or gameplay changes are diagnostic-product failures and must be
+reported explicitly.

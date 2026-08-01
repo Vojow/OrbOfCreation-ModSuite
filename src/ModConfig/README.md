@@ -37,7 +37,7 @@ contract. Missing required types, fields, sprites, or structural paths are
 suite defects on the matching audited baseline: installation retries bounded startup timing, then
 logs the exact terminal reason and a typed-candidate census at error level and publishes it to
 Runtime. There is no cloned native toggle, text quick-control, or alternate shell fallback. See the
-[native UI inventory](../../docs/testing/ui-native-inventory.md).
+[maintained UI test contract](../../docs/testing/mod-config.md).
 
 Suite-owned UI objects request `RectTransform` explicitly from the native
 `GameObject(string, Type[])` constructor. Quick controls and Mods share one startup-readiness gate.

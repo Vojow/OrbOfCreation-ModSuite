@@ -18,8 +18,10 @@ currently cover:
 - Auto Buy ServiceCycle frame projection, worker policy, final native revalidation,
   queue-room enforcement, and verified Structure/Upgrade mutations;
 - Auto Concept rotation, replacement assignment, native settlement, safe depth,
-  publication-scoped rejected-candidate deferral, multi-slot independence, native-resolved
+  fresh-world recovery after refusal, multi-slot independence, native-resolved
   completion/speed progression, and bounded timed round-robin journeys;
+- Auto Items and Auto Scribe exact-identity actions, boundary refusals,
+  postcondition evidence, and lifecycle quarantine;
 - automatic spell leveling before and after the native level-all upgrade, its
   boundary refusals for a locked or unaffordable level, and its refusal of a plan
   collected under a superseded lifecycle.

@@ -1,6 +1,6 @@
 # Orb Mentor testing
 
-[Testing hub](README.md) · [Mentor behavior reference](../../src/Mentor/README.md) · [Interactive checklist](mentor-runtime-validation.md)
+[Testing hub](README.md) · [Mentor behavior reference](../../src/Mentor/README.md) · [Runtime protocol](runtime-validation.md)
 
 ## Risk contract
 
@@ -48,7 +48,8 @@ change is green.
 
 ## Runtime handoff
 
-Use the [Mentor interactive checklist](mentor-runtime-validation.md) after the
-shared V0–V3 gates. Validate spells, artifacts, and alchemy independently, then
-run the combined-suite gate. Record the exact build, disposable save, settings,
-earned XP, recipient transitions, control/status state, logs, and rollback.
+After shared V0–V3, use Mentor's V4 cases in the
+[runtime protocol](runtime-validation.md). Validate spells, artifacts, and
+ordinary alchemy independently, then run V5 persistence and the V6 combined-suite
+gate. Record the exact build, disposable save, settings, earned XP, recipient
+transitions, control/status state, logs, and rollback.

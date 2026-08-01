@@ -42,7 +42,7 @@ must run `PerformanceAll` and the checked suite performance evaluator.
 - Every control, ownership decision, host activation, and status join reads the configuration store's
   committed snapshot; raw BepInEx state is persistence input only.
 - Each STOP/resume press cancels prepared work before synchronously committing its one saved
-  emergency state; no resume-arming state exists.
+  emergency state; there is no confirmation stage.
 
 ## Runtime handoff
 
