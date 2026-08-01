@@ -280,13 +280,15 @@ if [[ "${mode}" == "release" ]]; then
     env -u OOC_GAME_DIR dotnet clean \
         "${repository_root}/src/OrbModSuite.csproj" \
         --configuration "${configuration}" \
-        "${profile_build_arguments[@]}"
+        "${profile_build_arguments[@]}" \
+        -p:ContinuousIntegrationBuild=true
     echo "Building the canonical release artifact from checked-in game references..."
     env -u OOC_GAME_DIR dotnet restore \
         "${repository_root}/src/OrbModSuite.csproj" \
         --force-evaluate \
         --disable-build-servers \
-        "${profile_build_arguments[@]}"
+        "${profile_build_arguments[@]}" \
+        -p:ContinuousIntegrationBuild=true
     env -u OOC_GAME_DIR dotnet build \
         "${repository_root}/src/OrbModSuite.csproj" \
         --configuration "${configuration}" \
@@ -294,7 +296,8 @@ if [[ "${mode}" == "release" ]]; then
         -m:1 \
         --no-incremental \
         --no-restore \
-        "${profile_build_arguments[@]}"
+        "${profile_build_arguments[@]}" \
+        -p:ContinuousIntegrationBuild=true
 else
     echo "Building the supported suite in ${mode} mode against the real game references..."
     OOC_GAME_DIR="${reference_root}" dotnet restore \

@@ -101,12 +101,14 @@ jobs:
         run: >-
           env -u OOC_GAME_DIR dotnet restore src/OrbModSuite.csproj
           --force-evaluate --disable-build-servers -p:EnableServiceCycleProfiler=false
+          -p:ContinuousIntegrationBuild=true
 
       - name: Build canonical checked-in-reference artifact
         run: >-
           env -u OOC_GAME_DIR dotnet build src/OrbModSuite.csproj
           --configuration Release --no-restore --disable-build-servers
           -m:1 --no-incremental -p:EnableServiceCycleProfiler=false
+          -p:ContinuousIntegrationBuild=true
 
       - name: Verify rebuilt DLL against annotated tag
         id: dll

@@ -30,6 +30,12 @@ dotnet build src/OrbModSuite.csproj --configuration Release
 `global.json` pins the exact SDK used for release builds. Install that SDK
 version rather than allowing the compiler to float.
 
+The canonical release entry points also set
+`ContinuousIntegrationBuild=true`. That normalizes SourceLink document roots
+to `/_/`, so the full DLL is byte-identical across checkout locations. A plain
+development build remains deterministic within its checkout but is not the
+cross-checkout release-byte reproduction command.
+
 Set `OOC_GAME_DIR` only for gates that inspect the full installed assemblies,
 including installed contracts, release faithfulness, and perf-debug builds.
 The game is never launched by the contract gate.
@@ -72,8 +78,9 @@ the serial, non-incremental build commands from `tools/release.sh` so caching
 cannot hide a delta.
 
 Stub-linked outputs live under `bin-stubs/` and `obj-stubs/`; metadata-true
-reference builds use the normal `bin/` tree and produce the canonical release
-artifact. Never install a hand-written-stub-linked DLL. Continue with the
+reference builds use the normal `bin/` tree. The canonical release entry
+points add the cross-checkout setting above. Never install a
+hand-written-stub-linked DLL. Continue with the
 [testing hub](../testing/README.md) and
 [runtime validation protocol](../testing/runtime-validation.md).
 
