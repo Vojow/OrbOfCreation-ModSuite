@@ -62,7 +62,7 @@
     Excluding its runtime asset keeps the suite project from pretending it owns or deploys that DLL.
   -->
   <ItemGroup Condition="'$(EnableServiceCycleProfiler)' == 'true' and '$(UseGameStubs)' == 'true'">
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1"
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4"
                       PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
 
