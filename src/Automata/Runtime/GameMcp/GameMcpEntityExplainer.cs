@@ -691,8 +691,9 @@ internal static class GameMcpEntityExplainer
             cap["baseLevelExcludingBonus"] = research.BaseLevel;
             cap["bonusLevel"] = research.BonusLevel;
             cap["totalLevel"] = research.TotalLevel;
-            cap["effectiveCap"] = research.MaxLevel;
-            cap["artificialCap"] = research.ArtificialMaxLevel;
+            if (research.MaxLevel >= 0) cap["effectiveCap"] = research.MaxLevel;
+            if (research.ArtificialMaxLevel >= 0)
+                cap["artificialCap"] = research.ArtificialMaxLevel;
             cap["nativeComplete"] = research.Complete;
             result["cap"] = cap;
         }
@@ -832,6 +833,7 @@ internal static class GameMcpEntityExplainer
             ["resourceUuid"] = resourceId.ToString("D"),
             ["cost"] = ProjectNumber(amount),
             ["amount"] = ProjectNumber(available),
+            ["affordable"] = !blocked,
             ["blocked"] = blocked,
         };
         if (bandwidth) result["bandwidth"] = true;
@@ -856,6 +858,7 @@ internal static class GameMcpEntityExplainer
                 ["resourceUuid"] = resource.ResourceId.ToString("D"),
                 ["cost"] = ProjectNumber(resource.Amount),
                 ["amount"] = ProjectNumber(resource.Headroom),
+                ["affordable"] = !oneBlocked,
                 ["bandwidth"] = true,
                 ["blocked"] = oneBlocked,
             });

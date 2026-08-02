@@ -98,7 +98,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
     }
 
     [Fact]
-    public void CanonicalEncoderOmitsNullAndEmptyResponseFieldsRecursively()
+    public void CanonicalEncoderPreservesWrittenEmptyArraysAndOmitsNullsAndEmptyObjects()
     {
         var nested = new GameMcpObjectBuilder
         {
@@ -115,7 +115,11 @@ public sealed class GameMcpStreamableHttpProtocolTests
         }.Freeze(), GameMcpTestHarness.EntityCatalog);
 
         var result = Assert.IsType<JObject>(encoded);
-        Assert.Equal(new[] { "status" }, result.Properties().Select(property => property.Name));
+        Assert.Equal(
+            new[] { "status", "emptyArray", "emptyAfterFiltering" },
+            result.Properties().Select(property => property.Name));
+        Assert.Empty(result["emptyArray"]!);
+        Assert.Empty(result["emptyAfterFiltering"]!["emptyArray"]!);
     }
 
     [Fact]
@@ -318,7 +322,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
     }
 
     [Fact]
-    public void WorldGetSchemaRequiresOneListIdentityInput()
+    public void WorldGetSchemaRequiresCategoryAndAcceptsSingularOrBatchIdentity()
     {
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
@@ -326,11 +330,11 @@ public sealed class GameMcpStreamableHttpProtocolTests
         var schema = (JObject)tool["inputSchema"]!;
         var properties = (JObject)schema["properties"]!;
 
-        Assert.Equal(new[] { "category", "uuids" }, schema["required"]!.Values<string>());
+        Assert.Equal(new[] { "category" }, schema["required"]!.Values<string>());
         Assert.Equal(
-            new[] { "category", "uuids", "expectedNativeType" },
+            new[] { "category", "uuids", "uuid", "expectedNativeType" },
             properties.Properties().Select(property => property.Name));
-        Assert.Null(properties["uuid"]);
+        Assert.Equal("string", (string?)properties["uuid"]?["type"]);
         Assert.Equal("array", (string?)properties["uuids"]?["type"]);
         Assert.Equal(1, (int)properties["uuids"]!["minItems"]!);
         Assert.Equal(
@@ -486,7 +490,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
     }
 
     [Fact]
-    public void EmptyLiveCatalogSearchOmitsEmptyMatchesAndRequestEchoes()
+    public void EmptyLiveCatalogSearchKeepsExplicitCardinalityAndCollection()
     {
         var result = GameMcpTestHarness.Json(
             GameMcpEntityCatalog.Search(
@@ -495,22 +499,26 @@ public sealed class GameMcpStreamableHttpProtocolTests
                 20).Freeze());
 
         Assert.Equal("available", (string?)result["status"]);
-        Assert.Null(result["totalMatches"]);
-        Assert.Null(result["matches"]);
+        Assert.Equal(0, (int)result["total"]!);
+        Assert.Equal(0, (int)result["returned"]!);
+        Assert.Empty(result["matches"]!);
         Assert.Null(result["query"]);
         Assert.Null(result["limit"]);
         Assert.Null(result["truncated"]);
     }
 
     [Fact]
-    public void LimitedCatalogSearchUsesTheSharedHasMoreSpelling()
+    public void LimitedCatalogSearchUsesTotalReturnedAndNextOffset()
     {
         var result = GameMcpTestHarness.Json(GameMcpEntityCatalog.Search(
             GameMcpTestHarness.EntityCatalog,
             "a",
             1).Freeze());
 
-        Assert.True((bool)result["hasMore"]!);
+        Assert.True((int)result["total"]! > (int)result["returned"]!);
+        Assert.Equal(1, (int)result["returned"]!);
+        Assert.Equal(1, (int)result["nextOffset"]!);
+        Assert.Null(result["hasMore"]);
         Assert.Null(result["truncated"]);
         Assert.Single(result["matches"]!);
     }
@@ -998,7 +1006,7 @@ public sealed class GameMcpWorldEnvelopeTests
         Assert.Equal("unavailable", (string?)search["status"]);
         Assert.Equal("world_search_incomplete", (string?)search["reasonCode"]);
         Assert.NotEmpty(search["unavailableCategories"]!.Values<JObject>());
-        Assert.Null(search["partialMatches"]);
+        Assert.Empty(search["partialMatches"]!);
 
         var overview = GameMcpTestHarness.Json(GameMcpWorldQuery.Overview(state));
         Assert.False((bool)overview["collection"]!["complete"]!);
@@ -1200,7 +1208,9 @@ public sealed class GameMcpWorldEnvelopeTests
             ownerId.ToString("D"),
             10));
         Assert.Equal("available", (string?)search["status"]);
-        Assert.Null(search["matches"]);
+        Assert.Equal(0, (int)search["total"]!);
+        Assert.Equal(0, (int)search["returned"]!);
+        Assert.Empty(search["matches"]!);
         Assert.Null(search["partialMatches"]);
         Assert.Null(search["implicatedSkippedRows"]);
 
@@ -1448,6 +1458,11 @@ public sealed class GameMcpWorldEnvelopeTests
                 new BigDouble(5d)));
         var world = new GameWorldState
         {
+            EntityIdentities = EntityIdentityCatalogSnapshot.Bound(24, new[]
+            {
+                new EntityIdentityName(modifierId, "IntVariableSO", "Requirement Offset", "requirementOffset"),
+                new EntityIdentityName(challengeId, "ChallengeSO", "Improved Scribing", "improvedScribing"),
+            }.OrderBy(row => row.EntityId).ToArray()),
             Research = PublicationTable<WorldResearch>.Create(new[] { research }),
             CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(
                 new[] { Clean("research") }),
@@ -1458,25 +1473,28 @@ public sealed class GameMcpWorldEnvelopeTests
             new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
         publisher.Publish(world, new WorldGeneration(908));
 
-        var result = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
-            Snapshot(publisher.ReadLatest()),
-            "research",
-            researchId.ToString("D"),
-            string.Empty));
+        var result = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            GameMcpWorldQuery.GetRow(
+                Snapshot(publisher.ReadLatest()),
+                "research",
+                researchId.ToString("D"),
+                string.Empty).Freeze(),
+            world.EntityIdentities));
 
         var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
             result.ToString(Newtonsoft.Json.Formatting.None));
-        Assert.Equal(926, responseBytes);
-        Assert.True(responseBytes < 1461);
+        Assert.True(responseBytes < 1_461, "research projection was " + responseBytes + " bytes");
 
         Assert.Equal("available", (string?)result["status"]);
         var row = (JObject)result["row"]!;
-        Assert.Equal("1e1", (string?)row["baseRequirementLevel"]!);
-        Assert.Equal("5e0", (string?)row["effectiveRequirementLevel"]!);
-        Assert.Equal("-5e0", (string?)row["requirementLevelAdjustment"]!);
+        Assert.Equal(10, (int)row["baseRequirementLevel"]!);
+        Assert.Equal(5, (int)row["effectiveRequirementLevel"]!);
+        Assert.Equal(-5, (int)row["requirementLevelAdjustment"]!);
         var projected = Assert.Single(row["requirementAdjustments"]!.Values<JObject>())!;
         Assert.Equal(modifierId.ToString("D"), (string?)projected["modifier"]!["uuid"]);
+        Assert.Equal("Requirement Offset", (string?)projected["modifier"]!["name"]);
         Assert.Equal(challengeId.ToString("D"), (string?)projected["source"]!["uuid"]);
+        Assert.Equal("Improved Scribing", (string?)projected["source"]!["name"]);
         Assert.Equal("ChallengeSO", (string?)projected["sourceNativeType"]);
         Assert.Equal("-5e0", (string?)projected["amount"]);
         Assert.True((bool)projected["passive"]!);

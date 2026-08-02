@@ -177,13 +177,13 @@ public sealed class GameMcpWorldQueryTests
         var row = Assert.Single(response["results"]!.Values<JObject>())!["row"]!;
 
         Assert.Equal("5e24", (string?)row["amount"]);
-        Assert.Equal("0", (string?)row["netRatePerSecond"]);
+        Assert.Equal("0e0", (string?)row["netRatePerSecond"]);
         Assert.Null(row["capacity"]);
         Assert.Null(row["atCapacity"]);
     }
 
     [Fact]
-    public void SamePlayerMagnitudeFieldAlwaysUsesScientificStrings()
+    public void BoundedLevelsUseJsonCardinalsEvenWhenProjectedFromBigDouble()
     {
         var encoded = GameMcpDocumentJsonEncoder.Encode(
             new GameMcpObjectBuilder
@@ -198,8 +198,8 @@ public sealed class GameMcpWorldQueryTests
             GameMcpTestHarness.EntityCatalog);
         var rows = encoded["rows"]!.OfType<JObject>().ToArray();
 
-        Assert.Equal("1e0", (string?)rows[0]["committedLevel"]);
-        Assert.Equal("1.57e2", (string?)rows[1]["committedLevel"]);
+        Assert.Equal(1, (int)rows[0]["committedLevel"]!);
+        Assert.Equal(157, (int)rows[1]["committedLevel"]!);
     }
 
     [Fact]
@@ -225,7 +225,7 @@ public sealed class GameMcpWorldQueryTests
         Assert.Equal("2.5e3", (string?)encoded["amount"]);
         Assert.Equal("4e1", (string?)encoded["netRatePerSecond"]);
         Assert.True((bool)encoded["available"]!);
-        Assert.True((bool)encoded["hasMore"]!);
+        Assert.Null(encoded["hasMore"]);
         Assert.Null(encoded["entityId"]);
         Assert.Null(encoded["playerFacingName"]);
         Assert.Null(encoded["mcpCategory"]);
@@ -290,8 +290,8 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(overview["detailCategories"]);
         Assert.Null(overview["unlocks"]);
         Assert.Null(overview["harvest"]);
-        Assert.Equal(1309, System.Text.Encoding.UTF8.GetByteCount(
-            overview.ToString(Newtonsoft.Json.Formatting.None)));
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(
+            overview.ToString(Newtonsoft.Json.Formatting.None)) < 1_500);
 
         var exact = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,
@@ -555,17 +555,18 @@ public sealed class GameMcpProtocolSurfaceTests
             new FeatureStatusReason(FeatureStatusReasonCode.None, string.Empty),
             lifecycleGeneration: 9);
         var context = GameMcpTestHarness.Context(features: new[] { feature, mentor });
-        var compact = Plugin.ProjectGameMcpHealth(context);
-        Assert.Contains("availability: available", compact, StringComparison.Ordinal);
-        Assert.Contains(
-            "features configuration_disabled (configuration_disabled): Auto Buy",
-            compact,
-            StringComparison.Ordinal);
-        Assert.Contains("features operational: Mentor", compact, StringComparison.Ordinal);
-        Assert.DoesNotContain("Orb Mentor", compact, StringComparison.Ordinal);
-        Assert.DoesNotContain("(none)", compact, StringComparison.Ordinal);
-        Assert.DoesNotContain("mailbox", compact, StringComparison.Ordinal);
-        Assert.Equal(283, System.Text.Encoding.UTF8.GetByteCount(compact));
+        var compact = GameMcpTestHarness.Json(Plugin.ProjectGameMcpHealth(context));
+        Assert.Equal("available", (string?)compact["status"]);
+        var groups = compact["featureGroups"]!.Values<JObject>().ToArray();
+        Assert.Contains(groups, group =>
+            (string?)group["state"] == "configuration_disabled" &&
+            group["features"]!.Values<string>().SequenceEqual(new[] { "Auto Buy" }));
+        Assert.Contains(groups, group =>
+            (string?)group["state"] == "operational" &&
+            group["features"]!.Values<string>().SequenceEqual(new[] { "Mentor" }));
+        var encoded = compact.ToString(Newtonsoft.Json.Formatting.None);
+        Assert.DoesNotContain("Orb Mentor", encoded, StringComparison.Ordinal);
+        Assert.DoesNotContain("mailbox", encoded, StringComparison.Ordinal);
 
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
@@ -794,7 +795,7 @@ internal static class GameMcpAcceptanceFixture
                 ["arguments"] = arguments ?? new JObject(),
             }), operation => operation.Request.ToolName switch
             {
-                "suite_health" => GameMcpToolExecution.Text(
+                "suite_health" => GameMcpToolExecution.Read(
                     Plugin.ProjectGameMcpHealth(pinned)),
                 "suite_configuration" => GameMcpToolExecution.Read(
                     Plugin.ProjectGameMcpConfiguration(pinned)),

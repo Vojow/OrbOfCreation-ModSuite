@@ -56,9 +56,9 @@ public sealed class GameMcpPrestigeTests
 
         Assert.True(response["challengeState"] is not null, response.ToString());
         var prestige = response["challengeState"]!["prestige"]!;
-        Assert.Equal("7e0", (string?)prestige["persistenceCurrent"]);
+        Assert.Equal(7, (int)prestige["persistenceCurrent"]!);
         Assert.Equal("1.1e1", (string?)prestige["persistenceProjected"]);
-        Assert.Equal("4e0", (string?)prestige["resetCount"]);
+        Assert.Equal(4, (int)prestige["resetCount"]!);
         Assert.Equal("Persistent Light", (string?)prestige["persistentResource"]!["resource"]!["name"]);
         Assert.Equal("8e1", (string?)prestige["persistentResource"]!["amount"]);
         Assert.Equal("Prismatic Trial", (string?)prestige["queuedChallenges"]![0]!["name"]);
@@ -117,8 +117,8 @@ public sealed class GameMcpPrestigeTests
         var failure = Json(GameMcpPrestigeProjection.Project(in failed), World());
         var committed = Json(GameMcpPrestigeProjection.Project(in success), World());
 
-        Assert.Equal("post_commit_fault", (string?)failure["preflight"]);
-        Assert.Equal("4e0", (string?)failure["before"]!["resetCount"]);
+        Assert.Null(failure["preflight"]);
+        Assert.Equal(4, (int)failure["before"]!["resetCount"]!);
         Assert.Equal(21, (long?)failure["observedLifecycleGeneration"]);
         Assert.Null(failure["quarantined"]);
         Assert.Empty(committed.Properties());

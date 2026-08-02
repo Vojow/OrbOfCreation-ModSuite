@@ -86,7 +86,7 @@ public sealed class GameMcpConsumableTests
         Assert.Equal("Swift Thread", (string?)row["name"]);
         Assert.Equal(ConsumableId.ToString("D"), (string?)row["uuid"]);
         Assert.Equal("3e0", (string?)row["amount"]);
-        Assert.Equal("1e0", (string?)row["queued"]);
+        Assert.Equal(1, (int)row["queued"]!);
         Assert.True((bool)row["use"]!["available"]!);
         var cost = Assert.Single(row["useCosts"]!).Value<JObject>()!;
         Assert.Equal("Toxicity", (string?)cost["resource"]!["name"]);
@@ -97,7 +97,7 @@ public sealed class GameMcpConsumableTests
         Assert.False((bool)row["randomization"]!["enabled"]!);
         Assert.Equal("inventory", (string?)row["placements"]![0]!["list"]);
         Assert.Equal("Other Relic",
-            (string?)row["placements"]![0]!["moveDestinations"]![0]!["occupant"]!["name"]);
+            (string?)response["consumableInventory"]!["lists"]![0]!["slots"]![1]!["consumable"]!["name"]);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class GameMcpConsumableTests
         var failure = Json(GameMcpConsumableProjection.Project(in fault));
         var success = Json(GameMcpConsumableProjection.Project(in committed));
 
-        Assert.Equal("verification_failed", (string?)failure["preflight"]);
+        Assert.Null(failure["preflight"]);
         Assert.Null(failure["quarantined"]);
         Assert.Equal("Swift Thread",
             (string?)failure["before"]!["orderedList"]![0]!["consumable"]!["name"]);

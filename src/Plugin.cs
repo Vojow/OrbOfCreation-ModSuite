@@ -1419,10 +1419,10 @@ public sealed class Plugin : BaseUnityPlugin
                     GameMcpWorldQuery.Search(context, request.Query, request.Limit).Freeze());
                 return true;
             case "suite_health":
-                execution = GameMcpToolExecution.Text(ProjectGameMcpHealth(context));
+                execution = GameMcpToolExecution.Read(ProjectGameMcpHealth(context));
                 return true;
             case "game_screen_catalog":
-                execution = GameMcpToolExecution.Text(CaptureScreenCatalogGameMcp());
+                execution = GameMcpToolExecution.Read(CaptureScreenCatalogGameMcp());
                 return true;
             case "suite_configuration":
                 execution = GameMcpToolExecution.Read(ProjectGameMcpConfiguration(context));
@@ -1648,7 +1648,7 @@ public sealed class Plugin : BaseUnityPlugin
         if (uri == "orb://world/categories")
             return GameMcpToolExecution.Read(GameMcpWorldQuery.ListCategories(context).Freeze());
         if (uri == "orb://suite/health")
-            return GameMcpToolExecution.Text(ProjectGameMcpHealth(context));
+            return GameMcpToolExecution.Read(ProjectGameMcpHealth(context));
         if (uri == "orb://suite/configuration")
             return GameMcpToolExecution.Read(ProjectGameMcpConfiguration(context));
         if (uri == "orb://trace/health")
@@ -1662,48 +1662,69 @@ public sealed class Plugin : BaseUnityPlugin
             GameMcpWorldQuery.DefaultLimit).Freeze());
     }
 
-    internal static string ProjectGameMcpHealth(GameMcpFrameContext context)
+    internal static GameMcpValue ProjectGameMcpHealth(GameMcpFrameContext context)
     {
         var stopped = context.Runtime?.EmergencyStopEngaged ??
             context.Configuration.Snapshot.Safety.EmergencyDisable;
-        var result = new StringBuilder();
-        result.Append("availability: available | scene: ").Append(context.SceneName)
-            .Append(" | runtime: ").Append(context.RuntimeAvailable ? "available" : "unavailable")
-            .Append(" | native contracts: ")
-            .Append(context.NativeContractsAvailable ? "available" : "unavailable")
-            .Append(" | emergency stop: ").Append(stopped ? "engaged" : "clear");
+        var result = new GameMcpObjectBuilder
+        {
+            ["status"] = "available",
+            ["scene"] = context.SceneName,
+            ["runtime"] = new GameMcpObjectBuilder
+            {
+                ["available"] = context.RuntimeAvailable,
+            },
+            ["nativeContracts"] = new GameMcpObjectBuilder
+            {
+                ["available"] = context.NativeContractsAvailable,
+            },
+            ["emergencyStop"] = new GameMcpObjectBuilder
+            {
+                ["engaged"] = stopped,
+            },
+        };
         if (!context.RuntimeAvailable && context.RuntimeNotAvailableReason.Length > 0)
-            result.Append("\nreason: ").Append(context.RuntimeNotAvailableReason);
+            ((GameMcpObjectBuilder)result["runtime"]!)["reason"] =
+                context.RuntimeNotAvailableReason;
 
+        var features = new GameMcpArrayBuilder();
         var featureGroups = context.FeatureStatuses
             .GroupBy(feature => new { feature.State, feature.Reason.Code })
             .OrderBy(group => group.Key.State.ToString(), StringComparer.Ordinal)
             .ThenBy(group => group.Key.Code.ToString(), StringComparer.Ordinal);
         foreach (var group in featureGroups)
         {
-            result.Append("\nfeatures ")
-                .Append(GameMcpEntityWireNormalizer.Snake(group.Key.State.ToString()));
+            var row = new GameMcpObjectBuilder
+            {
+                ["state"] = GameMcpEntityWireNormalizer.Snake(group.Key.State.ToString()),
+                ["features"] = group.Select(
+                    feature => CanonicalGameMcpFeatureName(feature.DisplayName)).ToArray(),
+            };
             var reasonCode = GameMcpEntityWireNormalizer.Snake(group.Key.Code.ToString());
-            if (reasonCode.Length > 0 && reasonCode != "none")
-                result.Append(" (").Append(reasonCode).Append(')');
-            result.Append(": ").Append(string.Join(", ", group.Select(
-                feature => CanonicalGameMcpFeatureName(feature.DisplayName))));
+            if (reasonCode.Length > 0 && reasonCode != "none" &&
+                !string.Equals(reasonCode, (string?)row["state"], StringComparison.Ordinal))
+                row["reasonCode"] = reasonCode;
+            features.Add(row);
         }
+        result["featureGroups"] = features;
 
         var runtimeServices = context.Runtime?.Services ?? Array.Empty<AutomataServiceFrameFacts>();
         var serviceGroups = runtimeServices.GroupBy(service =>
             service.HasRunner
                 ? service.Runner.Fault.IsValid ? "faulted" : service.Runner.Phase.ToString()
                 : "unavailable");
+        var services = new GameMcpArrayBuilder();
         foreach (var group in serviceGroups.OrderBy(group => group.Key, StringComparer.Ordinal))
         {
-            result.Append("\nservices ")
-                .Append(GameMcpEntityWireNormalizer.Snake(group.Key))
-                .Append(": ")
-                .Append(string.Join(", ", group.Select(
-                    service => CanonicalGameMcpFeatureName(service.DisplayName))));
+            services.Add(new GameMcpObjectBuilder
+            {
+                ["state"] = GameMcpEntityWireNormalizer.Snake(group.Key),
+                ["services"] = group.Select(
+                    service => CanonicalGameMcpFeatureName(service.DisplayName)).ToArray(),
+            });
         }
-        return result.ToString();
+        result["serviceGroups"] = services;
+        return result.Freeze();
     }
 
     private static string CanonicalGameMcpFeatureName(string name) =>
@@ -1715,18 +1736,24 @@ public sealed class Plugin : BaseUnityPlugin
         for (var index = 0; index < context.WritableConfiguration.Length; index++)
         {
             var item = context.WritableConfiguration[index];
-            writable.Add(new GameMcpObjectBuilder
+            var setting = new GameMcpObjectBuilder
             {
                 ["section"] = item.Section,
                 ["key"] = item.Key,
                 ["settingType"] = item.SettingType,
-                ["serializedValue"] = GameMcpConfigurationSchema.SerializePublishedValue(
-                    context.Configuration.Snapshot,
-                    item.Section,
-                    item.Key),
+                ["serializedValue"] = CanonicalConfigurationValue(
+                    GameMcpConfigurationSchema.SerializePublishedValue(
+                        context.Configuration.Snapshot,
+                        item.Section,
+                        item.Key),
+                    item.SettingType),
                 ["description"] = item.Description,
-                ["constraint"] = new GameMcpDomainValue(item.Constraint),
-            });
+            };
+            var domain = item.Constraint.Domain.Length > 0
+                ? item.Constraint.Domain
+                : PlainConfigurationDomain(item.Constraint.AcceptableValues);
+            if (domain.Length > 0) setting["domain"] = domain;
+            writable.Add(setting);
         }
         var result = new GameMcpObjectBuilder
         {
@@ -1737,6 +1764,21 @@ public sealed class Plugin : BaseUnityPlugin
         };
         if (writable.Count > 0) result["writableSettings"] = writable;
         return result.Freeze();
+    }
+
+    private static string CanonicalConfigurationValue(string value, string settingType) =>
+        string.Equals(settingType, "Boolean", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(settingType, "bool", StringComparison.OrdinalIgnoreCase)
+            ? value.ToLowerInvariant()
+            : value;
+
+    private static string PlainConfigurationDomain(string value)
+    {
+        var result = (value ?? string.Empty).Trim();
+        const string marker = "# Acceptable value range:";
+        if (result.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+            result = result.Substring(marker.Length).Trim();
+        return result;
     }
 
     internal static GameMcpValue ProjectGameMcpTraceHealth(GameMcpFrameContext context)
@@ -1936,8 +1978,32 @@ public sealed class Plugin : BaseUnityPlugin
                 kind,
                 out reason))
         {
+            var code = "unsupported_action_target";
+            if (GameMcpEntityCapabilityMap.TryOwningTool(
+                    context.World.Snapshot,
+                    request.Uuid,
+                    out var owningCategory,
+                    out var owningNativeType,
+                    out var owningTool))
+            {
+                var identity = EntityIdentityFormatter.Format(
+                    request.Uuid,
+                    context.World.Snapshot.EntityIdentities);
+                if (owningTool.Length > 0)
+                {
+                    code = "wrong_action_tool";
+                    reason = identity + " is a " + owningNativeType + " in " +
+                        owningCategory + "; use " + owningTool + " for its player action";
+                }
+                else
+                {
+                    code = "read_only_entity";
+                    reason = identity + " is published in " + owningCategory +
+                        " but has no MCP gameplay verb; read it with world_get";
+                }
+            }
             failure = GameMcpCommandResult.Rejected(
-                "unsupported_action_target",
+                code,
                 reason.Length == 0
                     ? "the UUID is not supported by " + request.ToolName
                     : reason);
@@ -2176,18 +2242,24 @@ public sealed class Plugin : BaseUnityPlugin
     {
         yield return new WaitForEndOfFrame();
         Texture2D? texture = null;
+        Texture2D? encodedTexture = null;
         try
         {
             texture = ScreenCapture.CaptureScreenshotAsTexture();
             if (texture is null)
                 throw new InvalidOperationException(
                     "ScreenCapture.CaptureScreenshotAsTexture returned null");
-            var png = texture.EncodeToPNG();
+            encodedTexture = DownscaleScreenshot(texture, command.Amount);
+            var png = encodedTexture.EncodeToPNG();
             if (png is null || png.Length == 0)
                 throw new InvalidOperationException("Texture2D.EncodeToPNG returned no bytes");
             var details = new GameMcpObjectBuilder();
             if (baseResult.Details is GameMcpObject existingDetails)
                 details.CopyFrom(existingDetails);
+            details["width"] = encodedTexture.width;
+            details["height"] = encodedTexture.height;
+            details["scene"] = SceneManager.GetActiveScene().name;
+            details["worldGeneration"] = command.FrameContext?.World?.Generation.Value ?? 0;
             if (command.SaveCapture)
             {
                 var directory = AutomataTraceRunRoot.Child("mcp-screenshots");
@@ -2225,11 +2297,34 @@ public sealed class Plugin : BaseUnityPlugin
         }
         finally
         {
+            if (encodedTexture is not null && !ReferenceEquals(encodedTexture, texture))
+                Destroy(encodedTexture);
             if (texture is not null) Destroy(texture);
         }
     }
 
-    private string CaptureScreenCatalogGameMcp()
+    private static Texture2D DownscaleScreenshot(Texture2D source, int maxWidth)
+    {
+        if (source.width <= maxWidth) return source;
+        var width = maxWidth;
+        var height = Math.Max(1, (int)Math.Round(
+            source.height * (double)width / source.width,
+            MidpointRounding.AwayFromZero));
+        var result = new Texture2D(width, height);
+        for (var y = 0; y < height; y++)
+        {
+            var v = height == 1 ? 0f : y / (float)(height - 1);
+            for (var x = 0; x < width; x++)
+            {
+                var u = width == 1 ? 0f : x / (float)(width - 1);
+                result.SetPixel(x, y, source.GetPixelBilinear(u, v));
+            }
+        }
+        result.Apply(updateMipmaps: false, makeNoLongerReadable: false);
+        return result;
+    }
+
+    private GameMcpValue CaptureScreenCatalogGameMcp()
     {
         var scene = SceneManager.GetActiveScene().name;
         if (scene != "Main" || _uiShell is null || !_uiShell.IsAlive)
@@ -2247,34 +2342,60 @@ public sealed class Plugin : BaseUnityPlugin
             subtabs.Select(subtab => (subtab.StripKey, subtab.Label, subtab.Active)).ToArray());
     }
 
-    internal static string ProjectGameMcpScreenCatalog(
+    internal static GameMcpValue ProjectGameMcpScreenCatalog(
         string scene,
         bool navigationAvailable,
         IReadOnlyList<(string Label, bool Active)> tabs,
         IReadOnlyList<(string Strip, string Label, bool Active)> subtabs)
     {
+        var result = new GameMcpObjectBuilder
+        {
+            ["status"] = navigationAvailable ? "available" : "unavailable",
+            ["scene"] = scene,
+            ["navigationAvailable"] = navigationAvailable,
+        };
         if (!navigationAvailable)
-            return "scene: " + scene +
-                "\nnavigation: unavailable (the Main scene navigation shell is not alive)";
-        var result = new StringBuilder("scene: ").Append(scene).Append("\ntabs:");
+        {
+            result["reasonCode"] = "navigation_unavailable";
+            result["reason"] = "the Main scene navigation shell is not alive";
+            result["tabs"] = new GameMcpArrayBuilder();
+            return result.Freeze();
+        }
+        var projectedTabs = new GameMcpArrayBuilder();
         for (var index = 0; index < tabs.Count; index++)
         {
             var tab = tabs[index];
-            result.Append("\n  ").Append(tab.Active ? "* " : "  ").Append(tab.Label);
-            if (!tab.Active || subtabs.Count == 0) continue;
-            result.Append("\n    subtab strips:");
+            var projectedTab = new GameMcpObjectBuilder
+            {
+                ["label"] = tab.Label,
+                ["active"] = tab.Active,
+            };
+            if (!tab.Active || subtabs.Count == 0)
+            {
+                projectedTabs.Add(projectedTab);
+                continue;
+            }
+            var projectedStrips = new GameMcpArrayBuilder();
             var strips = subtabs.GroupBy(subtab => subtab.Strip, StringComparer.Ordinal);
             foreach (var strip in strips)
             {
-                result.Append("\n      -");
+                var labels = new GameMcpArrayBuilder();
+                var projectedStrip = new GameMcpObjectBuilder();
                 foreach (var subtab in strip)
                 {
-                    result.Append("\n        ").Append(subtab.Active ? "* " : "  ")
-                        .Append(subtab.Label);
+                    labels.Add(subtab.Label);
+                    if (subtab.Active) projectedStrip["active"] = subtab.Label;
                 }
+                var first = strip.FirstOrDefault().Label ?? string.Empty;
+                projectedStrip["id"] = GameMcpEntityWireNormalizer.Snake(first) + "_strip";
+                projectedStrip["labels"] = labels;
+                projectedStrips.Add(projectedStrip);
             }
+            projectedTab["subtabStrips"] = projectedStrips;
+            projectedTabs.Add(projectedTab);
         }
-        return result.ToString();
+        result["tabs"] = projectedTabs;
+        return result.Freeze();
     }
 
     private bool TryBeginNavigateGameMcp(
@@ -2595,11 +2716,14 @@ public sealed class Plugin : BaseUnityPlugin
         {
             var labels = new GameMcpArrayBuilder();
             var strip = new GameMcpObjectBuilder();
+            var firstLabel = string.Empty;
             foreach (var subtab in group)
             {
+                if (firstLabel.Length == 0) firstLabel = subtab.Label;
                 labels.Add(subtab.Label);
                 if (subtab.Active) strip["active"] = subtab.Label;
             }
+            strip["id"] = GameMcpEntityWireNormalizer.Snake(firstLabel) + "_strip";
             strip["labels"] = labels;
             strips.Add(strip);
         }
@@ -2719,16 +2843,17 @@ public sealed class Plugin : BaseUnityPlugin
                 ["name"] = item.GetName(),
                 ["displayType"] = item.GetDisplayType(),
                 ["hasAltTooltips"] = item.HasAltTooltips(),
-                ["nestedTooltipCount"] = children.Length,
+                ["nestedTooltipCount"] = GameMcpTooltipProjector.CountReachable(item, children),
             });
         }
         var details = new GameMcpObjectBuilder
         {
             ["scene"] = SceneManager.GetActiveScene().name,
             ["total"] = entries.Count,
-            ["hasMore"] = end < entries.Count,
+            ["returned"] = projected.Count,
+            ["tooltips"] = projected,
         };
-        if (projected.Count > 0) details["tooltips"] = projected;
+        if (end < entries.Count) details["nextOffset"] = end;
         return GadgetCommitted(
             "tooltip_catalog_read",
             "active tooltip-bearing elements were enumerated from the current native screen",

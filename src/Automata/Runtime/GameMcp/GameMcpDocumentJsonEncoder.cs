@@ -39,9 +39,9 @@ internal static class GameMcpDocumentJsonEncoder
         {
             var property = source.Properties[index];
             var encoded = EncodeValue(property.Value);
-            if (encoded.Type == JTokenType.Null ||
-                encoded is JArray { Count: 0 } ||
-                encoded is JObject { Count: 0 })
+            // A written empty collection is evidence (for example, a cleared glyph layout or
+            // an exhausted search). Preserve it; only an unwritten field means not applicable.
+            if (encoded.Type == JTokenType.Null || encoded is JObject { Count: 0 })
             {
                 continue;
             }

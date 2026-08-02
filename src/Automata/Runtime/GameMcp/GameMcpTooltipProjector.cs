@@ -1,6 +1,7 @@
 #if SERVICE_CYCLE_PROFILE
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using OrbModding.Common;
 using JObject = OrbAutomata.GameMcp.GameMcpObjectBuilder;
 using JArray = OrbAutomata.GameMcp.GameMcpArrayBuilder;
@@ -8,8 +9,9 @@ using JArray = OrbAutomata.GameMcp.GameMcpArrayBuilder;
 namespace OrbAutomata.GameMcp;
 
 /// <summary>
-/// Projects the native tooltip document into bounded, typed rows. It evaluates only the text
-/// delegate a <c>TooltipNode</c> explicitly authors; it does not render UI or follow click handlers.
+/// Projects a tooltip graph once. Linked tooltips are references into one flat definition map;
+/// cycles therefore cost one reference rather than another recursive subtree. Limit evidence is
+/// aggregated once for the response instead of repeated at every cut edge.
 /// </summary>
 internal static class GameMcpTooltipProjector
 {
@@ -24,78 +26,126 @@ internal static class GameMcpTooltipProjector
         if (primary is null) throw new ArgumentNullException(nameof(primary));
 
         var context = new ProjectionContext();
+        var primaryKey = context.Key(primary);
+        context.Projected.Add(primaryKey);
         var result = new JObject
         {
             ["source"] = "unity_main_thread",
-            ["tooltip"] = ProjectTooltip(primary, "primary", "primary", 0, context),
+            ["tooltip"] = ProjectTooltip(primary, 0, context),
+            ["nestedTooltips"] = ProjectReferences(authoredNested, 1, context),
+            ["inspectedPanels"] = ProjectReferences(inspectedPanels, 1, context),
         };
-        var nested = ProjectMany(authoredNested, "authored_nested", "nested", 1, context);
-        if (nested.Count > 0) result["nestedTooltips"] = nested;
-        var inspected = ProjectMany(inspectedPanels, "inspected_panel", "inspected", 1, context);
-        if (inspected.Count > 0) result["inspectedPanels"] = inspected;
+        if (context.Referenced.Count > 0)
+            result["referencedTooltips"] = context.Referenced;
+        if (context.Truncations.Count > 0)
+        {
+            var summary = new JArray();
+            foreach (var pair in context.Truncations)
+                summary.Add(new JObject
+                {
+                    ["reasonCode"] = pair.Key,
+                    ["occurrences"] = pair.Value.Occurrences,
+                    ["maximumDepth"] = pair.Value.MaximumDepth,
+                });
+            result["truncation"] = summary;
+        }
         return result;
     }
 
-    private static JArray ProjectMany(
+    internal static int CountReachable(
+        ITooltipable primary,
+        IEnumerable<ITooltipable>? authoredNested)
+    {
+        if (primary is null) throw new ArgumentNullException(nameof(primary));
+        var visited = new HashSet<ITooltipable>(ReferenceComparer.Instance);
+        var pending = new Queue<ITooltipable>();
+        pending.Enqueue(primary);
+        if (authoredNested is not null)
+            foreach (var item in authoredNested)
+                if (item is not null) pending.Enqueue(item);
+        while (pending.Count > 0 && visited.Count <= MaximumNodes)
+        {
+            var item = pending.Dequeue();
+            if (!visited.Add(item)) continue;
+            TryQueueNodes(item.GetTooltipNodes(), pending);
+            if (item.HasAltTooltips()) TryQueueNodes(item.GetAltTooltipNodes(), pending);
+        }
+        return Math.Max(visited.Count - 1, 0);
+    }
+
+    private static void TryQueueNodes(
+        IReadOnlyList<TooltipNode>? nodes,
+        Queue<ITooltipable> pending)
+    {
+        if (nodes is null) return;
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            var node = nodes[index];
+            if (node is null) continue;
+            if (node.tooltipable is not null) pending.Enqueue(node.tooltipable);
+            if (node.subTooltips is not null)
+                for (var nested = 0; nested < node.subTooltips.Count; nested++)
+                    if (node.subTooltips[nested] is not null)
+                        pending.Enqueue(node.subTooltips[nested]);
+            TryQueueNodes(node.children, pending);
+        }
+    }
+
+    private static JArray ProjectReferences(
         IEnumerable<ITooltipable>? items,
-        string role,
-        string path,
         int depth,
         ProjectionContext context)
     {
         var result = new JArray();
         if (items is null) return result;
-        var index = 0;
         foreach (var item in items)
-        {
-            if (item is not null)
-                result.Add(ProjectTooltip(item, role, path + "/" + index, depth, context));
-            index++;
-        }
+            if (item is not null) result.Add(ProjectReference(item, depth, context));
         return result;
+    }
+
+    private static JObject ProjectReference(
+        ITooltipable item,
+        int depth,
+        ProjectionContext context)
+    {
+        var key = context.Key(item);
+        if (!context.Projected.Contains(key))
+        {
+            if (depth > MaximumDepth)
+                context.Truncate("tooltip_depth_exceeded", depth);
+            else
+            {
+                context.Projected.Add(key);
+                context.Referenced[key] = ProjectTooltip(item, depth, context);
+            }
+        }
+        return new JObject { ["ref"] = key };
     }
 
     private static JObject ProjectTooltip(
         ITooltipable item,
-        string role,
-        string path,
         int depth,
         ProjectionContext context)
     {
-        if (depth > MaximumDepth)
-            return Limited("tooltip_depth_exceeded", depth);
-        if (!context.Tooltips.Add(item))
-            return Limited("tooltip_cycle", depth);
-
-        try
+        var result = new JObject
         {
-            var result = new JObject
-            {
-                ["name"] = item.GetName(),
-                ["displayType"] = item.GetDisplayType(),
-                ["description"] = item.GetDescription(),
-            };
-            TryAttachIdentity(result, item);
-            var nodes = ProjectNodes(item.GetTooltipNodes(), path + "/nodes", depth, context);
-            if (nodes.Items.Count > 0) result["nodes"] = nodes;
-            if (item.HasAltTooltips())
-            {
-                var altNodes = ProjectNodes(
-                    item.GetAltTooltipNodes(), path + "/altNodes", depth, context);
-                if (altNodes.Items.Count > 0 && !Equivalent(nodes, altNodes))
-                    result["altNodes"] = altNodes;
-            }
-            return result;
-        }
-        finally
+            ["name"] = item.GetName(),
+            ["displayType"] = item.GetDisplayType(),
+            ["description"] = item.GetDescription(),
+        };
+        TryAttachIdentity(result, item);
+        result["nodes"] = ProjectNodes(item.GetTooltipNodes(), depth, context);
+        if (item.HasAltTooltips())
         {
-            context.Tooltips.Remove(item);
+            var alternate = ProjectNodes(item.GetAltTooltipNodes(), depth, context);
+            if (!Equivalent((GameMcpValue)result["nodes"]!, alternate))
+                result["altNodes"] = alternate;
         }
+        return result;
     }
 
     private static GameMcpArray ProjectNodes(
         IReadOnlyList<TooltipNode>? nodes,
-        string path,
         int depth,
         ProjectionContext context)
     {
@@ -105,63 +155,57 @@ internal static class GameMcpTooltipProjector
         {
             var node = nodes[index];
             if (node is null) continue;
-            result.Add(ProjectNode(node, index, path + "/" + index, depth, context));
+            var projected = ProjectNode(node, depth, context);
+            if (projected is not null) result.Add(projected);
         }
         return result.Freeze();
     }
 
-    private static JObject ProjectNode(
+    private static JObject? ProjectNode(
         TooltipNode node,
-        int ordinal,
-        string path,
         int depth,
         ProjectionContext context)
     {
         if (depth > MaximumDepth)
-            return Limited("tooltip_depth_exceeded", depth);
+        {
+            context.Truncate("tooltip_depth_exceeded", depth);
+            return null;
+        }
         if (++context.NodeCount > MaximumNodes)
-            return Limited("tooltip_node_limit_exceeded", depth);
+        {
+            context.Truncate("tooltip_node_limit_exceeded", depth);
+            return null;
+        }
 
-        string? computedText = null;
-        string computationReason;
+        string? text = null;
+        string failure;
         try
         {
-            computedText = node.textFn is null ? node.text : node.textFn();
-            computationReason = string.Empty;
+            text = node.textFn is null ? node.text : node.textFn();
+            failure = string.Empty;
         }
         catch (Exception exception)
         {
-            computationReason = exception.GetBaseException().Message;
+            failure = exception.GetBaseException().Message;
         }
 
         var result = new JObject
         {
             ["kind"] = node.nodeType.ToString(),
-            ["text"] = computedText,
+            ["text"] = text,
+            ["children"] = ProjectNodes(node.children, depth + 1, context),
         };
-        if (computationReason.Length > 0)
+        if (failure.Length > 0)
         {
             result["status"] = "not_available";
             result["code"] = "tooltip_text_evaluation_failed";
-            result["reason"] = computationReason;
+            result["reason"] = failure;
         }
-        var children = ProjectNodes(node.children, path + "/children", depth + 1, context);
-        if (children.Items.Count > 0) result["children"] = children;
         if (node.tooltipable is not null)
-            result["linkedTooltip"] = ProjectTooltip(
-                node.tooltipable, "node_link", path + "/linkedTooltip", depth + 1, context);
-        var subTooltips = ProjectMany(
-            node.subTooltips, "node_subtooltip", path + "/subTooltips", depth + 1, context);
-        if (subTooltips.Count > 0) result["subTooltips"] = subTooltips;
+            result["linkedTooltip"] = ProjectReference(node.tooltipable, depth + 1, context);
+        result["subTooltips"] = ProjectReferences(node.subTooltips, depth + 1, context);
         return result;
     }
-
-    private static JObject Limited(string code, int depth) => new()
-    {
-        ["status"] = "not_available",
-        ["code"] = code,
-        ["truncatedAtDepth"] = depth,
-    };
 
     private static void TryAttachIdentity(JObject result, ITooltipable item)
     {
@@ -174,7 +218,7 @@ internal static class GameMcpTooltipProjector
         }
         catch (Exception)
         {
-            // Tooltip content remains useful when optional identity enrichment is unavailable.
+            // Optional identity enrichment never makes readable tooltip content unavailable.
         }
     }
 
@@ -199,8 +243,7 @@ internal static class GameMcpTooltipProjector
                 var leftProperty = leftObject.Properties[index];
                 var rightProperty = rightObject.Properties[index];
                 if (!string.Equals(leftProperty.Name, rightProperty.Name, StringComparison.Ordinal) ||
-                    !Equivalent(leftProperty.Value, rightProperty.Value))
-                    return false;
+                    !Equivalent(leftProperty.Value, rightProperty.Value)) return false;
             }
             return true;
         }
@@ -209,8 +252,60 @@ internal static class GameMcpTooltipProjector
 
     private sealed class ProjectionContext
     {
-        internal HashSet<ITooltipable> Tooltips { get; } = new();
+        private readonly Dictionary<ITooltipable, string> _keys =
+            new(ReferenceComparer.Instance);
+        private int _nextReference;
+
+        internal HashSet<string> Projected { get; } = new(StringComparer.Ordinal);
+        internal JObject Referenced { get; } = new();
+        internal SortedDictionary<string, TruncationCounter> Truncations { get; } =
+            new(StringComparer.Ordinal);
         internal int NodeCount { get; set; }
+
+        internal string Key(ITooltipable item)
+        {
+            if (_keys.TryGetValue(item, out var existing)) return existing;
+            var identity = StableIdentity(item);
+            var key = identity != Guid.Empty
+                ? identity.ToString("D")
+                : "tooltip_" + (++_nextReference).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+            _keys.Add(item, key);
+            return key;
+        }
+
+        internal void Truncate(string reason, int depth)
+        {
+            if (!Truncations.TryGetValue(reason, out var value)) value = default;
+            Truncations[reason] = new TruncationCounter(
+                value.Occurrences + 1,
+                Math.Max(value.MaximumDepth, depth));
+        }
+
+        private static Guid StableIdentity(ITooltipable item)
+        {
+            if (item is not IdScriptableObject) return Guid.Empty;
+            try
+            {
+                return RuntimeIdentityRegistryBinding.Shared.ReadStableUuid(item) ?? Guid.Empty;
+            }
+            catch (Exception) { return Guid.Empty; }
+        }
+    }
+
+    private readonly struct TruncationCounter
+    {
+        internal TruncationCounter(int occurrences, int maximumDepth)
+        { Occurrences = occurrences; MaximumDepth = maximumDepth; }
+        internal int Occurrences { get; }
+        internal int MaximumDepth { get; }
+    }
+
+    private sealed class ReferenceComparer : IEqualityComparer<ITooltipable>
+    {
+        internal static readonly ReferenceComparer Instance = new();
+        public bool Equals(ITooltipable? left, ITooltipable? right) => ReferenceEquals(left, right);
+        public int GetHashCode(ITooltipable value) => RuntimeHelpers.GetHashCode(value);
     }
 }
 #endif

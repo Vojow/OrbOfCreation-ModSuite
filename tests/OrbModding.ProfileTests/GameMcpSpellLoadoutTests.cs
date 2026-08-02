@@ -100,12 +100,12 @@ public sealed class GameMcpSpellLoadoutTests
         Assert.Equal("Gather Knowledge", (string?)first["spellRecipe"]!["name"]);
         Assert.True((bool)first["remove"]!["available"]!);
         Assert.True((bool)first["move"]!["available"]!);
-        var destinations = first["move"]!["destinations"]!.Values<JObject>().ToArray();
-        var occupiedDestination = Assert.IsType<JObject>(destinations[0]);
-        var emptyDestination = Assert.IsType<JObject>(destinations[1]);
+        var destinations = response["moveDestinations"]!.Values<JObject>().ToArray();
         Assert.Equal(
-            new[] { 1, 2 },
-            new[] { occupiedDestination, emptyDestination }.Select(row => (int)row["slot"]!));
+            new[] { 0, 1, 2 },
+            destinations.Select(row => (int)row["slot"]!));
+        var occupiedDestination = destinations[1];
+        var emptyDestination = destinations[2];
         Assert.Equal("Whirling Sorcery", (string?)occupiedDestination["occupant"]!["name"]);
         Assert.True((bool)emptyDestination["empty"]!);
 
@@ -147,7 +147,7 @@ public sealed class GameMcpSpellLoadoutTests
 
         var success = GameMcpTestHarness.Json(terminal.Project(command));
 
-        Assert.Equal(new[] { "status", "loadout" },
+        Assert.Equal(new[] { "status", "loadout", "augmentOptions", "moveDestinations" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
         var slots = success["loadout"]!["slots"]!.Values<JObject>().ToArray();
@@ -155,7 +155,7 @@ public sealed class GameMcpSpellLoadoutTests
         var secondSlot = Assert.IsType<JObject>(slots[1]);
         Assert.Equal("Whirling Sorcery", (string?)firstSlot["spellInstance"]!["name"]);
         Assert.Equal("Gather Knowledge", (string?)secondSlot["spellInstance"]!["name"]);
-        Assert.NotNull(firstSlot["move"]!["destinations"]);
+        Assert.NotNull(success["moveDestinations"]);
         Assert.NotNull(firstSlot["remove"]);
         Assert.Null(success["preflight"]);
         Assert.Null(success["before"]);
@@ -182,7 +182,7 @@ public sealed class GameMcpSpellLoadoutTests
         var failure = GameMcpTestHarness.Json(
             GameMcpSpellLoadoutProjection.Project(in submission));
 
-        Assert.Equal("verification_failed", (string?)failure["preflight"]);
+        Assert.Null(failure["preflight"]);
         Assert.Equal("Gather Knowledge", (string?)failure["before"]!["slots"]![0]!["spellInstance"]!["name"]);
         Assert.Equal("Whirling Sorcery", (string?)failure["after"]!["slots"]![1]!["spellInstance"]!["name"]);
         Assert.Null(failure["quarantined"]);

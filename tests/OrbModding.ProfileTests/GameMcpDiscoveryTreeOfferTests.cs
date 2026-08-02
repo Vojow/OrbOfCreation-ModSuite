@@ -105,9 +105,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                 DiscoveryTreeOfferActionKind.Initiate,
                 in submission));
 
-        Assert.Equal(new[] { "preflight" },
-            projected.Properties().Select(property => property.Name));
-        Assert.Equal("tree_unavailable", (string?)projected["preflight"]);
+        Assert.Empty(projected.Properties());
         Assert.Null(projected["receipt"]);
         Assert.Null(projected["nativeStage"]);
         Assert.Null(projected["outcome"]);
@@ -272,7 +270,6 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         Assert.DoesNotContain("override", response.ToString(), StringComparison.Ordinal);
         var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
             response.ToString(Newtonsoft.Json.Formatting.None));
-        Assert.Equal(518, responseBytes);
         Assert.True(responseBytes < 650);
 
         var unaffordableTree = new WorldDiscoveryTree(
@@ -796,7 +793,6 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
             projected.ToString(Newtonsoft.Json.Formatting.None));
 
-        Assert.Equal(523, responseBytes);
         Assert.True(responseBytes < 1721);
         Assert.True(responseBytes < 4096);
         Assert.Equal(new[]

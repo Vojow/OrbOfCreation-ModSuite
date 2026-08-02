@@ -259,6 +259,31 @@ internal static class GameMcpEntityCapabilityMap
     internal static bool Supports(string category, GameMcpCommandKind capability) =>
         ByCategory.TryGetValue(category, out var descriptor) && descriptor.Supports(capability);
 
+    internal static bool TryOwningTool(
+        GameWorldState world,
+        Guid target,
+        out string category,
+        out string nativeType,
+        out string tool)
+    {
+        category = string.Empty;
+        nativeType = string.Empty;
+        tool = string.Empty;
+        if (target == Guid.Empty || !world.EntityIdentities.TryGet(target, out var identity))
+            return false;
+        nativeType = identity.RuntimeType;
+        if (!TryCategoryForNativeType(nativeType, out category) ||
+            !ByCategory.TryGetValue(category, out var descriptor)) return false;
+        for (var index = 0; index < descriptor.Capabilities.Count; index++)
+        {
+            var candidate = GameMcpCommandKinds.ToolName(descriptor.Capabilities[index]);
+            if (candidate.Length == 0) continue;
+            tool = candidate;
+            return true;
+        }
+        return true;
+    }
+
     private static bool PurchaseTarget(GameWorldState world, Guid target, out string reason)
     {
         if (!Supports("structures", GameMcpCommandKind.Purchase) ||

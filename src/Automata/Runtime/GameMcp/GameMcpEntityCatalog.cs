@@ -41,9 +41,14 @@ internal static class GameMcpEntityCatalog
             if (matches.Count < limit) matches.Add(Project(catalog, in row));
         }
 
-        var result = new JObject { ["status"] = "available" };
-        if (matches.Count > 0) result["matches"] = matches;
-        if (totalMatches > matches.Count) result["hasMore"] = true;
+        var result = new JObject
+        {
+            ["status"] = "available",
+            ["total"] = totalMatches,
+            ["returned"] = matches.Count,
+            ["matches"] = matches,
+        };
+        if (totalMatches > matches.Count) result["nextOffset"] = matches.Count;
         return result;
     }
 

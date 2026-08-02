@@ -10,7 +10,7 @@ public sealed class GameMcpNumberFormatterTests
     [Fact]
     public void Canonical_scalar_shape_is_always_scientific_except_zero()
     {
-        Assert.Equal("0", GameMcpNumberFormatter.Format(BigDouble.Zero));
+        Assert.Equal("0e0", GameMcpNumberFormatter.Format(BigDouble.Zero));
         var canonical = new[]
         {
             GameMcpNumberFormatter.Format(new BigDouble(1.4d, 4)),

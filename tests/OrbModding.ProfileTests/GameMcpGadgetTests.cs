@@ -56,7 +56,9 @@ public sealed class GameMcpGadgetTests
         var screenshot = Tool("game_screenshot");
         Assert.Null(screenshot["inputSchema"]!["required"]);
         var properties = (JObject)screenshot["inputSchema"]!["properties"]!;
-        Assert.Equal(new[] { "save" }, properties.Properties().Select(p => p.Name));
+        Assert.Equal(new[] { "save", "maxWidth" }, properties.Properties().Select(p => p.Name));
+        Assert.Equal(320, (int)properties["maxWidth"]!["minimum"]!);
+        Assert.Equal(4096, (int)properties["maxWidth"]!["maximum"]!);
     }
 
     [Fact]
@@ -98,7 +100,7 @@ public sealed class GameMcpGadgetTests
         var navigation = Tool("game_navigate");
         var properties = (JObject)navigation["inputSchema"]!["properties"]!;
         Assert.Equal(
-            new[] { "tab", "subtab", "plotNodeUuid", "capture" },
+            new[] { "tab", "subtab", "plotNodeUuid", "capture", "maxWidth" },
             properties.Properties().Select(property => property.Name));
         Assert.Null(properties["operation"]);
         Assert.Null(properties["tabIndex"]);
@@ -207,24 +209,22 @@ public sealed class GameMcpGadgetTests
                 ("secondary", "Concepts", false),
             });
 
-        Assert.Equal(
-            "scene: Main\n" +
-            "tabs:\n" +
-            "    Magic\n" +
-            "  * Scholar\n" +
-            "    subtab strips:\n" +
-            "      -\n" +
-            "          Loadout\n" +
-            "        * Discover\n" +
-            "          Research\n" +
-            "      -\n" +
-            "        * Inventory\n" +
-            "          Concepts\n" +
-            "    Mods",
-            projected);
-        Assert.DoesNotContain("index", projected, System.StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Canvas", projected, System.StringComparison.Ordinal);
-        Assert.Equal(178, System.Text.Encoding.UTF8.GetByteCount(projected));
+        var json = GameMcpTestHarness.Json(projected);
+        Assert.Equal("available", (string?)json["status"]);
+        Assert.Equal("Main", (string?)json["scene"]);
+        var tabs = json["tabs"]!.Values<JObject>().ToArray();
+        Assert.Equal(new[] { "Magic", "Scholar", "Mods" },
+            tabs.Select(tab => (string)tab["label"]!).ToArray());
+        var scholar = tabs[1];
+        Assert.True((bool)scholar["active"]!);
+        var strips = scholar["subtabStrips"]!.Values<JObject>().ToArray();
+        Assert.Equal(new[] { "loadout_strip", "inventory_strip" },
+            strips.Select(strip => (string)strip["id"]!).ToArray());
+        Assert.Equal("Discover", (string?)strips[0]["active"]);
+        Assert.Equal("Inventory", (string?)strips[1]["active"]);
+        var encoded = json.ToString(Newtonsoft.Json.Formatting.None);
+        Assert.DoesNotContain("index", encoded, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Canvas", encoded, System.StringComparison.Ordinal);
     }
 
     [Fact]

@@ -86,7 +86,7 @@ public sealed class GameMcpSpellCompositionTests
         Assert.Equal(SpellInstanceId.ToString("D"), (string?)equipped["spellInstance"]!["uuid"]);
         Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
         Assert.Equal("4", (string?)equipped["outputLevel"]);
-        Assert.Equal("6e0", (string?)equipped["effectiveLevel"]);
+        Assert.Equal(6, (int)equipped["effectiveLevel"]!);
         Assert.Equal(3, (int)equipped["requiredMasteryLevel"]!);
         Assert.Equal(5, (int)equipped["recipeMasteryLevel"]!);
         Assert.True((bool)equipped["duration"]!);
@@ -95,11 +95,11 @@ public sealed class GameMcpSpellCompositionTests
         var applied = Assert.Single(equipped["augmentGlyphs"]!.Values<JObject>())!;
         Assert.Equal("Brew", (string?)applied["glyph"]!["name"]);
         Assert.Equal(2, (int)applied["count"]!);
-        var options = equipped["augmentOptions"]!.Values<JObject>().ToArray();
+        var options = response["augmentOptions"]!.Values<JObject>().ToArray();
         Assert.Equal(new[] { "Insight", "Brew" },
             options.Select(option => (string?)option!["glyph"]!["name"]));
         Assert.Equal(new[] { 2, 3 }, options.Select(option => (int)option!["maximumUses"]!));
-        Assert.Equal(new[] { 0, 2 }, options.Select(option => (int)option!["currentUses"]!));
+        Assert.All(options, option => Assert.Null(option!["currentUses"]));
 
         var cast = Assert.Single(equipped["castCosts"]!.Values<JObject>())!;
         Assert.Equal("Knowledge", (string?)cast["resource"]!["name"]);
@@ -143,14 +143,15 @@ public sealed class GameMcpSpellCompositionTests
 
         var success = GameMcpTestHarness.Json(terminal.Project(command));
 
-        Assert.Equal(new[] { "status", "outputLevel", "equipped" },
+        Assert.Equal(
+            new[] { "status", "outputLevel", "equipped", "augmentOptions", "moveDestinations" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
         var equipped = Assert.Single(success["equipped"]!.Values<JObject>())!;
         Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
         Assert.Equal(2, (int)Assert.Single(
             equipped["augmentGlyphs"]!.Values<JObject>())!["count"]!);
-        Assert.NotNull(equipped["augmentOptions"]);
+        Assert.NotNull(success["augmentOptions"]);
         Assert.NotNull(equipped["castCosts"]);
         Assert.NotNull(equipped["drainCostsPerSecond"]);
         Assert.Null(success["preflight"]);
@@ -184,10 +185,10 @@ public sealed class GameMcpSpellCompositionTests
 
         Assert.Equal(new[]
             {
-                "preflight", "nativeStage", "outcome", "before", "after", "quarantined",
+                "nativeStage", "outcome", "before", "after", "quarantined",
             },
             failure.Properties().Select(property => property.Name));
-        Assert.Equal("verification_failed", (string?)failure["preflight"]);
+        Assert.Null(failure["preflight"]);
         Assert.Equal("Gather Knowledge", (string?)failure["before"]!["spellRecipe"]!["name"]);
         Assert.Equal("Brew", (string?)failure["before"]!["augmentGlyphs"]![0]!["glyph"]!["name"]);
         Assert.True((bool)failure["quarantined"]!);

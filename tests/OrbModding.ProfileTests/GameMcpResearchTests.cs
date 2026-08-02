@@ -32,16 +32,17 @@ public sealed class GameMcpResearchTests
     }
 
     [Fact]
-    public void Validation_names_missing_uuid_and_removed_generation_argument()
+    public void Validation_names_missing_uuid_and_ignores_echoed_generation_metadata()
     {
-        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
+        var inbox = new GameMcpFrameInbox();
+        var router = new GameMcpProtocolRouter(inbox);
         var missing = router.Handle(GameMcpAcceptanceFixture.Request(1, "tools/call",
             new JObject
             {
                 ["name"] = "game_research",
                 ["arguments"] = new JObject { ["mode"] = "develop" },
             }));
-        var unexpected = router.Handle(GameMcpAcceptanceFixture.Request(2, "tools/call",
+        var accepted = router.Handle(GameMcpAcceptanceFixture.Request(2, "tools/call",
             new JObject
             {
                 ["name"] = "game_research",
@@ -54,11 +55,10 @@ public sealed class GameMcpResearchTests
             }));
 
         var missingErrors = Assert.IsType<JArray>(missing.Body!["error"]!["data"]!["validationErrors"]);
-        var unexpectedErrors = Assert.IsType<JArray>(unexpected.Body!["error"]!["data"]!["validationErrors"]);
         Assert.Contains(missingErrors.Values<JObject>(), error => (string?)error!["code"] == "missing_required" &&
                 (string?)error["field"] == "uuid");
-        Assert.Contains(unexpectedErrors.Values<JObject>(), error => (string?)error!["code"] == "unexpected_field" &&
-                (string?)error["field"] == "worldGeneration");
+        Assert.NotEqual(-32602, (int?)accepted.Body?["error"]?["code"]);
+        Assert.Empty(inbox.ClaimPending());
     }
 
     [Fact]
@@ -71,10 +71,10 @@ public sealed class GameMcpResearchTests
 
         Assert.Equal("Improved Casting", (string?)row["name"]);
         Assert.Equal("active", (string?)row["state"]);
-        Assert.Equal("3e0", (string?)row["queuedLevels"]);
+        Assert.Equal(3, (int)row["queuedLevels"]!);
         Assert.Equal("queue", (string?)row["develop"]!["route"]);
-        Assert.Equal("3e0", (string?)row["develop"]!["maximumBatch"]);
-        Assert.Equal("2e0", (string?)row["develop"]!["levels"]);
+        Assert.Equal(3, (int)row["develop"]!["maximumBatch"]!);
+        Assert.Equal(2, (int)row["develop"]!["levels"]!);
         Assert.True((bool)row["develop"]!["affordable"]!);
         var cost = Assert.Single(row["develop"]!["costs"]!).Value<JObject>()!;
         Assert.Equal("Arcana", (string?)cost["resource"]!["name"]);
@@ -82,7 +82,7 @@ public sealed class GameMcpResearchTests
         Assert.Equal("8e1", (string?)cost["amount"]);
         Assert.Equal("4e1", (string?)row["investment"]![0]!["invested"]);
         Assert.Equal("Insight", (string?)row["researchTypes"]![0]!["researchType"]!["name"]);
-        Assert.Equal("2e0", (string?)row["researchTypes"]![0]!["remainingBonusLevels"]);
+        Assert.Equal(2, (int)row["researchTypes"]![0]!["remainingBonusLevels"]!);
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public sealed class GameMcpResearchTests
         var failure = Json(GameMcpResearchProjection.Project(in failed), World());
         var committed = Json(GameMcpResearchProjection.Project(in success), World());
 
-        Assert.Equal("verification_failed", (string?)failure["preflight"]);
+        Assert.Null(failure["preflight"]);
         Assert.Equal("develop", (string?)failure["requestedMode"]);
         Assert.Null(failure["quarantined"]);
         Assert.NotNull(failure["before"]);

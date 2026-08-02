@@ -232,8 +232,11 @@ internal sealed class GameMcpProtocolRouter
             case "world_get":
                 builder.Category = RequireString(arguments, "category");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
-                builder.Uuids = RequireStringArray(
-                    arguments, "uuids", GameMcpWorldQuery.MaximumBatchSize);
+                if (arguments.ContainsKey("uuids"))
+                    builder.Uuids = RequireStringArray(
+                        arguments, "uuids", GameMcpWorldQuery.MaximumBatchSize);
+                else
+                    builder.Uuids = new[] { RequireUuid(arguments, "uuid").ToString("D") };
                 break;
             case "entity_catalog":
             case "world_search":
@@ -395,6 +398,10 @@ internal sealed class GameMcpProtocolRouter
                 break;
             case "game_screenshot":
                 builder.SaveCapture = OptionalBool(arguments, "save", false);
+                builder.Amount = OptionalInt(arguments, "maxWidth", 1280);
+                if (builder.Amount < 320 || builder.Amount > 4096)
+                    throw new GameMcpInvalidParamsException(
+                        "maxWidth must be between 320 and 4096 pixels");
                 break;
             case "game_navigate":
                 builder.Tab = ParseNavigationSelector(RequireSelector(arguments, "tab"));
@@ -402,6 +409,10 @@ internal sealed class GameMcpProtocolRouter
                     builder.Subtab = ParseNavigationSelector(RequireSelector(arguments, "subtab"));
                 builder.Uuid = OptionalUuid(arguments, "plotNodeUuid");
                 builder.Capture = OptionalBool(arguments, "capture", false);
+                builder.Amount = OptionalInt(arguments, "maxWidth", 1280);
+                if (builder.Amount < 320 || builder.Amount > 4096)
+                    throw new GameMcpInvalidParamsException(
+                        "maxWidth must be between 320 and 4096 pixels");
                 break;
             case "game_tooltips":
                 builder.Offset = OptionalInt(arguments, "offset", 0);
@@ -825,7 +836,11 @@ internal sealed class GameMcpProtocolRouter
                 "game_screenshot",
                 "Capture the game framebuffer",
                 "Return a PNG as inline MCP image content. Set save=true to also write a generated name in the trace folder.",
-                ObjectSchema(new JObject { ["save"] = BooleanSchema("Also save to the trace folder.") }),
+                ObjectSchema(new JObject
+                {
+                    ["save"] = BooleanSchema("Also save to the trace folder."),
+                    ["maxWidth"] = IntegerSchema(320, 4096),
+                }),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -851,6 +866,7 @@ internal sealed class GameMcpProtocolRouter
                         ["subtab"] = StringSchema("Optional exact player-facing subtab name."),
                         ["plotNodeUuid"] = StringSchema("Optional published plot UUID to select after navigation."),
                         ["capture"] = BooleanSchema("Return an inline PNG after arrival."),
+                        ["maxWidth"] = IntegerSchema(320, 4096),
                     },
                     "tab"),
                 readOnly: false,
@@ -901,10 +917,12 @@ internal sealed class GameMcpProtocolRouter
                     StringSchema("Canonical D-format stable UUID."),
                     1,
                     GameMcpWorldQuery.MaximumBatchSize),
+                ["uuid"] = StringSchema(
+                    "Singular alias for one canonical UUID; do not combine with uuids."),
                 ["expectedNativeType"] =
                     StringSchema("Optional exact assertion returned by world_categories."),
             },
-            "category", "uuids");
+            "category");
     }
 
     private static void ValidateToolArguments(string name, JObject arguments)
@@ -931,8 +949,27 @@ internal sealed class GameMcpProtocolRouter
             }
         }
 
+        if (string.Equals(name, "world_get", StringComparison.Ordinal))
+        {
+            var hasBatch = arguments.ContainsKey("uuids");
+            var hasSingle = arguments.ContainsKey("uuid");
+            if (!hasBatch && !hasSingle)
+                errors.Add(ValidationError(
+                    "missing_required",
+                    "uuids",
+                    "world_get requires uuids (array) or uuid (singular alias)"));
+            else if (hasBatch && hasSingle)
+                errors.Add(ValidationError(
+                    "mutually_exclusive",
+                    "uuid",
+                    "world_get accepts uuid or uuids, not both"));
+        }
+
         foreach (var supplied in arguments.Properties())
         {
+            if (string.Equals(supplied.Name, "worldGeneration", StringComparison.Ordinal) &&
+                IsActionTool(name))
+                continue;
             if (properties.ContainsKey(supplied.Name)) continue;
             errors.Add(ValidationError(
                 "unexpected_field",
@@ -1103,6 +1140,13 @@ internal sealed class GameMcpProtocolRouter
             StringSchema("Optional exact assertion; the server derives the native type from UUID.");
         return ObjectSchema(properties, required);
     }
+
+    private static bool IsActionTool(string name) => name is
+        "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
+        "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
+        "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
+        "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
+        "game_challenge" or "game_prestige" or "game_research";
 
     private static JObject ListResources() => new()
     {

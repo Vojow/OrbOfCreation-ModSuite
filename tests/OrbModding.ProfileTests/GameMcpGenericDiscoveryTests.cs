@@ -36,9 +36,10 @@ public sealed class GameMcpGenericDiscoveryTests
     }
 
     [Fact]
-    public void Validation_names_missing_uuid_and_removed_generation_argument()
+    public void Validation_names_missing_uuid_and_ignores_echoed_generation_metadata()
     {
-        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
+        var inbox = new GameMcpFrameInbox();
+        var router = new GameMcpProtocolRouter(inbox);
         var missing = router.Handle(GameMcpAcceptanceFixture.Request(
             1,
             "tools/call",
@@ -47,7 +48,7 @@ public sealed class GameMcpGenericDiscoveryTests
                 ["name"] = "game_discover",
                 ["arguments"] = new JObject(),
             }));
-        var unexpected = router.Handle(GameMcpAcceptanceFixture.Request(
+        var accepted = router.Handle(GameMcpAcceptanceFixture.Request(
             2,
             "tools/call",
             new JObject
@@ -62,16 +63,12 @@ public sealed class GameMcpGenericDiscoveryTests
 
         var missingErrors = Assert.IsType<JArray>(
             missing.Body!["error"]!["data"]!["validationErrors"]);
-        var unexpectedErrors = Assert.IsType<JArray>(
-            unexpected.Body!["error"]!["data"]!["validationErrors"]);
         Assert.Contains(
             missingErrors.Values<JObject>(),
             error => (string?)error!["code"] == "missing_required" &&
                      (string?)error["field"] == "uuid");
-        Assert.Contains(
-            unexpectedErrors.Values<JObject>(),
-            error => (string?)error!["code"] == "unexpected_field" &&
-                     (string?)error["field"] == "worldGeneration");
+        Assert.NotEqual(-32602, (int?)accepted.Body?["error"]?["code"]);
+        Assert.Empty(inbox.ClaimPending());
     }
 
     [Fact]
@@ -143,7 +140,7 @@ public sealed class GameMcpGenericDiscoveryTests
         var failed = Json(GameMcpGenericDiscoveryProjection.Project(in failure));
         var committed = Json(GameMcpGenericDiscoveryProjection.Project(in success));
 
-        Assert.Equal("verification_failed", (string?)failed["preflight"]);
+        Assert.Null(failed["preflight"]);
         Assert.Null(failed["quarantined"]);
         var cost = Assert.Single(failed["receipt"]!["costs"]!).Value<JObject>()!;
         Assert.Equal("Arcane Dust", (string?)cost["resource"]!["name"]);

@@ -61,8 +61,8 @@ public sealed class GameMcpTargetingTests
             candidates.Select(candidate => (string?)candidate["uuid"]));
         Assert.Equal(new[] { "Alchemic Ability", "Alchemic Command" },
             candidates.Select(candidate => (string?)candidate["name"]));
-        Assert.Equal("3e0", (string?)candidates[0]["committedLevel"]);
-        Assert.Equal("5e0", (string?)candidates[0]["effectiveLevel"]);
+        Assert.Equal(3, (int)candidates[0]["committedLevel"]!);
+        Assert.Equal(5, (int)candidates[0]["effectiveLevel"]!);
         Assert.True((bool)candidates[0]["available"]!);
         Assert.True((bool)row["randomize"]!["available"]!);
         Assert.True((bool)row["cancel"]!["available"]!);
@@ -102,7 +102,7 @@ public sealed class GameMcpTargetingTests
             TargetingNativeStage.Verification, NativeMutationOutcome.PostconditionFailed,
             new NativeMutationCallOutcome(1, 1, 0), in evidence, "failed");
         var failure = GameMcpTestHarness.Json(GameMcpTargetingProjection.Project(in submission));
-        Assert.Equal("verification_failed", (string?)failure["preflight"]);
+        Assert.Null(failure["preflight"]);
         Assert.Equal(First.ToString("D"), (string?)failure["requestedTarget"]!["uuid"]);
         Assert.True((bool)failure["requestPendingAfter"]!);
         Assert.Null(failure["quarantined"]);

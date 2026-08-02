@@ -67,12 +67,15 @@ public sealed class GameMcpTooltipProjectorTests
                 var row = Assert.IsType<JObject>(live);
                 Assert.Equal("live value 42", (string?)row["text"]);
                 Assert.Null(row["computationStatus"]);
-                Assert.Equal("Linked", (string?)row["linkedTooltip"]?["name"]);
+                var reference = (string?)row["linkedTooltip"]?["ref"];
+                Assert.False(string.IsNullOrWhiteSpace(reference));
+                Assert.Equal("Linked", (string?)result["referencedTooltips"]![reference!]!["name"]);
             });
         Assert.Equal(1, computations);
-        Assert.Null(Assert.Single(result["nestedTooltips"]!.Values<JObject>())!["role"]);
-        var inspectedRow = Assert.Single(result["inspectedPanels"]!.Values<JObject>());
-        Assert.Null(inspectedRow!["role"]);
+        var nestedRef = (string?)Assert.Single(result["nestedTooltips"]!.Values<JObject>())!["ref"];
+        Assert.Equal("Nested", (string?)result["referencedTooltips"]![nestedRef!]!["name"]);
+        var inspectedRef = (string?)Assert.Single(result["inspectedPanels"]!.Values<JObject>())!["ref"];
+        var inspectedRow = result["referencedTooltips"]![inspectedRef!];
         Assert.Equal("panel row", (string?)inspectedRow["nodes"]![0]!["text"]);
         Assert.All(
             result.DescendantsAndSelf().OfType<JObject>(),
@@ -90,7 +93,7 @@ public sealed class GameMcpTooltipProjectorTests
     }
 
     [Fact]
-    public void TooltipCyclesFailClosedWithAStableCode()
+    public void TooltipCyclesSerializeAsStableReferencesWithoutRecursiveCopies()
     {
         var tooltip = new FakeTooltip("Cycle");
         var node = new TooltipNode("cycle") { tooltipable = tooltip };
@@ -100,13 +103,14 @@ public sealed class GameMcpTooltipProjectorTests
             GameMcpTooltipProjector.Project(tooltip, null, null));
 
         var cycle = result["tooltip"]!["nodes"]![0]!["linkedTooltip"]!;
-        Assert.Equal("unavailable", (string?)cycle["status"]);
-        Assert.Equal("tooltip_cycle", (string?)cycle["reasonCode"]);
-        Assert.Null(result["nestedTooltips"]);
-        Assert.Null(result["inspectedPanels"]);
+        Assert.Equal("tooltip_1", (string?)cycle["ref"]);
+        Assert.Empty(result["nestedTooltips"]!);
+        Assert.Empty(result["inspectedPanels"]!);
+        Assert.Null(result["referencedTooltips"]);
+        Assert.Null(result["truncation"]);
         Assert.Null(result["tooltip"]!["altNodes"]);
-        Assert.Null(result["tooltip"]!["nodes"]![0]!["children"]);
-        Assert.Null(result["tooltip"]!["nodes"]![0]!["subTooltips"]);
+        Assert.Empty(result["tooltip"]!["nodes"]![0]!["children"]!);
+        Assert.Empty(result["tooltip"]!["nodes"]![0]!["subTooltips"]!);
         Assert.Null(result["tooltip"]!["nodes"]![0]!["reason"]);
     }
 

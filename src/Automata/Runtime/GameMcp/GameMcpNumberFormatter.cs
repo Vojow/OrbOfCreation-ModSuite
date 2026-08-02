@@ -20,7 +20,7 @@ internal static class GameMcpNumberFormatter
         if (double.IsNaN(mantissa)) return "nan";
         if (double.IsPositiveInfinity(mantissa)) return "infinity";
         if (double.IsNegativeInfinity(mantissa)) return "-infinity";
-        if (mantissa == 0d) return "0";
+        if (mantissa == 0d) return "0e0";
 
         Normalize(ref mantissa, ref exponent);
         return Scientific(mantissa, exponent);
@@ -36,7 +36,7 @@ internal static class GameMcpNumberFormatter
             rounded /= 10d;
             checked { exponent++; }
         }
-        if (rounded == 0d) return "0";
+        if (rounded == 0d) return "0e0";
         return rounded.ToString("0.##", CultureInfo.InvariantCulture) +
             "e" + exponent.ToString(CultureInfo.InvariantCulture);
     }

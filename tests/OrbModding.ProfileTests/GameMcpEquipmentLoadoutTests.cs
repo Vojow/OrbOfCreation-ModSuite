@@ -32,13 +32,14 @@ public sealed class GameMcpEquipmentLoadoutTests
     }
 
     [Fact]
-    public void Validation_names_missing_mode_and_removed_generation_argument()
+    public void Validation_names_missing_mode_and_ignores_echoed_generation_metadata()
     {
-        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
+        var inbox = new GameMcpFrameInbox();
+        var router = new GameMcpProtocolRouter(inbox);
         var id = Guid.NewGuid().ToString("D");
         var missing = router.Handle(GameMcpAcceptanceFixture.Request(1, "tools/call",
             new JObject { ["name"] = "game_equipment", ["arguments"] = new JObject { ["uuid"] = id } }));
-        var unexpected = router.Handle(GameMcpAcceptanceFixture.Request(2, "tools/call",
+        var accepted = router.Handle(GameMcpAcceptanceFixture.Request(2, "tools/call",
             new JObject
             {
                 ["name"] = "game_equipment",
@@ -46,11 +47,10 @@ public sealed class GameMcpEquipmentLoadoutTests
             }));
 
         var missingErrors = Assert.IsType<JArray>(missing.Body!["error"]!["data"]!["validationErrors"]);
-        var unexpectedErrors = Assert.IsType<JArray>(unexpected.Body!["error"]!["data"]!["validationErrors"]);
         Assert.Contains(missingErrors.Values<JObject>(),
             error => (string?)error!["code"] == "missing_required" && (string?)error["field"] == "mode");
-        Assert.Contains(unexpectedErrors.Values<JObject>(),
-            error => (string?)error!["code"] == "unexpected_field" && (string?)error["field"] == "worldGeneration");
+        Assert.NotEqual(-32602, (int?)accepted.Body?["error"]?["code"]);
+        Assert.Empty(inbox.ClaimPending());
     }
 
     [Fact]
@@ -70,9 +70,9 @@ public sealed class GameMcpEquipmentLoadoutTests
         var failed = Json(GameMcpEquipmentLoadoutProjection.Project(in failure));
         var committed = Json(GameMcpEquipmentLoadoutProjection.Project(in success));
 
-        Assert.Equal("verification_failed", (string?)failed["preflight"]);
+        Assert.Null(failed["preflight"]);
         Assert.Equal("equip", (string?)failed["requestedMode"]);
-        Assert.Equal("2e0", (string?)failed["requestedAmount"]);
+        Assert.Equal(2, (int)failed["requestedAmount"]!);
         Assert.Null(failed["quarantined"]);
         Assert.Null(failed["payment"]);
         Assert.Null(failed["receipt"]);
@@ -90,11 +90,11 @@ public sealed class GameMcpEquipmentLoadoutTests
         Assert.Equal("Prismatic Lens", (string?)row["name"]);
         Assert.Equal(TypeId.ToString("D"), (string?)row["equipmentType"]!["uuid"]);
         Assert.Equal("Focus", (string?)row["equipmentType"]!["name"]);
-        Assert.Equal("1e0", (string?)row["equippedStacks"]);
-        Assert.Equal("4e0", (string?)row["maximumStacks"]);
-        Assert.Equal("2e0", (string?)row["multiBuy"]);
-        Assert.Equal("2e0", (string?)row["equip"]!["amount"]);
-        Assert.Equal("1e0", (string?)row["unequip"]!["amount"]);
+        Assert.Equal(1, (int)row["equippedStacks"]!);
+        Assert.Equal(4, (int)row["maximumStacks"]!);
+        Assert.Equal(2, (int)row["multiBuy"]!);
+        Assert.Equal(2, (int)row["equip"]!["stacks"]!);
+        Assert.Equal(1, (int)row["unequip"]!["stacks"]!);
         var cost = Assert.Single(row["equip"]!["usageCosts"]!).Value<JObject>()!;
         Assert.Equal("Focus", (string?)cost["resource"]!["name"]);
         Assert.Equal("2e1", (string?)cost["cost"]);

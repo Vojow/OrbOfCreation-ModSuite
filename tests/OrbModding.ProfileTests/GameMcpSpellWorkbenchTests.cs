@@ -184,8 +184,7 @@ public sealed class GameMcpSpellWorkbenchTests
             "the selected recipe changed");
         var refusal = GameMcpTestHarness.Json(
             GameMcpSpellWorkbenchProjection.Project(in refusedSubmission));
-        Assert.Equal(new[] { "preflight" },
-            refusal.Properties().Select(property => property.Name));
+        Assert.Empty(refusal.Properties());
 
         var failedSubmission = new SpellWorkbenchSubmission(
             SpellWorkbenchPreflight.VerificationFailed,
@@ -196,7 +195,7 @@ public sealed class GameMcpSpellWorkbenchTests
             "the target was not discovered");
         var failure = GameMcpTestHarness.Json(
             GameMcpSpellWorkbenchProjection.Project(in failedSubmission));
-        Assert.Equal("verification_failed", (string?)failure["preflight"]);
+        Assert.Null(failure["preflight"]);
         Assert.Equal("Gather Knowledge", (string?)failure["before"]!["resolvedRecipe"]!["name"]);
         Assert.Equal("Brew", (string?)failure["before"]!["coreGlyphs"]![0]!["name"]);
         Assert.True((bool)failure["quarantined"]!);

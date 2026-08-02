@@ -38,9 +38,10 @@ public sealed class GameMcpCraftingTests
     }
 
     [Fact]
-    public void ValidationNamesMissingRecipeUuidAndRemovedGenerationArgument()
+    public void ValidationNamesMissingRecipeUuidAndIgnoresEchoedGenerationMetadata()
     {
-        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
+        var inbox = new GameMcpFrameInbox();
+        var router = new GameMcpProtocolRouter(inbox);
         var missing = router.Handle(GameMcpAcceptanceFixture.Request(
             1,
             "tools/call",
@@ -49,7 +50,7 @@ public sealed class GameMcpCraftingTests
                 ["name"] = "game_craft",
                 ["arguments"] = new JObject(),
             }));
-        var unexpected = router.Handle(GameMcpAcceptanceFixture.Request(
+        var accepted = router.Handle(GameMcpAcceptanceFixture.Request(
             2,
             "tools/call",
             new JObject
@@ -64,16 +65,12 @@ public sealed class GameMcpCraftingTests
 
         var missingErrors = Assert.IsType<JArray>(
             missing.Body!["error"]!["data"]!["validationErrors"]);
-        var unexpectedErrors = Assert.IsType<JArray>(
-            unexpected.Body!["error"]!["data"]!["validationErrors"]);
         Assert.Contains(
             missingErrors.Values<JObject>(),
             error => (string?)error!["code"] == "missing_required" &&
                      (string?)error["field"] == "recipeUuid");
-        Assert.Contains(
-            unexpectedErrors.Values<JObject>(),
-            error => (string?)error!["code"] == "unexpected_field" &&
-                     (string?)error["field"] == "worldGeneration");
+        Assert.NotEqual(-32602, (int?)accepted.Body?["error"]?["code"]);
+        Assert.Empty(inbox.ClaimPending());
     }
 
     [Fact]
@@ -91,8 +88,8 @@ public sealed class GameMcpCraftingTests
         Assert.Equal("Craft Sigils", (string?)row["name"]);
         Assert.Equal(RecipeId.ToString("D"), (string?)row["uuid"]);
         Assert.Equal("queue_stack", (string?)row["execution"]);
-        Assert.Equal("2e0", (string?)row["purchaseAmount"]);
-        Assert.Equal("4e0", (string?)row["queuedAmount"]);
+        Assert.Equal(2, (int)row["purchaseAmount"]!);
+        Assert.Equal(4, (int)row["queuedAmount"]!);
         Assert.True((bool)row["canStart"]!);
         Assert.Equal("Sigil Queue", (string?)row["queue"]!["queue"]!["name"]);
         Assert.Equal(1, (int)row["queue"]!["used"]!);
@@ -155,9 +152,9 @@ public sealed class GameMcpCraftingTests
         var failure = Json(GameMcpCraftingProjection.Project(in fault));
         var success = Json(GameMcpCraftingProjection.Project(in committed));
 
-        Assert.Equal("verification_failed", (string?)failure["preflight"]);
+        Assert.Null(failure["preflight"]);
         Assert.Equal("verification", (string?)failure["nativeStage"]);
-        Assert.Equal("4e0", (string?)failure["before"]!["queuedAmount"]);
+        Assert.Equal(4, (int)failure["before"]!["queuedAmount"]!);
         Assert.NotNull(failure["after"]);
         Assert.Null(failure["quarantined"]);
         Assert.Empty(success.Properties());

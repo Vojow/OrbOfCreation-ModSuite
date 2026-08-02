@@ -80,6 +80,28 @@ internal static class GameMcpCommandKinds
             "no MCP command capability is registered for " + toolName,
             nameof(toolName)),
     };
+
+    internal static string ToolName(GameMcpCommandKind kind) => kind switch
+    {
+        GameMcpCommandKind.Purchase => "game_purchase",
+        GameMcpCommandKind.Cast => "game_cast",
+        GameMcpCommandKind.Concept => "game_concept",
+        GameMcpCommandKind.Harvest => "game_harvest",
+        GameMcpCommandKind.SpellLevel => "game_spell_level",
+        GameMcpCommandKind.DiscoveryTreeOffer => "game_discovery_offer",
+        GameMcpCommandKind.SpellWorkbench => "game_spell_workbench",
+        GameMcpCommandKind.SpellComposition => "game_spell_composition",
+        GameMcpCommandKind.SpellLoadout => "game_spell_loadout",
+        GameMcpCommandKind.Targeting => "game_targeting",
+        GameMcpCommandKind.Consumable => "game_consumable",
+        GameMcpCommandKind.Crafting => "game_craft",
+        GameMcpCommandKind.GenericDiscovery => "game_discover",
+        GameMcpCommandKind.EquipmentLoadout => "game_equipment",
+        GameMcpCommandKind.Challenge => "game_challenge",
+        GameMcpCommandKind.Prestige => "game_prestige",
+        GameMcpCommandKind.Research => "game_research",
+        _ => string.Empty,
+    };
 }
 
 /// <summary>

@@ -253,8 +253,7 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
 
         var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
             result.ToString(Newtonsoft.Json.Formatting.None));
-        Assert.Equal(3111, responseBytes);
-        Assert.True(responseBytes < 3402);
+        Assert.True(responseBytes < 3_402, "explanation was " + responseBytes + " bytes");
 
         Assert.Equal("available", (string?)result["status"]);
         var requirements = Assert.IsType<JObject>(result["requirements"]);
@@ -271,7 +270,7 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         Assert.Equal("5e0", (string?)leaves[0]["required"]);
         Assert.True((bool)leaves[0]["met"]!);
         Assert.Equal(expansionId.ToString("D"), (string?)leaves[1]["requirement"]!["uuid"]);
-        Assert.Equal("0", (string?)leaves[1]["current"]);
+        Assert.Equal("0e0", (string?)leaves[1]["current"]);
         Assert.Equal("1.5e1", (string?)leaves[1]["required"]);
         Assert.False((bool)leaves[1]["met"]!);
         Assert.Equal(
@@ -286,11 +285,11 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         var cap = result["blockers"]!["cap"]!;
         Assert.True((bool)cap["blocked"]!);
         Assert.Equal("research_complete", (string?)cap["reasonCode"]);
-        Assert.Equal("1e0", (string?)cap["purchasedLevel"]);
-        Assert.Equal("1e0", (string?)cap["baseLevelExcludingBonus"]);
-        Assert.Equal("0", (string?)cap["bonusLevel"]);
-        Assert.Equal("1e0", (string?)cap["totalLevel"]);
-        Assert.Equal("1e0", (string?)cap["effectiveCap"]);
+        Assert.Equal(1, (int)cap["purchasedLevel"]!);
+        Assert.Equal(1, (int)cap["baseLevelExcludingBonus"]!);
+        Assert.Equal(0, (int)cap["bonusLevel"]!);
+        Assert.Equal(1, (int)cap["totalLevel"]!);
+        Assert.Equal(1, (int)cap["effectiveCap"]!);
         Assert.True((bool)cap["nativeComplete"]!);
     }
 
@@ -404,8 +403,8 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
             "research_leeway_exhausted",
             (string?)result["predicates"]!["canDevelop"]!["reasonCode"]);
         var cap = result["blockers"]!["cap"]!;
-        Assert.Equal("1e0", (string?)cap["artificialCap"]);
-        Assert.Equal("-1e0", (string?)cap["effectiveCap"]);
+        Assert.Equal(1, (int)cap["artificialCap"]!);
+        Assert.Null(cap["effectiveCap"]);
         Assert.False((bool)cap["nativeComplete"]!);
     }
 

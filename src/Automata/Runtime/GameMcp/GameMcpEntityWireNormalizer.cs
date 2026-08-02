@@ -66,7 +66,9 @@ internal static class GameMcpEntityWireNormalizer
         Rename(item, "trueQuantity", "amount");
         Rename(item, "trueRate", "netRatePerSecond");
         Rename(item, "netRate", "netRatePerSecond");
-        Rename(item, "truncated", "hasMore");
+        item.Remove("truncated");
+        item.Remove("preflight");
+        item.Remove("nativeOutcome");
 
         if (item["status"] is JValue statusValue)
         {
@@ -113,7 +115,16 @@ internal static class GameMcpEntityWireNormalizer
             }
             if (property.Value is JValue text && text.Type == JTokenType.String)
             {
-                text.Value = GameMcpTextFormatter.Plain((string?)text ?? string.Empty);
+                var raw = (string?)text ?? string.Empty;
+                if (IsBoundedCardinal(property.Name) &&
+                    double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var cardinal) &&
+                    cardinal >= int.MinValue && cardinal <= int.MaxValue &&
+                    cardinal == Math.Truncate(cardinal))
+                {
+                    property.Value = new JValue((int)cardinal);
+                    continue;
+                }
+                property.Value = new JValue(GameMcpTextFormatter.Plain(raw));
                 continue;
             }
             if (property.Value is JValue number &&
@@ -305,13 +316,22 @@ internal static class GameMcpEntityWireNormalizer
         "amount" or "amountBefore" or "amountAfter" or
         "baseCost" or "effectiveCost" or "groupCost" or "totalCost" or "cost" or
         "capacity" or "netRatePerSecond" or "yield" or
-        "level" or "committedLevel" or "effectiveLevel" or "queuedLevels" or
-        "maxLevel" or "remainingLevels" or "baseLevel" or "bonusLevel" or
-        "totalLevel" or "purchasedLevel" or "purchasedLevels" or "freeLevels" or
-        "baseLevelExcludingBonus" or "effectiveCap" or "artificialCap" or
-        "startingAmount" or "queued" or "maximumAmount" or "maximumCarry" or
-        "currentCharges" or "maximumCharges" or
+        "startingAmount" or "maximumAmount" or "maximumCarry" or
         "developmentProgress" => true,
+        _ => false,
+    };
+
+    private static bool IsBoundedCardinal(string field) => field switch
+    {
+        "level" or "levels" or "committedLevel" or "effectiveLevel" or
+        "queuedLevels" or "maximumLevel" or "remainingLevels" or "baseLevel" or
+        "bonusLevel" or "totalLevel" or "purchasedLevel" or "purchasedLevels" or
+        "freeLevels" or "baseLevelExcludingBonus" or "effectiveCap" or "artificialCap" or
+        "equippedStacks" or "maximumStacks" or "multiBuy" or "queued" or
+        "queuedAmount" or "purchaseAmount" or "maximumAmount" or "currentCharges" or
+        "maximumCharges" or "requestedAmount" or "rerollsLeft" or "selectionMaximum" or
+        "resetCount" or "persistenceCurrent" or "remainingBonusLevels" or
+        "maximumBatch" => true,
         _ => false,
     };
 

@@ -65,8 +65,8 @@ public sealed class GameMcpChallengeTests
             GameMcpTestHarness.Context(world, generation: 2501), "challenges", 0, 50).Freeze(), world);
 
         var state = response["challengeState"]!;
-        Assert.Equal("2e0", (string?)state["rerollsLeft"]);
-        Assert.Equal("3e0", (string?)state["selectionMaximum"]);
+        Assert.Equal(2, (int)state["rerollsLeft"]!);
+        Assert.Equal(3, (int)state["selectionMaximum"]!);
         Assert.Equal("Prismatic Trial", (string?)state["selected"]![0]!["name"]);
         Assert.Equal("Expanding Trial", (string?)state["timeOffers"]![1]!["name"]);
         var first = Assert.Single(response["rows"]!.Values<JObject>(),
@@ -115,7 +115,7 @@ public sealed class GameMcpChallengeTests
         var failed = Json(GameMcpChallengeProjection.Project(in failure), World());
         var committed = Json(GameMcpChallengeProjection.Project(in success), World());
 
-        Assert.Equal("verification_failed", (string?)failed["preflight"]);
+        Assert.Null(failed["preflight"]);
         Assert.Equal("queue", (string?)failed["requestedMode"]);
         Assert.Equal("Prismatic Trial", (string?)failed["before"]!["timeOffers"]![0]!["name"]);
         Assert.Null(failed["quarantined"]);

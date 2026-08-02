@@ -3253,6 +3253,17 @@ namespace UnityEngine
 
     public class Texture2D : Object
     {
+        public Texture2D() : this(1920, 1080) { }
+        public Texture2D(int width, int height)
+        {
+            this.width = width;
+            this.height = height;
+        }
+        public int width { get; }
+        public int height { get; }
+        public Color GetPixelBilinear(float u, float v) => default;
+        public void SetPixel(int x, int y, Color color) { }
+        public void Apply(bool updateMipmaps = true, bool makeNoLongerReadable = false) { }
         public byte[] EncodeToPNG() => new byte[] { 137, 80, 78, 71 };
     }
 
