@@ -141,6 +141,26 @@ public sealed class GameMcpSpellWorkbenchTests
     }
 
     [Fact]
+    public void UnavailableDiscoveryNamesTheNativeVisibilityPredicateWithoutSelectionCeremony()
+    {
+        var context = GameMcpTestHarness.Context(World(
+            discovered: false,
+            discoveryAffordable: true,
+            creationAffordable: true,
+            hasEmptySlot: true,
+            discoveryVisible: false));
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context, "spell-recipes", RecipeId.ToString("D"), "SpellRecipeSO"));
+        var row = response["row"]!;
+
+        Assert.False((bool)row["discover"]!["available"]!);
+        Assert.Equal("not_visible", (string?)row["discover"]!["reasonCode"]);
+        Assert.Null(row["selected"]);
+        Assert.Null(row["select"]);
+    }
+
+    [Fact]
     public void SuccessIsOnlyNamedPostStateWhileFailuresRetainEarnedEvidence()
     {
         var before = new SpellWorkbenchState(
@@ -279,7 +299,9 @@ public sealed class GameMcpSpellWorkbenchTests
         bool discoveryAffordable,
         bool creationAffordable,
         bool hasEmptySlot,
-        bool equipped = false)
+        bool equipped = false,
+        bool discoveryVisible = true,
+        bool canDiscover = true)
     {
         var glyphs = PublicationTable<WorldSpellRecipeGlyph>.Create(new[]
         {
@@ -334,7 +356,14 @@ public sealed class GameMcpSpellWorkbenchTests
                     false,
                     glyphs,
                     discoveryCosts,
-                    discoveryAffordable),
+                    discoveryAffordable,
+                    new WorldDiscoverableDecision(
+                        discoveryVisible,
+                        canDiscover,
+                        discovered,
+                        required: false,
+                        affordable: discoveryAffordable,
+                        costs: discoveryCosts)),
             }),
             Glyphs = PublicationTable<WorldGlyph>.Create(new[]
             {
