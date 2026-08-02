@@ -131,9 +131,10 @@ declares:
   a resolution failure is impossible mid-transaction;
 - its **preflights**, each with its freshness class;
 - the **mutation** itself;
-- its **expected evidence** — exact deltas, verified before/after;
-- its **failure story** — what quarantines, what blocks, and what the health surface says
-  when postconditions fail.
+- its **postcondition** — the single simplest observable check that the requested transition
+  landed on the requested target (see below);
+- its **failure story** — what blocks, what the health surface says when the postcondition
+  fails, and, for automation consumers only, what quarantines.
 
 Mutation entry points, in strict order of preference:
 
@@ -143,9 +144,8 @@ Mutation entry points, in strict order of preference:
    `PlotNodeActionInstanceListVariable.AddInstance`.
 2. **A disciplined re-drive** when the composite exists only inside a UI handler body.
    `SpellLevelNativeAdapter` is the reference implementation: every member prebound and
-   validated before the first mutation is possible, the sequence wrapped in exact
-   before/after verification, and irreversible steps (payments) preflighted hardest and
-   taken last.
+   validated before the first mutation is possible, the outcome verified by the simplest
+   observable check, and irreversible steps (payments) preflighted hardest and taken last.
 3. Invoking UI handler methods: **never.**
 
 One evaluation round per world reading; any attempted round raises the world-gate floor.
@@ -177,64 +177,54 @@ carries its own cooldown, retry timer, or candidate memory.
 - The Game MCP owns transport only. All stateful tools cross its single post-pump frame-operation
   inbox; an empty inbox performs no projection, health read, native read, or authority refresh.
 
-## Proposed ruling: verification protects the action, not the ledger
+## Postconditions: one simplest sentinel
 
-> **Pending maintainer ratification at landing.** This wording records the round-2 ruling for review;
-> it is not presented as doctrine that predates that ratification.
+A GameAction verifies its outcome with the single simplest observable check that the requested
+transition happened to the requested target: stable UUID plus expected native type, plus one
+outcome fact — a loadout add checks for the new spell instance, a purchase checks the new level.
+Nothing else is computed. Payment deltas, resource balances, counters, timers, and flags are not
+gathered as receipt evidence; code that computes values nothing acts on is deleted, not tolerated.
+Most actions succeed, the boundary is designed for that, and a layer of paranoia bookkeeping is a
+finding, not a safety margin. In particular, an accounting fact can never veto, downgrade, or
+quarantine an outcome the game observably performed — a sub-ULP native `BigDouble` subtraction
+cannot disprove a transition that happened.
 
-A GameAction postcondition proves that the exact stable target and expected native type performed
-the requested transition. Wrong target, wrong type, an absent transition, or an ambiguous outcome
-fails verification and may quarantine the capability. Payment deltas, resource balances, counters,
-timers, flags, and other accounting facts remain exact receipt evidence, but they never gate,
-downgrade, or quarantine an otherwise observed target outcome. In particular, a sub-ULP native
-`BigDouble` subtraction cannot disprove a transition the game performed.
+After a native exception, capture the simplest available after-state before classifying: if the
+requested identity and outcome are observable, the action committed and the exception rides along
+as its explanation; if the outcome is absent or the target ambiguous after a mutation began, fail
+closed. Admission checks still prevent unaffordable or otherwise ineligible attempts — this rule
+defines what a postcondition is, not preflight authority.
 
-After a native exception, capture the strongest available after-state before classifying it. If the
-requested identity and outcome are present, commit verified and retain the exception plus all ledger
-facts as evidence. If the requested outcome is absent or target identity is ambiguous after a
-mutation began, fail closed and quarantine. Admission checks still prevent unaffordable or otherwise
-ineligible attempts; this ruling changes postcondition meaning, not preflight authority.
+## MCP responses: worked, or why not
 
-## Proposed ruling: MCP responses are signal-dense
+A success says the action worked and, when the settlement window delivers it, what changed — the
+settled post-state a caller would otherwise need a follow-up read for. Nothing else: no request
+echoes, no zero counters, no empty collections, no receipts, no expected/observed generation
+pairs, no verbosity options. Absence means not applicable, and each tool has one response shape.
 
-> **Pending maintainer ratification at landing.** This wording records the round-2 ruling for review;
-> it is not presented as doctrine that predates that ratification.
+A refusal or fault answers with the exact reason a caller can act on, plus only the facts that
+explain that reason. Explaining a failure is not dumping a dossier: an audit stanza that ships
+with every failure regardless of relevance is ceremony, and ceremony is deleted.
 
-An MCP success contains status, stable code, the requested data or outcome, and only facts needed for
-the next decision. It omits request echoes, zero counters, empty collections, inapplicable predicate
-stanzas, and matching expected/observed generation pairs. Absence means not applicable. There is one
-honest response shape per tool and no response-verbosity option.
+## The wire speaks the screen's language
 
-A refusal or fault keeps the evidence that explains it: exact reason, native call/mutation audit,
-generation mismatch where present, and the decomposed action receipt. Brevity is a success posture,
-not permission to hide uncertainty or failure evidence.
+What the MCP returns matches what the player sees: a screenshot and the MCP answer for the same
+screen agree on names and numbers. Reads answer `available`/`unavailable`; mutations answer
+`committed`/`refused`/`faulted`. Every entity reference carries the stable UUID plus the
+player-facing name, category or type when relevant, and the internal name only when it differs.
+Magnitudes render the way the player recognizes them from the screen; native numeric sentinels
+become field absence, never plausible values. Resource and cost rows use one canonical spendable
+`amount`; collector and factor internals stay off the player surface.
 
-## Proposed round-5 clarification: the MCP is a player surface, not an audit envelope
+The format is the simplest one that carries the signal. Compact text is the default whenever an
+agent reads it faster than structured data; JSON is for responses whose handles feed the next
+call. One vocabulary, one spelling, one numeric rendering per concept, whatever the media.
 
-> **Pending maintainer ratification at landing.** This clarification supersedes conflicting response
-> examples in the preceding round-2 proposal without rewriting that historical ruling.
+Read tools carry one `worldGeneration` naming the immutable publication that answered. Action
+schemas and results carry none: the GameAction revalidates live, and a committed response's
+post-state names the newer settled world it came from.
 
-MCP reads use `available`/`unavailable`; mutations use `committed`/`refused`/`faulted`. A success has
-no code that restates its status, no static mutation-scope label, no attempts/committed counters, no
-request echo, and no payment or generation-mismatch stanza. Failure retains decomposed evidence.
-Every entity reference carries stable UUID plus player-facing name, category/type when relevant, and
-internal name only when it differs. Every game-domain magnitude is one rounded string: zero is `0`;
-all nonzero values use a lowercase scientific exponent and at most two mantissa decimals.
-Integral and large-number implementations of the same player concept therefore have one wire type;
-protocol counters and identifiers remain integers. Native numeric sentinels are translated into
-their domain semantics, normally field absence, rather than forwarded as plausible magnitudes.
-
-Read tools retain one `worldGeneration` naming the immutable publication that answered. Action
-schemas and results have no world generation: the GameAction revalidates live identity and mutable
-facts, then the operation returns the newer published post-state that would otherwise require a
-follow-up read. Resource and cost rows use one canonical spendable `amount`; deeper collector and
-factor internals remain outside the player surface. Compact text is legitimate when it is faster for
-an agent to read than structured data and no handle extraction is required.
-
-## Proposed action-surface and settlement clarification
-
-> **Pending maintainer ratification at landing.** This records the supervised verb-surface ruling
-> and supersedes the older MCP-specific generation and quarantine wording above where they differ.
+## The UI defines the verb surface
 
 The native player UI defines the MCP action vocabulary. A compiled manager or UI handler is not by
 itself permission to expose a verb: the player must actually be offered that choice. Discovery is
@@ -252,9 +242,11 @@ usage-budget affordability; an empty loadout slot; and unique-spell compatibilit
 affordability is then re-read from the exact core-plus-augment composition. After acquiring its
 mutation permit, the boundary stages the live selection, reruns those mutable gates, performs the
 cost, invokes native creation, and commits only when a new spell with the requested recipe identity
-and exact baked glyph multiset is observable. Duplicate request rows count cumulatively against each
-glyph's native usable maximum. Core-component spell discovery remains independently bound, but both
-verbs use the same complete lifecycle binding set and native recipe resolver.
+and exact baked glyph multiset is observable. The player's staged Spellcraft selection is restored
+to what it was before the action, on every outcome including success. Duplicate request rows count
+cumulatively against each glyph's native usable maximum. Core-component spell discovery remains
+independently bound, but both verbs use the same complete lifecycle binding set and native recipe
+resolver.
 
 Generic compose discovery uses the same component-first rule without retaining a rendered UI page.
 The existing category traversal publishes each `IDiscoverable.GetGlyphRecipe()` and
@@ -274,23 +266,9 @@ policy, and MCP capability registration does not depend on whether the owning au
 All committed gameplay actions pass through one post-state settlement path. It waits up to one
 second for a shared world publication strictly newer than the world used for mutation admission,
 then delegates to one command-to-world projector. The successful response stamps that observed
-`worldGeneration` and returns the complete next-decision state. If no newer publication arrives, it
-omits post-state and generation: it never labels an older world as committed state and never adds a
+`worldGeneration` and returns the complete next-decision state. If no newer publication arrives, the
+response stays `committed` and emits one exceptional `postStateUnavailable` fact with
+`reasonCode=post_state_timeout` — it never labels an older world as committed state and never adds a
 ceremonial lag explanation. Navigation uses the same one-second freshness rule for the arrived UI
 state. Domain-specific readiness may strengthen the shared predicate only when the requested outcome
 is event-driven, as discovery offers are.
-
-Wire format follows the decision. Structured JSON remains the default when an agent must extract
-UUID handles or compose the next action; compact text is allowed for genuinely human-readable
-catalogs or summaries. A tool has one response shape and one vocabulary regardless of media. Format
-freedom is not permission to create a second spelling, numeric encoding, status vocabulary, or
-pagination dialect for the same concept.
-
-### Settlement-timeout evidence refinement
-
-The one-second settlement deadline is a wedge guard, not permission to return a content-free
-success. If no strictly newer publication exposes the committed post-state by that deadline, the
-response retains `committed` and emits one exceptional `postStateUnavailable` fact with
-`reasonCode=post_state_timeout`. It still never projects the admission world as post-state. This
-failure-only evidence replaces the earlier silent-omission wording; successful responses carry no
-lag field or settlement ceremony.
