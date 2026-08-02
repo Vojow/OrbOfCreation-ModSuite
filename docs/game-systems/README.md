@@ -77,8 +77,6 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
   asymmetries, and category migration.
 - [development-queue.md](development-queue.md) — buying queues; the queue, not the resource, is the
   early binder.
-- [purchase-checks.md](purchase-checks.md) — what the buy button tests, and the ways a purchase fails
-  silently.
 - [cost-scaling.md](cost-scaling.md) — ≈×1.25 per level, two-currency prices, and retroactive cost
   scaling.
 - [auto-buy.md](auto-buy.md) — the native sweeper fires only on empty queue, 5 s idle, and <0.1 % of
@@ -95,8 +93,6 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 - [orbs.md](orbs.md) — one orb per global level, spent on disciplines that gate later content.
 - [requirement-graph.md](requirement-graph.md) — gates read purchased levels, not the displayed sum,
   and reach across systems.
-- [reachability.md](reachability.md) — most content has two routes; single-route content vanishes with
-  its one screen.
 
 ## Systems
 

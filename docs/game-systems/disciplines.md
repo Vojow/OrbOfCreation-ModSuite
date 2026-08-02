@@ -16,8 +16,7 @@ top-level screens host **two disciplines each**:
 | Druidry | World | Druid |
 | Dimensional | World | Shaper |
 
-**Druidry is single-route content**: it is reachable only through World > Druidry, because World does
-not co-reference its subtabs the way Magic co-references Wizardry. If that subtab is not yet
-available, its content is not visible anywhere else. See [reachability.md](reachability.md).
+**Druidry is single-route content**: it is reachable only through World > Druidry. If that subtab
+is not yet available, its content is not visible anywhere else.
 
 Several disciplines have never been played; see [unmapped-systems.md](unmapped-systems.md).

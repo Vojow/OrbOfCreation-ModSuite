@@ -58,6 +58,12 @@ Note that both `prerequisitesPerLevel` checks take the level as an argument — 
 would *reach*, which is `quantity` for a structure and `level + queuedLevels + 1` for an upgrade.
 That is the one admission term that cannot be answered from a snapshot taken earlier.
 
+A player never meets any of this, because the buy button runs its own preflight — per-level
+prerequisite, affordability, queue room — and renders the cost line red instead of firing. Red is
+the interface's check, not the data layer's. Driving the data layer directly, an attribute purchase
+that cannot be paid for silently does nothing: admission passes (cost is untested there), and the
+purchase's own per-level payment commits zero levels — no error, no queue entry, no message.
+
 ### Diagnosing a refusal
 
 When `CanPurchase()` says no, decompose it by asking the game the readable terms separately:
@@ -93,6 +99,15 @@ contradictory route is a named status, not an empty gap. The proving incident: `
 (`b8ebce37-ba04-42bc-b36d-63f7a7766a21`) was unavailable — the item itself carried no tab
 prerequisite.
 
+The authored route shapes: most content carries two. Either a parent tab and its subtab show the
+same list (the *Witchcraft* attribute sits in a single Wizardry list shown by both Magic and
+Wizardry), or a candidate sits in an aggregate list and a screen list at once (a Wizardry upgrade
+in both the all-upgrades aggregate and Magic's own upgrade list — aggregates are legitimate routes,
+not summaries). The persistent right-panel Upgrades / Inventory strip is genuinely global and
+always available, a route in its own right. Single-route content is where things go missing:
+*Life Weaver* is reachable only through World > Druidry, because World does not co-reference its
+subtabs the way Magic co-references Wizardry.
+
 ### Making the mutation
 
 `StructureSO.Purchase(true)` forces exactly **one** level and consults no multiplier;
@@ -125,6 +140,9 @@ Queue authority is `ActionManager.GetRemainingRoom()` together with
 `ActionManager.instance.actionableItems.maxQueuedItems.AsInt()`. Read them as a pair immediately
 before acting; capacity grows through ordinary progression without any lifecycle boundary firing,
 and `Player.GetBulkDevelopment()` is a separate value that only shapes grouping.
+
+Payment lands at queue time, not completion: the game prices the levels it is queueing at that
+moment and charges as it queues, so queueing a large group spends its whole sum at once.
 
 **The upgrade path never checks room per level.** One committed level is one queue slot —
 `UpgradeSO.Purchase()` loops the multi-buy multiplier and `QueueAction` stacks once per committed
