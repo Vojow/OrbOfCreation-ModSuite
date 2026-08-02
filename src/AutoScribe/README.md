@@ -67,4 +67,4 @@ lane adds no evaluation interval, timer, per-role control, temporary-item allowl
 behavior, or persistent Scribe automation.
 
 The installed evidence and remaining live-validation limits are documented in the
-[Auto Scribe native pipeline](../../docs/reverse-engineering/auto-scribe-native-pipeline.md).
+[native action surfaces](../../docs/reverse-engineering/native-action-surfaces.md).

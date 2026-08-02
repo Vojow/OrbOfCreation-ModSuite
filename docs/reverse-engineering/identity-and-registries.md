@@ -6,16 +6,10 @@
 
 Game entities derive from `IdScriptableObject`, which derives from Unity `ScriptableObject`.
 
-Verified fields:
-
 ```csharp
 static Dictionary<Guid, IdScriptableObject> RuntimeLookup;
 GuidContainer guidContainer;
-```
 
-Verified lookup APIs:
-
-```csharp
 Guid GetGuid();
 Guid GetId();
 static IdScriptableObject GetInstance(Guid guid);
@@ -23,47 +17,48 @@ static T GetInstance<T>(Guid guid);
 static List<IdScriptableObject> GetAllInstances();
 ```
 
-The inspected IL for `GetInstance(Guid)` checks `RuntimeLookup` and returns the object for that UUID. The generic overload casts the stored object to `T`.
+`GetInstance(Guid)` looks the UUID up in `RuntimeLookup` and returns the object; the generic
+overload casts the stored object to `T`. `GuidContainer` is what carries the persistent UUID onto
+the asset, and it is the same UUID that appears in saves.
 
-## Runtime lookup flow
-
-```mermaid
-flowchart LR
-    UUID["Persistent UUID"] --> GC["GuidContainer"]
-    GC --> ISO["IdScriptableObject"]
-    ISO --> Register["RegisterObject()"]
-    Register --> Lookup["RuntimeLookup<Guid, object>"]
-    Lookup --> Typed["GetInstance<ResourceSO>(guid)"]
+```text
+persistent UUID → GuidContainer → IdScriptableObject → RegisterObject() → RuntimeLookup
 ```
 
-## Why this matters for mods
+## Why the registry, not the scene
 
-The registry is a better integration surface than scene searches:
+The registry is stable across UI layouts, does not depend on Unity object names, uses the same
+UUIDs the save uses, and supports typed lookup. A scene search has none of those properties.
 
-- It is stable across UI layouts.
-- It avoids relying on Unity object names.
-- It uses the same UUIDs present in saves.
-- It supports typed lookup.
+It is not populated during the earliest part of plugin `Awake()`. Wait until game initialization
+has run — `GameManager.InitGame()` postfix is the reliable point — and re-resolve after every
+boundary in [architecture.md](architecture.md).
 
-A runtime test should wait until game initialization has populated `RuntimeLookup`; calling it in the earliest part of plugin `Awake()` may return no object.
+Registry presence is not availability and not completion. Locked content stays registered and
+becomes active later, so "is it there" and "can I act on it" are two separate questions.
 
-## Mapping identity rules
+## Resolution rule
 
-The current mapping contains 2,792 rows and 2,792 unique UUIDs across 141 managed types. It contains only 2,751 unique internal names: 39 labels are reused, covering 80 rows.
+The canonical mapping holds 2,792 rows and 2,792 unique UUIDs across 141 managed types — but only
+2,751 unique internal names. 39 labels are reused, covering 80 rows: `SpellDuration` names a
+`DoubleVariable`, a `ModifierListVariable`, and a `ScalingWeightSO`; `WorkshopStructures` names a
+`StructureListVariable`, a `StructureTypeSO`, and a `ViewSO`; `Arcane` and `Dragon` each name both
+a `GlyphSO` and a `SpellTypeSO`.
 
-Examples include `SpellDuration` across `DoubleVariable`, `ModifierListVariable`, and `ScalingWeightSO`, and `WorkshopStructures` across `StructureListVariable`, `StructureTypeSO`, and `ViewSO`.
+So:
 
-Therefore:
+1. **UUID** is identity.
+2. **Managed type** is the validation boundary.
+3. **Name** is diagnostic metadata, and nothing else.
 
-- UUID is the primary identity.
-- Runtime type is the validation boundary.
-- Internal/display name is diagnostic metadata only.
-- Configuration should store UUID plus an optional expected type and name.
-- A failed type check should disable only that feature and log the mismatch; it should not fall back to a same-named object.
+Configuration stores a UUID plus, optionally, an expected type and name for readable validation
+errors. A failed type check disables that one feature and logs the mismatch — it never falls back
+to a same-named object, because a same-named object is a different object.
 
-See [Entity catalog and taxonomy](entity-catalog.md) for mapping coverage and [Entity correlations](entity-correlations.md) for safe traversal between related assets.
+Display names collide harder than internal names; see [naming-traps.md](naming-traps.md) for how
+a player's word resolves to exactly one managed type.
 
-## Related base classes
+## Base-class chain
 
 ```text
 UnityEngine.ScriptableObject
@@ -73,4 +68,6 @@ UnityEngine.ScriptableObject
               └─ ResourceSO
 ```
 
-`TooltipableObject` adds display name, description, icon, color and search terms. This means resource names are presentation data on the asset, while identity remains GUID-based.
+`TooltipableObject` adds display name, description, icon, colour, and search terms — presentation
+data hanging off the asset, while identity stays GUID-based. `UpgradeableObject` adds the modifier
+accessor surface. What each layer affords is in [type-model.md](type-model.md).

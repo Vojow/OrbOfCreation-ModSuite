@@ -2,62 +2,82 @@
 
 [Back to index](README.md)
 
-## Recommended first runtime path
+Where to attach, what not to touch, and how to prove a mutation landed. BepInEx already ships
+Harmony — never bundle your own copy.
 
-```mermaid
-sequenceDiagram
-    participant Plugin as BepInEx plugin
-    participant Game as GameManager
-    participant Registry as IdScriptableObject registry
-    participant Scroll as Alchemic Scroll ResourceSO
-    participant Save as SaveStateManager
-
-    Plugin->>Game: Wait until game has started
-    Plugin->>Registry: GetInstance<ResourceSO>(scroll UUID)
-    Registry-->>Plugin: ResourceSO instance
-    Plugin->>Scroll: Read GetQuantity()
-    Plugin->>Scroll: Gain(...) or SetQuantity(...)
-    Scroll-->>Plugin: Observable/UI state updated as applicable
-    Save->>Scroll: CollectSaveData() during normal save
-```
-
-## Candidate hooks
+## Entry points
 
 | Target | Use | Risk |
 |---|---|---|
-| `GameManager.StartGame` postfix | Know that a game session began | Low |
-| `SaveStateManager.ImplementLoadedJson` postfix | Act after save objects are populated | Low–medium |
-| `ResourceSO.Gain` prefix/postfix | Global or selective gain multipliers | Medium; called frequently |
-| `GameManager.AfterSave` or save triggers | Synchronize custom plugin state | Low–medium |
-| `InputManager.Update` | Existing input path | Usually unnecessary; plugin `Update` is simpler |
+| `GameManager.InitGame()` postfix | the registry is rebuilt and the runtime is ready; the reliable first-resolve point | Low |
+| `GameManager.StartGame` postfix | a session began | Low |
+| `SaveStateManager.ImplementLoadedJson()` prefix/postfix | bracket a save load; act once objects are populated | Low–medium |
+| `GameManager.BeforeSave` / `AfterSave` triggers | synchronize state a mod owns with a normal save | Low–medium |
+| `PersistentResetManager.PersistentResetLogic()` prefix | NG+ started | Low–medium |
+| `GameManager.ResetGameState()` prefix | a reset started | Low–medium |
+| `StructureSO.QueueBuild(int)` / `UpgradeSO.Purchase()` postfix | observe queue mutations, including ones you did not cause | Medium |
+| `StructureSO.CompleteAction()` / `UpgradeSO.CompleteAction()` postfix | observe completion | Medium |
+| `ResourceSO.Gain` prefix/postfix | global or selective gain multipliers | Medium; called very frequently |
+| `InputManager.Update` | the existing input path | usually unnecessary — a plugin `Update` is simpler |
 
-## Existing developer-console functionality
+The four lifecycle boundaries in [architecture.md](architecture.md) are the ones that make cached
+references invalid. Drop every resolved object, price, capacity reading, and prerequisite cache
+state at each of them, and re-resolve from the stable UUID.
 
-The assembly already contains `DevConsoleEngine` methods:
+## Members that are not a supported call
 
-- `ResourceRefresh`
-- `ResourceVisible`
-- `ResourceGain`
-- `ResourceSetQuantity`
+- **`ResourceSO.MakeVisible()` is private.** Change visibility through a proven public gameplay
+  path, or through a deliberately labelled reflection/Harmony operation that you own the risk for.
+  It is not a Toolbox-grade call.
+- **A `CraftingInstanceListVariable` does not retain caller ownership.** The game's own automation
+  puts its repeating instances in these lists, so an instance you find there is not yours to edit,
+  remove, or claim. Observe it as external supply.
+- **`Prerequisites.Container.Check()` — the no-argument overload — permanently caches `true`**
+  until `Reset()`. Re-reading it will not notice a condition that later became false. The per-level
+  `Check(ConditionInfo)` overload is uncached and is the one to use when the answer must be
+  current.
+- **Anything a page is the only caller of.** See [ui-internals.md](ui-internals.md).
 
-Inspected call references confirm that `ResourceGain` calls `ResourceSO.Gain`, while `ResourceSetQuantity` calls `ResourceSO.SetQuantity`. These methods are valuable examples and possibly direct command surfaces, but their parameter parsing still needs decompilation/runtime inspection.
+## Proving a mutation landed
 
-## Suggested first mod
+Capture → call → verify delta, with the postcondition chosen to prove *identity and outcome*, not
+bookkeeping:
 
-A safe first plugin should:
+1. Resolve the target from its stable UUID **and** confirm the exact managed type.
+2. Capture the specific observable that the call is supposed to move — queued quantity, queued
+   purchase level, stock, usage count.
+3. Make exactly one call.
+4. Capture again and require the expected delta.
 
-1. Wait until a loaded game is available.
-2. Resolve Alchemic Scrolls through UUID `67acd892-8a8a-455a-aa71-3fb06e75bf38`.
-3. Log its display name and current `BigDouble` value.
-4. Bind an opt-in hotkey and configurable multiplier.
-5. On key press, call the normal resource API.
-6. Avoid bundling Harmony because BepInEx already provides it.
+Then classify the result honestly. A call that completed cleanly and moved nothing is a **benign
+skip**, not a fault — the game refused, which it is entitled to do. Reserve the fault
+classification for a call that threw, or one whose after-state cannot be read, because those are
+the genuinely ambiguous cases where you do not know whether a side effect landed. A partial group
+that stopped early because the game stopped admitting is a partial success.
 
-## Questions still requiring runtime testing
+An ambiguous mutation should block that target until a lifecycle boundary replaces it. There is no
+way to un-ring the bell by re-reading.
 
-- Exact earliest safe lifecycle point for populated `RuntimeLookup`.
-- Whether an extreme scroll amount is capacity-clamped by `SetQuantity` in the current progression state.
-- Which `Gain` flag combination best matches a silent debug grant.
-- Whether direct `SetQuantity` requires a manual observable update for immediate UI refresh.
-- Whether the built-in developer console can be enabled cleanly without patching.
+## The global multi-buy override
 
+Some purchase paths honour a global multiplier rather than taking a count
+(see [native-action-surfaces.md](native-action-surfaces.md)). Driving them for a specific count
+means writing a global:
+
+1. Resolve `GlobalVariables.GetMultiBuy()` and read its current value with `IntVariable.AsInt()`.
+2. `SetValue(int)` the count you want, then read it back and verify.
+3. Make the call.
+4. Restore the original value and verify the restoration **on every exit path**, including the
+   exception path.
+
+If entry or restoration cannot be verified, do not mutate at all — a multiplier left set is a
+global change to the player's manual purchases. Take a process-wide lease on it so two features
+cannot interleave writes.
+
+## The existing developer console
+
+`DevConsoleEngine` already contains `ResourceRefresh`, `ResourceVisible`, `ResourceGain`, and
+`ResourceSetQuantity`. `ResourceGain` calls `ResourceSO.Gain`; `ResourceSetQuantity` calls
+`ResourceSO.SetQuantity`. They are worth reading as worked examples of how the game itself drives
+the resource API, and they are a possible command surface in their own right — their parameter
+parsing has not been decompiled.

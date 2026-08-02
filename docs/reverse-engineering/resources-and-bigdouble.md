@@ -2,9 +2,30 @@
 
 [Back to index](README.md)
 
-## ResourceSO state
+The game math you have to reproduce **exactly** if you want to price anything without asking the
+game. Everything here is IL-derived; parity against a live save is the only proof that a
+reimplementation is right.
 
-Verified saved fields include:
+## BigDouble
+
+`BigDouble` lives in `Assembly-CSharp-firstpass.dll` — identical across both admitted platform
+pairs — as a value type of `double mantissa` (`Ma`) and `long exponent` (`Ex`), representing
+`mantissa × 10^exponent`; `[1.446, 23]` is roughly `1.446 × 10²³`.
+
+```csharp
+new BigDouble(double mantissa, long exponent)
+BigDouble.Normalize(double mantissa, long exponent)
+BigDouble.Pow10(long exponent)
+BigDouble.Parse(string value)
+```
+
+Arithmetic and comparison operators are defined. Use constructors and operators; setting `Ma` and
+`Ex` independently skips normalization and produces a value the game's own comparisons will
+disagree with.
+
+## ResourceSO
+
+Saved state:
 
 ```csharp
 bool visible;
@@ -17,81 +38,143 @@ List<QuantityTimer> replenishTimers;
 List<QuantityTimer> decayTimers;
 ```
 
-Resources also contain modifiers for rate, capacity, gain, drain, loss, reservation, decay, replenishment and overflow.
+Alongside it are modifier records for rate, capacity, gain, drain, loss, reservation, decay,
+replenishment, and overflow.
 
-## Important methods
-
-| Method | Role |
+| Member | Role |
 |---|---|
-| `GetQuantity()` | Current stored quantity |
-| `GetTrueQuantity()` | Quantity after game-specific interpretation |
-| `Gain(...)` | Normal gain path with modifiers, notifications and reverberation |
-| `GainInternal(...)` | Low-level capped/overflow addition |
-| `Spend(...)` | Normal spending path |
-| `SetQuantity(BigDouble)` | Direct assignment clamped to zero and max capacity |
-| `SetToCap()` | Fill to capacity |
-| `GetLifeTimeQuantity()` | Lifetime accumulated quantity |
-| `GetQuantityObservable()` | UI/system notification source |
+| `GetQuantity()` | stored quantity |
+| `GetTrueQuantity()` | quantity after quality interpretation |
+| `GetMissing()` | headroom to the maximum |
+| `Gain(...)` | the normal gain path: modifiers, notifications, reverberation |
+| `GainInternal(...)` | low-level capped/overflow addition, governed by `canOverflow` |
+| `Spend(...)` | the normal spending path |
+| `SetQuantity(BigDouble)` | direct assignment, clamped |
+| `SetToCap()` | fill to capacity |
+| `GetLifeTimeQuantity()` | lifetime accumulated quantity |
+| `GetQuantityObservable()` | the UI/system notification source |
 
-### SetQuantity behavior
+`SetQuantity` clamps: for a capped resource `quantity = Max(0, Min(requested, maxQuantity))`,
+otherwise `quantity = requested`. It therefore **cannot** exceed capacity, and it does not fire the
+gain path.
 
-Inspected IL confirms:
+`Gain` rejects a zero amount, optionally resets loss state, applies `gainRate` unless `isRaw` is
+set, registers lifetime gain unless the gain is a splash, calls `GainInternal`, updates the
+quantity and channel observables when asked, and optionally accumulates reverberation. For a debug
+grant it is the semantically safer of the two; for an exact target value `SetQuantity` is simpler
+but still clamped. `ResourceSO.MakeVisible()` is **private** — see
+[modding-hooks.md](modding-hooks.md).
+
+## Containers and collection edges
+
+| Type | Bulk-readable contents |
+|---|---|
+| `ResourceListVariable` | `GetAll()`, which returns `ResourceSO.All` — not a richer snapshot API |
+| `ResourceCostList` | `costs : List<ResourceTuple>`; `GetEntries()` returns the same list |
+| `ResourceFillList` | partial investment into costs |
+| `ResourceManager` | `allResources` plus a generated-resource cache |
+| `Prerequisites.Container` | `prerequisites : List<IRequirementCondition>` |
+| `AndRequirement` / `OrRequirement` | nested condition lists |
+| `ValueModifierList` | `modifiers` and a **separate** `exponents` list |
+| `ModifierRecord` | `passiveModifiers` and `activeModifiers` dictionaries |
+| `ActionableListVariable` | the queue list and its maximum-queued-item variable |
+
+The three public bulk roots are `StructureSO.All`, `UpgradeSO.All`, and `ResourceSO.All`. Modifier
+arithmetic and fold order are player-observable and documented in
+[`game-systems/modifiers.md`](../game-systems/modifiers.md); what the code offers
+is the operand graph above, in native combination order.
+
+## Rounding
+
+Two variants, not interchangeable: `RoundToTwoSigsEarly()` closes the Structure cost chain and
+`RoundToTwoSigs()` closes the Upgrade chain. A third rule appears in bandwidth affordability
+below — an integer `RoundToInt` comparison, not a significant-digit round.
+
+## Structure cost
+
+Let `q = quantity + queuedQuantity`.
 
 ```text
-if resource has a maximum:
-    quantity = Max(0, Min(requested, maxQuantity))
+attributeCost = baseCost.AdjustAsAttribute()
+scaling       = costPerQuantity.GetModifier()
+                    .MultiplyScalar(costScalingMod.AsPercent())
+scaledCost    = attributeCost.AdjustWith(scaling.MultiplyScalar(q))
+purchaseCost  = scaledCost
+                    .Multiply(GetNextCostMod().AsPercent())
+                    .RoundToTwoSigsEarly()
+```
+
+`AdjustAsAttribute()` multiplies each tuple by `resource.GetAttributeCostMod().AsPercent()`, whose
+resource factor is:
+
+```text
+attributeCostMod.GetValue()
+    / Pow(quality.AsPercent(), Player.AttributeQualityBonus)
+```
+
+`GetNextCostMod()` combines a passive floor with the scaled term:
+
+```text
+passive = passiveCostMod.GetValue()
+scaled  = costPerQuantity.GetMod().MultiplyScalar(q).Adjust(1)
+base    = Max(passive / 100, scaled)
+active  = activeCostMod.GetValue() * Player.GetStructureCost().AsPercent()
+result  = base * active.AsPercent()
+```
+
+The `Max(passive / 100, scaled)` term is the one people drop.
+
+## Upgrade cost
+
+```text
+index = level + queuedLevels
+if maxLevel > 0:
+    index = Min(index, maxLevel - 1)
+
+levelArgument = index + 1
+if levelArgument == 1:
+    cost = clone(resourceCost)
 else:
-    quantity = requested
+    modifiers = resourceCostModPerLevel.MultiplyScalar(levelArgument - 1)
+    cost      = modifiers.Adjust(each base tuple)
+
+purchaseCost = cost.RoundToTwoSigs()
 ```
 
-Therefore, `SetQuantity` cannot exceed capacity for a capped resource. `GainInternal` has separate overflow behavior governed by `canOverflow`.
+The native object **caches its calculated cost by cost level**. Whether a modifier change
+invalidates that cache is not established from IL; treat a cached price as stale after any
+modifier movement.
 
-### Gain behavior
+## Affordability
 
-`Gain`:
-
-1. Rejects a zero amount.
-2. Optionally resets loss state.
-3. Applies `gainRate` unless `isRaw` is true.
-4. Registers lifetime gain unless it is a splash gain.
-5. Calls `GainInternal`.
-6. Updates quantity and channel observables when requested.
-7. Optionally accumulates reverberation.
-
-For a cheat/debug action, `Gain` is semantically safer than directly assigning the private field. For an exact quantity, `SetQuantity` is simpler but still capacity-clamped.
-
-## BigDouble
-
-`BigDouble` is defined in `Assembly-CSharp-firstpass.dll` as a value type with:
-
-```csharp
-double mantissa;
-long exponent;
-```
-
-It represents approximately:
+Ordinary resource:
 
 ```text
-mantissa × 10^exponent
+qualityFactor        = quality.GetValue().AsPercent()
+trueQuantity         = quantity * qualityFactor
+trueSpend(nominal)   = nominal / qualityFactor
+hasAmount            = GameManager.DEBUG || quantity >= trueSpend(nominal)
 ```
 
-For example, `[1.446, 23]` represents approximately `1.446 × 10²³`.
+`GameManager.DEBUG` short-circuits affordability entirely — a debug build says yes to everything,
+so parity runs against it prove nothing about price.
 
-Verified constructors and helpers include:
+Bandwidth resource — this one is genuinely surprising:
 
-```csharp
-new BigDouble(double mantissa, long exponent)
-BigDouble.Normalize(double mantissa, long exponent)
-BigDouble.Pow10(long exponent)
-BigDouble.Parse(string value)
+```text
+missing   = Max(maxQuantity.GetValue() - quantity, 0)
+hasAmount = RoundToInt(missing.ToFloat())
+            >= RoundToInt(nominalCost.ToFloat())
 ```
 
-It supports arithmetic and comparison operators. Prefer constructors/operators over modifying `Ma`/`Ex` properties independently so normalization is preserved.
+Both sides are rounded to `int` before the comparison, so a bandwidth cost is admitted or refused
+at integer boundaries rather than at exact `BigDouble` ones.
 
-## Resource containers
+`ResourceCostList.HasEnough()` checks each tuple **independently**. A cost list naming the same
+resource twice is therefore not summed by the game; anything that combines duplicate tuples by
+UUID is imposing a stricter rule than the native one, and both behaviours have to be preserved
+deliberately rather than merged.
 
-- `ResourceListVariable` exposes `List<ResourceSO> GetAll()`.
-- `ResourceCostList` represents spend/gain lists and performs costs, refunds and generation.
-- `ResourceFillList` tracks partial investment into costs.
-- `ResourceManager` owns `allResources` and a generated-resource cache.
-
+Native spending stays authoritative regardless: spend paths can involve decay and replenishment,
+so matching the admission arithmetic does not license predicting or performing the mutation
+yourself.

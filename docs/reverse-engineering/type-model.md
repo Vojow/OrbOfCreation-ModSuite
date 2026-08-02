@@ -1,0 +1,112 @@
+# Type model
+
+[Back to index](README.md)
+
+Every gameplay domain in this assembly repeats one shape. Learn it once and resources, structures,
+spells, alchemy, rituals, research, equipment, passives, time runes, harvesting, and combat all
+read the same way.
+
+```mermaid
+flowchart LR
+    Concrete["Concrete asset<br/>recipe / object / action"] -->|"one or more type refs"| Type["Type asset"]
+    Type -->|"registered members"| Members["Runtime member collection"]
+    List["ListVariable / registry"] --> Concrete
+    Effect["Upgrade / research / effect"] --> Ref["ModifierReference"]
+    Ref --> Concrete
+    Ref --> Type
+    Ref --> Group["AttributeGroupSO"]
+```
+
+Four consequences carry all the weight:
+
+- A concrete asset holds references to **one or more** type assets, and each type asset holds a
+  registered-member collection pointing back. Membership is a set, not a hierarchy.
+- Type assets are not global. They affect exactly the instances registered with them. A "type-wide"
+  bonus is bounded by that registration list.
+- List variables are **index surfaces**, not UI lists. They are where you find live instances,
+  filtered views, and registries that the type assets do not expose.
+- The same statistic can be reached through concrete → type → group → player-global layers, so a
+  broad bonus can double-apply.
+
+## Base-class families and what each affords
+
+| Family | Mapped types | What you can do with it |
+|---|---:|---|
+| `GenericListVariable<T>` descendants | 45 | enumerate a registry or a filtered collection |
+| `UpgradeableObject` descendants | 32 | reach modifier accessors directly |
+| `TooltipableObject` descendants | 24 | read/extend display data without an upgrade surface |
+| direct `IdScriptableObject` descendants | 18 | variables, definitions, scaling assets, utilities |
+| `EmptyTypeListVariable<T>` descendants | 9 | runtime instance, snapshot, and state collections |
+| `StackableListVariable<T>` descendants | 5 | stack-aware gameplay collections |
+| `AbstractItemRefVariable<T>` descendants | 4 | read the currently selected item |
+| `AbstractVariable<T>` descendants | 2 | GUID and upgradeable-object references |
+| `NumberVariable` descendants | 2 | `DoubleVariable` / `IntVariable` persistent modifier targets |
+
+UUID lookup works for every registered `IdScriptableObject` descendant. Native upgrade-property
+modification needs an `UpgradeableObject` accessor or an effect script aimed at another record.
+Tooltip extension reaches `TooltipableObject` descendants even where they are not upgradeable.
+
+The exhaustive per-type census lives in [`data/entity-types.tsv`](../../data/entity-types.tsv).
+
+## Where the shape bends
+
+The pattern is near-universal; these are the variations worth knowing before you traverse.
+
+| Domain | Variation |
+|---|---|
+| Structures | one primary `structureType` **plus** a `structureSubTypes[]` list, so one structure can be reached by several type-level bonuses at once |
+| Resources | `GlobalResourceType` excludes resources marked `excludeFromGlobals`; `GlobalCappedResourceType` takes only resources that report a maximum at registration |
+| Research and upgrades | share prerequisite, cost, validation, purchase, save, and visibility concepts through **interfaces**, not a common concrete base — there is no one class to patch |
+| Achievements | contribute raw values into an `AchievementStrength` `IntVariable` that then drives persistent effect blocks; it is a derived global, not a per-achievement surface |
+| Combat | definitions are ordinary assets, but live state (status effects, engaged effects, targets) exists only in list variables and target containers |
+| Concepts | have no class of their own; see [naming-traps.md](naming-traps.md) |
+
+## Modifier layers and double application
+
+A final statistic can receive contributions from the base record, concrete-object modifiers,
+type-level merged modifiers, `AttributeGroupSO` merged modifiers, and player-global
+`NumberVariable` effects. `AttributeGroupSO.BindAllMods()` binds serialized target records into one
+`MergingModifierRecord` with ratio, exponent-ratio, and order-adjust delegates.
+
+That is a list of layers, not an evaluation order — the actual arithmetic and fold order are in
+[`game-systems/modifiers.md`](../game-systems/modifiers.md).
+
+The hazard is that a single conceptual bonus ("more casting", "more manufacturing power") often
+maps onto several of these layers at once and multiplies with itself. Before shipping a broad
+bonus, log:
+
+```text
+source UUID and type
+target UUID and type
+propertyType[propertyIndex]
+modifier UUID, ValueModifier type, value, and order
+group/type ratio and prerequisites
+current record contributors
+```
+
+That produces a graph in which double application is visible, rather than a guess based on names.
+
+A worked example of the layering: `Spell.Initialize` loads glyphs and then establishes the spell's
+types. `SetupLimitedElementalType` starts from the recipe's authored tags and may add or replace
+elemental tags based on the equipped glyphs; `GetAllSpellTypes` combines the negative/exclusion and
+augmented type lists. Spell calculations then request Power, CooldownSpeed, Cost and the rest from
+**every** applicable `SpellTypeSO` via `SpellTypeSO.GetValueModifierRecord`. So a tag-targeted buff
+applies according to the spell's *effective* type set, glyph changes included — never according to
+its name or its authored tags alone.
+
+## What IL cannot prove
+
+Two boundaries return `Unresolved` from code alone, no matter how much IL you read:
+
+- **`AttributeGroupSO` membership.** ILSpy proves how a group propagates modifiers into member
+  records. It cannot prove which records are in the group — that is serialized asset data. Log the
+  membership at runtime before enabling anything that combines overlapping groups.
+- **The direction of a "scaling" stat.** "Scaling" is not one stat. Beneficial power/effect scaling
+  and harmful cost/time/requirement scaling are reached through *different accessors*. A blanket
+  scaling modifier is not safe, and neither is a blanket bonus on a `DoubleVariable` whose
+  direction you have not checked.
+
+The mapping proves an asset's UUID, name, and managed type exist. It does not prove which assets
+reference each other, whether an entity is unlocked or visible in a loaded save, what a list
+variable contains at a given lifecycle phase, or the balance impact of any modifier. Those come
+from field metadata, decompiled methods, serialized assets, or a runtime probe.
