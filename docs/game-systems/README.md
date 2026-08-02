@@ -26,7 +26,8 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 - [capacity.md](capacity.md) — a price above your cap is unreachable, not slow; resolving it is a
   cross-currency detour.
 - [overcap.md](overcap.md) — a one-shot 3 s timer, then a rubber band pulling the excess back to cap.
-- [spark.md](spark.md) — the only resource that decays toward zero, even below cap.
+- [resource-behaviours.md](resource-behaviours.md) — resources with attached effects of their own:
+  Spark drains to zero, Arcanum fills on missing %.
 - [splash.md](splash.md) — type-targeted gain split by lifetime production rate; it feeds the rich and
   does not conserve.
 - [resource-types.md](resource-types.md) — every resource carries type keywords, and effects target
@@ -54,8 +55,6 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
   spell-type tracks.
 - [spell-levels.md](spell-levels.md) — cost curve 3.3^(L(1+0.007L)); levelling raises output and XP
   together.
-- [spell-catalogue.md](spell-catalogue.md) — observed spells and their authored tags (partial; the
-  full set is unknown).
 
 ## Augments
 

@@ -27,8 +27,9 @@ carried cross-run bonuses (authored constants do not).
   resources, and whether ordinary resources share them is unestablished. So is whether a purely
   rate-fed resource can overcap at all: none has been observed doing so, but no rule forbidding it
   has been found. Settle with one observed overcap decay on a normal resource.
-- **Spark's formula** — no coefficients, no equilibrium function, no confirmation of the channel
-  exemption.
+- **Per-resource behaviour formulas** — Spark's drain toward zero (no coefficients, no equilibrium
+  function, no confirmation of the channel exemption) and Arcanum's missing-% fill (no numbers at
+  all); see [resource-behaviours.md](resource-behaviours.md).
 - **Aura effect-level magnitudes** — the rough ≈×1.7–1.8 estimate for a stack of +12 aura effect
   levels was never confirmed. Settle by capturing an affected rate before and after a single
   effect-level purchase with nothing else changing.
@@ -41,8 +42,6 @@ carried cross-run bonuses (authored constants do not).
 - **The Reserve Level exponent** — whether the per-level factor is applied at the level or level − 1.
 - **The augment catalogue** — which augments exist beyond the two worked examples, what each costs in
   weight, and how many copies are available at a given point.
-- **The spell catalogue** — [spell-catalogue.md](spell-catalogue.md) is one save's play state; the
-  authored roster is larger and unenumerated.
 - **The emblem catalogue** — 24 emblem passives exist and one is worked out.
 - **Whether a Momentum build is viable** — Momentum and the standard cantrip charm cannot both be
   equipped at observed weight caps, and the pairing with its feeder spell was never tested. Settle by
