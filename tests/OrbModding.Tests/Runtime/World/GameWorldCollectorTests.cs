@@ -48,6 +48,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         FakeConsumableInventory.Reset();
         FakeChallengeManager.instance = new FakeChallengeManager();
         FakePersistentResetManager.instance = new FakePersistentResetManager();
+        FakeSettingsManager.QueueMode = false;
+        FakeGlobalVariables.SetMultiBuy(1);
         WorldCategoryFakes.Clear();
     }
 
@@ -91,6 +93,10 @@ public sealed class GameWorldCollectorTests : IDisposable
             ["ChallengeManager"] = typeof(FakeChallengeManager),
             ["PersistentResetManager"] = typeof(FakePersistentResetManager),
             ["ChallengeListVariable"] = typeof(FakeChallengeList),
+            ["SettingsManager"] = typeof(FakeSettingsManager),
+            ["ResearchTypeSO"] = typeof(FakeResearchType),
+            ["ResourceFillList"] = typeof(FakeResearchFillList),
+            ["ResourceFillList+ResourceFillEntry"] = typeof(FakeResearchFillList.ResourceFillEntry),
         };
 
         foreach (var pair in WorldCategoryFakes.ByTypeName) byName[pair.Key] = pair.Value;
@@ -370,6 +376,84 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(-5d, adjustment.Amount.ToDouble());
         Assert.Equal(0, adjustment.Order);
         Assert.True(adjustment.Passive);
+    }
+
+    [Fact]
+    public void ResearchDecisionPublishesNativeCostHoldingsInvestmentAndBonusCapacityTogether()
+    {
+        var resource = new FakeResource { Identity = Guid.NewGuid(), Quantity = new BigDouble(80) };
+        var type = new FakeResearchType
+        {
+            Identity = Guid.NewGuid(),
+            RemainingFreeBonusLevels = 2,
+            CurrentInvestmentLevel = 1,
+            MaxInvestmentLevel = 5,
+        };
+        var fill = new FakeResearchFillList.ResourceFillEntry
+        {
+            resource = resource,
+            Quantity = new BigDouble(40),
+            Capacity = new BigDouble(100),
+        };
+        var research = new FakeResearch
+        {
+            Identity = Guid.NewGuid(),
+            maxLevel = 10,
+            researchCost = new FakeCraftingResourceCostList().With(resource, new BigDouble(20)),
+        };
+        research.researchTypes.Add(type);
+        research.resourceFillList.entries.Add(fill);
+        FakeResource.All.Add(resource);
+        FakeResearch.All.Add(research);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.Research, research.Identity, out var row));
+        Assert.True(row.Decision.Available);
+        Assert.Equal(1, row.Decision.LevelsAvailable);
+        var cost = Assert.Single(row.Decision.DevelopmentCosts.AsSpan().ToArray());
+        Assert.Equal(resource.Identity, cost.ResourceId);
+        Assert.Equal(20d, cost.Cost.ToDouble());
+        Assert.Equal(80d, cost.Amount.ToDouble());
+        var investment = Assert.Single(row.Decision.Investment.AsSpan().ToArray());
+        Assert.Equal(40d, investment.Invested.ToDouble());
+        var typeDecision = Assert.Single(row.Decision.ResearchTypes.AsSpan().ToArray());
+        Assert.Equal(type.Identity, typeDecision.ResearchTypeId);
+        Assert.Equal(2, typeDecision.RemainingBonusLevels);
+    }
+
+    [Fact]
+    public void ResearchQueueDecisionReportsOnlyTheAffordableAcceptedCostPrefix()
+    {
+        var resource = new FakeResource { Identity = Guid.NewGuid(), Quantity = new BigDouble(15) };
+        var research = new FakeResearch
+        {
+            Identity = Guid.NewGuid(),
+            maxLevel = 10,
+            researchCost = new FakeCraftingResourceCostList
+            {
+                affordabilityUsesResourceAmounts = true,
+            }.With(resource, new BigDouble(10)),
+        };
+        FakeSettingsManager.QueueMode = true;
+        FakeGlobalVariables.SetMultiBuy(3);
+        FakeResource.All.Add(resource);
+        FakeResearch.All.Add(research);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.Research, research.Identity, out var row));
+        Assert.True(row.Decision.QueueMode);
+        Assert.Equal(1, row.Decision.LevelsAvailable);
+        var cost = Assert.Single(row.Decision.DevelopmentCosts.AsSpan().ToArray());
+        Assert.Equal(10d, cost.Cost.ToDouble());
+        Assert.Equal(15d, cost.Amount.ToDouble());
     }
 
     [Fact]
@@ -1609,6 +1693,9 @@ public sealed class GameWorldCollectorTests : IDisposable
         public FakeModifierRecord power = new(100d);
         public FakeModifierRecord maxLevelCap = new(0d);
         public FakeModifierRecord leewayPoints = new(0d);
+        public List<FakeResearchType> researchTypes = new();
+        public FakeCraftingResourceCostList researchCost = new();
+        public FakeResearchFillList resourceFillList = new();
 
         public Guid GetGuid() => Identity;
 
@@ -1623,6 +1710,10 @@ public sealed class GameWorldCollectorTests : IDisposable
         public bool IsWithinDevelopRange() =>
             !IsComplete() && MeetsLevelRequirements() && StillHasLeeway() &&
             IsBelowArtificialMaxLevel() && IsBelowMaxInvestmentLevel();
+
+        public bool IsWithinDevelopRangeAt(int atLevel) => IsWithinDevelopRange();
+
+        public bool HasMaxLevel() => maxLevel > 0;
 
         public bool MeetsLevelRequirements() =>
             levelPrerequisites.Check(new Requirements.ConditionInfo(GetRequirementLevel()));
@@ -1644,6 +1735,74 @@ public sealed class GameWorldCollectorTests : IDisposable
         public int GetArtificialMaxLevel() => 0;
 
         public int GetRequirementLevel() => requirementsAdjust.AdjustRawLevel(GetBaseLevel());
+
+        public int GetQueuedLevels() => queuedLevels + (isDeveloping ? 1 : 0);
+
+        public int GetCurrentInvestmentLevel() => level + GetQueuedLevels();
+
+        public BigDouble GetCurrentTime() => resourceFillList.GetAverageRatio() * GetRequiredTime();
+
+        public BigDouble GetRemainingTime() =>
+            (BigDouble.One - resourceFillList.GetLowestRatio()) * GetRequiredTime();
+
+        public BigDouble GetTimeRatio() => GetCurrentTime() / GetRequiredTime();
+
+        public BigDouble GetRequiredTime() => requiredTimeCached == BigDouble.Zero
+            ? new BigDouble(researchTime)
+            : requiredTimeCached;
+
+        public bool CanApplyBonusLevels() =>
+            researchTypes.Exists(type => type.GetRemainingFreeBonusLevels() > 0);
+
+        public int GetFreeBonusLevelsLeft() => researchTypes.Count == 0
+            ? 0
+            : researchTypes.Max(type => type.GetRemainingFreeBonusLevels());
+
+        public FakeCraftingResourceCostList GetDevelopmentCost() => researchCost;
+
+        public FakeCraftingResourceCostList GetDevelopmentCostAtLevel(int atLevel) =>
+            researchCost.Multiply(BigDouble.One);
+    }
+
+    private static class FakeSettingsManager
+    {
+        public static bool QueueMode;
+        public static bool IsResearchQueueMode() => QueueMode;
+    }
+
+    private sealed class FakeResearchType
+    {
+        public Guid Identity = Guid.NewGuid();
+        public int RemainingFreeBonusLevels { get; set; }
+        public int CurrentInvestmentLevel { get; set; }
+        public int MaxInvestmentLevel { get; set; }
+        public Guid GetGuid() => Identity;
+        public int GetRemainingFreeBonusLevels() => RemainingFreeBonusLevels;
+        public int GetCurrentInvestmentLevel() => CurrentInvestmentLevel;
+        public int GetMaxInvestmentLevel() => MaxInvestmentLevel;
+    }
+
+    private sealed class FakeResearchFillList
+    {
+        public List<ResourceFillEntry> entries = new();
+        public BigDouble GetAverageRatio() => entries.Count == 0
+            ? BigDouble.Zero
+            : entries.Select(entry => entry.GetQuantity() / entry.GetCapacity())
+                .Aggregate(BigDouble.Zero, (sum, value) => sum + value) / new BigDouble(entries.Count);
+        public BigDouble GetLowestRatio() => entries.Count == 0
+            ? BigDouble.Zero
+            : entries.Select(entry => entry.GetQuantity() / entry.GetCapacity()).Min();
+
+        internal sealed class ResourceFillEntry
+        {
+            public FakeResource resource = new();
+            public BigDouble Quantity;
+            public BigDouble Capacity = BigDouble.One;
+            public FakeResource get_resource() => resource;
+            public BigDouble GetQuantity() => Quantity;
+            public BigDouble GetCapacity() => Capacity;
+            public BigDouble GetRemaining() => BigDouble.Max(Capacity - Quantity, BigDouble.Zero);
+        }
     }
 
     /// <summary>
@@ -1686,6 +1845,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         private static readonly FakeCount MultiBuy = new(1);
 
         public static FakeCount GetMultiBuy() => MultiBuy;
+
+        public static void SetMultiBuy(int amount) => MultiBuy.SetValue(amount);
     }
 
     internal sealed class FakeCraftingPage : UnityEngine.Object

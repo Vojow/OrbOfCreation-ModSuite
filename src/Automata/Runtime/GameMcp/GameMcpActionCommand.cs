@@ -34,6 +34,7 @@ internal enum GameMcpCommandKind
     EquipmentLoadout = 23,
     Challenge = 24,
     Prestige = 25,
+    Research = 26,
 }
 
 internal static class GameMcpCommandKinds
@@ -45,7 +46,7 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.Targeting or GameMcpCommandKind.Consumable or
             GameMcpCommandKind.Crafting or GameMcpCommandKind.GenericDiscovery or
             GameMcpCommandKind.EquipmentLoadout or GameMcpCommandKind.Challenge or
-            GameMcpCommandKind.Prestige;
+            GameMcpCommandKind.Prestige or GameMcpCommandKind.Research;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -65,6 +66,7 @@ internal static class GameMcpCommandKinds
         "game_equipment" => GameMcpCommandKind.EquipmentLoadout,
         "game_challenge" => GameMcpCommandKind.Challenge,
         "game_prestige" => GameMcpCommandKind.Prestige,
+        "game_research" => GameMcpCommandKind.Research,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -666,6 +668,21 @@ internal static class GameMcpActionResultCodeNames
             if (code == PrestigeActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == PrestigeActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == PrestigeActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.Research)
+        {
+            if (code == ResearchActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == ResearchActionResultCodes.Quarantined) return "quarantined";
+            if (code == ResearchActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == ResearchActionResultCodes.IdentityUnavailable) return "identity_unavailable";
+            if (code == ResearchActionResultCodes.DevelopUnavailable) return "develop_unavailable";
+            if (code == ResearchActionResultCodes.MultiBuyUnavailable) return "multi_buy_unavailable";
+            if (code == ResearchActionResultCodes.InvalidMode) return "invalid_mode";
+            if (code == ResearchActionResultCodes.InvalidState) return "invalid_state";
+            if (code == ResearchActionResultCodes.BonusUnavailable) return "bonus_unavailable";
+            if (code == ResearchActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == ResearchActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == ResearchActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

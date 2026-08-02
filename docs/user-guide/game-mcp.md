@@ -121,6 +121,7 @@ does not refresh it by hidden navigation.
 | `game_equipment` | Equip/increase or unequip/decrease one created artifact using live native multi-buy |
 | `game_challenge` | Select, queue, abandon, or fetch the Time/prestige challenge offers |
 | `game_prestige` | Confirm and perform the irreversible persistent reset |
+| `game_research` | Develop/queue, pause, resume, cancel, or apply a free research bonus level |
 | `game_spell_workbench` | Select an authored spell recipe, discover it, or create another equipped instance |
 | `game_spell_composition` | Set the global spell output level or replace one equipped spell's augment stack |
 | `game_spell_loadout` | Remove one exact equipped runtime spell or move it to another loadout slot |
@@ -202,6 +203,14 @@ them as persistent/passive modifiers, so an active-only modifier count can be ze
 the research tooltip and native availability evaluator apply the challenge adjustment. Type-wide
 research modifiers are included in the native effective result but are not misattributed as direct
 members of the research row.
+
+The same row is the complete pre-decision surface for `game_research`. It names the immediate or
+queue route, live multi-buy maximum, exact number of levels the native cumulative loop will accept,
+and ordered named costs paired with each resource's canonical current `amount`. While development
+is active it includes elapsed/required/remaining progress and per-resource investment; associated
+research types carry their remaining free bonus levels and investment caps. Only currently
+UI-reachable next verbs appear: `develop`, `pause`, `resume`, `cancel`, and `bonus`. A committed
+mutation returns this complete newer row inline, so planning never requires a follow-up read.
 
 `crafting-recipe-types` describes the game's crafting families; `crafting-recipes` contains the
 actual recipes and is the pre-decision surface for `game_craft`. A recipe row leads with `visible`,
@@ -681,6 +690,18 @@ by the exact lifecycle replacement. Resource and counter movements are not ledge
 throw or a returned transaction without lifecycle replacement faults and quarantines the family.
 After success, the response waits for the newer post-reset world and carries its scene plus complete
 prestige and challenge next-decision state, with no receipt, payment stanza, or read-back call.
+
+`game_research` requires `mode` plus one published `ResearchSO` `uuid`. Modes are `develop`,
+`pause`, `resume`, `cancel`, and `bonus`. The boundary re-resolves that exact identity and rereads
+queue mode, multi-buy, level/cap/range evaluators, exact cumulative costs, current state,
+investment/progress, and free bonus capacity on Unity's main thread before capturing the
+`ResearchLifecycle` permit last. Develop calls the same native `PurchaseLevel` dispatch as the UI;
+pause, resume, cancel, and bonus call their exact native methods. Success is only the requested
+identity/outcome: active development or increased total queued levels, paused/resumed state, idle
+with an empty queue, or one added self-bonus level. Cost, investment, resource, type-counter, and
+progress-clock movements never gate success. A missing transition quarantines the family; a throw
+after the exact outcome commits. Every committed mode returns the full newer named research row
+and every next decision with no receipt, payment stanza, or read-back.
 
 CLI play commands therefore need no generation option:
 

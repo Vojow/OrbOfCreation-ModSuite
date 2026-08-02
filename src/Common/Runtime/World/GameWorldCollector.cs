@@ -210,7 +210,7 @@ internal sealed class GameWorldCollector
         _resources = Reader(new WorldResourceBinder(), resolveType, static frame => frame.Resources);
         _structures = Reader(new WorldStructureBinder(), resolveType, static frame => frame.Structures);
         _upgrades = Reader(new WorldUpgradeBinder(), resolveType, static frame => frame.Upgrades);
-        _research = Reader(new WorldResearchBinder(), resolveType, static frame => frame.Research);
+        _research = Reader(new WorldResearchBinder(resolveType), resolveType, static frame => frame.Research);
         _doubleVariables = Reader(new WorldDoubleVariableBinder(), resolveType, static frame => frame.DoubleVariables);
         _intVariables = Reader(new WorldIntVariableBinder(), resolveType, static frame => frame.IntVariables);
         _boolVariables = Reader(new WorldBoolVariableBinder(), resolveType, static frame => frame.BoolVariables);

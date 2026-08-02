@@ -1466,14 +1466,14 @@ public sealed class GameMcpWorldEnvelopeTests
 
         var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
             result.ToString(Newtonsoft.Json.Formatting.None));
-        Assert.Equal(1085, responseBytes);
+        Assert.Equal(926, responseBytes);
         Assert.True(responseBytes < 1461);
 
         Assert.Equal("available", (string?)result["status"]);
         var row = (JObject)result["row"]!;
-        Assert.Equal(10, (int)row["baseRequirementLevel"]!);
-        Assert.Equal(5, (int)row["effectiveRequirementLevel"]!);
-        Assert.Equal(-5, (int)row["requirementLevelAdjustment"]!);
+        Assert.Equal("1e1", (string?)row["baseRequirementLevel"]!);
+        Assert.Equal("5e0", (string?)row["effectiveRequirementLevel"]!);
+        Assert.Equal("-5e0", (string?)row["requirementLevelAdjustment"]!);
         var projected = Assert.Single(row["requirementAdjustments"]!.Values<JObject>())!;
         Assert.Equal(modifierId.ToString("D"), (string?)projected["modifier"]!["uuid"]);
         Assert.Equal(challengeId.ToString("D"), (string?)projected["source"]!["uuid"]);

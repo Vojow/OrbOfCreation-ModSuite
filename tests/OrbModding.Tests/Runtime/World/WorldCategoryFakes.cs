@@ -234,16 +234,25 @@ internal sealed class FakeCraftingResourceCostList
     public List<FakeCraftingResourceTuple> costs = new();
     public bool withinCapacity = true;
     public bool affordable = true;
+    public bool affordabilityUsesResourceAmounts;
     public BigDouble maximumCostTimes = new(int.MaxValue);
 
     public bool IsWithinCapacity() => withinCapacity;
-    public bool HasEnough() => affordable;
+    public bool HasEnough() => affordable &&
+        (!affordabilityUsesResourceAmounts || costs.All(cost =>
+            cost.resource is not null &&
+            cost.valueBig.CompareTo(cost.resource.GetTrueQuantity()) <= 0));
     public BigDouble MaximumCostTimes() => maximumCostTimes;
     public List<FakeCraftingResourceTuple> GetEntries() => costs;
 
     public FakeCraftingResourceCostList Multiply(BigDouble factor)
     {
-        var result = new FakeCraftingResourceCostList { withinCapacity = withinCapacity };
+        var result = new FakeCraftingResourceCostList
+        {
+            withinCapacity = withinCapacity,
+            affordable = affordable,
+            affordabilityUsesResourceAmounts = affordabilityUsesResourceAmounts,
+        };
         for (var index = 0; index < costs.Count; index++)
             result.costs.Add(new FakeCraftingResourceTuple
             {
@@ -251,6 +260,23 @@ internal sealed class FakeCraftingResourceCostList
                 valueBig = costs[index].valueBig * factor,
             });
         return result;
+    }
+
+    public FakeCraftingResourceCostList Add(FakeCraftingResourceCostList other)
+    {
+        affordable &= other.affordable;
+        affordabilityUsesResourceAmounts |= other.affordabilityUsesResourceAmounts;
+        for (var index = 0; index < other.costs.Count; index++)
+        {
+            var incoming = other.costs[index];
+            var existing = costs.FindIndex(row => ReferenceEquals(row.resource, incoming.resource));
+            if (existing < 0)
+                costs.Add(new FakeCraftingResourceTuple
+                    { resource = incoming.resource, valueBig = incoming.valueBig });
+            else
+                costs[existing].valueBig += incoming.valueBig;
+        }
+        return this;
     }
 
     internal FakeCraftingResourceCostList With(FakeResource resource, BigDouble amount)

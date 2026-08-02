@@ -253,7 +253,7 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
 
         var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
             result.ToString(Newtonsoft.Json.Formatting.None));
-        Assert.Equal(3215, responseBytes);
+        Assert.Equal(3111, responseBytes);
         Assert.True(responseBytes < 3402);
 
         Assert.Equal("available", (string?)result["status"]);

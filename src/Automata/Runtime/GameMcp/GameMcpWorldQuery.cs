@@ -909,6 +909,8 @@ internal static class GameMcpWorldQuery
             ? ProjectTargeting(world, in targeting)
             : row is WorldConsumable consumable
             ? ProjectConsumable(world, in consumable)
+            : row is WorldResearch research
+            ? ProjectResearch(world, in research)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -1004,6 +1006,185 @@ internal static class GameMcpWorldQuery
                 !tree.UsedRerollsLastDiscover;
         return result.Freeze();
     }
+
+    private static GameMcpValue ProjectResearch(GameWorldState world, in WorldResearch research)
+    {
+        var decision = research.Decision;
+        var queued = decision.Available
+            ? decision.QueuedLevels
+            : Math.Max(research.QueuedLevels + (research.IsDeveloping ? 1 : 0), 0);
+        var result = new JObject
+        {
+            ["entityId"] = research.EntityId.ToString("D"),
+            ["category"] = "research",
+            ["nativeType"] = "ResearchSO",
+            ["available"] = research.Available,
+            ["visible"] = research.Visible,
+            ["state"] = research.IsDeveloping
+                ? research.IsActive ? "active" : "paused"
+                : "idle",
+            ["purchasedLevel"] = Number(research.PurchasedLevels),
+            ["baseLevel"] = Number(research.BaseLevel),
+            ["bonusLevel"] = Number(research.BonusLevel),
+            ["totalLevel"] = Number(research.TotalLevel),
+            ["queuedLevels"] = Number(queued),
+            ["maximumLevel"] = Number(research.MaxLevel),
+            ["complete"] = research.Complete,
+            ["baseRequirementLevel"] = Number(research.BaseRequirementLevel),
+            ["effectiveRequirementLevel"] = Number(research.EffectiveRequirementLevel),
+            ["requirementLevelAdjustment"] = Number(research.RequirementLevelAdjustment),
+        };
+        if (research.ArtificialMaxLevel > 0)
+            result["artificialMaximumLevel"] = Number(research.ArtificialMaxLevel);
+        if (research.Flagged) result["flagged"] = true;
+        if (research.HiddenLevel) result["levelHidden"] = true;
+        if (research.RequirementAdjustments.Count > 0)
+        {
+            var adjustments = new JArray();
+            for (var index = 0; index < research.RequirementAdjustments.Count; index++)
+            {
+                var value = research.RequirementAdjustments[index];
+                var adjustment = new JObject
+                {
+                    ["modifierId"] = value.ModifierId.ToString("D"),
+                    ["sourceId"] = value.SourceId.ToString("D"),
+                    ["sourceNativeType"] = value.SourceNativeType,
+                    ["modifierType"] = Number(value.ModifierType),
+                    ["amount"] = new GameMcpDomainValue(value.Amount),
+                    ["order"] = Number(value.Order),
+                };
+                if (value.Passive) adjustment["passive"] = true;
+                adjustments.Add(adjustment);
+            }
+            result["requirementAdjustments"] = adjustments;
+        }
+        if (!decision.Available)
+        {
+            result["develop"] = new JObject
+            {
+                ["available"] = false,
+                ["reasonCode"] = "research_decision_unavailable",
+            };
+            return result.Freeze();
+        }
+
+        if (research.IsDeveloping)
+        {
+            result["progress"] = new JObject
+            {
+                ["stage"] = Number(research.ResearchStage),
+                ["requiredStages"] = Number(research.RequiredStagesCached),
+                ["elapsed"] = new GameMcpDomainValue(decision.CurrentTime),
+                ["required"] = new GameMcpDomainValue(research.RequiredTimeCached),
+                ["remaining"] = new GameMcpDomainValue(decision.RemainingTime),
+                ["ratio"] = new GameMcpDomainValue(decision.TimeRatio),
+            };
+        }
+        result["investmentLevel"] = Number(decision.CurrentInvestmentLevel);
+        if (decision.Investment.Count > 0)
+        {
+            var investment = new JArray();
+            for (var index = 0; index < decision.Investment.Count; index++)
+            {
+                var value = decision.Investment[index];
+                investment.Add(new JObject
+                {
+                    ["resourceId"] = value.ResourceId.ToString("D"),
+                    ["invested"] = new GameMcpDomainValue(value.Invested),
+                    ["required"] = new GameMcpDomainValue(value.Required),
+                    ["remaining"] = new GameMcpDomainValue(value.Remaining),
+                });
+            }
+            result["investment"] = investment;
+        }
+        if (decision.ResearchTypes.Count > 0)
+        {
+            var types = new JArray();
+            for (var index = 0; index < decision.ResearchTypes.Count; index++)
+            {
+                var value = decision.ResearchTypes[index];
+                var type = new JObject
+                {
+                    ["researchTypeId"] = value.ResearchTypeId.ToString("D"),
+                    ["remainingBonusLevels"] = Number(value.RemainingBonusLevels),
+                    ["investmentLevel"] = Number(value.CurrentInvestmentLevel),
+                };
+                if (value.MaximumInvestmentLevel > 0)
+                    type["maximumInvestmentLevel"] = Number(value.MaximumInvestmentLevel);
+                types.Add(type);
+            }
+            result["researchTypes"] = types;
+        }
+
+        var queueRoom = research.MaxLevel <= 0
+            ? int.MaxValue
+            : Math.Max(research.MaxLevel - research.Level - queued, 0);
+        var developAvailable = decision.LevelsAvailable > 0;
+        var develop = new JObject
+        {
+            ["available"] = developAvailable,
+            ["route"] = decision.QueueMode ? "queue" : "immediate",
+            ["affordable"] = decision.DevelopmentCostAffordable,
+        };
+        if (decision.QueueMode)
+            develop["maximumBatch"] = Number(Math.Min(decision.MultiBuy, queueRoom));
+        develop["levels"] = Number(decision.LevelsAvailable);
+        if (!developAvailable)
+            develop["reasonCode"] = decision.QueueMode && decision.MultiBuy <= 0
+                ? "multi_buy_unavailable"
+                : decision.QueueMode && queueRoom <= 0
+                    ? "research_queue_full"
+                    : !decision.DevelopmentCostAffordable
+                        ? "unaffordable"
+                        : research.Complete
+                            ? "research_complete"
+                    : !research.MeetsLevelRequirements
+                                ? "requirements_unmet"
+                                : !research.StillHasLeeway
+                                    ? "research_leeway_exhausted"
+                                    : !research.BelowArtificialMaxLevel
+                                        ? "research_cap_reached"
+                                        : !research.BelowMaxInvestmentLevel
+                                            ? "research_investment_cap_reached"
+                                            : research.IsDeveloping && !decision.QueueMode
+                                                ? "already_developing"
+                                                : !research.WithinDevelopRange
+                                                    ? "develop_range_refused"
+                                                    : "native_develop_refused";
+        if (decision.DevelopmentCosts.Count > 0)
+        {
+            var costs = new JArray();
+            for (var index = 0; index < decision.DevelopmentCosts.Count; index++)
+            {
+                var value = decision.DevelopmentCosts[index];
+                costs.Add(new JObject
+                {
+                    ["resourceId"] = value.ResourceId.ToString("D"),
+                    ["cost"] = new GameMcpDomainValue(value.Cost),
+                    ["amount"] = new GameMcpDomainValue(value.Amount),
+                });
+            }
+            develop["costs"] = costs;
+        }
+        result["develop"] = develop;
+
+        if (research.IsDeveloping)
+        {
+            result["cancel"] = new JObject { ["available"] = true };
+            if (!decision.QueueMode)
+                result[research.IsActive ? "pause" : "resume"] =
+                    new JObject { ["available"] = true };
+        }
+        else if (decision.CanApplyBonusLevel && decision.FreeBonusLevels > 0)
+            result["bonus"] = new JObject
+            {
+                ["available"] = true,
+                ["remainingLevels"] = Number(decision.FreeBonusLevels),
+            };
+        return result.Freeze();
+    }
+
+    private static GameMcpDomainValue Number(int value) => new(new BigDouble(value));
 
     private static GameMcpValue ProjectConsumable(
         GameWorldState world,
@@ -2438,6 +2619,8 @@ internal static class GameMcpWorldQuery
             ? ProjectTargeting(world, in targeting)
             : row is WorldConsumable consumable
             ? ProjectConsumable(world, in consumable)
+            : row is WorldResearch research
+            ? ProjectResearch(world, in research)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,

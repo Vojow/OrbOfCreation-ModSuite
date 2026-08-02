@@ -375,6 +375,12 @@ internal sealed class GameMcpProtocolRouter
                     throw new GameMcpInvalidParamsException(
                         "confirm must be true to request the irreversible persistent reset");
                 break;
+            case "game_research":
+                builder.Mode = RequireOneOf(arguments, "mode",
+                    "develop", "pause", "resume", "cancel", "bonus");
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                break;
             case "suite_config_set":
                 builder.ConfigurationGeneration = RequiredUlong(
                     arguments, "configurationGeneration");
@@ -445,7 +451,7 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
             "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
-            "game_challenge" or "game_prestige" =>
+            "game_challenge" or "game_prestige" or "game_research" =>
                 GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
@@ -473,7 +479,7 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
             "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
-            "game_challenge" or "game_prestige" =>
+            "game_challenge" or "game_prestige" or "game_research" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
@@ -770,6 +776,19 @@ internal sealed class GameMcpProtocolRouter
                         ["confirm"] = BooleanSchema("Must be true to confirm the irreversible persistent reset."),
                     },
                     "confirm"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_research",
+                "Develop or manage research",
+                "Develop, queue, pause, resume, cancel, or apply a free bonus level to one exact published research. Success returns its newer state and every next decision inline.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("develop", "pause", "resume", "cancel", "bonus"),
+                        ["uuid"] = StringSchema("Published ResearchSO UUID."),
+                    },
+                    "mode", "uuid"),
                 readOnly: false,
                 idempotent: false),
             Tool(

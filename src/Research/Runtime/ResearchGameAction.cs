@@ -1,0 +1,255 @@
+using System;
+using System.Reflection;
+using OrbModding.Common;
+
+namespace OrbAutomata;
+
+internal sealed class ResearchGameAction : IDisposable
+{
+    private readonly Func<long> _readLifecycleEpoch;
+    private readonly Func<bool> _tryCaptureMutationPermit;
+    private readonly Func<string> _readOwnershipFailure;
+    private readonly Func<string, Type?>? _resolveType;
+    private readonly Func<string, bool>? _includeContract;
+    private readonly TypedRegistryResolver _registry;
+    private readonly int _mainThreadId;
+    private ResearchNativeBindings? _bindings;
+    private string _bindingFailure = string.Empty;
+    private string _quarantineReason = string.Empty;
+
+    internal ResearchGameAction(Func<long> readLifecycleEpoch,
+        Func<bool> tryCaptureMutationPermit, Func<string> readOwnershipFailure,
+        Func<string, Type?>? resolveType = null, Func<string, bool>? includeContract = null,
+        TypedRegistryResolver? registry = null)
+    {
+        _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
+        _tryCaptureMutationPermit = tryCaptureMutationPermit ?? throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
+        _readOwnershipFailure = readOwnershipFailure ?? throw new ArgumentNullException(nameof(readOwnershipFailure));
+        _resolveType = resolveType; _includeContract = includeContract;
+        var identity = RuntimeIdentityRegistryBinding.Shared;
+        _registry = registry ?? new TypedRegistryResolver(_readLifecycleEpoch, identity.Read, identity.ReadStableUuid);
+        _mainThreadId = Environment.CurrentManagedThreadId;
+        BindLifecycle();
+    }
+
+    internal bool BindingsAvailable => _bindings is not null;
+    internal string BindingFailure => _bindingFailure;
+    internal bool IsQuarantined => _quarantineReason.Length != 0;
+
+    internal ResearchSubmission Submit(in ResearchAction action)
+    {
+        if (Environment.CurrentManagedThreadId != _mainThreadId)
+            return ResearchSubmission.Reject(ResearchPreflight.WrongThread,
+                "Research actions are bound to Unity thread " + _mainThreadId + ".");
+        if (_quarantineReason.Length != 0)
+            return ResearchSubmission.Reject(ResearchPreflight.Quarantined, _quarantineReason);
+        if (_bindings is not { } native)
+            return ResearchSubmission.Reject(ResearchPreflight.ContractUnavailable, _bindingFailure);
+        long epoch;
+        try { epoch = _readLifecycleEpoch(); }
+        catch (Exception exception) when (IsExpected(exception))
+        {
+            return ResearchSubmission.Reject(ResearchPreflight.LifecycleReplaced,
+                "The lifecycle epoch could not be read: " + exception.GetBaseException().Message);
+        }
+        if (action.LifecycleEpoch != epoch)
+            return ResearchSubmission.Reject(ResearchPreflight.LifecycleReplaced,
+                "The submitted lifecycle is stale.");
+        try
+        {
+            var resolution = _registry.Resolve(action.TargetId, native.ResearchType);
+            if (!resolution.IsResolved || !_registry.IsCurrent(resolution))
+                return ResearchSubmission.Reject(ResearchPreflight.IdentityUnavailable,
+                    resolution.IsResolved ? "The research resolution became stale." : resolution.Reason);
+            var target = resolution.Value!;
+            var before = Capture(native, target);
+            var preflight = Preflight(action.Kind, in before, out var reason);
+            if (preflight != ResearchPreflight.Proceeded)
+                return ResearchSubmission.Reject(preflight, reason);
+            if (!_tryCaptureMutationPermit())
+                return ResearchSubmission.Reject(ResearchPreflight.MutationPermitUnavailable,
+                    _readOwnershipFailure());
+            return Execute(in action, native, target, in before);
+        }
+        catch (Exception exception) when (IsExpected(exception))
+        {
+            return ResearchSubmission.Reject(ResearchPreflight.ContractUnavailable,
+                "Research preflight failed before mutation: " + exception.GetBaseException().Message);
+        }
+    }
+
+    internal void InvalidateLifecycle()
+    { _bindings = null; _bindingFailure = string.Empty; _quarantineReason = string.Empty; BindLifecycle(); }
+
+    public void Dispose()
+    { _bindings = null; _bindingFailure = string.Empty; _quarantineReason = string.Empty; }
+
+    private ResearchSubmission Execute(in ResearchAction action, ResearchNativeBindings native,
+        object target, in ResearchState before)
+    {
+        var stage = ResearchNativeStage.NativeCallback;
+        try
+        {
+            Invoke(action.Kind, native, target);
+            stage = ResearchNativeStage.Verification;
+            var after = Capture(native, target);
+            var receipt = new ResearchReceipt(action.Kind, before, after);
+            return OutcomeMatches(action.Kind, in before, in after)
+                ? Verified(in receipt)
+                : Quarantine(in action, ResearchPreflight.VerificationFailed, stage,
+                    NativeMutationOutcome.PostconditionFailed, in receipt,
+                    "The exact research target did not make the requested state transition.");
+        }
+        catch (Exception exception) when (IsExpected(exception))
+        {
+            ResearchState after;
+            try { after = Capture(native, target); }
+            catch (Exception) { after = default; }
+            var receipt = new ResearchReceipt(action.Kind, before, after);
+            if (after.EvidenceAvailable && OutcomeMatches(action.Kind, in before, in after))
+                return Verified(in receipt);
+            return Quarantine(in action, ResearchPreflight.PostCommitFault, stage,
+                NativeMutationOutcome.ExecutionThrew, in receipt,
+                "The native research callback threw before the requested outcome was observable: " +
+                exception.GetBaseException().Message);
+        }
+    }
+
+    private static ResearchPreflight Preflight(ResearchActionKind kind,
+        in ResearchState state, out string reason)
+    {
+        reason = string.Empty;
+        switch (kind)
+        {
+            case ResearchActionKind.Develop:
+                if (state.QueueMode)
+                {
+                    if (state.MultiBuy <= 0)
+                    { reason = "The native multi-buy setting permits no queued research level."; return ResearchPreflight.MultiBuyUnavailable; }
+                    if (state.MaxLevel > 0 && state.Level + state.QueuedLevels >= state.MaxLevel)
+                    { reason = "The research queue has no room below its authored maximum level."; return ResearchPreflight.DevelopUnavailable; }
+                    if (state.LevelsAvailable <= 0)
+                    { reason = "The native queued-development evaluators refused the next level."; return ResearchPreflight.DevelopUnavailable; }
+                }
+                else if (!state.CanDevelop || !state.CostAffordable)
+                { reason = "The native immediate-development gates or cost refused the next level."; return ResearchPreflight.DevelopUnavailable; }
+                return ResearchPreflight.Proceeded;
+            case ResearchActionKind.Pause:
+            case ResearchActionKind.Resume:
+                if (state.QueueMode)
+                { reason = "Pause and resume are UI-reachable only when Research Queue Mode is disabled."; return ResearchPreflight.InvalidMode; }
+                if (!state.IsDeveloping || (kind == ResearchActionKind.Pause ? !state.IsActive : state.IsActive))
+                { reason = "The research is not in the requested active or paused state."; return ResearchPreflight.InvalidState; }
+                return ResearchPreflight.Proceeded;
+            case ResearchActionKind.Cancel:
+                if (!state.IsDeveloping)
+                { reason = "The research has no active development to cancel."; return ResearchPreflight.InvalidState; }
+                return ResearchPreflight.Proceeded;
+            case ResearchActionKind.Bonus:
+                if (state.IsDeveloping)
+                { reason = "The game hides bonus-level submission while research is developing."; return ResearchPreflight.InvalidState; }
+                if (!state.CanApplyBonusLevel || state.FreeBonusLevels <= 0)
+                { reason = "No associated research type has a free bonus level available."; return ResearchPreflight.BonusUnavailable; }
+                return ResearchPreflight.Proceeded;
+            default:
+                reason = "The research mode is unsupported.";
+                return ResearchPreflight.InvalidMode;
+        }
+    }
+
+    private static void Invoke(ResearchActionKind kind, ResearchNativeBindings native, object target)
+    {
+        switch (kind)
+        {
+            case ResearchActionKind.Develop: native.Purchase(target); break;
+            case ResearchActionKind.Pause: native.Pause(target); break;
+            case ResearchActionKind.Resume: native.Resume(target); break;
+            case ResearchActionKind.Cancel: native.Cancel(target); break;
+            case ResearchActionKind.Bonus: native.SubmitBonus(target); break;
+            default: throw new ArgumentOutOfRangeException(nameof(kind));
+        }
+    }
+
+    private static ResearchState Capture(ResearchNativeBindings native, object target)
+    {
+        var cost = native.DevelopmentCost(target) ??
+            throw new InvalidOperationException("ResearchSO.GetDevelopmentCost returned null.");
+        var multiBuy = native.MultiBuy() ??
+            throw new InvalidOperationException("GlobalVariables.GetMultiBuy returned null.");
+        return new ResearchState(true, native.QueueMode(), native.AsInt(multiBuy),
+            native.Level(target), native.WaitingLevels(target), native.QueuedLevels(target),
+            native.Stage(target), native.SelfBonusLevels(target), native.IsActive(target),
+            native.IsDeveloping(target), native.PurchasedLevels(target), native.BonusLevel(target),
+            native.TotalLevel(target), native.CurrentInvestmentLevel(target), native.TimeRatio(target),
+            native.CanDevelop(target), native.WithinDevelopRange(target),
+            native.CanApplyBonusLevel(target), native.FreeBonusLevels(target),
+            native.HasEnough(cost), native.MaxLevel(target), QueueableLevels(native, target));
+    }
+
+    private static int QueueableLevels(ResearchNativeBindings native, object target)
+    {
+        if (!native.QueueMode())
+        {
+            var cost = native.DevelopmentCost(target) ??
+                throw new InvalidOperationException("ResearchSO.GetDevelopmentCost returned null.");
+            return native.CanDevelop(target) && native.HasEnough(cost) ? 1 : 0;
+        }
+        var currentQueued = native.QueuedLevels(target);
+        var multiBuy = native.MultiBuy() ??
+            throw new InvalidOperationException("GlobalVariables.GetMultiBuy returned null.");
+        var limit = Math.Max(native.AsInt(multiBuy), 0);
+        if (native.HasMaxLevel(target))
+            limit = Math.Min(limit,
+                Math.Max(native.MaxLevel(target) - currentQueued - native.Level(target), 0));
+        object? aggregate = null;
+        var levels = 0;
+        for (var index = 0; index < limit; index++)
+        {
+            var atLevel = checked(native.Level(target) + currentQueued + index);
+            var next = native.DevelopmentCostAtLevel(target, checked(atLevel + 1)) ??
+                throw new InvalidOperationException("ResearchSO.GetDevelopmentCostAtLevel returned null.");
+            aggregate = aggregate is null ? next : native.AddCost(aggregate, next) ??
+                throw new InvalidOperationException("ResourceCostList.Add returned null.");
+            if (!native.HasEnough(aggregate) || !native.WithinDevelopRangeAt(target, atLevel)) break;
+            levels++;
+        }
+        return levels;
+    }
+
+    private static bool OutcomeMatches(ResearchActionKind kind,
+        in ResearchState before, in ResearchState after) => kind switch
+    {
+        ResearchActionKind.Develop when before.QueueMode => after.QueuedLevels > before.QueuedLevels,
+        ResearchActionKind.Develop => !before.IsDeveloping && after.IsDeveloping && after.IsActive,
+        ResearchActionKind.Pause => after.IsDeveloping && !after.IsActive,
+        ResearchActionKind.Resume => after.IsDeveloping && after.IsActive,
+        ResearchActionKind.Cancel => !after.IsDeveloping && after.QueuedLevels == 0,
+        ResearchActionKind.Bonus => after.SelfBonusLevels == checked(before.SelfBonusLevels + 1),
+        _ => false,
+    };
+
+    private static ResearchSubmission Verified(in ResearchReceipt receipt) =>
+        new(ResearchPreflight.Proceeded, ResearchNativeStage.Verification,
+            NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1),
+            in receipt, "Verified the exact requested research identity/outcome transition.");
+
+    private ResearchSubmission Quarantine(in ResearchAction action, ResearchPreflight preflight,
+        ResearchNativeStage stage, NativeMutationOutcome outcome, in ResearchReceipt receipt,
+        string reason)
+    {
+        _quarantineReason = "Research actions are quarantined for this lifecycle after " + stage +
+            " on " + EntityIdentityFormatter.Format(action.TargetId) + ": " + reason;
+        return new ResearchSubmission(preflight, stage, outcome,
+            new NativeMutationCallOutcome(1, 1, 0), in receipt, _quarantineReason);
+    }
+
+    private void BindLifecycle()
+    {
+        if (ResearchNativeBindings.TryCreate(out var bindings, out var reason, _resolveType, _includeContract))
+        { _bindings = bindings; _bindingFailure = string.Empty; return; }
+        _bindings = null; _bindingFailure = reason;
+    }
+
+    private static bool IsExpected(Exception exception) => exception is InvalidOperationException or
+        ArgumentException or TargetInvocationException or OverflowException;
+}

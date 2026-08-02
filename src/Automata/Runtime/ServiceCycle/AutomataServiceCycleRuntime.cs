@@ -33,6 +33,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly EquipmentLoadoutGameAction? _equipmentLoadout;
     private readonly ChallengeGameAction? _challenges;
     private readonly PrestigeGameAction? _prestige;
+    private readonly ResearchGameAction? _research;
     private bool _disposed;
 #if SERVICE_CYCLE_PROFILE
     private ulong _nextGameMcpActionIdentity;
@@ -52,7 +53,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         GenericDiscoveryGameAction? genericDiscovery = null,
         EquipmentLoadoutGameAction? equipmentLoadout = null,
         ChallengeGameAction? challenges = null,
-        PrestigeGameAction? prestige = null)
+        PrestigeGameAction? prestige = null,
+        ResearchGameAction? research = null)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _configurationPublication = configurationPublication ??
@@ -69,6 +71,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _equipmentLoadout = equipmentLoadout;
         _challenges = challenges;
         _prestige = prestige;
+        _research = research;
     }
 
     internal SuiteRuntimeConfiguration CurrentConfiguration => _configurationPublication.ReadLatest().Snapshot;
@@ -135,6 +138,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _equipmentLoadout?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
         _prestige?.InvalidateLifecycle();
+        _research?.InvalidateLifecycle();
     }
 
 #if SERVICE_CYCLE_PROFILE
@@ -197,6 +201,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteChallenge(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Prestige)
                 return ExecutePrestige(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.Research)
+                return ExecuteResearch(command, lifecycle, configuration.Generation.Value);
             var service = ServiceForGameMcp(command.Kind);
             var context = CreateGameMcpContext(
                 registry,
@@ -498,6 +504,34 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
             configurationGeneration, submission.Reason,
             GameMcpPrestigeProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecuteResearch(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        GameMcpNativeActionAdmission.AssertNativeType(command, "ResearchSO");
+        if (_research is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared research GameAction was not composed", lifecycle,
+                configurationGeneration);
+        var kind = command.Mode switch
+        {
+            "develop" => ResearchActionKind.Develop,
+            "pause" => ResearchActionKind.Pause,
+            "resume" => ResearchActionKind.Resume,
+            "cancel" => ResearchActionKind.Cancel,
+            "bonus" => ResearchActionKind.Bonus,
+            _ => throw new ArgumentException("unsupported research mode " + command.Mode),
+        };
+        var action = new ResearchAction(kind, command.TargetId,
+            command.ExpectedLifecycleGeneration);
+        var submission = _research.Submit(in action);
+        var result = ResearchActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason,
+            GameMcpResearchProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteSpellWorkbench(
@@ -835,6 +869,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _equipmentLoadout?.Dispose();
             _challenges?.Dispose();
             _prestige?.Dispose();
+            _research?.Dispose();
             if (!_host.EmergencyStopEngaged)
                 _host.SetEmergencyStop(true, EmergencyStopReason.SuiteShutdown);
         }

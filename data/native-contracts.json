@@ -20602,6 +20602,1091 @@
       "type": "ChallengeSO", "typeVisibility": "public", "kind": "method", "member": "GetNextInstanceBaseReward",
       "visibility": "public", "static": false, "returnType": "BigDouble", "parameters": [],
       "owners": ["Common challenge world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "research-action.research.type-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.cost.type-action",
+      "assembly": "assembly-csharp",
+      "type": "ResourceCostList",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.settings.type-action",
+      "assembly": "assembly-csharp",
+      "type": "SettingsManager",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.globals.type-action",
+      "assembly": "assembly-csharp",
+      "type": "GlobalVariables",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.int-variable.type-action",
+      "assembly": "assembly-csharp",
+      "type": "IntVariable",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.level-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "level",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.waiting-levels-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "queuedLevels",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.stage-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "researchStage",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.self-bonus-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "selfBonusLevels",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.active-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "isActive",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.developing-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "isDeveloping",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.max-level-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "maxLevel",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Int32",
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.can-develop-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanDevelop",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.within-range-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsWithinDevelopRange",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.can-bonus-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanApplyBonusLevels",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.purchased-levels-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetPurchasedLevels",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.bonus-level-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetBonusLevels",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.total-level-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.queued-levels-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetQueuedLevels",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.investment-level-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetCurrentInvestmentLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.time-ratio-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetTimeRatio",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.free-bonus-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetFreeBonusLevelsLeft",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.development-cost-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetDevelopmentCost",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.cost-enough-action",
+      "assembly": "assembly-csharp",
+      "type": "ResourceCostList",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasEnough",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.queue-mode-action",
+      "assembly": "assembly-csharp",
+      "type": "SettingsManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsResearchQueueMode",
+      "visibility": "public",
+      "static": true,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.multi-buy-action",
+      "assembly": "assembly-csharp",
+      "type": "GlobalVariables",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMultiBuy",
+      "visibility": "public",
+      "static": true,
+      "returnType": "IntVariable",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.int-as-int-action",
+      "assembly": "assembly-csharp",
+      "type": "IntVariable",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "AsInt",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.purchase-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "PurchaseLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.pause-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "PauseResearch",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.resume-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "ResumeResearch",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.cancel-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CancelDevelopment",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.submit-bonus-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "SubmitBonusLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.has-max-level-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasMaxLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.development-cost-at-level-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetDevelopmentCostAtLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [
+        "System.Int32"
+      ],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.within-range-at-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsWithinDevelopRangeAt",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [
+        "System.Int32"
+      ],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.cost-add-action",
+      "assembly": "assembly-csharp",
+      "type": "ResourceCostList",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Add",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [
+        "ResourceCostList"
+      ],
+      "owners": [
+        "Automata research GameAction",
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-decision.tuple.type-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceTuple",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.resource.type-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceSO",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.fill.type-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceFillList",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.fill-entry.type-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceFillList+ResourceFillEntry",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.research-type.type-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResearchTypeSO",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.current-time-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetCurrentTime",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.remaining-time-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetRemainingTime",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.cost-entries-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceCostList",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetEntries",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Collections.Generic.List`1<ResourceTuple>",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.cost-resource-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceTuple",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "resource",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceSO",
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.cost-value-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceTuple",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetValue",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.resource-guid-capture",
+      "assembly": "assembly-csharp",
+      "type": "IdScriptableObject",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetGuid",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Guid",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.resource-amount-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetTrueQuantity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.fill-list-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "resourceFillList",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceFillList",
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.fill-entries-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceFillList",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "entries",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<ResourceFillList+ResourceFillEntry>",
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.fill-resource-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceFillList+ResourceFillEntry",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "get_resource",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceSO",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.fill-quantity-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceFillList+ResourceFillEntry",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetQuantity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.fill-capacity-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceFillList+ResourceFillEntry",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetCapacity",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.fill-remaining-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResourceFillList+ResourceFillEntry",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetRemaining",
+      "visibility": "public",
+      "static": false,
+      "returnType": "BigDouble",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.research-types-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "researchTypes",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<ResearchTypeSO>",
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.research-type-guid-capture",
+      "assembly": "assembly-csharp",
+      "type": "IdScriptableObject",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetGuid",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Guid",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.remaining-bonus-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResearchTypeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetRemainingFreeBonusLevels",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.type-investment-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResearchTypeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetCurrentInvestmentLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "research-decision.type-maximum-investment-capture",
+      "assembly": "assembly-csharp",
+      "type": "ResearchTypeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMaxInvestmentLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Common research world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
     }
   ],
   "sourceAudit": {
@@ -20620,6 +21705,7 @@
       "src/EquipmentLoadout",
       "src/Challenge",
       "src/Prestige",
+      "src/Research",
       "src/Mentor",
       "src/ModConfig",
       "src/SpellComposition",

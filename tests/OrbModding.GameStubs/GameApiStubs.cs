@@ -97,6 +97,13 @@ public static class GlobalVariables
     public static AttributeSO GetMasteryExpAttr() => MasteryExperienceAttribute;
 }
 
+public static class SettingsManager
+{
+    public static bool ResearchQueueMode { get; set; }
+
+    public static bool IsResearchQueueMode() => ResearchQueueMode;
+}
+
 public static class KnownVariableIds
 {
     public static readonly Guid MultiBuy = new Guid("37a84399-98b5-463c-b858-c1ecf2f9bf34");
@@ -1259,6 +1266,18 @@ public class ResourceCostList
                 costs[index].GetValue() * factor));
         return result;
     }
+    public ResourceCostList Add(ResourceCostList other)
+    {
+        foreach (var row in other.costs)
+        {
+            var index = costs.FindIndex(existing => ReferenceEquals(existing.resource, row.resource));
+            if (index < 0) costs.Add(row);
+            else costs[index] = new ResourceTuple(row.resource,
+                costs[index].GetValue() + row.GetValue());
+        }
+        affordable &= other.affordable;
+        return this;
+    }
     public void PerformCost()
     {
         PerformCalls++;
@@ -1457,6 +1476,9 @@ public class ResearchSO
     public bool isActive;
     public bool flagged;
     public bool available = true;
+    public List<ResearchTypeSO> researchTypes = new List<ResearchTypeSO>();
+    public ResourceCostList researchCost = new ResourceCostList();
+    public ResourceFillList resourceFillList = new ResourceFillList();
     public Prerequisites.Container levelPrerequisites = new Prerequisites.Container();
     public bool hiddenLevel;
     public int levelVisibilityRange = 2;
@@ -1486,6 +1508,85 @@ public class ResearchSO
         !IsComplete() && MeetsLevelRequirements() && StillHasLeeway() &&
         IsBelowArtificialMaxLevel() && IsBelowMaxInvestmentLevel();
     public bool CanDevelop() => IsWithinDevelopRange() && !IsDeveloping();
+    public void PurchaseLevel()
+    {
+        if (SettingsManager.IsResearchQueueMode()) QueueDevelopment();
+        else Develop();
+    }
+    public void Develop()
+    {
+        if (SuppressAction) return;
+        isActive = true;
+        isDeveloping = true;
+        if (queuedLevels > 0) queuedLevels--;
+        researchCost.PerformUsage(GetGuid());
+        if (ThrowAfterAction) throw new InvalidOperationException("injected research action failure");
+    }
+    public void QueueDevelopment()
+    {
+        if (SuppressAction) return;
+        var limit = Math.Max(GlobalVariables.GetMultiBuy().AsInt(), 0);
+        if (maxLevel > 0) limit = Math.Min(limit, Math.Max(maxLevel - level - GetQueuedLevels(), 0));
+        var aggregate = new ResourceCostList();
+        var accepted = 0;
+        for (var index = 0; index < limit; index++)
+        {
+            var atLevel = level + GetQueuedLevels() + index;
+            aggregate.Add(GetDevelopmentCostAtLevel(atLevel + 1));
+            if (!aggregate.HasEnough() || !IsWithinDevelopRangeAt(atLevel)) break;
+            accepted++;
+        }
+        if (accepted <= 0) return;
+        queuedLevels += accepted;
+        if (!isDeveloping) Develop();
+        if (ThrowAfterAction) throw new InvalidOperationException("injected research action failure");
+    }
+    public void CancelDevelopment()
+    {
+        if (!isDeveloping || SuppressAction) return;
+        isActive = false;
+        isDeveloping = false;
+        queuedLevels = 0;
+        resourceFillList.ClearInvestment();
+        if (ThrowAfterAction) throw new InvalidOperationException("injected research action failure");
+    }
+    public void PauseResearch()
+    {
+        if (!isDeveloping || SuppressAction) return;
+        isActive = false;
+        if (ThrowAfterAction) throw new InvalidOperationException("injected research action failure");
+    }
+    public void ResumeResearch()
+    {
+        if (!isDeveloping || SuppressAction) return;
+        isActive = true;
+        if (ThrowAfterAction) throw new InvalidOperationException("injected research action failure");
+    }
+    public void SubmitBonusLevel()
+    {
+        if (SuppressAction) return;
+        selfBonusLevels++;
+        if (researchTypes.Count > 0) researchTypes[0].UseBonusLevel();
+        if (ThrowAfterAction) throw new InvalidOperationException("injected research action failure");
+    }
+    public bool SuppressAction { get; set; }
+    public bool ThrowAfterAction { get; set; }
+    public bool CanApplyBonusLevels() => researchTypes.Any(type => type.HasFreeBonusLevelsLeft());
+    public int GetFreeBonusLevelsLeft() => researchTypes.Count == 0
+        ? 0
+        : researchTypes.Max(type => type.GetRemainingFreeBonusLevels());
+    public ResourceCostList GetDevelopmentCost() => researchCost;
+    public ResourceCostList GetDevelopmentCostAtLevel(int level) =>
+        researchCost.Multiply(new BigDouble(1));
+    public bool IsWithinDevelopRangeAt(int level) => IsWithinDevelopRange();
+    public int GetQueuedLevels() => queuedLevels + (isDeveloping ? 1 : 0);
+    public int GetCurrentInvestmentLevel() => Math.Max(GetQueuedLevels() + level, 0);
+    public BigDouble GetCurrentTime() => resourceFillList.GetAverageRatio() * GetRequiredTime();
+    public BigDouble GetRemainingTime() => (new BigDouble(1) - resourceFillList.GetLowestRatio()) * GetRequiredTime();
+    public BigDouble GetTimeRatio() => GetCurrentTime() / GetRequiredTime();
+    public BigDouble GetRequiredTime() => requiredTimeCached == BigDouble.Zero
+        ? new BigDouble(researchTime)
+        : requiredTimeCached;
     public int GetPurchasedLevels() => level;
     public int GetBaseLevel() => level + baseLevels.GetValue().ToInt();
     public int GetBonusLevels() => bonusLevels.GetValue().ToInt();
@@ -1493,6 +1594,58 @@ public class ResearchSO
     public int GetMaxLevel() => maxLevel;
     public int GetArtificialMaxLevel() => maxLevelCap.GetValue().ToInt();
     public int GetRequirementLevel() => requirementsAdjust.Adjust(new BigDouble(GetBaseLevel())).ToInt();
+}
+
+public class ResearchTypeSO : IdScriptableObject
+{
+    public int FreeBonusLevels { get; set; }
+    public int UsedBonusLevels { get; set; }
+    public int CurrentInvestmentLevel { get; set; }
+    public int MaximumInvestmentLevel { get; set; }
+
+    public bool HasFreeBonusLevelsLeft() => GetRemainingFreeBonusLevels() > 0;
+    public int GetRemainingFreeBonusLevels() => Math.Max(FreeBonusLevels - UsedBonusLevels, 0);
+    public int GetCurrentInvestmentLevel() => CurrentInvestmentLevel;
+    public int GetMaxInvestmentLevel() => MaximumInvestmentLevel;
+    public void UseBonusLevel() => UsedBonusLevels++;
+}
+
+public class ResourceFillList
+{
+    public List<ResourceFillEntry> entries = new List<ResourceFillEntry>();
+
+    public BigDouble GetAverageRatio() => entries.Count == 0
+        ? BigDouble.Zero
+        : entries.Aggregate(BigDouble.Zero, (sum, entry) => sum + entry.FillPercent()) /
+          new BigDouble(entries.Count);
+    public BigDouble GetLowestRatio() => entries.Count == 0
+        ? BigDouble.Zero
+        : entries.Min(entry => entry.FillPercent());
+    public ResourceFillList ClearInvestment()
+    {
+        foreach (var entry in entries) entry.Clear();
+        return this;
+    }
+
+    public sealed class ResourceFillEntry
+    {
+        public ResourceFillEntry(ResourceSO resource, BigDouble quantity, BigDouble capacity)
+        {
+            this.resource = resource;
+            Quantity = quantity;
+            Capacity = capacity;
+        }
+
+        private readonly ResourceSO resource;
+        public BigDouble Quantity { get; private set; }
+        public BigDouble Capacity { get; }
+        public ResourceSO get_resource() => resource;
+        public BigDouble GetQuantity() => Quantity;
+        public BigDouble GetCapacity() => Capacity;
+        public BigDouble GetRemaining() => BigDouble.Max(Capacity - Quantity, BigDouble.Zero);
+        public BigDouble FillPercent() => Capacity <= BigDouble.Zero ? BigDouble.Zero : Quantity / Capacity;
+        public ResourceFillEntry Clear() { Quantity = BigDouble.Zero; return this; }
+    }
 }
 
 public struct ResourceTuple

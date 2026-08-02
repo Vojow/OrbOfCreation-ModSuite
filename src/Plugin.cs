@@ -583,6 +583,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .PrestigeOwnershipFailure)
+                    , createResearch: () => new ResearchGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureResearchMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .ResearchOwnershipFailure)
 #endif
                     );
             },
@@ -1595,6 +1603,7 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandKind.EquipmentLoadout => "equipment",
         GameMcpCommandKind.Challenge => "challenges",
         GameMcpCommandKind.Prestige => "challenges",
+        GameMcpCommandKind.Research => "research",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 
@@ -1818,6 +1827,8 @@ public sealed class Plugin : BaseUnityPlugin
             nativeType = "ChallengeSO";
         else if (kind == GameMcpCommandKind.Prestige)
             nativeType = "PersistentResetManager";
+        else if (kind == GameMcpCommandKind.Research)
+            nativeType = "ResearchSO";
         else if (kind == GameMcpCommandKind.ConfigurationSet)
         {
             mode = request.Section;

@@ -116,6 +116,8 @@ internal static class GameMcpEntityCapabilityMap
                 Entity(world.EntityIdentities, world.Challenges, target, "challenges", capability, out reason),
             GameMcpCommandKind.Prestige =>
                 AvailableGlobal(world.ChallengeContext.Available, "prestige decision state", out reason),
+            GameMcpCommandKind.Research =>
+                Entity(world.EntityIdentities, world.Research, target, "research", capability, out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -353,7 +355,7 @@ internal static class GameMcpEntityCapabilityMap
         D("resources", "ResourceSO"),
         D("structures", "StructureSO", GameMcpCommandKind.Purchase, GameMcpCommandKind.Targeting),
         D("upgrades", "UpgradeSO", GameMcpCommandKind.Purchase),
-        D("research", "ResearchSO"),
+        D("research", "ResearchSO", GameMcpCommandKind.Research),
         D("double-variables", "DoubleVariable"),
         D("int-variables", "IntVariable"),
         D("bool-variables", "BoolVariable"),
