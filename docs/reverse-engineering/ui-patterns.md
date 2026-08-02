@@ -1,8 +1,11 @@
 # Interaction patterns
 
-Every page in the game is one of these patterns, or a purchase list with a dial bolted on. Learning
-them makes a page you have never opened readable on sight: you already know where the cost line is,
-what turns red, and what the button at the bottom does.
+[Back to index](README.md)
+
+Every page in the game is one of these patterns, or a purchase list with a dial bolted on. For
+anything modelling the interface — captures, navigation, tooling — the pattern tells you where the
+cost line is, what turns red, and what the bottom button does, before the screen has ever been
+opened.
 
 | Pattern | Shape | Where it appears |
 |---|---|---|
@@ -14,10 +17,5 @@ what turns red, and what the button at the bottom does.
 | Timed job | a point cost per school, a duration, and an output; starting it runs a timer and drains a resource | Research |
 | Mastery confirm | cost lines plus parallel XP tracks that fill from casting, not from spending | Spellbook > Spells |
 
-Three rules cut across all of them:
-
-- **Dials are two-way.** You can tune a level dial *down* at any time; the purchase beside it moves
-  only the ceiling.
-- **Budget pages preflight their own fit**, so a red number on a loadout means "this will not go in",
-  not "this looks expensive".
-- **A budgeted loadout can have more than one binder**, and either can be the one that is full.
+The rules each pattern implies (two-way dials, budget preflights, dual binders) are documented on
+the owning [game-systems](../game-systems/README.md) pages; this table is the map, not the rules.

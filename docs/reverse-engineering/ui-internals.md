@@ -27,6 +27,9 @@ two to four seconds after scene entry, and the exact delay is machine- and load-
 not a fixed frame count you can wait out. Anything that needs a constructed UI object has to poll
 for it on a bounded window and treat a partial set as still-loading rather than as a failure.
 
+Screen switches also **cross-fade**: during the transition the visible frame is a blend of both
+pages, so a capture taken then belongs to neither screen.
+
 ## Constructed objects outlive their screen
 
 Runtime list items are **not destroyed when their view closes**. They persist inactive, which has

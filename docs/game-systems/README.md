@@ -125,10 +125,7 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 ## Interface
 
 - [screens.md](screens.md) — seven screens, their subtabs, and which page holds what.
-- [ui-patterns.md](ui-patterns.md) — discovery surfaces, budgeted loadouts, level dials, purchase
-  lists, timed jobs.
-- [ui-behaviours.md](ui-behaviours.md) — wheel ownership, tab reselect, late top bar, nested tooltips,
-  red vs grey.
+- [ui-behaviours.md](ui-behaviours.md) — wheel ownership, nested tooltips, red vs grey.
 - [vocabulary.md](vocabulary.md) — attribute/statistic, glyph/recipe book/augment, concepts/alchemy.
 
 ## Gaps
