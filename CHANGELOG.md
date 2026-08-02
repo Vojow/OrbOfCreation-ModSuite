@@ -1,5 +1,15 @@
 # Changelog
 
+## Orb Of Creation ModSuite 0.5.2 — 2026-08-02
+
+### Fixed
+
+- Auto Buy bought nothing since 0.5.1: the new reachability check mistook every
+  structure and upgrade for unreachable. It now buys anything you can see on a screen
+  you can reach, and still refuses what you genuinely cannot.
+- A feature that loses all of its work to one cause now reports itself as blocked with
+  that exact reason, instead of showing "operational" while doing nothing.
+
 ## Orb Of Creation ModSuite 0.5.1 — 2026-08-01
 
 ### Fixed
@@ -13,8 +23,8 @@
 
 - Auto Scribe crafts only the Scrolls your structures still need, and never pays for a
   craft the game would silently discard.
-- Every release is built twice on independent systems and ships only if both builds
-  match byte for byte.
+- Every release is built in CI from checked-in, hash-locked game references with a
+  pinned SDK, and ships with published checksums.
 
 ## Orb Of Creation ModSuite 0.5.0 — 2026-08-01
 
