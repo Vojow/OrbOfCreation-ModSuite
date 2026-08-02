@@ -123,8 +123,9 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Equal("9e6", (string?)cost["amount"]);
         Assert.Equal(1, (int)row["loadout"]!["equippedCount"]!);
         Assert.Equal(3, (int)row["loadout"]!["maximumEquipped"]!);
-        Assert.Equal(0, (int)Assert.Single(row["equipped"]!.Values<JObject>())!["slot"]!);
-        Assert.DoesNotContain("spellInstance", response.ToString(), StringComparison.Ordinal);
+        var equipped = Assert.Single(row["equipped"]!.Values<JObject>())!;
+        Assert.Equal(0, (int)equipped["slot"]!);
+        Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
     }
 
     [Fact]
@@ -166,7 +167,7 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Equal(new[]
             {
                 "status", "uuid", "name", "internalName", "category", "nativeType", "discovered",
-                "masteryLevel", "selected", "coreGlyphs", "loadout", "select", "create",
+                "masteryLevel", "selected", "outputLevel", "coreGlyphs", "loadout", "select", "create",
             },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);

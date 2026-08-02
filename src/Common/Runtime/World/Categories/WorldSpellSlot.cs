@@ -66,7 +66,14 @@ internal readonly struct WorldSpellSlot
             resourcesCovered,
             currentCharges,
             maximumCharges,
-            cooldownRemaining)
+            cooldownRemaining,
+            0,
+            0,
+            0,
+            0,
+            false,
+            false,
+            PublicationTable<WorldSpellSlotGlyph>.Empty)
     {
     }
 
@@ -87,6 +94,57 @@ internal readonly struct WorldSpellSlot
         int currentCharges,
         int maximumCharges,
         BigDouble cooldownRemaining)
+        : this(
+            slotIndex,
+            spellInstanceId,
+            spellRecipeId,
+            occupied,
+            casting,
+            readyingCast,
+            attuning,
+            channeled,
+            toggled,
+            chargeable,
+            castReady,
+            chargeAvailable,
+            resourcesCovered,
+            currentCharges,
+            maximumCharges,
+            cooldownRemaining,
+            0,
+            0,
+            0,
+            0,
+            false,
+            false,
+            PublicationTable<WorldSpellSlotGlyph>.Empty)
+    {
+    }
+
+    internal WorldSpellSlot(
+        int slotIndex,
+        Guid spellInstanceId,
+        Guid spellRecipeId,
+        bool occupied,
+        bool casting,
+        bool readyingCast,
+        bool attuning,
+        bool channeled,
+        bool toggled,
+        bool chargeable,
+        bool castReady,
+        bool chargeAvailable,
+        bool resourcesCovered,
+        int currentCharges,
+        int maximumCharges,
+        BigDouble cooldownRemaining,
+        int outputLevel,
+        int effectiveLevel,
+        int requiredMasteryLevel,
+        int recipeMasteryLevel,
+        bool durationSpell,
+        bool usageRequirementsMet,
+        PublicationTable<WorldSpellSlotGlyph> augmentGlyphs)
     {
         SlotIndex = slotIndex;
         SpellInstanceId = spellInstanceId;
@@ -104,6 +162,14 @@ internal readonly struct WorldSpellSlot
         CurrentCharges = currentCharges;
         MaximumCharges = maximumCharges;
         CooldownRemaining = cooldownRemaining;
+        OutputLevel = outputLevel;
+        EffectiveLevel = effectiveLevel;
+        RequiredMasteryLevel = requiredMasteryLevel;
+        RecipeMasteryLevel = recipeMasteryLevel;
+        DurationSpell = durationSpell;
+        UsageRequirementsMet = usageRequirementsMet;
+        AugmentGlyphs = augmentGlyphs ??
+            throw new ArgumentNullException(nameof(augmentGlyphs));
     }
 
     /// <summary>
@@ -164,6 +230,27 @@ internal readonly struct WorldSpellSlot
 
     /// <summary>Seconds left before the next charge returns, on the game's own clock.</summary>
     internal BigDouble CooldownRemaining { get; }
+
+    internal int OutputLevel { get; }
+    internal int EffectiveLevel { get; }
+    internal int RequiredMasteryLevel { get; }
+    internal int RecipeMasteryLevel { get; }
+    internal bool DurationSpell { get; }
+    internal bool UsageRequirementsMet { get; }
+    internal PublicationTable<WorldSpellSlotGlyph> AugmentGlyphs { get; }
+}
+
+/// <summary>One unique augment and its native stack count on an equipped spell.</summary>
+internal readonly struct WorldSpellSlotGlyph
+{
+    internal WorldSpellSlotGlyph(Guid glyphId, int quantity)
+    {
+        GlyphId = glyphId;
+        Quantity = quantity;
+    }
+
+    internal Guid GlyphId { get; }
+    internal int Quantity { get; }
 }
 
 /// <summary>
@@ -300,6 +387,15 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
     private readonly Func<object, BigDouble>? _cooldown;
     private readonly Func<object, Guid>? _recipeId;
     private readonly Func<object, Guid>? _spellInstanceId;
+    private readonly Func<object, int>? _outputLevel;
+    private readonly Func<object, int>? _effectiveLevel;
+    private readonly Func<object, int>? _requiredMasteryLevel;
+    private readonly Func<object, int>? _recipeMasteryLevel;
+    private readonly Func<object, bool>? _durationSpell;
+    private readonly Func<object, bool>? _usageRequirementsMet;
+    private readonly MethodInfo? _getAugmentGlyphs;
+    private readonly MethodInfo? _getGlyphQuantity;
+    private readonly Func<object, Guid>? _glyphId;
 
     private readonly MethodInfo? _getCost;
     private readonly MethodInfo? _getDrainCost;
@@ -347,6 +443,27 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         _cooldown = spell.Call<BigDouble>("GetCooldownTimeRemaining");
         _recipeId = spell.CallReferenceGuid("get_reference");
         _spellInstanceId = spell.ReferenceGuid("guidContainer");
+        _outputLevel = spell.Call<int>("GetOutputLevel");
+        _effectiveLevel = spell.Call<int>("GetLevel");
+        _requiredMasteryLevel = spell.Call<int>("GetRequiredLevel");
+        _recipeMasteryLevel = spell.Call<int>("GetRecipeMasteryLevel");
+        _durationSpell = spell.Call<bool>("IsDurationSpell");
+        _usageRequirementsMet = spell.Call<bool>("HasMetUsageRequirements");
+        var glyphType = resolveType("GlyphSO");
+        var glyphListType = glyphType is null ? null : typeof(List<>).MakeGenericType(glyphType);
+        _getAugmentGlyphs = _spellType?.GetMethod(
+            "GetAugmentGlyphs", Instance, null, Type.EmptyTypes, null);
+        _getGlyphQuantity = glyphType is null
+            ? null
+            : _spellType?.GetMethod(
+                "GetQuantityOfGlyph", Instance, null, new[] { glyphType }, null);
+        _glyphId = NativeAccessorBinder.Call<Guid>(glyphType, "GetGuid");
+        if (_getAugmentGlyphs?.ReturnType != glyphListType ||
+            _getGlyphQuantity?.ReturnType != typeof(int))
+        {
+            _getAugmentGlyphs = null;
+            _getGlyphQuantity = null;
+        }
 
         // The two cost accessors return a cost list rather than a value, so their entries are bound
         // off the declared return type the same way the upgrade reader binds its authored costs.
@@ -365,9 +482,9 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
             return;
         }
 
-        _unavailable = IsCostBound()
+        _unavailable = IsCostBound() && IsCompositionBound()
             ? string.Empty
-            : "Spell did not expose its cast and drain costs on this build";
+            : "Spell did not expose its complete cast, level, and augment state on this build";
     }
 
     public string Category => "spell slots";
@@ -455,6 +572,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
             return;
         }
 
+        var glyphs = ReadAugmentGlyphs(spell);
         slots.Append(new WorldSpellSlot(
             index,
             _spellInstanceId!(spell),
@@ -471,7 +589,14 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
             _hasEnoughResources!(spell),
             _currentCharges!(spell),
             _maximumCharges!(spell),
-            _cooldown!(spell)));
+            _cooldown!(spell),
+            _outputLevel!(spell),
+            _effectiveLevel!(spell),
+            _requiredMasteryLevel!(spell),
+            _recipeMasteryLevel!(spell),
+            _durationSpell!(spell),
+            _usageRequirementsMet!(spell),
+            glyphs));
 
         Append(spell, index, WorldSpellCostKind.Immediate, _getCost!, costs);
         Append(spell, index, WorldSpellCostKind.Drain, _getDrainCost!, costs);
@@ -505,6 +630,32 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
     private bool IsCostBound() =>
         _getCost is not null && _getDrainCost is not null &&
         _costEntries is not null && _entryResource is not null && _entryValue is not null;
+
+    private bool IsCompositionBound() =>
+        _outputLevel is not null && _effectiveLevel is not null &&
+        _requiredMasteryLevel is not null && _recipeMasteryLevel is not null &&
+        _durationSpell is not null && _usageRequirementsMet is not null &&
+        _getAugmentGlyphs is not null && _getGlyphQuantity is not null && _glyphId is not null;
+
+    private PublicationTable<WorldSpellSlotGlyph> ReadAugmentGlyphs(object spell)
+    {
+        var values = _getAugmentGlyphs!.Invoke(spell, null) as IList;
+        if (values is null || values.Count == 0)
+            return PublicationTable<WorldSpellSlotGlyph>.Empty;
+        var rows = new List<WorldSpellSlotGlyph>(values.Count);
+        var seen = new HashSet<Guid>();
+        for (var index = 0; index < values.Count; index++)
+        {
+            var glyph = values[index];
+            if (glyph is null) continue;
+            var id = _glyphId!(glyph);
+            if (id == Guid.Empty || !seen.Add(id)) continue;
+            var quantity = (int)(_getGlyphQuantity!.Invoke(spell, new[] { glyph }) ?? 0);
+            if (quantity > 0) rows.Add(new WorldSpellSlotGlyph(id, quantity));
+        }
+        rows.Sort(static (left, right) => left.GlyphId.CompareTo(right.GlyphId));
+        return PublicationTable<WorldSpellSlotGlyph>.Create(rows.ToArray());
+    }
 
     private static void Skip(ref int skipped, ref string firstFailure, string reason)
     {

@@ -118,6 +118,7 @@ does not refresh it by hidden navigation.
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
 | `game_discovery_offer` | Initiate, select, confirm, or reroll one Discovery Tree offer lifecycle |
 | `game_spell_workbench` | Select an authored spell recipe, discover it, or create another equipped instance |
+| `game_spell_composition` | Set the global spell output level or replace one equipped spell's augment stack |
 | `suite_config_set` | Commit one allowlisted setting through the configuration store |
 | `suite_emergency_stop` | Engage or resume the suite's shared emergency stop |
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
@@ -270,6 +271,32 @@ stanza, receipt poll, or post-mutation `world_get` is required. B-002 deliberate
 authored base recipe by stable recipe UUID; augment and output-level composition is a separate
 family.
 
+### Spell composition loop
+
+The same `spell-recipes` row is the pre-decision surface for `game_spell_composition`. Its
+`outputLevel` gives the current and live maximum global selector. Every `equipped` row names the
+runtime spell UUID and recipe, slot, output/effective/mastery levels, exact applied augments,
+duration/toggle properties, and current native usage verdict. `augmentOptions` names every
+spell-augment glyph with owned/bonus level, availability, maximum/current uses, mastery
+requirement, and duration/toggle restrictions. Cast and drain cost rows use the same named
+resource, spendable `amount`, and affordability vocabulary as the rest of MCP.
+
+The MCP-only composition sequence is:
+
+1. Read one `spell-recipes` row and choose a named equipped runtime spell plus valid named augment
+   options from that row.
+2. Call `game_spell_composition(mode="set_output_level", outputLevel=...)`. The compact committed
+   result returns the newer global output and all affected equipped spell facts.
+3. Call `game_spell_composition(mode="set_augments", spellInstanceUuid=...,
+   augmentGlyphs=[...])`. The compact committed result returns that exact runtime spell's newer
+   applied stack, options, derived levels, usage verdict, and cast/drain economics. An empty array
+   clears the stack.
+
+The boundary revalidates the output range or exact runtime spell identity and every glyph's exact
+type, availability, augment role, maximum uses, combined compatibility, and mastery requirement on
+the Unity main thread. Success is the requested global value or exact target/stack outcome. It has
+no payment framing, receipt poll, request echo, world-generation argument, or read-back call.
+
 ### Entity explanation
 
 `explain_entity` accepts one canonical `uuid` and pins the latest immutable world publication before
@@ -398,6 +425,8 @@ tools/game-mcp-client.py call game_discovery_offer --arguments \
   '{"mode":"select","treeUuid":"TREE_UUID","offerUuid":"OFFER_UUID"}'
 tools/game-mcp-client.py call game_spell_workbench --arguments \
   '{"mode":"select","spellRecipeUuid":"SPELL_RECIPE_UUID"}'
+tools/game-mcp-client.py call game_spell_composition --arguments \
+  '{"mode":"set_augments","spellInstanceUuid":"RUNTIME_SPELL_UUID","augmentGlyphs":[{"glyphUuid":"GLYPH_UUID","count":2}]}'
 ```
 
 `game_discovery_offer` requires `offerUuid` for `select` and `confirm`, and rejects it for
@@ -419,6 +448,15 @@ the selection, discovered state, slot room, and current native create-cost verdi
 `SpellManager.CreateSpell`. Discovery success is the exact target becoming discovered. Creation
 success is a new non-empty runtime spell identity referencing that target. Native payment and list
 accounting never replace those identity/outcome gates.
+
+`game_spell_composition` has two conditional shapes. `set_output_level` requires only a positive
+`outputLevel`; the boundary then checks it against the live native maximum. `set_augments` requires
+one equipped runtime `spellInstanceUuid` plus `augmentGlyphs`; each row requires `glyphUuid` and a
+positive `count`, while an empty list means clear. The latter revalidates exact identities,
+availability, augment classification, maximum usage, combined non-level compatibility, and recipe
+mastery before its one native setter. Success is exact global value or exact target UUID plus exact
+canonical glyph/count stack. A committed result is the newer spell composition and next-decision
+economics; failure evidence is retained only when native execution was reached.
 
 CLI play commands therefore need no generation option:
 

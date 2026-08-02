@@ -16,7 +16,9 @@ internal readonly struct WorldSpellWorkbench
         bool creationAffordable,
         int equippedCount,
         int maximumEquipped,
-        bool hasEmptySlot)
+        bool hasEmptySlot,
+        int outputLevel = 0,
+        int maximumOutputLevel = 0)
     {
         CoreGlyphs = coreGlyphs ?? throw new ArgumentNullException(nameof(coreGlyphs));
         AugmentGlyphs = augmentGlyphs ?? throw new ArgumentNullException(nameof(augmentGlyphs));
@@ -25,6 +27,8 @@ internal readonly struct WorldSpellWorkbench
         EquippedCount = equippedCount;
         MaximumEquipped = maximumEquipped;
         HasEmptySlot = hasEmptySlot;
+        OutputLevel = outputLevel;
+        MaximumOutputLevel = maximumOutputLevel;
     }
 
     internal PublicationTable<WorldSpellWorkbenchGlyph> CoreGlyphs { get; }
@@ -34,6 +38,8 @@ internal readonly struct WorldSpellWorkbench
     internal int EquippedCount { get; }
     internal int MaximumEquipped { get; }
     internal bool HasEmptySlot { get; }
+    internal int OutputLevel { get; }
+    internal int MaximumOutputLevel { get; }
 }
 
 internal readonly struct WorldSpellWorkbenchCost
@@ -78,6 +84,8 @@ internal sealed class WorldSpellWorkbenchBuffer
     internal int EquippedCount { get; private set; }
     internal int MaximumEquipped { get; private set; }
     internal bool HasEmptySlot { get; private set; }
+    internal int OutputLevel { get; private set; }
+    internal int MaximumOutputLevel { get; private set; }
 
     internal void Reset()
     {
@@ -88,6 +96,8 @@ internal sealed class WorldSpellWorkbenchBuffer
         EquippedCount = 0;
         MaximumEquipped = 0;
         HasEmptySlot = false;
+        OutputLevel = 0;
+        MaximumOutputLevel = 0;
     }
 
     internal void AppendCore(Guid id) => Append(ref _core, ref _coreCount, id);
@@ -108,6 +118,12 @@ internal sealed class WorldSpellWorkbenchBuffer
         HasEmptySlot = hasEmptySlot;
     }
 
+    internal void SetOutputLevel(int outputLevel, int maximumOutputLevel)
+    {
+        OutputLevel = outputLevel;
+        MaximumOutputLevel = maximumOutputLevel;
+    }
+
     internal WorldSpellWorkbench Build() => new(
         PublicationTable<WorldSpellWorkbenchGlyph>.Create(_core, CoreCount),
         PublicationTable<WorldSpellWorkbenchGlyph>.Create(_augments, AugmentCount),
@@ -115,7 +131,9 @@ internal sealed class WorldSpellWorkbenchBuffer
         CreationAffordable,
         EquippedCount,
         MaximumEquipped,
-        HasEmptySlot);
+        HasEmptySlot,
+        OutputLevel,
+        MaximumOutputLevel);
 
     private static void Append(
         ref WorldSpellWorkbenchGlyph[] values,
@@ -154,6 +172,10 @@ internal sealed class WorldSpellWorkbenchReader : IWorldCategoryReader
     private readonly Func<object, object?>? _costResource;
     private readonly Func<object, BigDouble>? _costValue;
     private readonly Func<object, BigDouble>? _resourceAmount;
+    private readonly Func<object?>? _player;
+    private readonly Func<object?>? _outputLevel;
+    private readonly Func<object, object?>? _maximumOutputLevel;
+    private readonly Func<object, int>? _asInt;
     private readonly string _unavailable;
 
     internal WorldSpellWorkbenchReader(Func<string, Type?> resolveType)
@@ -193,12 +215,20 @@ internal sealed class WorldSpellWorkbenchReader : IWorldCategoryReader
         var resourceType = entryType?.GetField("resource", Instance)?.FieldType;
         _costResource = NativeAccessorBinder.Reference(entryType, "resource", resourceType);
         _resourceAmount = NativeAccessorBinder.Call<BigDouble>(resourceType, "GetTrueQuantity");
+        var playerType = resolveType("Player");
+        var intVariableType = resolveType("IntVariable");
+        _player = BindStaticReference(playerType, "_instance", playerType);
+        _outputLevel = BindStaticObjectCall(playerType, "GetSpellOutputLevel", intVariableType);
+        _maximumOutputLevel = NativeAccessorBinder.Reference(
+            playerType, "maxSpellOutputLevel", intVariableType);
+        _asInt = NativeAccessorBinder.Call<int>(intVariableType, "AsInt");
         _unavailable = _managerType is null || _glyphType is null || glyphListType is null ||
             spellListType is null || _manager is null || _core is null || _augments is null ||
             _active is null || _glyphValues is null || _glyphId is null || _used is null ||
             _maximum is null || _hasEmpty is null || _getCreateCost is null ||
             _costAffordable is null || _costEntries is null || _costResourceId is null ||
-            _costValue is null || _costResource is null || _resourceAmount is null
+            _costValue is null || _costResource is null || _resourceAmount is null ||
+            _player is null || _outputLevel is null || _maximumOutputLevel is null || _asInt is null
             ? "the complete SpellManager selection and loadout binding set was unavailable"
             : string.Empty;
     }
@@ -245,6 +275,14 @@ internal sealed class WorldSpellWorkbenchReader : IWorldCategoryReader
             if (active is null)
                 return WorldCategoryReport.Missing(Category, "SpellManager.activeSpells was null");
             buffer.SetCapacity(_used!(active), _maximum!(active), _hasEmpty!(active));
+            var player = _player!();
+            var output = _outputLevel!();
+            var maximumOutput = player is null ? null : _maximumOutputLevel!(player);
+            if (player is null || output is null || maximumOutput is null)
+                return WorldCategoryReport.Missing(
+                    Category,
+                    "Player output-level variables were null");
+            buffer.SetOutputLevel(_asInt!(output), _asInt!(maximumOutput));
             return new WorldCategoryReport(Category, WorldCategoryOutcome.Collected, 1, 0, string.Empty);
         }
         catch (Exception ex)
@@ -276,6 +314,22 @@ internal sealed class WorldSpellWorkbenchReader : IWorldCategoryReader
         {
             var read = Expression.Convert(Expression.Field(null, field), typeof(object));
             return Expression.Lambda<Func<object?>>(read).Compile();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static Func<object?>? BindStaticObjectCall(Type? owner, string name, Type? resultType)
+    {
+        if (owner is null || resultType is null) return null;
+        var method = owner.GetMethod(name, Static, null, Type.EmptyTypes, null);
+        if (method is null || !method.IsStatic || method.ReturnType != resultType) return null;
+        try
+        {
+            var call = Expression.Convert(Expression.Call(method), typeof(object));
+            return Expression.Lambda<Func<object?>>(call).Compile();
         }
         catch (Exception)
         {

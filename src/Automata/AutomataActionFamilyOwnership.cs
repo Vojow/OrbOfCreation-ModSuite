@@ -33,6 +33,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.DiscoveryTreeOfferLifecycle };
     private static readonly AutomationActionFamily[] SpellWorkbenchFamilies =
         { AutomationActionFamily.SpellWorkbenchLifecycle };
+    private static readonly AutomationActionFamily[] SpellCompositionFamilies =
+        { AutomationActionFamily.SpellComposition };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -117,6 +119,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.DiscoveryTreeOfferLifecycle);
     public bool TryCaptureSpellWorkbenchMutationPermit() =>
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.SpellWorkbenchLifecycle);
+    public bool TryCaptureSpellCompositionMutationPermit() =>
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.SpellComposition);
     public string ItemsOwnershipFailure =>
         _itemsClaimFailure.Length != 0
             ? _itemsClaimFailure
@@ -131,6 +135,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         "The current MCP operation does not hold DiscoveryTreeOfferLifecycle.";
     public string SpellWorkbenchOwnershipFailure =>
         "The current MCP operation does not hold SpellWorkbenchLifecycle.";
+    public string SpellCompositionOwnershipFailure =>
+        "The current MCP operation does not hold SpellComposition.";
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -414,6 +420,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.Harvest => HarvestFamilies,
         GameMcpCommandKind.DiscoveryTreeOffer => DiscoveryTreeOfferFamilies,
         GameMcpCommandKind.SpellWorkbench => SpellWorkbenchFamilies,
+        GameMcpCommandKind.SpellComposition => SpellCompositionFamilies,
         _ => Array.Empty<AutomationActionFamily>(),
     };
 
@@ -446,6 +453,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         AutomationActionFamily.HarvestAction => _harvest?.IsHeld == true,
         AutomationActionFamily.DiscoveryTreeOfferLifecycle => false,
         AutomationActionFamily.SpellWorkbenchLifecycle => false,
+        AutomationActionFamily.SpellComposition => false,
         _ => false,
     };
 

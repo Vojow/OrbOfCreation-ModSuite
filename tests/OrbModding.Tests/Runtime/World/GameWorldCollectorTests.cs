@@ -515,6 +515,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, world.SpellWorkbench.EquippedCount);
         Assert.Equal(3, world.SpellWorkbench.MaximumEquipped);
         Assert.True(world.SpellWorkbench.HasEmptySlot);
+        Assert.Equal(1, world.SpellWorkbench.OutputLevel);
+        Assert.Equal(100, world.SpellWorkbench.MaximumOutputLevel);
     }
 
     [Fact]
@@ -1524,7 +1526,14 @@ public sealed class GameWorldCollectorTests : IDisposable
         public FakeModifierRecord value = new(0d);
         public bool isPercentVariable;
 
+        internal FakeCount()
+        {
+        }
+
+        internal FakeCount(int amount) => value = new FakeModifierRecord(amount);
+
         public Guid GetGuid() => Identity;
+        public int AsInt() => (int)value.GetValue().ToDouble();
     }
 
     private sealed class FakeFlag
@@ -3247,8 +3256,16 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void TheEquippedLoadoutIsPublishedByThePositionACastIsAddressedBy()
     {
-        var fireball = new FakeSpellRecipe { discovered = true };
+        var fireball = new FakeSpellRecipe { discovered = true, masteryLevel = 5 };
         FakeSpellRecipe.All.Add(fireball);
+        var echo = new FakeGlyph
+        {
+            Identity = Guid.NewGuid(),
+            discovered = true,
+            augmentsSpells = true,
+            maxUsages = new FakeModifierRecord(3d),
+        };
+        FakeGlyph.All.Add(echo);
 
         var water = Guid.NewGuid();
         var mana = Guid.NewGuid();
@@ -3261,9 +3278,16 @@ public sealed class GameWorldCollectorTests : IDisposable
             currentCharges = 2,
             maximumCharges = 3,
             cooldownRemaining = new BigDouble(4d, 0),
+            outputLevel = 4,
+            effectiveLevel = 6,
+            requiredMasteryLevel = 3,
+            durationSpell = true,
+            usageRequirementsMet = false,
             cost = new FakeSpellCostList().With(water, 50d),
             drainCost = new FakeSpellCostList().With(mana, 7d),
         };
+        equipped.augmentGlyphs.Add(echo);
+        equipped.augmentGlyphs.Add(echo);
 
         var loadout = new FakeSpellLoadout();
         loadout.value.Add(equipped);
@@ -3288,6 +3312,15 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(2, first.CurrentCharges);
         Assert.Equal(3, first.MaximumCharges);
         Assert.Equal(4d, first.CooldownRemaining.ToDouble());
+        Assert.Equal(4, first.OutputLevel);
+        Assert.Equal(6, first.EffectiveLevel);
+        Assert.Equal(3, first.RequiredMasteryLevel);
+        Assert.Equal(5, first.RecipeMasteryLevel);
+        Assert.True(first.DurationSpell);
+        Assert.False(first.UsageRequirementsMet);
+        var applied = Assert.Single(first.AugmentGlyphs.AsSpan().ToArray());
+        Assert.Equal(echo.Identity, applied.GlyphId);
+        Assert.Equal(2, applied.Quantity);
 
         // The empty position keeps its index rather than sliding down into the hole's place.
         Assert.False(WorldSpellSlotLookup.TryFind(world.SpellSlots, 1, out _));
@@ -3611,12 +3644,11 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     /// <summary>
-    /// A player that cannot be bound costs the globals, not the pass. They feed five terms out of a
-    /// chain of a dozen; failing the whole collection over them would take away every category to
-    /// protect one number.
+    /// A player that cannot be bound still leaves unrelated rows usable, but the spell workbench
+    /// now fails closed because output level is required pre-decision state for composition.
     /// </summary>
     [Fact]
-    public void AnUnbindablePlayerLeavesTheGlobalsAtZeroRatherThanFailingThePass()
+    public void AnUnbindablePlayerLocalizesFailureToTheSpellWorkbench()
     {
         var mana = Guid.NewGuid();
         FakeResource.All.Add(OverflowingResource(mana));
@@ -3624,7 +3656,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         var collector = Collector(("Player", null));
         var report = collector.Collect();
 
-        Assert.True(report.IsComplete, report.Describe());
+        Assert.False(report.IsComplete);
+        Assert.Equal(WorldCategoryOutcome.Unavailable, report.For("spell workbench").Outcome);
         Assert.True(WorldLookup.TryFind(collector.Build().Resources, mana, out var row));
         Assert.False(BigDouble.IsNaN(row.TrueRate) || BigDouble.IsInfinity(row.TrueRate));
     }
@@ -3651,13 +3684,20 @@ public sealed class GameWorldCollectorTests : IDisposable
     /// every test that does not speak about quality prices exactly as it did before the discount was
     /// read at all.
     /// </remarks>
-    private static class FakePlayerGlobals
+    private sealed class FakePlayerGlobals
     {
+        private static readonly FakePlayerGlobals _instance = new();
         private static FakeGlobalVariable _overflow = new(200d);
         private static FakeGlobalVariable _overflowLoss = new(100d);
         private static FakeGlobalVariable _resetTimePassed = new(60d);
         private static FakeGlobalVariable _structureCost = new(100d);
         private static FakeGlobalVariable _attributeQualityBonus = new(0d);
+        private FakeCount spellOutputLevel = new(1);
+        public FakeCount maxSpellOutputLevel = new(100);
+
+        private FakePlayerGlobals()
+        {
+        }
 
         /// <summary>Back to the game's authored values, so one test cannot set another's globals.</summary>
         internal static void Reset()
@@ -3667,6 +3707,8 @@ public sealed class GameWorldCollectorTests : IDisposable
             _resetTimePassed = new FakeGlobalVariable(60d);
             _structureCost = new FakeGlobalVariable(100d);
             _attributeQualityBonus = new FakeGlobalVariable(0d);
+            _instance.spellOutputLevel = new FakeCount(1);
+            _instance.maxSpellOutputLevel = new FakeCount(100);
         }
 
         internal static void SetOverflow(double percent) => _overflow = new FakeGlobalVariable(percent);
@@ -3686,6 +3728,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         public static FakeGlobalVariable GetStructureCost() => _structureCost;
 
         public static FakeGlobalVariable GetAttributeQualityBonus() => _attributeQualityBonus;
+
+        public static FakeCount GetSpellOutputLevel() => _instance.spellOutputLevel;
     }
 
     private sealed class FakeGlobalVariable

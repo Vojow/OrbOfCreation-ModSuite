@@ -18068,6 +18068,542 @@
         "reflection"
       ],
       "place": "action"
+    },
+    {
+      "id": "spell-composition.player-instance-capture",
+      "assembly": "assembly-csharp",
+      "type": "Player",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "_instance",
+      "visibility": "private",
+      "static": true,
+      "valueType": "Player",
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.player-output-level-capture",
+      "assembly": "assembly-csharp",
+      "type": "Player",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetSpellOutputLevel",
+      "visibility": "public",
+      "static": true,
+      "returnType": "IntVariable",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.player-maximum-output-level-capture",
+      "assembly": "assembly-csharp",
+      "type": "Player",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "maxSpellOutputLevel",
+      "visibility": "public",
+      "static": false,
+      "valueType": "IntVariable",
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.int-as-int-capture",
+      "assembly": "assembly-csharp",
+      "type": "IntVariable",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "AsInt",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.glyph-is-available-capture",
+      "assembly": "assembly-csharp",
+      "type": "GlyphSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsAvailable",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.glyph-get-maximum-usages-capture",
+      "assembly": "assembly-csharp",
+      "type": "GlyphSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMaxUsages",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.spell-get-output-level-capture",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetOutputLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.spell-get-level-capture",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.spell-get-required-level-capture",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetRequiredLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.spell-get-recipe-mastery-capture",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetRecipeMasteryLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.spell-is-duration-capture",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsDurationSpell",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.spell-has-met-usage-requirements-capture",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasMetUsageRequirements",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.spell-get-augment-glyphs-capture",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetAugmentGlyphs",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Collections.Generic.List`1<GlyphSO>",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.spell-get-glyph-quantity-capture",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetQuantityOfGlyph",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [
+        "GlyphSO"
+      ],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.player-instance-action",
+      "assembly": "assembly-csharp",
+      "type": "Player",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "_instance",
+      "visibility": "private",
+      "static": true,
+      "valueType": "Player",
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.player-output-level-action",
+      "assembly": "assembly-csharp",
+      "type": "Player",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetSpellOutputLevel",
+      "visibility": "public",
+      "static": true,
+      "returnType": "IntVariable",
+      "parameters": [],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.player-maximum-output-level-action",
+      "assembly": "assembly-csharp",
+      "type": "Player",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "maxSpellOutputLevel",
+      "visibility": "public",
+      "static": false,
+      "valueType": "IntVariable",
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.glyph-all-action",
+      "assembly": "assembly-csharp",
+      "type": "GlyphSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "All",
+      "visibility": "public",
+      "static": true,
+      "valueType": "System.Collections.Generic.List`1<GlyphSO>",
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.glyph-get-maximum-usages-action",
+      "assembly": "assembly-csharp",
+      "type": "GlyphSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMaxUsages",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.glyph-meets-non-level-requirements-action",
+      "assembly": "assembly-csharp",
+      "type": "GlyphSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "MeetsNonLvRequirements",
+      "visibility": "public",
+      "static": true,
+      "returnType": "System.Boolean",
+      "parameters": [
+        "System.Collections.Generic.List`1<GlyphSO>",
+        "Spell"
+      ],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.glyph-get-mastery-requirement-action",
+      "assembly": "assembly-csharp",
+      "type": "GlyphSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetMasterReqOfList",
+      "visibility": "public",
+      "static": true,
+      "returnType": "System.Int32",
+      "parameters": [
+        "System.Collections.Generic.List`1<GlyphSO>"
+      ],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.spell-get-augment-glyphs-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetAugmentGlyphs",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Collections.Generic.List`1<GlyphSO>",
+      "parameters": [],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.spell-get-glyph-quantity-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetQuantityOfGlyph",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [
+        "GlyphSO"
+      ],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.spell-get-recipe-mastery-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetRecipeMasteryLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.spell-set-augments-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "SetAugmentGlyphs",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "Stacked.StackedIdRecord`1<GlyphSO>"
+      ],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.stacked-record-type-action",
+      "assembly": "assembly-csharp",
+      "type": "Stacked.StackedIdRecord`1",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.stacked-record-construct-action",
+      "assembly": "assembly-csharp",
+      "type": "Stacked.StackedIdRecord`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": ".ctor",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.stacked-record-set-action",
+      "assembly": "assembly-csharp",
+      "type": "Stacked.AbstractStackedRecord`2",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Set",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "!0",
+        "System.Int32"
+      ],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     }
   ],
   "sourceAudit": {
@@ -18084,6 +18620,7 @@
       "src/DiscoveryTree",
       "src/Mentor",
       "src/ModConfig",
+      "src/SpellComposition",
       "src/SpellWorkbench",
       "src/SpellLeveling"
     ],

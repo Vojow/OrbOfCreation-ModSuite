@@ -344,6 +344,21 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable
     public string GetName() => DisplayName;
     public bool IsAvailable() => NativeAvailable;
     public bool IsSpellAugment() => augmentsSpells;
+    public int GetMaxUsages() => (int)maxUsages.GetValue().ToDouble();
+    public static bool MeetsNonLvRequirements(List<GlyphSO> glyphs, Spell spell)
+    {
+        foreach (var glyph in glyphs)
+            if (glyph.requiresDuration && !spell.IsDurationSpell() ||
+                glyph.requiresToggleable && !spell.IsToggledSpell())
+                return false;
+        return true;
+    }
+    public static int GetMasterReqOfList(List<GlyphSO> glyphs)
+    {
+        var result = 0;
+        foreach (var glyph in glyphs) result = Math.Max(result, glyph.masteryReqCount);
+        return result;
+    }
     public string GetDisplayType() => "Glyph";
     public UnityEngine.Sprite GetIcon() => new UnityEngine.Sprite();
     public UnityEngine.Color GetColor() => default;

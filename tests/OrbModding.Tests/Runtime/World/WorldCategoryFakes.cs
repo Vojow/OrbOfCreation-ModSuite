@@ -795,6 +795,12 @@ internal sealed class FakeSpell
     public BigDouble cooldownRemaining;
     public FakeSpellCostList cost = new();
     public FakeSpellCostList drainCost = new();
+    public int outputLevel = 1;
+    public int effectiveLevel = 1;
+    public int requiredMasteryLevel;
+    public bool durationSpell;
+    public bool usageRequirementsMet = true;
+    public List<FakeGlyph> augmentGlyphs = new();
 
     public FakeSpellRecipe? get_reference() => spellReference;
 
@@ -813,6 +819,15 @@ internal sealed class FakeSpell
     public BigDouble GetCooldownTimeRemaining() => cooldownRemaining;
     public FakeSpellCostList GetCost() => cost;
     public FakeSpellCostList GetDrainCost() => drainCost;
+    public int GetOutputLevel() => outputLevel;
+    public int GetLevel() => effectiveLevel;
+    public int GetRequiredLevel() => requiredMasteryLevel;
+    public int GetRecipeMasteryLevel() => spellReference?.masteryLevel ?? 0;
+    public bool IsDurationSpell() => durationSpell;
+    public bool HasMetUsageRequirements() => usageRequirementsMet;
+    public List<FakeGlyph> GetAugmentGlyphs() => new(augmentGlyphs);
+    public int GetQuantityOfGlyph(FakeGlyph glyph) =>
+        augmentGlyphs.Count(candidate => ReferenceEquals(candidate, glyph));
 }
 
 /// <summary>What a spell answers when asked its price, in the game's own cost-list shape.</summary>
@@ -1216,6 +1231,10 @@ internal sealed class FakeGlyph
     public FakeModifierRecord freeUsages = new(0d);
     public FakeModifierRecord freeLoadoutUsages = new(0d);
     public FakeModifierRecord maxUsages = new(0d);
+
+    public bool NativeAvailable = true;
+    public bool IsAvailable() => NativeAvailable;
+    public int GetMaxUsages() => (int)maxUsages.GetValue().ToDouble();
 }
 
 internal sealed class FakeConsumable

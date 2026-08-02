@@ -106,7 +106,9 @@ public sealed record GameWorldState
         false,
         0,
         0,
-        false);
+        false,
+        0,
+        0);
 
     internal PublicationTable<WorldSpellType> SpellTypes { get; init; } =
         PublicationTable<WorldSpellType>.Empty;

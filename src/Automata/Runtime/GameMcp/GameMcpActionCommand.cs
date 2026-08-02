@@ -25,13 +25,15 @@ internal enum GameMcpCommandKind
     ContinueRun = 14,
     DiscoveryTreeOffer = 15,
     SpellWorkbench = 16,
+    SpellComposition = 17,
 }
 
 internal static class GameMcpCommandKinds
 {
     internal static bool IsGameplayAction(GameMcpCommandKind kind) =>
         kind is >= GameMcpCommandKind.Purchase and <= GameMcpCommandKind.SpellLevel or
-            GameMcpCommandKind.DiscoveryTreeOffer or GameMcpCommandKind.SpellWorkbench;
+            GameMcpCommandKind.DiscoveryTreeOffer or GameMcpCommandKind.SpellWorkbench or
+            GameMcpCommandKind.SpellComposition;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -42,6 +44,7 @@ internal static class GameMcpCommandKinds
         "game_spell_level" => GameMcpCommandKind.SpellLevel,
         "game_discovery_offer" => GameMcpCommandKind.DiscoveryTreeOffer,
         "game_spell_workbench" => GameMcpCommandKind.SpellWorkbench,
+        "game_spell_composition" => GameMcpCommandKind.SpellComposition,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -79,7 +82,8 @@ internal sealed class GameMcpCommand
         bool capture,
         bool saveCapture,
         GameMcpFrameOperation? sourceOperation = null,
-        GameMcpFrameContext? frameContext = null)
+        GameMcpFrameContext? frameContext = null,
+        GameMcpUuidCount[]? uuidCounts = null)
     {
         if (sequence <= 0) throw new ArgumentOutOfRangeException(nameof(sequence));
         var nativeAction = GameMcpCommandKinds.IsGameplayAction(kind);
@@ -107,6 +111,9 @@ internal sealed class GameMcpCommand
         SaveCapture = saveCapture;
         SourceOperation = sourceOperation;
         FrameContext = frameContext;
+        UuidCounts = uuidCounts is null
+            ? Array.Empty<GameMcpUuidCount>()
+            : (GameMcpUuidCount[])uuidCounts.Clone();
     }
 
     internal long Sequence { get; }
@@ -125,6 +132,7 @@ internal sealed class GameMcpCommand
     internal bool SaveCapture { get; }
     internal GameMcpFrameOperation? SourceOperation { get; }
     internal GameMcpFrameContext? FrameContext { get; }
+    internal GameMcpUuidCount[] UuidCounts { get; }
 }
 
 internal sealed class GameMcpCommandResult
@@ -398,6 +406,9 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.SpellWorkbench)
             return "the spell workbench boundary returned " + disposition +
                 " with exact preflight code " + exact;
+        if (commandKind == GameMcpCommandKind.SpellComposition)
+            return "the spell composition boundary returned " + disposition +
+                " with exact preflight code " + exact;
         return "the native action boundary returned " + disposition +
             " with exact result code " + exact;
     }
@@ -480,6 +491,25 @@ internal static class GameMcpActionResultCodeNames
                 return "action_family_unavailable";
             if (code == SpellWorkbenchActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == SpellWorkbenchActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.SpellComposition)
+        {
+            if (code == SpellCompositionActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == SpellCompositionActionResultCodes.Quarantined) return "quarantined";
+            if (code == SpellCompositionActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == SpellCompositionActionResultCodes.IdentityUnavailable) return "identity_unavailable";
+            if (code == SpellCompositionActionResultCodes.OutputLevelOutOfRange) return "output_level_out_of_range";
+            if (code == SpellCompositionActionResultCodes.AlreadyInRequestedState) return "already_in_requested_state";
+            if (code == SpellCompositionActionResultCodes.GlyphIdentityUnavailable) return "glyph_identity_unavailable";
+            if (code == SpellCompositionActionResultCodes.DuplicateGlyph) return "duplicate_glyph";
+            if (code == SpellCompositionActionResultCodes.GlyphUnavailable) return "glyph_unavailable";
+            if (code == SpellCompositionActionResultCodes.NotAnAugment) return "not_an_augment";
+            if (code == SpellCompositionActionResultCodes.UsageLimitExceeded) return "usage_limit_exceeded";
+            if (code == SpellCompositionActionResultCodes.IncompatibleComposition) return "incompatible_composition";
+            if (code == SpellCompositionActionResultCodes.MasteryRequirementUnmet) return "mastery_requirement_unmet";
+            if (code == SpellCompositionActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == SpellCompositionActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == SpellCompositionActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

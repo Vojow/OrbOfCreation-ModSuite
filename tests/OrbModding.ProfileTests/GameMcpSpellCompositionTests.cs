@@ -1,0 +1,400 @@
+using System;
+using System.Linq;
+using BepInEx.Configuration;
+using Newtonsoft.Json.Linq;
+using OrbAutomata;
+using OrbAutomata.GameMcp;
+using OrbModding.Common;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.World;
+using Xunit;
+
+namespace OrbModding.ProfileTests;
+
+public sealed class GameMcpSpellCompositionTests
+{
+    private static readonly Guid RecipeId =
+        Guid.Parse("36375616-7476-4748-8c20-ba628933bea5");
+    private static readonly Guid FirstGlyphId =
+        Guid.Parse("81894d9f-4e91-43da-9f47-2a97d77a2294");
+    private static readonly Guid SecondGlyphId =
+        Guid.Parse("0f38b02c-b81a-4fcd-9e07-73e09bd38dee");
+    private static readonly Guid ResourceId =
+        Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
+    private static readonly Guid SpellInstanceId =
+        Guid.Parse("13b37dd5-44f7-4eb5-af6b-168454578466");
+
+    [Fact]
+    public void ToolIsOneTwoModeMutationWithoutGenerationOrReceiptKnobs()
+    {
+        var tool = Assert.Single(
+            GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "game_spell_composition");
+
+        Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
+        var schema = tool["inputSchema"]!;
+        Assert.Equal(new[] { "mode" }, schema["required"]!.Values<string>().ToArray());
+        Assert.Equal(
+            new[] { "set_output_level", "set_augments" },
+            schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
+        Assert.NotNull(schema["properties"]!["outputLevel"]);
+        Assert.NotNull(schema["properties"]!["spellInstanceUuid"]);
+        Assert.NotNull(schema["properties"]!["augmentGlyphs"]);
+        Assert.Null(schema["properties"]!["worldGeneration"]);
+        Assert.Null(schema["properties"]!["detail"]);
+        Assert.Null(schema["properties"]!["verbosity"]);
+    }
+
+    [Fact]
+    public void ConditionalArgumentsNameEveryMissingField()
+    {
+        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
+        var response = router.Handle(GameMcpAcceptanceFixture.Request(
+            1,
+            "tools/call",
+            new JObject
+            {
+                ["name"] = "game_spell_composition",
+                ["arguments"] = new JObject { ["mode"] = "set_augments" },
+            }));
+
+        Assert.Equal(-32602, (int)response.Body!["error"]!["code"]!);
+        var errors = response.Body["error"]!["data"]!["validationErrors"]!
+            .Values<JObject>()
+            .ToArray();
+        Assert.Equal(new[] { "spellInstanceUuid", "augmentGlyphs" },
+            errors.Select(error => (string?)error!["field"]));
+        Assert.All(errors, error => Assert.Equal("missing_required", (string?)error!["code"]));
+    }
+
+    [Fact]
+    public void SpellRecipeReadCarriesCompleteNamedCompositionDecisionState()
+    {
+        var context = GameMcpTestHarness.Context(World());
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context,
+            "spell-recipes",
+            RecipeId.ToString("D"),
+            "SpellRecipeSO"));
+        var row = (JObject)response["row"]!;
+        var equipped = Assert.Single(row["equipped"]!.Values<JObject>())!;
+
+        Assert.Equal("4", (string?)row["outputLevel"]!["current"]);
+        Assert.Equal("12", (string?)row["outputLevel"]!["maximum"]);
+        Assert.Equal("Gather Knowledge", (string?)equipped["spellRecipe"]!["name"]);
+        Assert.Equal(SpellInstanceId.ToString("D"), (string?)equipped["spellInstance"]!["uuid"]);
+        Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
+        Assert.Equal("4", (string?)equipped["outputLevel"]);
+        Assert.Equal("6e0", (string?)equipped["effectiveLevel"]);
+        Assert.Equal(3, (int)equipped["requiredMasteryLevel"]!);
+        Assert.Equal(5, (int)equipped["recipeMasteryLevel"]!);
+        Assert.True((bool)equipped["duration"]!);
+        Assert.False((bool)equipped["usageRequirementsMet"]!);
+
+        var applied = Assert.Single(equipped["augmentGlyphs"]!.Values<JObject>())!;
+        Assert.Equal("Brew", (string?)applied["glyph"]!["name"]);
+        Assert.Equal(2, (int)applied["count"]!);
+        var options = equipped["augmentOptions"]!.Values<JObject>().ToArray();
+        Assert.Equal(new[] { "Insight", "Brew" },
+            options.Select(option => (string?)option!["glyph"]!["name"]));
+        Assert.Equal(new[] { 2, 3 }, options.Select(option => (int)option!["maximumUses"]!));
+        Assert.Equal(new[] { 0, 2 }, options.Select(option => (int)option!["currentUses"]!));
+
+        var cast = Assert.Single(equipped["castCosts"]!.Values<JObject>())!;
+        Assert.Equal("Knowledge", (string?)cast["resource"]!["name"]);
+        Assert.Equal("4.4e3", (string?)cast["cost"]);
+        Assert.Equal("9e6", (string?)cast["amount"]);
+        Assert.True((bool)cast["affordable"]!);
+        var drain = Assert.Single(equipped["drainCostsPerSecond"]!.Values<JObject>())!;
+        Assert.Equal("2.5e2", (string?)drain["cost"]);
+        Assert.Equal("9e6", (string?)drain["amount"]);
+    }
+
+    [Fact]
+    public void CommittedMutationReturnsOnlyTheCompleteNamedPostState()
+    {
+        var before = new SpellCompositionState(
+            4, 12, SpellInstanceId, RecipeId,
+            new[] { new SpellCompositionGlyphStack(FirstGlyphId, 1) });
+        var after = new SpellCompositionState(
+            4, 12, SpellInstanceId, RecipeId,
+            new[] { new SpellCompositionGlyphStack(FirstGlyphId, 2) });
+        var evidence = new SpellCompositionEvidence(true, in before, in after);
+        var submission = new SpellCompositionSubmission(
+            SpellCompositionPreflight.Proceeded,
+            SpellCompositionNativeStage.Verification,
+            NativeMutationOutcome.Verified,
+            new NativeMutationCallOutcome(1, 1, 1),
+            in evidence,
+            "the exact augment composition is observable on the requested spell");
+        var mapped = SpellCompositionActionResultMapper.Map(in submission);
+        var command = Command("set_augments");
+        var terminal = GameMcpCommandResult.FromAction(
+            in mapped,
+            command.Kind,
+            9,
+            3,
+            submission.Reason,
+            GameMcpSpellCompositionProjection.Project(in submission));
+        terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectSpellCompositionPostState(
+            GameMcpTestHarness.Context(World()),
+            SpellInstanceId));
+
+        var success = GameMcpTestHarness.Json(terminal.Project(command));
+
+        Assert.Equal(new[] { "status", "outputLevel", "equipped" },
+            success.Properties().Select(property => property.Name));
+        Assert.Equal("committed", (string?)success["status"]);
+        var equipped = Assert.Single(success["equipped"]!.Values<JObject>())!;
+        Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
+        Assert.Equal(2, (int)Assert.Single(
+            equipped["augmentGlyphs"]!.Values<JObject>())!["count"]!);
+        Assert.NotNull(equipped["augmentOptions"]);
+        Assert.NotNull(equipped["castCosts"]);
+        Assert.NotNull(equipped["drainCostsPerSecond"]);
+        Assert.Null(success["preflight"]);
+        Assert.Null(success["before"]);
+        Assert.Null(success["after"]);
+        Assert.Null(success["receipt"]);
+        Assert.DoesNotContain("payment", success.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("attempt", success.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FailureKeepsNamedOutcomeEvidenceAndQuarantineState()
+    {
+        var before = new SpellCompositionState(
+            4, 12, SpellInstanceId, RecipeId,
+            new[] { new SpellCompositionGlyphStack(FirstGlyphId, 1) });
+        var after = new SpellCompositionState(
+            4, 12, SpellInstanceId, RecipeId,
+            new[] { new SpellCompositionGlyphStack(FirstGlyphId, 1) });
+        var evidence = new SpellCompositionEvidence(true, in before, in after);
+        var submission = new SpellCompositionSubmission(
+            SpellCompositionPreflight.VerificationFailed,
+            SpellCompositionNativeStage.Verification,
+            NativeMutationOutcome.PostconditionFailed,
+            new NativeMutationCallOutcome(1, 1, 0),
+            in evidence,
+            "the requested composition was not observable");
+
+        var failure = GameMcpTestHarness.Json(
+            GameMcpSpellCompositionProjection.Project(in submission));
+
+        Assert.Equal(new[]
+            {
+                "preflight", "nativeStage", "outcome", "before", "after", "quarantined",
+            },
+            failure.Properties().Select(property => property.Name));
+        Assert.Equal("verification_failed", (string?)failure["preflight"]);
+        Assert.Equal("Gather Knowledge", (string?)failure["before"]!["spellRecipe"]!["name"]);
+        Assert.Equal("Brew", (string?)failure["before"]!["augmentGlyphs"]![0]!["glyph"]!["name"]);
+        Assert.True((bool)failure["quarantined"]!);
+        Assert.DoesNotContain("payment", failure.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ReadAdmissionAndOperationScopedOwnershipUseOneCompositionCapability()
+    {
+        var world = World();
+        Assert.True(GameMcpEntityCapabilityMap.Contains(
+            world,
+            Guid.Empty,
+            GameMcpCommandKind.SpellComposition,
+            out var outputReason), outputReason);
+        Assert.True(GameMcpEntityCapabilityMap.Contains(
+            world,
+            SpellInstanceId,
+            GameMcpCommandKind.SpellComposition,
+            out var spellReason), spellReason);
+        Assert.True(GameMcpEntityCapabilityMap.Supports(
+            "spell-slots", GameMcpCommandKind.SpellComposition));
+
+        var registry = new ActionFamilyOwnershipRegistry();
+        var configuration = BepInExAutomataConfiguration.Bind(new ConfigFile()).Current;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+        ownership.Refresh(configuration, lifecycleReady: true);
+        Assert.False(ownership.TryCaptureSpellCompositionMutationPermit());
+        Assert.True(ownership.TryBeginGameMcpOperation(
+            GameMcpCommandKind.SpellComposition,
+            "set_augments",
+            out var scope,
+            out var reason), reason);
+        using (scope)
+            Assert.True(ownership.TryCaptureSpellCompositionMutationPermit());
+        Assert.False(ownership.TryCaptureSpellCompositionMutationPermit());
+    }
+
+    private static GameMcpCommand Command(string mode) => new(
+        1,
+        GameMcpCommandKind.SpellComposition,
+        9,
+        3,
+        mode,
+        SpellInstanceId,
+        Guid.Empty,
+        "Spell",
+        string.Empty,
+        1,
+        string.Empty,
+        string.Empty,
+        false,
+        false,
+        uuidCounts: new[] { new GameMcpUuidCount(FirstGlyphId, 2) });
+
+    private static GameWorldState World()
+    {
+        var recipeGlyphs = PublicationTable<WorldSpellRecipeGlyph>.Create(new[]
+        {
+            new WorldSpellRecipeGlyph(0, FirstGlyphId),
+            new WorldSpellRecipeGlyph(1, SecondGlyphId),
+        });
+        var applied = PublicationTable<WorldSpellSlotGlyph>.Create(new[]
+        {
+            new WorldSpellSlotGlyph(FirstGlyphId, 2),
+        });
+        return new GameWorldState
+        {
+            CollectedAtEpoch = 9,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus(
+                    "spell-recipes", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
+                new WorldCollectionCategoryStatus(
+                    "spell slots", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
+                new WorldCollectionCategoryStatus(
+                    "spell workbench", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
+            }),
+            SpellRecipes = PublicationTable<WorldSpellRecipe>.Create(new[]
+            {
+                new WorldSpellRecipe(
+                    RecipeId,
+                    true,
+                    5,
+                    BigDouble.Zero,
+                    0,
+                    false,
+                    false,
+                    false,
+                    0,
+                    1d,
+                    1,
+                    false,
+                    BigDouble.One,
+                    BigDouble.One,
+                    BigDouble.One,
+                    BigDouble.One,
+                    BigDouble.One,
+                    BigDouble.One,
+                    false,
+                    recipeGlyphs,
+                    PublicationTable<WorldSpellRecipeCost>.Empty,
+                    true),
+            }),
+            Glyphs = PublicationTable<WorldGlyph>.Create(new[]
+            {
+                Glyph(SecondGlyphId, 3, 2, 2),
+                Glyph(FirstGlyphId, 7, 1, 3),
+            }),
+            SpellWorkbench = new WorldSpellWorkbench(
+                PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
+                PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
+                PublicationTable<WorldSpellWorkbenchCost>.Empty,
+                true,
+                1,
+                3,
+                true,
+                4,
+                12),
+            SpellSlots = PublicationTable<WorldSpellSlot>.Create(new[]
+            {
+                new WorldSpellSlot(
+                    0,
+                    SpellInstanceId,
+                    RecipeId,
+                    true,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
+                    true,
+                    true,
+                    true,
+                    2,
+                    3,
+                    BigDouble.Zero,
+                    4,
+                    6,
+                    3,
+                    5,
+                    true,
+                    false,
+                    applied),
+            }),
+            SpellCosts = PublicationTable<WorldSpellCost>.Create(new[]
+            {
+                new WorldSpellCost(0, WorldSpellCostKind.Immediate, ResourceId, new BigDouble(4.4d, 3)),
+                new WorldSpellCost(0, WorldSpellCostKind.Drain, ResourceId, new BigDouble(2.5d, 2)),
+            }),
+            Resources = PublicationTable<WorldResource>.Create(new[] { Resource() }),
+        };
+    }
+
+    private static WorldGlyph Glyph(Guid id, int level, int mastery, int maximum) => new(
+        id,
+        level,
+        0,
+        0,
+        true,
+        true,
+        false,
+        true,
+        false,
+        false,
+        mastery,
+        BigDouble.Zero,
+        BigDouble.Zero,
+        new BigDouble(maximum, 0),
+        true,
+        maximum);
+
+    private static WorldResource Resource()
+    {
+        var rateInputs = default(RawResourceRateInputs);
+        var traits = default(RawResourceTraits);
+        var modifiers = default(RawResourceModifiers);
+        var reading = new RawResourceSample(
+            ResourceId,
+            new BigDouble(9d, 6),
+            new BigDouble(1d, 9),
+            BigDouble.Zero,
+            true,
+            BigDouble.Zero,
+            BigDouble.Zero,
+            new BigDouble(100d),
+            new BigDouble(100d),
+            BigDouble.Zero,
+            BigDouble.Zero,
+            BigDouble.Zero,
+            false,
+            true,
+            false,
+            0,
+            Guid.Empty,
+            in rateInputs,
+            in traits,
+            in modifiers);
+        return new WorldResource(
+            in reading,
+            true,
+            new BigDouble(9.91d, 8),
+            0.009d,
+            false,
+            new BigDouble(9d, 6),
+            BigDouble.Zero);
+    }
+}

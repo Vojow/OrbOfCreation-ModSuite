@@ -55,6 +55,9 @@ internal sealed class GameMcpOperationRequest
         Uuid = source.Uuid;
         SecondaryUuid = source.SecondaryUuid;
         Uuids = source.Uuids is null ? Array.Empty<string>() : (string[])source.Uuids.Clone();
+        UuidCounts = source.UuidCounts is null
+            ? Array.Empty<GameMcpUuidCount>()
+            : (GameMcpUuidCount[])source.UuidCounts.Clone();
         ExpectedNativeType = source.ExpectedNativeType ?? string.Empty;
         Mode = source.Mode ?? string.Empty;
         Offset = source.Offset;
@@ -82,6 +85,7 @@ internal sealed class GameMcpOperationRequest
     internal Guid Uuid { get; }
     internal Guid SecondaryUuid { get; }
     internal string[] Uuids { get; }
+    internal GameMcpUuidCount[] UuidCounts { get; }
     internal string ExpectedNativeType { get; }
     internal string Mode { get; }
     internal int Offset { get; }
@@ -111,6 +115,7 @@ internal sealed class GameMcpOperationRequestBuilder
     internal Guid Uuid { get; set; }
     internal Guid SecondaryUuid { get; set; }
     internal string[] Uuids { get; set; } = Array.Empty<string>();
+    internal GameMcpUuidCount[] UuidCounts { get; set; } = Array.Empty<GameMcpUuidCount>();
     internal string ExpectedNativeType { get; set; } = string.Empty;
     internal string Mode { get; set; } = string.Empty;
     internal int Offset { get; set; }
@@ -130,6 +135,20 @@ internal sealed class GameMcpOperationRequestBuilder
     internal GameMcpNavigationSelector? Subtab { get; set; }
 
     internal GameMcpOperationRequest Freeze() => new(this);
+}
+
+internal readonly struct GameMcpUuidCount
+{
+    internal GameMcpUuidCount(Guid uuid, int count)
+    {
+        if (uuid == Guid.Empty) throw new ArgumentException("A UUID is required.", nameof(uuid));
+        if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
+        Uuid = uuid;
+        Count = count;
+    }
+
+    internal Guid Uuid { get; }
+    internal int Count { get; }
 }
 
 internal sealed class GameMcpNavigationSelector

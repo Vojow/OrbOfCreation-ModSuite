@@ -14,7 +14,9 @@ internal readonly struct WorldGlyph : IWorldEntity
         int masteryReqCount,
         BigDouble freeUsages,
         BigDouble freeLoadoutUsages,
-        BigDouble maxUsages)
+        BigDouble maxUsages,
+        bool available = false,
+        int maximumUsages = 0)
     {
         GlyphId = glyphId;
         Level = level;
@@ -30,6 +32,8 @@ internal readonly struct WorldGlyph : IWorldEntity
         FreeUsages = freeUsages;
         FreeLoadoutUsages = freeLoadoutUsages;
         MaxUsages = maxUsages;
+        Available = available;
+        MaximumUsages = maximumUsages;
     }
 
     internal Guid GlyphId { get; }
@@ -63,6 +67,12 @@ internal readonly struct WorldGlyph : IWorldEntity
     internal BigDouble FreeLoadoutUsages { get; }
 
     internal BigDouble MaxUsages { get; }
+
+    /// <summary>The native progression verdict used by the glyph picker now.</summary>
+    internal bool Available { get; }
+
+    /// <summary>The native picker clamp for this glyph, after active modifiers.</summary>
+    internal int MaximumUsages { get; }
 }
 
 internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
@@ -81,6 +91,8 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
     private Func<object, BigDouble>? _freeUsages;
     private Func<object, BigDouble>? _freeLoadoutUsages;
     private Func<object, BigDouble>? _maxUsages;
+    private Func<object, bool>? _available;
+    private Func<object, int>? _maximumUsages;
 
     internal override string Category => "glyphs";
 
@@ -103,6 +115,8 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
         _freeUsages = bind.ModifierRecord("freeUsages");
         _freeLoadoutUsages = bind.ModifierRecord("freeLoadoutUsages");
         _maxUsages = bind.ModifierRecord("maxUsages");
+        _available = bind.Call<bool>("IsAvailable");
+        _maximumUsages = bind.Call<int>("GetMaxUsages");
         return bind.Failure;
     }
 
@@ -121,5 +135,7 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
             _masteryReqCount!(entity),
             _freeUsages!(entity),
             _freeLoadoutUsages!(entity),
-            _maxUsages!(entity));
+            _maxUsages!(entity),
+            _available!(entity),
+            _maximumUsages!(entity));
 }

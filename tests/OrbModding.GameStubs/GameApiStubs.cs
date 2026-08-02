@@ -724,6 +724,28 @@ public class StructureSO : UpgradeableObject, Targeting.ITargetable, IActionable
 
 public class Player
 {
+    private static Player _instance = new Player(initializeOutputVariables: true);
+    public IntVariable spellOutputLevel;
+    public IntVariable maxSpellOutputLevel;
+
+    public Player() : this(initializeOutputVariables: true)
+    {
+    }
+
+    private Player(bool initializeOutputVariables)
+    {
+        spellOutputLevel = new IntVariable { Value = initializeOutputVariables ? 1 : 0 };
+        maxSpellOutputLevel = new IntVariable { Value = initializeOutputVariables ? 100 : 0 };
+    }
+
+    public static Player Current
+    {
+        get => _instance;
+        set => _instance = value;
+    }
+
+    public static IntVariable GetSpellOutputLevel() => _instance.spellOutputLevel;
+
     private static IntVariable bulkDevelopment =
         IntVariable.Register(KnownVariableIds.BulkDevelopment);
 
@@ -809,6 +831,16 @@ public class Spell
     public UnityEngine.Sprite Icon { get; set; } = new UnityEngine.Sprite();
     public ResourceCostList Cost { get; } = new ResourceCostList();
     public GuidContainer guidContainer = new GuidContainer(Guid.NewGuid());
+    public Stacked.StackedIdRecord<GlyphSO> augmentGlyphRefs = new Stacked.StackedIdRecord<GlyphSO>();
+    private List<GlyphSO> augmentGlyphs = new List<GlyphSO>();
+    public int BaseEffectLevel { get; set; } = 1;
+    public bool DurationSpell { get; set; }
+    public bool ToggledSpell { get; set; }
+    public bool NativeUsageRequirementsMet { get; set; } = true;
+    public bool SuppressAugmentMutation { get; set; }
+    public bool ThrowBeforeAugmentMutation { get; set; }
+    public bool ThrowAfterAugmentMutation { get; set; }
+    public int SetAugmentCalls { get; private set; }
 
     public Spell()
     {
@@ -824,7 +856,7 @@ public class Spell
     public string GetName() => DisplayName;
     public UnityEngine.Sprite GetIcon() => Icon;
     public bool IsChanneled() => Channeled;
-    public bool IsToggledSpell() => false;
+    public bool IsToggledSpell() => ToggledSpell;
     public bool IsEmpty() => false;
     public bool CanCharge() => true;
     public bool IsCasting() => false;
@@ -845,6 +877,33 @@ public class Spell
     public BigDouble GetCooldownTimeRemaining() => CooldownRemaining;
     public ResourceCostList GetCost() => Cost;
     public ResourceCostList GetDrainCost() => new ResourceCostList();
+    public int GetOutputLevel() => Player.GetSpellOutputLevel().AsInt();
+    public int GetLevel() => Math.Max(GetOutputLevel(), BaseEffectLevel);
+    public int GetRequiredLevel() => GlyphSO.GetMasterReqOfList(augmentGlyphs);
+    public int GetRecipeMasteryLevel() => reference?.masteryLevel ?? 0;
+    public bool IsDurationSpell() => DurationSpell;
+    public bool HasMetUsageRequirements() => NativeUsageRequirementsMet;
+    public List<GlyphSO> GetAugmentGlyphs() => new List<GlyphSO>(augmentGlyphs);
+    public int GetQuantityOfGlyph(GlyphSO glyph) => augmentGlyphRefs.GetQuantity(glyph);
+    public int GetNonFreeUsesOfGlyph(GlyphSO glyph) =>
+        Math.Max(GetQuantityOfGlyph(glyph) - (int)glyph.freeUsages.GetValue().ToDouble(), 0);
+    public int GetTotalAugGlyphs() => augmentGlyphRefs.GetTotalStacks();
+    public void SetLevel(int _) => ComputeCost();
+    public void SetAugmentGlyphs(Stacked.StackedIdRecord<GlyphSO> value)
+    {
+        SetAugmentCalls++;
+        if (ThrowBeforeAugmentMutation) throw new InvalidOperationException("injected failure before augment mutation");
+        if (!SuppressAugmentMutation)
+        {
+            augmentGlyphRefs = new Stacked.StackedIdRecord<GlyphSO>(value);
+            augmentGlyphs = augmentGlyphRefs.GetItemList();
+            ComputeCost();
+        }
+        if (ThrowAfterAugmentMutation) throw new InvalidOperationException("injected failure after augment mutation");
+    }
+    private void ComputeCost()
+    {
+    }
     public object GetScalingInfo() => new object();
     public void SetChargeInput(string source, bool holding) => HoldingCharge = holding;
 
@@ -1555,6 +1614,69 @@ public sealed class SpellListVariable : GenericListVariable<Spell>, IEnumerable
     public Spell this[int index] => value[index];
 
     public IEnumerator GetEnumerator() => value.GetEnumerator();
+}
+
+namespace Stacked
+{
+    public class StackedIdEntry<T>
+    {
+        public T item = default!;
+        public int quantity;
+    }
+
+    public class AbstractStackedRecord<T, TEntry>
+        where TEntry : StackedIdEntry<T>, new()
+    {
+        protected readonly List<TEntry> entries = new List<TEntry>();
+
+        public void Set(T item, int quantity)
+        {
+            var entry = entries.FirstOrDefault(candidate => EqualityComparer<T>.Default.Equals(candidate.item, item));
+            if (quantity <= 0)
+            {
+                if (entry is not null) entries.Remove(entry);
+                return;
+            }
+            if (entry is null)
+            {
+                entry = new TEntry { item = item };
+                entries.Add(entry);
+            }
+            entry.quantity = quantity;
+        }
+
+        public int GetQuantity(T item) =>
+            entries.FirstOrDefault(candidate => EqualityComparer<T>.Default.Equals(candidate.item, item))?.quantity ?? 0;
+
+        public int GetTotalStacks() => entries.Sum(entry => entry.quantity);
+
+        public List<T> GetItemList()
+        {
+            var result = new List<T>();
+            foreach (var entry in entries)
+                for (var index = 0; index < entry.quantity; index++) result.Add(entry.item);
+            return result;
+        }
+
+        public List<TEntry> GetEntries() => new List<TEntry>(entries);
+    }
+
+    public sealed class StackedIdRecord<T> : AbstractStackedRecord<T, StackedIdEntry<T>>
+    {
+        public StackedIdRecord()
+        {
+        }
+
+        public StackedIdRecord(StackedIdRecord<T> source)
+        {
+            foreach (var entry in source.GetEntries()) Set(entry.item, entry.quantity);
+        }
+
+        public StackedIdRecord(List<T> values)
+        {
+            foreach (var value in values) Set(value, GetQuantity(value) + 1);
+        }
+    }
 }
 
 public sealed class EquipmentSO : IdScriptableObject

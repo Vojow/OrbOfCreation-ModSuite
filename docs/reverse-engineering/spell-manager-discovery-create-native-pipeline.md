@@ -6,7 +6,9 @@ v1.0.5; live mutation promotion remains deliberately pending.
 This dossier is the native contract for M1 family B-002 (`V-SPELL-01` through
 `V-SPELL-03`). It covers selecting one authored base recipe, discovering that exact
 recipe, and creating another runtime spell instance from it. Augment and output-level
-composition is B-003; loadout removal and reordering are B-004.
+composition is B-003 and is specified in
+[spell-composition-native-pipeline.md](spell-composition-native-pipeline.md); loadout removal and
+reordering are B-004.
 
 ## Evidence source and identity
 

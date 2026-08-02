@@ -298,6 +298,17 @@ internal sealed class GameMcpProtocolRouter
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "select", "discover", "create");
                 break;
+            case "game_spell_composition":
+                builder.Mode = RequireOneOf(arguments, "mode", "set_output_level", "set_augments");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                if (builder.Mode == "set_output_level")
+                    builder.Amount = RequiredInt(arguments, "outputLevel", 1, int.MaxValue);
+                else
+                {
+                    builder.Uuid = RequireUuid(arguments, "spellInstanceUuid");
+                    builder.UuidCounts = RequireUuidCountArray(arguments, "augmentGlyphs", 64);
+                }
+                break;
             case "suite_config_set":
                 builder.ConfigurationGeneration = RequiredUlong(
                     arguments, "configurationGeneration");
@@ -365,7 +376,8 @@ internal sealed class GameMcpProtocolRouter
         GameMcpOperationRequestBuilder request) => name switch
     {
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" => GameMcpOperationClass.Gameplay,
+            "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
+            "game_spell_composition" => GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
         "game_screenshot" when request.SaveCapture => GameMcpOperationClass.SuiteAdministration,
@@ -389,7 +401,8 @@ internal sealed class GameMcpProtocolRouter
         "trace_health" => GameMcpFrameData.TraceWriterHealth,
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" =>
+            "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
+            "game_spell_composition" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
@@ -558,6 +571,30 @@ internal sealed class GameMcpProtocolRouter
                 readOnly: false,
                 idempotent: false),
             Tool(
+                "game_spell_composition",
+                "Set spell output level or augments",
+                "Set the global spell output level or replace one equipped spell instance's exact augment stacks. Success returns the newer named composition state inline.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("set_output_level", "set_augments"),
+                        ["outputLevel"] = IntegerSchema(1, int.MaxValue),
+                        ["spellInstanceUuid"] = StringSchema("Runtime spell-instance UUID published inline under an equipped spell recipe."),
+                        ["augmentGlyphs"] = ArraySchema(
+                            ObjectSchema(
+                                new JObject
+                                {
+                                    ["uuid"] = StringSchema("Published GlyphSO UUID."),
+                                    ["count"] = IntegerSchema(1, int.MaxValue),
+                                },
+                                "uuid", "count"),
+                            0,
+                            64),
+                    },
+                    "mode"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
                 "suite_config_set",
                 "Commit one suite setting",
                 "Write one allowlisted setting through the single committed configuration-store publication path.",
@@ -722,6 +759,39 @@ internal sealed class GameMcpProtocolRouter
                     "unexpected_for_mode",
                     "offerUuid",
                     "field 'offerUuid' is not accepted for mode '" + mode + "'"));
+            }
+        }
+
+        if (string.Equals(name, "game_spell_composition", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var output = arguments.ContainsKey("outputLevel");
+            var spell = arguments.ContainsKey("spellInstanceUuid");
+            var augments = arguments.ContainsKey("augmentGlyphs");
+            if (mode == "set_output_level")
+            {
+                if (!output) errors.Add(ValidationError(
+                    "missing_required", "outputLevel",
+                    "required field 'outputLevel' is missing for mode 'set_output_level'"));
+                if (spell) errors.Add(ValidationError(
+                    "unexpected_for_mode", "spellInstanceUuid",
+                    "field 'spellInstanceUuid' is not accepted for mode 'set_output_level'"));
+                if (augments) errors.Add(ValidationError(
+                    "unexpected_for_mode", "augmentGlyphs",
+                    "field 'augmentGlyphs' is not accepted for mode 'set_output_level'"));
+            }
+            else if (mode == "set_augments")
+            {
+                if (!spell) errors.Add(ValidationError(
+                    "missing_required", "spellInstanceUuid",
+                    "required field 'spellInstanceUuid' is missing for mode 'set_augments'"));
+                if (!augments) errors.Add(ValidationError(
+                    "missing_required", "augmentGlyphs",
+                    "required field 'augmentGlyphs' is missing for mode 'set_augments'"));
+                if (output) errors.Add(ValidationError(
+                    "unexpected_for_mode", "outputLevel",
+                    "field 'outputLevel' is not accepted for mode 'set_augments'"));
             }
         }
 
@@ -899,6 +969,33 @@ internal sealed class GameMcpProtocolRouter
             if (result[index].Length == 0)
                 throw new GameMcpInvalidParamsException(
                     name + "[" + index + "] must not be empty");
+        }
+        return result;
+    }
+
+    private static GameMcpUuidCount[] RequireUuidCountArray(
+        JObject source,
+        string name,
+        int maximum)
+    {
+        if (source[name] is not JArray values)
+            throw new GameMcpInvalidParamsException(name + " must be an array");
+        if (values.Count > maximum)
+            throw new GameMcpInvalidParamsException(
+                name + " accepts at most " + maximum + " rows");
+        var result = new GameMcpUuidCount[values.Count];
+        for (var index = 0; index < values.Count; index++)
+        {
+            if (values[index] is not JObject row)
+                throw new GameMcpInvalidParamsException(
+                    name + "[" + index + "] must be an object");
+            foreach (var property in row.Properties())
+                if (property.Name is not "uuid" and not "count")
+                    throw new GameMcpInvalidParamsException(
+                        name + "[" + index + "]." + property.Name + " is unexpected");
+            result[index] = new GameMcpUuidCount(
+                RequireUuid(row, "uuid"),
+                RequiredInt(row, "count", 1, int.MaxValue));
         }
         return result;
     }

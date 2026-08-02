@@ -527,6 +527,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .SpellWorkbenchOwnershipFailure)
+                    , createSpellComposition: () => new SpellCompositionGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureSpellCompositionMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .SpellCompositionOwnershipFailure)
 #endif
                     );
             },
@@ -1477,7 +1485,9 @@ public sealed class Plugin : BaseUnityPlugin
                  command.Mode,
                  command.SecondaryId)))
         {
-            state = GameMcpWorldQuery.ProjectPostState(latest, category, command.TargetId);
+            state = command.Kind == GameMcpCommandKind.SpellComposition
+                ? GameMcpWorldQuery.ProjectSpellCompositionPostState(latest, command.TargetId)
+                : GameMcpWorldQuery.ProjectPostState(latest, category, command.TargetId);
         }
         else
         {
@@ -1502,6 +1512,7 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandKind.SpellLevel => "spell-recipes",
         GameMcpCommandKind.DiscoveryTreeOffer => "discovery-trees",
         GameMcpCommandKind.SpellWorkbench => "spell-recipes",
+        GameMcpCommandKind.SpellComposition => "spell-recipes",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 
@@ -1695,6 +1706,8 @@ public sealed class Plugin : BaseUnityPlugin
             nativeType = "DiscoveryTreeSO";
         else if (kind == GameMcpCommandKind.SpellWorkbench)
             nativeType = "SpellRecipeSO";
+        else if (kind == GameMcpCommandKind.SpellComposition)
+            nativeType = request.Mode == "set_output_level" ? "IntVariable" : "Spell";
         else if (kind == GameMcpCommandKind.ConfigurationSet)
         {
             mode = request.Section;
@@ -1747,7 +1760,8 @@ public sealed class Plugin : BaseUnityPlugin
             request.Capture || kind == GameMcpCommandKind.Screenshot,
             request.SaveCapture,
             operation,
-            context);
+            context,
+            request.UuidCounts);
 
         if (request.Classification != GameMcpOperationClass.Gameplay)
         {

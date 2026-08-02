@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.World;
@@ -961,6 +962,11 @@ internal static class GameMcpWorldQuery
             ["masteryLevel"] = recipe.MasteryLevel,
             ["selected"] = selected,
         };
+        result["outputLevel"] = new JObject
+        {
+            ["current"] = world.SpellWorkbench.OutputLevel,
+            ["maximum"] = world.SpellWorkbench.MaximumOutputLevel,
+        };
 
         if (recipe.CoreGlyphs.Count > 0)
         {
@@ -988,10 +994,7 @@ internal static class GameMcpWorldQuery
         {
             var slot = world.SpellSlots[index];
             if (!slot.Occupied || slot.SpellRecipeId != recipe.EntityId) continue;
-            holdings.Add(new JObject
-            {
-                ["slot"] = slot.SlotIndex,
-            });
+            holdings.Add(ProjectEquippedSpell(world, in slot));
         }
         if (holdings.Count > 0) result["equipped"] = holdings;
 
@@ -1026,6 +1029,139 @@ internal static class GameMcpWorldQuery
             next["reasonCode"] = "loadout_full";
         result[recipe.Discovered ? "create" : "discover"] = next;
         return result.Freeze();
+    }
+
+    /// <summary>The one newer-world post-state shape shared by both composition modes.</summary>
+    internal static GameMcpValue ProjectSpellCompositionPostState(
+        GameMcpFrameContext state,
+        Guid spellInstanceId)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        var result = new JObject
+        {
+            ["outputLevel"] = new JObject
+            {
+                ["current"] = world.SpellWorkbench.OutputLevel,
+                ["maximum"] = world.SpellWorkbench.MaximumOutputLevel,
+            },
+        };
+        var equipped = new JArray();
+        for (var index = 0; index < world.SpellSlots.Count; index++)
+        {
+            var slot = world.SpellSlots[index];
+            if (!slot.Occupied) continue;
+            if (spellInstanceId != Guid.Empty && slot.SpellInstanceId != spellInstanceId) continue;
+            equipped.Add(ProjectEquippedSpell(world, in slot));
+        }
+        if (spellInstanceId != Guid.Empty && equipped.Count == 0)
+            return PostStateUnavailable(
+                "post_state_not_published",
+                "the newer world has no equipped spell with the committed runtime identity");
+        if (equipped.Count > 0) result["equipped"] = equipped;
+        return result.Freeze();
+    }
+
+    private static JObject ProjectEquippedSpell(
+        GameWorldState world,
+        in WorldSpellSlot slot)
+    {
+        var recipe = EntityIdentityFormatter.Describe(
+            slot.SpellRecipeId,
+            world.EntityIdentities);
+        var instance = new JObject
+        {
+            ["uuid"] = slot.SpellInstanceId.ToString("D"),
+            ["name"] = recipe.HasName ? recipe.Name : "Equipped spell",
+        };
+        var result = new JObject
+        {
+            ["spellInstance"] = instance,
+            ["spellRecipeId"] = slot.SpellRecipeId.ToString("D"),
+            ["slot"] = slot.SlotIndex,
+            ["outputLevel"] = slot.OutputLevel,
+            ["effectiveLevel"] = slot.EffectiveLevel,
+            ["requiredMasteryLevel"] = slot.RequiredMasteryLevel,
+            ["recipeMasteryLevel"] = slot.RecipeMasteryLevel,
+            ["duration"] = slot.DurationSpell,
+            ["toggleable"] = slot.Toggled,
+            ["usageRequirementsMet"] = slot.UsageRequirementsMet,
+        };
+        if (slot.AugmentGlyphs.Count > 0)
+        {
+            var applied = new JArray();
+            for (var index = 0; index < slot.AugmentGlyphs.Count; index++)
+            {
+                var value = slot.AugmentGlyphs[index];
+                applied.Add(new JObject
+                {
+                    ["glyphId"] = value.GlyphId.ToString("D"),
+                    ["count"] = value.Quantity,
+                });
+            }
+            result["augmentGlyphs"] = applied;
+        }
+        var options = new JArray();
+        for (var index = 0; index < world.Glyphs.Count; index++)
+        {
+            var glyph = world.Glyphs[index];
+            if (!glyph.AugmentsSpells) continue;
+            var current = 0;
+            for (var applied = 0; applied < slot.AugmentGlyphs.Count; applied++)
+                if (slot.AugmentGlyphs[applied].GlyphId == glyph.GlyphId)
+                    current = slot.AugmentGlyphs[applied].Quantity;
+            var option = new JObject
+            {
+                ["glyphId"] = glyph.GlyphId.ToString("D"),
+                ["ownedLevel"] = glyph.Level,
+                ["available"] = glyph.Available,
+                ["maximumUses"] = glyph.MaximumUsages,
+                ["currentUses"] = current,
+                ["masteryRequirement"] = glyph.MasteryReqCount,
+            };
+            if (glyph.FreeLevels != 0) option["bonusLevel"] = glyph.FreeLevels;
+            if (glyph.RequiresDuration) option["requiresDuration"] = true;
+            if (glyph.RequiresToggleable) option["requiresToggleable"] = true;
+            options.Add(option);
+        }
+        if (options.Count > 0) result["augmentOptions"] = options;
+        var immediate = ProjectEquippedSpellCosts(world, slot.SlotIndex, WorldSpellCostKind.Immediate);
+        var drain = ProjectEquippedSpellCosts(world, slot.SlotIndex, WorldSpellCostKind.Drain);
+        if (immediate.Count > 0) result["castCosts"] = immediate;
+        if (drain.Count > 0) result["drainCostsPerSecond"] = drain;
+        return result;
+    }
+
+    private static JArray ProjectEquippedSpellCosts(
+        GameWorldState world,
+        int slotIndex,
+        WorldSpellCostKind kind)
+    {
+        var result = new JArray();
+        if (!WorldSpellCostLookup.TryFindRange(
+                world.SpellCosts,
+                slotIndex,
+                kind,
+                out var start,
+                out var count))
+            return result;
+        for (var index = start; index < start + count; index++)
+        {
+            var value = world.SpellCosts[index];
+            var row = new JObject
+            {
+                ["resourceId"] = value.ResourceId.ToString("D"),
+                ["cost"] = new GameMcpDomainValue(value.Amount),
+            };
+            if (WorldLookup.TryFind(world.Resources, value.ResourceId, out var resource))
+            {
+                row["amount"] = new GameMcpDomainValue(resource.TrueQuantity);
+                row["affordable"] = resource.TrueQuantity >= value.Amount;
+            }
+            result.Add(row);
+        }
+        return result;
     }
 
     private static JArray ProjectSpellCosts(PublicationTable<WorldSpellRecipeCost> values)

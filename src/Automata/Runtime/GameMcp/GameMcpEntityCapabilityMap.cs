@@ -51,7 +51,7 @@ internal static class GameMcpEntityCapabilityMap
         out string reason)
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
-        if (target == Guid.Empty)
+        if (target == Guid.Empty && capability != GameMcpCommandKind.SpellComposition)
         {
             reason = "a non-empty stable UUID is required";
             return false;
@@ -85,8 +85,42 @@ internal static class GameMcpEntityCapabilityMap
                     "discovery-trees",
                     capability,
                     out reason),
+            GameMcpCommandKind.SpellComposition => SpellCompositionTarget(world, target, out reason),
             _ => Unsupported(capability, out reason),
         };
+    }
+
+    private static bool SpellCompositionTarget(
+        GameWorldState world,
+        Guid target,
+        out string reason)
+    {
+        if (target == Guid.Empty)
+        {
+            if (world.SpellWorkbench.MaximumOutputLevel > 0)
+            {
+                reason = string.Empty;
+                return true;
+            }
+            reason = "the published world has no live spell output-level range";
+            return false;
+        }
+        var matches = 0;
+        for (var index = 0; index < world.SpellSlots.Count; index++)
+            if (world.SpellSlots[index].Occupied &&
+                world.SpellSlots[index].SpellInstanceId == target)
+                matches++;
+        if (matches == 1)
+        {
+            reason = string.Empty;
+            return true;
+        }
+        reason = matches == 0
+            ? "runtime Spell identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
+              " is absent from published equipped spell instances"
+            : "runtime Spell identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
+              " is ambiguous across " + matches + " equipped instances";
+        return false;
     }
 
     internal static bool Supports(string category, GameMcpCommandKind capability) =>
@@ -220,7 +254,7 @@ internal static class GameMcpEntityCapabilityMap
         D("plot-action-instances", "PlotNodeActionInstance"),
         D("action-queues", "ActionQueueVariable"),
         D("action-queue-slots", "PlotNodeActionInstance"),
-        D("spell-slots", "Spell"),
+        D("spell-slots", "Spell", GameMcpCommandKind.SpellComposition),
         D("spell-costs", "Spell"),
         D("mastery-experience", "SpellRecipeSO|AlchemyRecipeSO|EquipmentSO"),
         D("concept-recipes", "AlchemyRecipeSO"),
