@@ -35,6 +35,7 @@ internal static class GameMcpSpellWorkbenchProjection
         Add(result, "coreGlyphs", state.CoreGlyphIds);
         Add(result, "augmentGlyphs", state.AugmentGlyphIds);
         Add(result, "spellInstances", state.TargetSpellInstanceIds);
+        Add(result, "matchingLayoutSpellInstances", state.MatchingLayoutSpellInstanceIds);
         return result;
     }
 

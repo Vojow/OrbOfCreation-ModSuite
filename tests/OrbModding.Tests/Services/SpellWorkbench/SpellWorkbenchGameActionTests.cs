@@ -80,11 +80,16 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     }
 
     [Fact]
-    public void LoadoutAddRefusesBeforeMutationUntilEveryPlayerVisibleAdmissionGateIsBound()
+    public void LoadoutAddBakesTheExactGlyphLayoutAndPaysOnlyAfterAdmission()
     {
         var (recipe, _, _) = Recipe(discovered: true);
-        var resource = new ResourceSO { quantity = new BigDouble(10) };
-        recipe.baseUsageCost.costs.Add(new ResourceTuple(resource, new BigDouble(3)));
+        recipe.NativeUsageRequirementsMet = false;
+        var usageResource = new ResourceSO { quantity = new BigDouble(10) };
+        recipe.baseUsageCost.costs.Add(new ResourceTuple(usageResource, new BigDouble(3)));
+        var paymentResource = new ResourceSO { quantity = new BigDouble(10) };
+        var createCost = new ResourceCostList();
+        createCost.costs.Add(new ResourceTuple(paymentResource, new BigDouble(2)));
+        SpellManager.instance!.CreateCostOverride = createCost;
         var augment = new GlyphSO
         {
             DisplayName = "Bright",
@@ -102,13 +107,108 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
             Array.Empty<SpellWorkbenchGlyphStack>(),
             new[] { new SpellWorkbenchGlyphStack(augment.GetGuid(), 2) }));
 
-        Assert.Equal(SpellWorkbenchPreflight.ContractUnavailable, result.Preflight);
-        Assert.Contains("complete player-visible admission contract is not bound", result.Reason);
+        Assert.True(result.Verified, result.Reason);
+        var equipped = Assert.Single(SpellManager.instance!.activeSpells.value);
+        Assert.Equal(new[] { augment, augment }, equipped.GetAugmentGlyphs());
+        Assert.Single(result.Evidence.After.MatchingLayoutSpellInstanceIds);
+        Assert.Equal(new[] { augment, augment }, SpellManager.instance.selectedAugmentGlyphs.value);
+        Assert.Equal(1, createCost.PerformCalls);
+        Assert.Equal(8d, paymentResource.GetTrueQuantity().ToDouble());
+        Assert.Equal(10d, usageResource.GetTrueQuantity().ToDouble());
+    }
+
+    [Fact]
+    public void LoadoutAddAggregatesDuplicateGlyphRowsAgainstTheLiveUsableCount()
+    {
+        var (recipe, _, _) = Recipe(discovered: true);
+        var augment = Augment(maximum: 2);
+        using var action = Action();
+
+        var result = action.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout,
+            recipe.GetGuid(), Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(),
+            new[]
+            {
+                new SpellWorkbenchGlyphStack(augment.GetGuid(), 2),
+                new SpellWorkbenchGlyphStack(augment.GetGuid(), 1),
+            }));
+
+        Assert.Equal(SpellWorkbenchPreflight.SelectionUnavailable, result.Preflight);
+        Assert.Contains("Requested 3 uses", result.Reason);
         Assert.Empty(SpellManager.instance!.activeSpells.value);
-        Assert.Empty(SpellManager.instance.selectedCoreGlyphs.value);
-        Assert.Empty(SpellManager.instance.selectedAugmentGlyphs.value);
-        Assert.Equal(0, recipe.baseUsageCost.PerformCalls);
-        Assert.Equal(10d, resource.GetTrueQuantity().ToDouble());
+    }
+
+    [Fact]
+    public void LoadoutAddRefusesUnmetGlyphAndRecipeRequirementsBeforePayment()
+    {
+        var (recipe, _, _) = Recipe(discovered: true);
+        recipe.NativeUsageRequirementsMet = false;
+        var augment = Augment();
+        augment.requiresDuration = true;
+        var payment = new ResourceCostList();
+        SpellManager.instance!.CreateCostOverride = payment;
+        using var action = Action();
+
+        var glyphResult = action.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout,
+            recipe.GetGuid(), Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(),
+            new[] { new SpellWorkbenchGlyphStack(augment.GetGuid(), 1) }));
+        var recipeResult = action.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout,
+            recipe.GetGuid(), Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(),
+            Array.Empty<SpellWorkbenchGlyphStack>()));
+
+        Assert.Equal(SpellWorkbenchPreflight.GlyphRequirementsUnavailable, glyphResult.Preflight);
+        Assert.Equal(SpellWorkbenchPreflight.UsageRequirementsUnavailable, recipeResult.Preflight);
+        Assert.Equal(0, payment.PerformCalls);
+        Assert.Empty(SpellManager.instance.activeSpells.value);
+    }
+
+    [Fact]
+    public void LoadoutAddChecksUsageBudgetAndUniqueCompatibilityBeforePayment()
+    {
+        var (recipe, _, _) = Recipe(discovered: true);
+        var usageResource = new ResourceSO { quantity = BigDouble.Zero };
+        recipe.baseUsageCost.costs.Add(new ResourceTuple(usageResource, BigDouble.One));
+        var payment = new ResourceCostList();
+        SpellManager.instance!.CreateCostOverride = payment;
+        using var action = Action();
+
+        var budget = action.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout, recipe.GetGuid(), Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(), Array.Empty<SpellWorkbenchGlyphStack>()));
+        recipe.baseUsageCost = new ResourceCostList();
+        recipe.NativeUniqueSpell = true;
+        SpellManager.instance.activeSpells.value.Add(recipe.CreateEmpty(0));
+        var unique = action.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout, recipe.GetGuid(), Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(), Array.Empty<SpellWorkbenchGlyphStack>()));
+
+        Assert.Equal(SpellWorkbenchPreflight.UsageUnaffordable, budget.Preflight);
+        Assert.Equal(SpellWorkbenchPreflight.UniqueSpellConflict, unique.Preflight);
+        Assert.Equal(0, payment.PerformCalls);
+    }
+
+    [Fact]
+    public void LoadoutAddFaultsWhenPaymentRunsWithoutTheExactRequestedOutcome()
+    {
+        var (recipe, _, _) = Recipe(discovered: true);
+        var payment = new ResourceCostList();
+        SpellManager.instance!.CreateCostOverride = payment;
+        SpellManager.instance.SuppressCreation = true;
+        using var action = Action();
+
+        var result = action.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout, recipe.GetGuid(), Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(), Array.Empty<SpellWorkbenchGlyphStack>()));
+
+        Assert.Equal(SpellWorkbenchPreflight.VerificationFailed, result.Preflight);
+        Assert.True(result.Evidence.PaymentInvoked);
+        Assert.Equal(1, payment.PerformCalls);
+        Assert.Empty(SpellManager.instance.activeSpells.value);
     }
 
     [Fact]
@@ -220,6 +320,19 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
             new SpellWorkbenchGlyphStack(first.GetGuid(), 1),
             new SpellWorkbenchGlyphStack(second.GetGuid(), 1),
         };
+
+    private static GlyphSO Augment(int maximum = 4)
+    {
+        var augment = new GlyphSO
+        {
+            DisplayName = "Bright",
+            NativeAvailable = true,
+            augmentsSpells = true,
+            maxUsages = new ValueModifierRecord(new BigDouble(maximum)),
+        };
+        IdScriptableObject.RuntimeLookup[augment.GetGuid()] = augment;
+        return augment;
+    }
 
     private static SpellWorkbenchGameAction Action(
         long epoch = Epoch,

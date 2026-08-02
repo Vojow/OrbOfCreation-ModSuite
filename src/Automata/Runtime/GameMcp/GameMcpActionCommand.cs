@@ -628,6 +628,14 @@ internal static class GameMcpActionResultCodeNames
                 return "action_family_unavailable";
             if (code == SpellWorkbenchActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == SpellWorkbenchActionResultCodes.VerificationFailed) return "verification_failed";
+            if (code == SpellWorkbenchActionResultCodes.UsageRequirementsUnavailable)
+                return "usage_requirements_unavailable";
+            if (code == SpellWorkbenchActionResultCodes.UsageUnaffordable)
+                return "usage_budget_unavailable";
+            if (code == SpellWorkbenchActionResultCodes.UniqueSpellConflict)
+                return "unique_spell_conflict";
+            if (code == SpellWorkbenchActionResultCodes.GlyphRequirementsUnavailable)
+                return "glyph_requirements_unavailable";
         }
         if (commandKind == GameMcpCommandKind.SpellComposition)
         {

@@ -21,6 +21,10 @@ internal enum SpellWorkbenchPreflight
     MutationPermitUnavailable = 15,
     PostCommitFault = 16,
     VerificationFailed = 17,
+    UsageRequirementsUnavailable = 18,
+    UsageUnaffordable = 19,
+    UniqueSpellConflict = 20,
+    GlyphRequirementsUnavailable = 21,
 }
 
 internal enum SpellWorkbenchNativeStage
@@ -37,13 +41,15 @@ internal enum SpellWorkbenchNativeStage
 internal readonly struct SpellWorkbenchState
 {
     internal SpellWorkbenchState(Guid resolvedRecipeId, bool targetDiscovered,
-        Guid[] coreGlyphIds, Guid[] augmentGlyphIds, Guid[] targetSpellInstanceIds)
+        Guid[] coreGlyphIds, Guid[] augmentGlyphIds, Guid[] targetSpellInstanceIds,
+        Guid[]? matchingLayoutSpellInstanceIds = null)
     {
         ResolvedRecipeId = resolvedRecipeId;
         TargetDiscovered = targetDiscovered;
         CoreGlyphIds = coreGlyphIds ?? Array.Empty<Guid>();
         AugmentGlyphIds = augmentGlyphIds ?? Array.Empty<Guid>();
         TargetSpellInstanceIds = targetSpellInstanceIds ?? Array.Empty<Guid>();
+        MatchingLayoutSpellInstanceIds = matchingLayoutSpellInstanceIds ?? Array.Empty<Guid>();
     }
 
     internal Guid ResolvedRecipeId { get; }
@@ -51,6 +57,7 @@ internal readonly struct SpellWorkbenchState
     internal Guid[] CoreGlyphIds { get; }
     internal Guid[] AugmentGlyphIds { get; }
     internal Guid[] TargetSpellInstanceIds { get; }
+    internal Guid[] MatchingLayoutSpellInstanceIds { get; }
 }
 
 internal readonly struct SpellWorkbenchEvidence

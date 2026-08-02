@@ -22,6 +22,10 @@ public sealed class SpellWorkbenchContractTests
         Assert.Equal(0x06000741, assembly.GetMethodToken("SpellManager", "DiscoverSpell"));
         Assert.Equal(0x06000747, assembly.GetMethodToken("SpellManager", "GetSpellFromRecipe"));
         Assert.Equal(0x0600074A, assembly.GetMethodToken("SpellManager", "GetSpellCreateCost"));
+        Assert.Equal(0x06000755, assembly.GetMethodToken("SpellManager", "GetUsageCostOfSpell"));
+        Assert.Equal(0x06001422, assembly.GetMethodToken("SpellRecipeSO", "CreateEmpty"));
+        Assert.Equal(0x0600143E, assembly.GetMethodToken("SpellRecipeSO", "GetSelectedSpellLevel"));
+        Assert.Equal(0x06001453, assembly.GetMethodToken("SpellRecipeSO", "HasMetUsageRequirements"));
         Assert.Equal(0x06001442, assembly.GetMethodToken("SpellRecipeSO", "GetDiscoverCost"));
         Assert.Equal(0x06001447, assembly.GetMethodToken("SpellRecipeSO", "GetGlyphRecipe"));
         Assert.Equal(0x0600144F, assembly.GetMethodToken("SpellRecipeSO", "IsCreatable"));
@@ -31,6 +35,8 @@ public sealed class SpellWorkbenchContractTests
         Assert.Equal(0x06001569, assembly.GetMethodToken("GenericListVariable`1", "Empty"));
         Assert.Equal(0x06001563, assembly.GetMethodToken("GenericListVariable`1", "Add"));
         Assert.Equal(0x0600155C, assembly.GetMethodToken("EmptyTypeListVariable`1", "HasEmptySpot"));
+        Assert.Equal(0x06000FE2, assembly.GetMethodToken("Spell", "SetLevel"));
+        Assert.Equal(0x0600100A, assembly.GetMethodToken("Spell", "IsUniqueSpell"));
     }
 
     [GameAssemblyFact]
@@ -102,6 +108,21 @@ public sealed class SpellWorkbenchContractTests
             "UIGlyphList", "SelectGlyph", "IdScriptableObject", "GetGuid"));
         Assert.True(assembly.MethodReferencesMethod(
             "UISpellRecipeButton", "AttachSpell", "Spell", "SetAugmentGlyphs"));
+        Assert.True(assembly.MethodReferencesMethod(
+            "UISpellRecipeButton", "AttachSpell", "SpellRecipeSO", "GetSelectedSpellLevel"));
+        Assert.True(assembly.MethodReferencesMethod(
+            "UISpellRecipeButton", "AttachSpell", "Spell", "SetLevel"));
+        Assert.True(assembly.MethodReferencesMethod(
+            "UISpellRecipeButton", "AttachSpell", "GlyphSO", "MeetsNonLvRequirements"));
+        Assert.True(assembly.MethodReferencesMethod(
+            "UISpellRecipeButton", "UpdateUsage", "SpellManager", "GetUsageCostOfSpell"));
+        Assert.True(assembly.MethodReferencesMethod(
+            "UISpellRecipeButton", "RenderContent", "SpellRecipeSO", "HasMetUsageRequirements"));
+        Assert.Contains(
+            assembly.GetMethodBodyMemberReferences("UISpellRecipeButton", "RenderContent"),
+            reference => reference.MemberName == "HasEmptySpot");
+        Assert.True(assembly.MethodReferencesMethod(
+            "UISpellRecipeButton", "ComputeListCompare", "Spell", "IsUniqueSpell"));
     }
 
     private static string[] References(

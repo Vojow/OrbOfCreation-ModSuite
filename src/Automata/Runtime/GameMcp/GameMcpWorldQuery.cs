@@ -1641,11 +1641,13 @@ internal static class GameMcpWorldQuery
             ? world.SpellWorkbench.CreationAffordable
             : recipe.DiscoveryAffordable;
         next["affordable"] = affordable;
-        next["available"] = !recipe.Discovered && affordable &&
-            recipe.CoreGlyphs.Count > 0 && recipe.Discovery.Visible &&
-            recipe.Discovery.CanDiscover;
-        if (recipe.Discovered) next["reasonCode"] = "contract_unavailable";
-        else if (!affordable) next["reasonCode"] = "unaffordable";
+        next["available"] = recipe.Discovered
+            ? affordable && world.SpellWorkbench.HasEmptySlot
+            : affordable && recipe.CoreGlyphs.Count > 0 && recipe.Discovery.Visible &&
+                recipe.Discovery.CanDiscover;
+        if (!affordable) next["reasonCode"] = "unaffordable";
+        else if (recipe.Discovered && !world.SpellWorkbench.HasEmptySlot)
+            next["reasonCode"] = "loadout_full";
         else if (!recipe.Discovered && recipe.CoreGlyphs.Count == 0)
             next["reasonCode"] = "components_unavailable";
         else if (!recipe.Discovered && !recipe.Discovery.Visible)

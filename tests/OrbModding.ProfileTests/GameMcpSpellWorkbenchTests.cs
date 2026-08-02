@@ -126,9 +126,9 @@ public sealed class GameMcpSpellWorkbenchTests
 
         Assert.Null(row["selected"]);
         Assert.Null(row["select"]);
-        Assert.False((bool)row["loadoutAdd"]!["available"]!);
+        Assert.True((bool)row["loadoutAdd"]!["available"]!);
         Assert.True((bool)row["loadoutAdd"]!["affordable"]!);
-        Assert.Equal("contract_unavailable", (string?)row["loadoutAdd"]!["reasonCode"]);
+        Assert.Null(row["loadoutAdd"]!["reasonCode"]);
         var cost = Assert.Single(row["loadoutAdd"]!["costs"]!.Values<JObject>())!;
         Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
         Assert.Equal("7.5e2", (string?)cost["cost"]);
@@ -205,8 +205,8 @@ public sealed class GameMcpSpellWorkbenchTests
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
         Assert.Equal("Gather Knowledge", (string?)success["name"]);
-        Assert.False((bool)success["loadoutAdd"]!["available"]!);
-        Assert.Equal("contract_unavailable", (string?)success["loadoutAdd"]!["reasonCode"]);
+        Assert.True((bool)success["loadoutAdd"]!["available"]!);
+        Assert.Null(success["loadoutAdd"]!["reasonCode"]);
         Assert.Null(success["preflight"]);
         Assert.Null(success["before"]);
         Assert.Null(success["after"]);

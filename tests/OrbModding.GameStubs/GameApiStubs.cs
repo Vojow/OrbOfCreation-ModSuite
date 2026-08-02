@@ -187,6 +187,11 @@ public class SpellRecipeSO : IdScriptableObject, IDiscoverable
     public bool ThrowAfterDiscovery { get; set; }
     public int DiscoverCalls { get; private set; }
     public bool NativeIsCreatable { get; set; } = true;
+    public bool NativeUsageRequirementsMet { get; set; } = true;
+    public int NativeSelectedSpellLevel { get; set; } = 1;
+    public bool NativeUniqueSpell { get; set; }
+    public bool CandidateDurationSpell { get; set; }
+    public bool CandidateToggledSpell { get; set; }
     public void GainMasteryExp(BigDouble exp)
     {
         MasteryGrantCalls++;
@@ -204,7 +209,14 @@ public class SpellRecipeSO : IdScriptableObject, IDiscoverable
     public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(coreRecipe);
     public ResourceCostList GetDiscoverCost() => baseDiscoveryCost;
     public ResourceCostList GetUsageCost() => baseUsageCost;
-    public Spell CreateEmpty(int _) => new Spell(this);
+    public Spell CreateEmpty(int _) => new Spell(this)
+    {
+        NativeUnique = NativeUniqueSpell,
+        DurationSpell = CandidateDurationSpell,
+        ToggledSpell = CandidateToggledSpell,
+    };
+    public int GetSelectedSpellLevel() => NativeSelectedSpellLevel;
+    public bool HasMetUsageRequirements() => NativeUsageRequirementsMet;
     public void Discover()
     {
         DiscoverCalls++;
@@ -1011,6 +1023,7 @@ public class Spell
     public bool DurationSpell { get; set; }
     public bool ToggledSpell { get; set; }
     public bool NativeUsageRequirementsMet { get; set; } = true;
+    public bool NativeUnique { get; set; }
     public bool NativeEmpty { get; set; }
     public bool NativeCasting { get; set; }
     public bool NativeReadyingCast { get; set; }
@@ -1062,6 +1075,7 @@ public class Spell
     public int GetRecipeMasteryLevel() => reference?.masteryLevel ?? 0;
     public bool IsDurationSpell() => DurationSpell;
     public bool HasMetUsageRequirements() => NativeUsageRequirementsMet;
+    public bool IsUniqueSpell() => NativeUnique;
     public List<GlyphSO> GetAugmentGlyphs() => new List<GlyphSO>(augmentGlyphs);
     public int GetQuantityOfGlyph(GlyphSO glyph) => augmentGlyphRefs.GetQuantity(glyph);
     public int GetNonFreeUsesOfGlyph(GlyphSO glyph) =>
@@ -1906,8 +1920,11 @@ public class SpellManager
     public bool ThrowAfterRemoval { get; set; }
     public int RemoveCalls { get; private set; }
     public int TryLevelAllCalls { get; private set; }
+    public ResourceCostList? CreateCostOverride { get; set; }
 
     public static bool CanCastASpell() => NativeCanCast;
+    public static ResourceCostList GetUsageCostOfSpell(Spell spell) =>
+        spell.get_reference()?.GetUsageCost() ?? new ResourceCostList();
 
     public SpellRecipeSO? GetSpellFromRecipe(List<GlyphSO> glyphs)
     {
@@ -1927,7 +1944,8 @@ public class SpellManager
     public ResourceCostList GetSpellCreateCost(List<GlyphSO> glyphs)
     {
         var recipe = GetSpellFromRecipe(glyphs);
-        return recipe is null ? new ResourceCostList() : recipe.baseUsageCost;
+        return CreateCostOverride ??
+            (recipe is null ? new ResourceCostList() : recipe.baseUsageCost);
     }
 
     public void DiscoverSpell()
@@ -1944,7 +1962,8 @@ public class SpellManager
     {
         var recipe = GetSpellFromRecipe(selectedCoreGlyphs.GetFilledElements());
         if (recipe is null || !recipe.IsDiscovered() || SuppressCreation || !activeSpells.HasEmptySpot()) return;
-        var spell = new Spell(recipe);
+        var spell = recipe.CreateEmpty(0);
+        spell.SetLevel(recipe.GetSelectedSpellLevel());
         spell.SetAugmentGlyphs(new Stacked.StackedIdRecord<GlyphSO>(
             selectedAugmentGlyphs.GetFilledElements()));
         if (CreateEmptyIdentity) spell.guidContainer = new GuidContainer(Guid.Empty);

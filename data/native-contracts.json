@@ -7899,7 +7899,8 @@
       "returnType": "System.Void",
       "parameters": [],
       "owners": [
-        "Automata spell leveling"
+        "Automata spell leveling",
+        "Automata spell workbench GameAction"
       ],
       "usages": [
         "reflection"
@@ -17713,6 +17714,27 @@
       "place": "action"
     },
     {
+      "id": "spell-workbench.manager-get-usage-cost-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetUsageCostOfSpell",
+      "visibility": "public",
+      "static": true,
+      "returnType": "ResourceCostList",
+      "parameters": [
+        "Spell"
+      ],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
       "id": "spell-workbench.manager-discover",
       "assembly": "assembly-csharp",
       "type": "SpellManager",
@@ -17813,6 +17835,65 @@
       "typeVisibility": "public",
       "kind": "method",
       "member": "CanDiscover",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.recipe-create-empty-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CreateEmpty",
+      "visibility": "public",
+      "static": false,
+      "returnType": "Spell",
+      "parameters": [
+        "System.Int32"
+      ],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.recipe-selected-level-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetSelectedSpellLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.recipe-usage-requirements-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasMetUsageRequirements",
       "visibility": "public",
       "static": false,
       "returnType": "System.Boolean",
@@ -18062,6 +18143,46 @@
       "visibility": "public",
       "static": false,
       "valueType": "GuidContainer",
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.spell-set-level-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "SetLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "System.Int32"
+      ],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.spell-is-unique-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsUniqueSpell",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
       "owners": [
         "Automata spell workbench GameAction"
       ],
@@ -18517,7 +18638,7 @@
         "Spell"
       ],
       "owners": [
-        "Automata spell composition GameAction"
+        "Automata spell workbench GameAction"
       ],
       "usages": [
         "reflection"
@@ -18557,7 +18678,7 @@
       "returnType": "System.Collections.Generic.List`1<GlyphSO>",
       "parameters": [],
       "owners": [
-        "Automata spell composition GameAction"
+        "Automata spell workbench GameAction"
       ],
       "usages": [
         "reflection"
@@ -18618,7 +18739,7 @@
         "Stacked.StackedIdRecord`1<GlyphSO>"
       ],
       "owners": [
-        "Automata spell composition GameAction"
+        "Automata spell workbench GameAction"
       ],
       "usages": [
         "reflection"
@@ -18632,7 +18753,7 @@
       "typeVisibility": "public",
       "kind": "type",
       "owners": [
-        "Automata spell composition GameAction"
+        "Automata spell workbench GameAction"
       ],
       "usages": [
         "reflection"
@@ -18651,7 +18772,7 @@
       "returnType": "System.Void",
       "parameters": [],
       "owners": [
-        "Automata spell composition GameAction"
+        "Automata spell workbench GameAction"
       ],
       "usages": [
         "reflection"
@@ -18673,7 +18794,7 @@
         "System.Int32"
       ],
       "owners": [
-        "Automata spell composition GameAction"
+        "Automata spell workbench GameAction"
       ],
       "usages": [
         "reflection"

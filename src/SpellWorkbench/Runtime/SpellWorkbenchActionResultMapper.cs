@@ -34,6 +34,10 @@ internal static class SpellWorkbenchActionResultMapper
         SpellWorkbenchPreflight.MutationPermitUnavailable => SpellWorkbenchActionResultCodes.MutationPermitUnavailable,
         SpellWorkbenchPreflight.PostCommitFault => SpellWorkbenchActionResultCodes.PostCommitFault,
         SpellWorkbenchPreflight.VerificationFailed => SpellWorkbenchActionResultCodes.VerificationFailed,
+        SpellWorkbenchPreflight.UsageRequirementsUnavailable => SpellWorkbenchActionResultCodes.UsageRequirementsUnavailable,
+        SpellWorkbenchPreflight.UsageUnaffordable => SpellWorkbenchActionResultCodes.UsageUnaffordable,
+        SpellWorkbenchPreflight.UniqueSpellConflict => SpellWorkbenchActionResultCodes.UniqueSpellConflict,
+        SpellWorkbenchPreflight.GlyphRequirementsUnavailable => SpellWorkbenchActionResultCodes.GlyphRequirementsUnavailable,
         _ => SpellWorkbenchActionResultCodes.ContractUnavailable,
     };
 }

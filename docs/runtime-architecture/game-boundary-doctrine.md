@@ -244,13 +244,17 @@ glyph layout is chosen before loadout add and baked into the new spell. Casting 
 are global dials, not per-spell state. Whenever the MCP cannot bind the exact visible sibling, it
 returns `contract_unavailable` rather than substituting a nearby native path.
 
-The current spell-loadout add boundary is the concrete fail-closed case. The native button admits a
-candidate only after checking usage requirements, computed usage cost, unique-spell compatibility,
-loadout budget, and non-level glyph requirements. Until that complete candidate binding set is in
-the installed manifest, the recipe row reports `loadoutAdd.available=false` with
-`reasonCode=contract_unavailable`, and the shared GameAction refuses before selection, payment, or
-creation. Core-component spell discovery remains independently bound; unused creation members do
-not poison its lifecycle completeness set.
+Spell-loadout add is the concrete complete-candidate case. On the Unity main thread the shared
+GameAction builds a temporary spell at the recipe's selected level, bakes the requested glyph
+multiset into it, and follows the visible recipe button's gate order: non-level duration/toggle
+requirements; authored usage requirements (with the UI's selected-augment override); computed
+usage-budget affordability; an empty loadout slot; and unique-spell compatibility. Creation-cost
+affordability is then re-read from the exact core-plus-augment composition. After acquiring its
+mutation permit, the boundary stages the live selection, reruns those mutable gates, performs the
+cost, invokes native creation, and commits only when a new spell with the requested recipe identity
+and exact baked glyph multiset is observable. Duplicate request rows count cumulatively against each
+glyph's native usable maximum. Core-component spell discovery remains independently bound, but both
+verbs use the same complete lifecycle binding set and native recipe resolver.
 
 Every MCP gameplay action still uses its capability's canonical GameAction and live Unity-main-thread
 revalidation. A failed player-driven attempt returns its exact failure and leaves no MCP-owned

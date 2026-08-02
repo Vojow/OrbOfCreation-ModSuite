@@ -18,4 +18,8 @@ internal static class SpellWorkbenchActionResultCodes
     internal static ServiceActionResultCode MutationPermitUnavailable => new(4413);
     internal static ServiceActionResultCode PostCommitFault => new(4414);
     internal static ServiceActionResultCode VerificationFailed => new(4415);
+    internal static ServiceActionResultCode UsageRequirementsUnavailable => new(4416);
+    internal static ServiceActionResultCode UsageUnaffordable => new(4417);
+    internal static ServiceActionResultCode UniqueSpellConflict => new(4418);
+    internal static ServiceActionResultCode GlyphRequirementsUnavailable => new(4419);
 }
