@@ -87,8 +87,8 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 
 - [tab-and-orb-xp.md](tab-and-orb-xp.md) — every completed attribute level pays +1 tab XP and +1 Orb
   XP.
-- [advancement-currencies.md](advancement-currencies.md) — tab levels raise caps, never balances; the
-  supply is run-finite.
+- [advancement-currencies.md](advancement-currencies.md) — which tabs grant which points, and why
+  the supply is run-finite.
 - [research.md](research.md) — timed nodes priced in school points, revealing further nodes on
   completion.
 - [orbs.md](orbs.md) — one orb per global level, spent on disciplines that gate later content.

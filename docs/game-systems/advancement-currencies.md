@@ -1,12 +1,14 @@
 # Advancement currencies
 
-When a progression tab levels it does **not** grant one unit of an advancement currency. It adds `+1`
-to the **maximum quantity** of the currencies it feeds, so a currency reading `2/2` becomes `2/3`.
-**Nothing is wasted at cap**, and there is therefore no urgency to spend an advancement point before
-the next tab level lands. Quantity/cap reads as unspent/earned; see
+A progression tab level **grants advancement points** — one in each of the two currencies that tab
+feeds. Points are never wasted by arriving while you are "full", so there is no urgency to spend one
+before the next tab level lands.
+
+**Code shape:** the level actually adds `+1` to the currency's **maximum quantity**, so a currency
+reading `2/2` becomes `2/3`; quantity/cap reads as unspent/earned. See
 [allocations.md](allocations.md).
 
-| Progression tab | Advancement maximums it raises, per level |
+| Progression tab | Advancement points it grants, per level |
 |---|---|
 | Wizardry | +1 Magical, +1 Glyph |
 | Scholar | +1 Cognitive, +1 Technology |
@@ -18,10 +20,10 @@ the next tab level lands. Quantity/cap reads as unspent/earned; see
 | Shaper | +1 Technology, +1 Glyph |
 | Orb | +1 Orb |
 
-Maximums are also raised **outside** that table: resource-type levels and various named upgrades
-target the same maximums — e.g., Technology Mastery adds +2 Technology, and Boost Glyphs adds +50 %
-to Glyph. Because these are modifiers, the effective cap is their folded result rather than a stored
-integer.
+Points also arrive **outside** that table: resource-type levels and various named upgrades feed the
+same currencies — e.g., Technology Mastery grants +2 Technology, and Boost Glyphs +50 % to Glyph.
+**Code shape:** those are modifiers on the maximum, so the effective cap is their folded result
+rather than a stored integer.
 
 ## The supply is run-finite
 

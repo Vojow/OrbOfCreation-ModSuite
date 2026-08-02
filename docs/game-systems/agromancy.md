@@ -13,12 +13,12 @@ Agromancy is the game's farming and harvesting system, on the World tab.
 
 ## The screen has to be open
 
-**The game only refreshes harvest state while the Agromancy screen is open.** Plot and action state
-is cached behind the interface, and the plot list's own render pass is what re-evaluates it.
+**The game only refreshes harvest state while the Agromancy screen is open.** An action that has
+actually become available does not appear until you open the screen; once it has appeared it stays
+available. A save that looks stalled may just be waiting to be looked at.
 
-The visible symptom is a plot that looks stale: an action that has actually become available does not
-appear until you open the screen. Once it has appeared it stays available — the check latches on and
-is not re-tested afterwards.
+**Code shape:** plot and action state is cached behind the interface, and the plot list's own render
+pass is what re-evaluates it — the availability check latches on and is not re-tested afterwards.
 
 ## Two plot quirks
 
