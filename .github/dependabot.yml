@@ -1,6 +1,17 @@
 version: 2
 
 updates:
+  - package-ecosystem: "uv"
+    directory: "/tools"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+
   - package-ecosystem: "nuget"
     directories:
       - "/src"
