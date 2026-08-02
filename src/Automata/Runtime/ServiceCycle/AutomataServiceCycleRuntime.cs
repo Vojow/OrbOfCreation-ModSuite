@@ -249,28 +249,21 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         long lifecycle,
         ulong configurationGeneration)
     {
-        GameMcpNativeActionAdmission.AssertNativeType(
-            command,
-            command.Mode == "set_output_level" ? "IntVariable" : "Spell");
+        GameMcpNativeActionAdmission.AssertNativeType(command, "IntVariable");
         if (_spellComposition is null)
             return GameMcpCommandResult.Rejected(
                 "contract_unavailable",
                 "the shared spell composition GameAction was not composed",
                 lifecycle,
                 configurationGeneration);
-        var kind = command.Mode == "set_output_level"
-            ? SpellCompositionActionKind.SetOutputLevel
-            : SpellCompositionActionKind.SetAugments;
-        var stacks = new SpellCompositionGlyphStack[command.UuidCounts.Length];
-        for (var index = 0; index < stacks.Length; index++)
-            stacks[index] = new SpellCompositionGlyphStack(
-                command.UuidCounts[index].Uuid,
-                command.UuidCounts[index].Count);
+        if (command.Mode != "set_output_level")
+            return GameMcpCommandResult.Rejected(
+                "unsupported_mode",
+                "the Casting action boundary accepts only the global Output Level dial",
+                lifecycle,
+                configurationGeneration);
         var action = new SpellCompositionAction(
-            kind,
-            command.TargetId,
             command.Amount,
-            stacks,
             command.ExpectedLifecycleGeneration);
         var submission = _spellComposition.Submit(in action);
         var result = SpellCompositionActionResultMapper.Map(in submission);

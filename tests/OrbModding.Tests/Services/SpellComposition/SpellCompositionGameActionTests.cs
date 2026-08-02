@@ -12,8 +12,6 @@ public sealed class SpellCompositionGameActionTests : IDisposable
 
     public SpellCompositionGameActionTests()
     {
-        GlyphSO.All.Clear();
-        SpellManager.instance = new SpellManager();
         Player.Current = new Player();
         Player.GetSpellOutputLevel().Value = 2;
         Player.Current.maxSpellOutputLevel.Value = 12;
@@ -59,150 +57,6 @@ public sealed class SpellCompositionGameActionTests : IDisposable
     }
 
     [Fact]
-    public void AugmentCompositionCommitsExactNamedRuntimeTargetAndStacks()
-    {
-        var (spell, first, second) = SpellFixture(recipeMastery: 9);
-        first.masteryReqCount = 3;
-        second.masteryReqCount = 8;
-        using var action = Action();
-
-        var result = action.Submit(Augments(
-            spell,
-            new SpellCompositionGlyphStack(second.GetGuid(), 1),
-            new SpellCompositionGlyphStack(first.GetGuid(), 2)));
-
-        Assert.True(result.Verified, result.Reason);
-        Assert.Equal(spell.guidContainer.guid, result.Evidence.After.SpellInstanceId);
-        Assert.Equal(spell.get_reference()!.GetGuid(), result.Evidence.After.SpellRecipeId);
-        Assert.Equal(2, spell.GetQuantityOfGlyph(first));
-        Assert.Equal(1, spell.GetQuantityOfGlyph(second));
-        Assert.Equal(2, result.Evidence.After.AugmentGlyphs.Length);
-    }
-
-    [Fact]
-    public void EmptyAugmentListClearsTheComposition()
-    {
-        var (spell, first, _) = SpellFixture();
-        var initial = new Stacked.StackedIdRecord<GlyphSO>();
-        initial.Set(first, 2);
-        spell.SetAugmentGlyphs(initial);
-        using var action = Action();
-
-        var result = action.Submit(Augments(spell));
-
-        Assert.True(result.Verified, result.Reason);
-        Assert.Empty(spell.GetAugmentGlyphs());
-        Assert.Empty(result.Evidence.After.AugmentGlyphs);
-    }
-
-    [Fact]
-    public void AugmentSetterThrowAfterOutcomeStillCommitsWithoutQuarantine()
-    {
-        var (spell, glyph, _) = SpellFixture();
-        spell.ThrowAfterAugmentMutation = true;
-        using var action = Action();
-
-        var result = action.Submit(Augments(
-            spell,
-            new SpellCompositionGlyphStack(glyph.GetGuid(), 1)));
-
-        Assert.True(result.Verified, result.Reason);
-        Assert.Equal(1, spell.GetQuantityOfGlyph(glyph));
-    }
-
-    [Theory]
-    [InlineData("duplicate", (int)SpellCompositionPreflight.DuplicateGlyph)]
-    [InlineData("missing", (int)SpellCompositionPreflight.GlyphIdentityUnavailable)]
-    [InlineData("unavailable", (int)SpellCompositionPreflight.GlyphUnavailable)]
-    [InlineData("core", (int)SpellCompositionPreflight.NotAnAugment)]
-    [InlineData("over_maximum", (int)SpellCompositionPreflight.UsageLimitExceeded)]
-    [InlineData("incompatible", (int)SpellCompositionPreflight.IncompatibleComposition)]
-    [InlineData("mastery", (int)SpellCompositionPreflight.MasteryRequirementUnmet)]
-    public void AugmentPreconditionsRefuseBeforeNativeMutation(string scenario, int expected)
-    {
-        var (spell, glyph, _) = SpellFixture(recipeMastery: 4);
-        var requestedId = glyph.GetGuid();
-        var requestedCount = 1;
-        var rows = new[] { new SpellCompositionGlyphStack(requestedId, requestedCount) };
-        switch (scenario)
-        {
-            case "duplicate":
-                rows = new[]
-                {
-                    new SpellCompositionGlyphStack(requestedId, 1),
-                    new SpellCompositionGlyphStack(requestedId, 1),
-                };
-                break;
-            case "missing":
-                rows = new[] { new SpellCompositionGlyphStack(Guid.NewGuid(), 1) };
-                break;
-            case "unavailable":
-                glyph.NativeAvailable = false;
-                break;
-            case "core":
-                glyph.augmentsSpells = false;
-                break;
-            case "over_maximum":
-                rows = new[] { new SpellCompositionGlyphStack(requestedId, 4) };
-                break;
-            case "incompatible":
-                glyph.requiresDuration = true;
-                break;
-            case "mastery":
-                glyph.masteryReqCount = 5;
-                break;
-        }
-        using var action = Action();
-
-        var result = action.Submit(new SpellCompositionAction(
-            SpellCompositionActionKind.SetAugments,
-            spell.guidContainer.guid,
-            0,
-            rows,
-            Epoch));
-
-        Assert.Equal((SpellCompositionPreflight)expected, result.Preflight);
-        Assert.Equal(0, spell.SetAugmentCalls);
-    }
-
-    [Fact]
-    public void WrongRuntimeTargetRefusesWithoutNativeMutation()
-    {
-        var (_, glyph, _) = SpellFixture();
-        using var action = Action();
-
-        var result = action.Submit(new SpellCompositionAction(
-            SpellCompositionActionKind.SetAugments,
-            Guid.NewGuid(),
-            0,
-            new[] { new SpellCompositionGlyphStack(glyph.GetGuid(), 1) },
-            Epoch));
-
-        Assert.Equal(SpellCompositionPreflight.IdentityUnavailable, result.Preflight);
-        Assert.Equal(0, SpellManager.instance!.activeSpells.value[0].SetAugmentCalls);
-    }
-
-    [Fact]
-    public void MissingRequestedOutcomeFaultsThisAttemptAndTheNextCallRevalidates()
-    {
-        var (spell, glyph, _) = SpellFixture();
-        spell.SuppressAugmentMutation = true;
-        using var action = Action();
-
-        var failed = action.Submit(Augments(
-            spell,
-            new SpellCompositionGlyphStack(glyph.GetGuid(), 1)));
-        var retry = action.Submit(Augments(
-            spell,
-            new SpellCompositionGlyphStack(glyph.GetGuid(), 1)));
-
-        Assert.Equal(SpellCompositionPreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(SpellCompositionPreflight.VerificationFailed, retry.Preflight);
-        Assert.True(failed.Evidence.Available);
-        Assert.Empty(failed.Evidence.After.AugmentGlyphs);
-    }
-
-    [Fact]
     public async Task OffThreadSubmissionRefusesBeforeNativeExecution()
     {
         using var action = Action();
@@ -216,6 +70,11 @@ public sealed class SpellCompositionGameActionTests : IDisposable
     [Fact]
     public void EveryMissingLifecycleBindingFailsClosed()
     {
+        Assert.Equal(5, SpellCompositionNativeBindings.ContractIds.Length);
+        Assert.DoesNotContain(
+            SpellCompositionNativeBindings.ContractIds,
+            id => id.Contains("augment", StringComparison.OrdinalIgnoreCase));
+
         foreach (var missing in SpellCompositionNativeBindings.ContractIds)
         {
             using var action = Action(include: id => id != missing);
@@ -239,56 +98,7 @@ public sealed class SpellCompositionGameActionTests : IDisposable
         Assert.Equal(2, Player.GetSpellOutputLevel().AsInt());
     }
 
-    private static SpellCompositionAction Output(int level) => new(
-        SpellCompositionActionKind.SetOutputLevel,
-        Guid.Empty,
-        level,
-        Array.Empty<SpellCompositionGlyphStack>(),
-        Epoch);
-
-    private static SpellCompositionAction Augments(
-        Spell spell,
-        params SpellCompositionGlyphStack[] glyphs) => new(
-            SpellCompositionActionKind.SetAugments,
-            spell.guidContainer.guid,
-            0,
-            glyphs,
-            Epoch);
-
-    private static (Spell Spell, GlyphSO First, GlyphSO Second) SpellFixture(
-        int recipeMastery = 10)
-    {
-        var recipe = new SpellRecipeSO
-        {
-            uuid = Guid.NewGuid().ToString("D"),
-            discovered = true,
-            masteryLevel = recipeMastery,
-        };
-        var first = Glyph("Focus", maximum: 3);
-        var second = Glyph("Echo", maximum: 2);
-        var spell = new Spell(recipe)
-        {
-            DisplayName = "Test Spell",
-            DurationSpell = false,
-            ToggledSpell = false,
-        };
-        SpellManager.instance!.activeSpells.value.Add(spell);
-        return (spell, first, second);
-    }
-
-    private static GlyphSO Glyph(string name, int maximum)
-    {
-        var glyph = new GlyphSO
-        {
-            DisplayName = name,
-            NativeAvailable = true,
-            augmentsSpells = true,
-            maxUsages = new ValueModifierRecord(new BigDouble(maximum, 0)),
-        };
-        glyph.SetGuid(Guid.NewGuid());
-        GlyphSO.All.Add(glyph);
-        return glyph;
-    }
+    private static SpellCompositionAction Output(int level) => new(level, Epoch);
 
     private static SpellCompositionGameAction Action(
         long epoch = Epoch,
@@ -306,10 +116,5 @@ public sealed class SpellCompositionGameActionTests : IDisposable
         return action;
     }
 
-    public void Dispose()
-    {
-        GlyphSO.All.Clear();
-        SpellManager.instance = null;
-        Player.Current = new Player();
-    }
+    public void Dispose() => Player.Current = new Player();
 }

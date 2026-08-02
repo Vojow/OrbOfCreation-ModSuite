@@ -633,16 +633,8 @@ internal static class GameMcpActionResultCodeNames
         {
             if (code == SpellCompositionActionResultCodes.ContractUnavailable) return "contract_unavailable";
             if (code == SpellCompositionActionResultCodes.WrongThread) return "wrong_thread";
-            if (code == SpellCompositionActionResultCodes.IdentityUnavailable) return "identity_unavailable";
             if (code == SpellCompositionActionResultCodes.OutputLevelOutOfRange) return "output_level_out_of_range";
             if (code == SpellCompositionActionResultCodes.AlreadyInRequestedState) return "already_in_requested_state";
-            if (code == SpellCompositionActionResultCodes.GlyphIdentityUnavailable) return "glyph_identity_unavailable";
-            if (code == SpellCompositionActionResultCodes.DuplicateGlyph) return "duplicate_glyph";
-            if (code == SpellCompositionActionResultCodes.GlyphUnavailable) return "glyph_unavailable";
-            if (code == SpellCompositionActionResultCodes.NotAnAugment) return "not_an_augment";
-            if (code == SpellCompositionActionResultCodes.UsageLimitExceeded) return "usage_limit_exceeded";
-            if (code == SpellCompositionActionResultCodes.IncompatibleComposition) return "incompatible_composition";
-            if (code == SpellCompositionActionResultCodes.MasteryRequirementUnmet) return "mastery_requirement_unmet";
             if (code == SpellCompositionActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == SpellCompositionActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == SpellCompositionActionResultCodes.VerificationFailed) return "verification_failed";
