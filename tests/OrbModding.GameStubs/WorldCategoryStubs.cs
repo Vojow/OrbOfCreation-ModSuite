@@ -335,12 +335,15 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable
     public bool augmentsSpells;
     public bool requiresDuration;
     public bool requiresToggleable;
+    public bool NativeAvailable { get; set; } = true;
     public int masteryReqCount;
     public ValueModifierRecord freeUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord freeLoadoutUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord maxUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
 
     public string GetName() => DisplayName;
+    public bool IsAvailable() => NativeAvailable;
+    public bool IsSpellAugment() => augmentsSpells;
     public string GetDisplayType() => "Glyph";
     public UnityEngine.Sprite GetIcon() => new UnityEngine.Sprite();
     public UnityEngine.Color GetColor() => default;

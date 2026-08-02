@@ -141,7 +141,9 @@ public static class AutoBuyManager
 public class SpellRecipeSO : IdScriptableObject
 {
     public static List<SpellRecipeSO> All = new List<SpellRecipeSO>();
-    private string stableUuid = Guid.NewGuid().ToString();
+    private string stableUuid;
+
+    public SpellRecipeSO() => stableUuid = base.GetGuid().ToString("D");
     /// <summary>
     /// Fixture-facing string form of the inherited identity. The game declares <c>GetGuid()</c> on
     /// <see cref="IdScriptableObject"/>, so this surface keeps that base identity synchronized and
@@ -167,6 +169,11 @@ public class SpellRecipeSO : IdScriptableObject
     public List<BigDouble> GrantedMasteryExperience { get; } = new List<BigDouble>();
     public Prerequisites.Container levelingPrerequisites = new Prerequisites.Container();
     public ResourceCostList levelCost = new ResourceCostList();
+    public List<GlyphSO> coreRecipe = new List<GlyphSO>();
+    public ResourceCostList baseDiscoveryCost = new ResourceCostList();
+    public ResourceCostList baseUsageCost = new ResourceCostList();
+    public bool NativeCanDiscover { get; set; } = true;
+    public bool NativeIsCreatable { get; set; } = true;
     public void GainMasteryExp(BigDouble exp)
     {
         MasteryGrantCalls++;
@@ -177,6 +184,17 @@ public class SpellRecipeSO : IdScriptableObject
     public new Guid GetGuid() => Guid.Parse(uuid);
     public new Guid GetId() => GetGuid();
     public bool IsDiscovered() => discovered;
+    public bool CanDiscover() => NativeCanDiscover;
+    public bool IsCreatable() => NativeIsCreatable;
+    public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(coreRecipe);
+    public ResourceCostList GetDiscoverCost() => baseDiscoveryCost;
+    public ResourceCostList GetUsageCost() => baseUsageCost;
+    public Spell CreateEmpty(int _) => new Spell(this);
+    public void Discover()
+    {
+        discovered = true;
+        SpellManager.instance?.PostDiscoverRecipe(this);
+    }
     public bool IsReadyToLevelMastery() => readyToLevel;
     public ResourceCostList GetLevelCost() => levelCost;
     public void PurchaseLevel()
@@ -405,6 +423,9 @@ public class AbstractListVariable<T> : AbstractListVariable
     public IntVariable? maxSizeVariable;
     public int GetMax() => maxSizeVariable?.AsInt() ?? Maximum;
     public List<T> ToList() => new List<T>(value);
+    public int Count => value.Count;
+    public void Empty() => value.Clear();
+    public bool IsAtMax() => value.Count >= GetMax();
 }
 
 public class GenericListVariable<T> : AbstractListVariable<T>
@@ -425,6 +446,8 @@ public class GenericListVariable<T> : AbstractListVariable<T>
     }
 
     public bool HasEmptySpot() => GetUsedSpots() < GetMax();
+
+    public List<T> GetFilledElements() => value.FindAll(IsFilledElement);
 
     public void Add(T element)
     {
@@ -785,6 +808,7 @@ public class Spell
     public BigDouble CooldownRemaining { get; set; }
     public UnityEngine.Sprite Icon { get; set; } = new UnityEngine.Sprite();
     public ResourceCostList Cost { get; } = new ResourceCostList();
+    public GuidContainer guidContainer = new GuidContainer(Guid.NewGuid());
 
     public Spell()
     {
@@ -1424,15 +1448,77 @@ public class SpellRecipeListVariable
     public List<SpellRecipeSO> value = new List<SpellRecipeSO>();
 }
 
+public sealed class GlyphListVariable : GenericListVariable<GlyphSO>
+{
+}
+
 public class SpellManager
 {
     public static SpellManager? instance;
     public static bool NativeCanCast { get; set; } = true;
     public SpellRecipeListVariable availableSpellRecipes = new SpellRecipeListVariable();
+    public GlyphListVariable selectedCoreGlyphs = new GlyphListVariable();
+    public GlyphListVariable selectedAugmentGlyphs = new GlyphListVariable();
     public SpellListVariable activeSpells = new SpellListVariable();
+    public bool SuppressSelectionResolution { get; set; }
+    public bool SuppressDiscovery { get; set; }
+    public bool SuppressCreation { get; set; }
+    public bool CreateEmptyIdentity { get; set; }
+    public bool ThrowAfterDiscovery { get; set; }
+    public bool ThrowAfterCreation { get; set; }
     public int TryLevelAllCalls { get; private set; }
 
     public static bool CanCastASpell() => NativeCanCast;
+
+    public SpellRecipeSO? GetSpellFromRecipe(List<GlyphSO> glyphs)
+    {
+        if (SuppressSelectionResolution) return null;
+        foreach (var recipe in availableSpellRecipes.value)
+        {
+            if (recipe.coreRecipe.Count != glyphs.Count) continue;
+            var matches = true;
+            for (var index = 0; index < glyphs.Count; index++)
+                if (!ReferenceEquals(recipe.coreRecipe[index], glyphs[index])) { matches = false; break; }
+            if (matches) return recipe;
+        }
+        return null;
+    }
+
+    public ResourceCostList GetSpellCreateCost(List<GlyphSO> glyphs)
+    {
+        var recipe = GetSpellFromRecipe(glyphs);
+        return recipe is null ? new ResourceCostList() : recipe.baseUsageCost;
+    }
+
+    public void DiscoverSpell()
+    {
+        var recipe = GetSpellFromRecipe(selectedCoreGlyphs.GetFilledElements());
+        if (recipe is null || recipe.IsDiscovered() || SuppressDiscovery) return;
+        recipe.Discover();
+        recipe.baseDiscoveryCost.PerformCost();
+        selectedCoreGlyphs.Empty();
+        if (ThrowAfterDiscovery) throw new InvalidOperationException("injected failure after discovery");
+    }
+
+    public void CreateSpell()
+    {
+        var recipe = GetSpellFromRecipe(selectedCoreGlyphs.GetFilledElements());
+        if (recipe is null || !recipe.IsDiscovered() || SuppressCreation || !activeSpells.HasEmptySpot()) return;
+        var spell = new Spell(recipe);
+        if (CreateEmptyIdentity) spell.guidContainer = new GuidContainer(Guid.Empty);
+        AddSpell(spell);
+        selectedCoreGlyphs.Empty();
+        if (ThrowAfterCreation) throw new InvalidOperationException("injected failure after creation");
+    }
+
+    public void PostDiscoverRecipe(SpellRecipeSO recipe)
+    {
+        var spell = recipe.CreateEmpty(0);
+        if (activeSpells.HasEmptySpot() && spell.get_reference()!.GetUsageCost().HasEnough())
+            AddSpell(spell);
+    }
+
+    private void AddSpell(Spell spell) => activeSpells.Add(spell);
 
     public void FireSpellIndex(int index)
     {
@@ -1464,11 +1550,9 @@ public class SpellManager
 /// The equipped loadout. A list variable like every other, which is what lets world collection reach
 /// it by uuid through the identity registry rather than through the spell manager singleton.
 /// </summary>
-public sealed class SpellListVariable : AbstractListVariable<Spell>, IEnumerable
+public sealed class SpellListVariable : GenericListVariable<Spell>, IEnumerable
 {
     public Spell this[int index] => value[index];
-
-    public void Add(Spell spell) => value.Add(spell);
 
     public IEnumerator GetEnumerator() => value.GetEnumerator();
 }

@@ -60,7 +60,7 @@ internal static class GameMcpEntityCapabilityMap
         return capability switch
         {
             GameMcpCommandKind.Purchase => PurchaseTarget(world, target, out reason),
-            GameMcpCommandKind.Cast or GameMcpCommandKind.SpellLevel =>
+            GameMcpCommandKind.Cast or GameMcpCommandKind.SpellLevel or GameMcpCommandKind.SpellWorkbench =>
                 Entity(
                     world.EntityIdentities,
                     world.SpellRecipes,
@@ -190,7 +190,8 @@ internal static class GameMcpEntityCapabilityMap
         D("purchase-costs", "StructureSO|UpgradeSO"),
         D("alchemy-recipes", "AlchemyRecipeSO", GameMcpCommandKind.Concept),
         D("alchemy-types", "AlchemyTypeSO"),
-        D("spell-recipes", "SpellRecipeSO", GameMcpCommandKind.Cast, GameMcpCommandKind.SpellLevel),
+        D("spell-recipes", "SpellRecipeSO", GameMcpCommandKind.Cast, GameMcpCommandKind.SpellLevel,
+            GameMcpCommandKind.SpellWorkbench),
         D("spell-types", "SpellTypeSO"),
         D("equipment", "EquipmentSO"),
         D("equipment-types", "EquipmentTypeSO"),

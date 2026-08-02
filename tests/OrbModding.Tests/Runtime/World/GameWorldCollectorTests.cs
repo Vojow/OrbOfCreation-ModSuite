@@ -327,7 +327,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Fifty passes: the four categories
+        // The scope claim, asserted rather than described. Fifty-one passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -342,13 +342,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(50, report.Categories.Length);
+        Assert.Equal(51, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "concept instances", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -430,6 +430,91 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         // Same mastery level on both: readiness is its own fact, not one the level implies.
         Assert.Equal(readyRow.MasteryLevel, bankingRow.MasteryLevel);
+    }
+
+    [Fact]
+    public void SpellDiscoveryAndCreationDecisionsArePublishedFromTheNativeWorkbench()
+    {
+        var first = new FakeGlyph { Identity = Guid.NewGuid(), level = 7, discovered = true };
+        var second = new FakeGlyph { Identity = Guid.NewGuid(), level = 3, discovered = true };
+        var discoveryResource = new FakeSpellWorkbenchResource
+        {
+            Identity = Guid.NewGuid(),
+            amount = new BigDouble(9d, 6),
+        };
+        var creationResource = new FakeSpellWorkbenchResource
+        {
+            Identity = Guid.NewGuid(),
+            amount = new BigDouble(5d, 2),
+        };
+        var recipe = new FakeSpellRecipe
+        {
+            Identity = Guid.NewGuid(),
+            discovered = false,
+            coreRecipe = { first, second },
+            discoveryCost = new FakeSpellWorkbenchCostList
+            {
+                affordable = true,
+                costs =
+                {
+                    new FakeSpellWorkbenchCost
+                    {
+                        resource = discoveryResource,
+                        amount = new BigDouble(4.4d, 3),
+                    },
+                },
+            },
+        };
+        FakeGlyph.All.Add(first);
+        FakeGlyph.All.Add(second);
+        FakeSpellRecipe.All.Add(recipe);
+
+        var manager = new FakeSpellManager
+        {
+            creationCost = new FakeSpellWorkbenchCostList
+            {
+                affordable = false,
+                costs =
+                {
+                    new FakeSpellWorkbenchCost
+                    {
+                        resource = creationResource,
+                        amount = new BigDouble(7.5d, 2),
+                    },
+                },
+            },
+        };
+        manager.selectedCoreGlyphs.value.Add(first);
+        manager.selectedCoreGlyphs.value.Add(second);
+        manager.activeSpells.maximum = 3;
+        manager.activeSpells.value.Add(new FakeSpell());
+        FakeSpellManager.instance = manager;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.SpellRecipes, recipe.Identity, out var recipeRow));
+        Assert.Equal(new[] { first.Identity, second.Identity },
+            recipeRow.CoreGlyphs.AsSpan().ToArray().Select(glyph => glyph.GlyphId));
+        var discoveryCost = Assert.Single(recipeRow.DiscoveryCosts.AsSpan().ToArray());
+        Assert.Equal(discoveryResource.Identity, discoveryCost.ResourceId);
+        Assert.Equal(4400d, discoveryCost.Cost.ToDouble());
+        Assert.Equal(9e6, discoveryCost.AvailableAmount.ToDouble());
+        Assert.True(recipeRow.DiscoveryAffordable);
+
+        Assert.Equal(new[] { first.Identity, second.Identity },
+            world.SpellWorkbench.CoreGlyphs.AsSpan().ToArray().Select(glyph => glyph.GlyphId));
+        Assert.Empty(world.SpellWorkbench.AugmentGlyphs.AsSpan().ToArray());
+        var creationCost = Assert.Single(world.SpellWorkbench.CreationCosts.AsSpan().ToArray());
+        Assert.Equal(creationResource.Identity, creationCost.ResourceId);
+        Assert.Equal(750d, creationCost.Cost.ToDouble());
+        Assert.Equal(500d, creationCost.AvailableAmount.ToDouble());
+        Assert.False(world.SpellWorkbench.CreationAffordable);
+        Assert.Equal(1, world.SpellWorkbench.EquippedCount);
+        Assert.Equal(3, world.SpellWorkbench.MaximumEquipped);
+        Assert.True(world.SpellWorkbench.HasEmptySlot);
     }
 
     [Fact]

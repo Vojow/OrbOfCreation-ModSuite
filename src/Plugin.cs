@@ -519,6 +519,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .DiscoveryTreeOfferOwnershipFailure)
+                    , createSpellWorkbench: () => new SpellWorkbenchGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureSpellWorkbenchMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .SpellWorkbenchOwnershipFailure)
 #endif
                     );
             },
@@ -1493,6 +1501,7 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandKind.Harvest => "plot-nodes",
         GameMcpCommandKind.SpellLevel => "spell-recipes",
         GameMcpCommandKind.DiscoveryTreeOffer => "discovery-trees",
+        GameMcpCommandKind.SpellWorkbench => "spell-recipes",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 
@@ -1684,6 +1693,8 @@ public sealed class Plugin : BaseUnityPlugin
             nativeType = "SpellRecipeSO";
         else if (kind == GameMcpCommandKind.DiscoveryTreeOffer)
             nativeType = "DiscoveryTreeSO";
+        else if (kind == GameMcpCommandKind.SpellWorkbench)
+            nativeType = "SpellRecipeSO";
         else if (kind == GameMcpCommandKind.ConfigurationSet)
         {
             mode = request.Section;

@@ -21,7 +21,8 @@ internal static class AutomataServiceCycleComposition
         AutomataServiceCycleHostDependencies hostDependencies,
         IReadOnlyList<IAutomataServiceCycleFeature> features,
         ManualLogSource log,
-        Func<DiscoveryTreeOfferGameAction>? createDiscoveryTreeOffers = null)
+        Func<DiscoveryTreeOfferGameAction>? createDiscoveryTreeOffers = null,
+        Func<SpellWorkbenchGameAction>? createSpellWorkbench = null)
     {
         try
         {
@@ -31,7 +32,8 @@ internal static class AutomataServiceCycleComposition
                 hostDependencies,
                 features,
                 log,
-                createDiscoveryTreeOffers);
+                createDiscoveryTreeOffers,
+                createSpellWorkbench);
             log.LogAutomataInfo("Automata ServiceCycle runtime registered.");
             return runtime;
         }
@@ -55,7 +57,8 @@ internal static class AutomataServiceCycleComposition
         AutomataServiceCycleHostDependencies hostDependencies,
         IReadOnlyList<IAutomataServiceCycleFeature> features,
         ManualLogSource log,
-        Func<DiscoveryTreeOfferGameAction>? createDiscoveryTreeOffers = null)
+        Func<DiscoveryTreeOfferGameAction>? createDiscoveryTreeOffers = null,
+        Func<SpellWorkbenchGameAction>? createSpellWorkbench = null)
     {
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
         if (hostDependencies is null) throw new ArgumentNullException(nameof(hostDependencies));
@@ -69,6 +72,7 @@ internal static class AutomataServiceCycleComposition
         AutomataServiceCycleHost? host = null;
         AutomataServiceCycleObservability? observability = null;
         DiscoveryTreeOfferGameAction? discoveryTreeOffers = null;
+        SpellWorkbenchGameAction? spellWorkbench = null;
         var featureRuntimes = new List<IAutomataServiceCycleFeatureRuntime>(features.Count);
         try
         {
@@ -120,17 +124,20 @@ internal static class AutomataServiceCycleComposition
             for (var index = 0; index < featureRuntimes.Count; index++)
                 featureRuntimes[index].ActivateDiagnostics();
             discoveryTreeOffers = createDiscoveryTreeOffers?.Invoke();
+            spellWorkbench = createSpellWorkbench?.Invoke();
             return new AutomataServiceCycleRuntime(
                 hostDependencies.ReadLifecycleEpoch,
                 configurationPublication,
                 host,
                 featureRuntimes.ToArray(),
                 configurationGeneration,
-                discoveryTreeOffers);
+                discoveryTreeOffers,
+                spellWorkbench);
         }
         catch
         {
             discoveryTreeOffers?.Dispose();
+            spellWorkbench?.Dispose();
             DisposeFailedConstruction(featureRuntimes, observability, host, registry);
             throw;
         }

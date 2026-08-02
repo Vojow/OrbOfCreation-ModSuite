@@ -293,6 +293,11 @@ internal sealed class GameMcpProtocolRouter
                     throw new GameMcpInvalidParamsException(
                         "offerUuid is accepted only for select or confirm");
                 break;
+            case "game_spell_workbench":
+                builder.Uuid = RequireUuid(arguments, "spellRecipeUuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                builder.Mode = RequireOneOf(arguments, "mode", "select", "discover", "create");
+                break;
             case "suite_config_set":
                 builder.ConfigurationGeneration = RequiredUlong(
                     arguments, "configurationGeneration");
@@ -360,7 +365,7 @@ internal sealed class GameMcpProtocolRouter
         GameMcpOperationRequestBuilder request) => name switch
     {
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_spell_level" or "game_discovery_offer" => GameMcpOperationClass.Gameplay,
+            "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" => GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
         "game_screenshot" when request.SaveCapture => GameMcpOperationClass.SuiteAdministration,
@@ -384,7 +389,7 @@ internal sealed class GameMcpProtocolRouter
         "trace_health" => GameMcpFrameData.TraceWriterHealth,
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_spell_level" or "game_discovery_offer" =>
+            "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
@@ -537,6 +542,19 @@ internal sealed class GameMcpProtocolRouter
                         ["offerUuid"] = StringSchema("Required for select and confirm; must be in the current live native offer set."),
                     },
                     "mode", "treeUuid"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_spell_workbench",
+                "Select, discover, or create a spell",
+                "Drive the native base-recipe workbench. Success returns the newer named recipe state with costs, holdings, selection, and next action inline.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("select", "discover", "create"),
+                        ["spellRecipeUuid"] = StringSchema("Published SpellRecipeSO UUID."),
+                    },
+                    "mode", "spellRecipeUuid"),
                 readOnly: false,
                 idempotent: false),
             Tool(

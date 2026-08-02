@@ -848,6 +848,8 @@ internal static class GameMcpWorldQuery
             ? ProjectCraftingRecipe(in craftingRecipe)
             : row is WorldDiscoveryTree tree
             ? ProjectDiscoveryTree(world, in tree)
+            : row is WorldSpellRecipe spellRecipe
+            ? ProjectSpellRecipe(world, in spellRecipe)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -942,6 +944,132 @@ internal static class GameMcpWorldQuery
                 tree.RerollsLeft > 0 && tree.CurrentOfferIds.Count > 0 &&
                 !tree.UsedRerollsLastDiscover;
         return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectSpellRecipe(
+        GameWorldState world,
+        in WorldSpellRecipe recipe)
+    {
+        var selected = MatchesSelection(recipe.CoreGlyphs, world.SpellWorkbench.CoreGlyphs) &&
+            world.SpellWorkbench.AugmentGlyphs.Count == 0;
+        var result = new JObject
+        {
+            ["entityId"] = recipe.EntityId.ToString("D"),
+            ["category"] = "spell-recipes",
+            ["nativeType"] = "SpellRecipeSO",
+            ["discovered"] = recipe.Discovered,
+            ["masteryLevel"] = recipe.MasteryLevel,
+            ["selected"] = selected,
+        };
+
+        if (recipe.CoreGlyphs.Count > 0)
+        {
+            var glyphs = new JArray();
+            for (var index = 0; index < recipe.CoreGlyphs.Count; index++)
+            {
+                var glyph = recipe.CoreGlyphs[index];
+                var projected = new JObject
+                {
+                    ["glyphId"] = glyph.GlyphId.ToString("D"),
+                };
+                if (WorldLookup.TryFind(world.Glyphs, glyph.GlyphId, out var holding))
+                {
+                    projected["ownedLevel"] = holding.Level;
+                    if (holding.FreeLevels != 0) projected["bonusLevel"] = holding.FreeLevels;
+                    projected["discovered"] = holding.Discovered;
+                }
+                glyphs.Add(projected);
+            }
+            result["coreGlyphs"] = glyphs;
+        }
+
+        var holdings = new JArray();
+        for (var index = 0; index < world.SpellSlots.Count; index++)
+        {
+            var slot = world.SpellSlots[index];
+            if (!slot.Occupied || slot.SpellRecipeId != recipe.EntityId) continue;
+            holdings.Add(new JObject
+            {
+                ["slot"] = slot.SlotIndex,
+            });
+        }
+        if (holdings.Count > 0) result["equipped"] = holdings;
+
+        result["loadout"] = new JObject
+        {
+            ["equippedCount"] = world.SpellWorkbench.EquippedCount,
+            ["maximumEquipped"] = world.SpellWorkbench.MaximumEquipped,
+            ["hasEmptySlot"] = world.SpellWorkbench.HasEmptySlot,
+        };
+
+        if (!selected && recipe.CoreGlyphs.Count > 0)
+        {
+            result["select"] = new JObject
+            {
+                ["available"] = true,
+            };
+        }
+
+        var next = new JObject();
+        var costs = recipe.Discovered
+            ? ProjectSpellCosts(world.SpellWorkbench.CreationCosts)
+            : ProjectSpellCosts(recipe.DiscoveryCosts);
+        if (costs.Count > 0) next["costs"] = costs;
+        var affordable = recipe.Discovered
+            ? world.SpellWorkbench.CreationAffordable
+            : recipe.DiscoveryAffordable;
+        next["available"] = selected && affordable &&
+            (!recipe.Discovered || world.SpellWorkbench.HasEmptySlot);
+        if (!selected) next["reasonCode"] = "selection_required";
+        else if (!affordable) next["reasonCode"] = "unaffordable";
+        else if (recipe.Discovered && !world.SpellWorkbench.HasEmptySlot)
+            next["reasonCode"] = "loadout_full";
+        result[recipe.Discovered ? "create" : "discover"] = next;
+        return result.Freeze();
+    }
+
+    private static JArray ProjectSpellCosts(PublicationTable<WorldSpellRecipeCost> values)
+    {
+        var result = new JArray();
+        for (var index = 0; index < values.Count; index++)
+        {
+            var value = values[index];
+            result.Add(new JObject
+            {
+                ["resourceId"] = value.ResourceId.ToString("D"),
+                ["cost"] = new GameMcpDomainValue(value.Cost),
+                ["amount"] = new GameMcpDomainValue(value.AvailableAmount),
+            });
+        }
+        return result;
+    }
+
+    private static JArray ProjectSpellCosts(PublicationTable<WorldSpellWorkbenchCost> values)
+    {
+        var result = new JArray();
+        for (var index = 0; index < values.Count; index++)
+        {
+            var value = values[index];
+            result.Add(new JObject
+            {
+                ["resourceId"] = value.ResourceId.ToString("D"),
+                ["cost"] = new GameMcpDomainValue(value.Cost),
+                ["amount"] = new GameMcpDomainValue(value.AvailableAmount),
+            });
+        }
+        return result;
+    }
+
+    private static bool MatchesSelection(
+        PublicationTable<WorldSpellRecipeGlyph> recipe,
+        PublicationTable<WorldSpellWorkbenchGlyph> selected)
+    {
+        if (recipe.Count == 0 || recipe.Count != selected.Count) return false;
+        for (var index = 0; index < recipe.Count; index++)
+        {
+            if (recipe[index].GlyphId != selected[index].GlyphId) return false;
+        }
+        return true;
     }
 
     private static GameMcpValue ProjectResource(in WorldResource resource)
@@ -1234,6 +1362,8 @@ internal static class GameMcpWorldQuery
             ? ProjectCraftingRecipe(in craftingRecipe)
             : row is WorldDiscoveryTree tree
             ? ProjectDiscoveryTree(world, in tree)
+            : row is WorldSpellRecipe spellRecipe
+            ? ProjectSpellRecipe(world, in spellRecipe)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,

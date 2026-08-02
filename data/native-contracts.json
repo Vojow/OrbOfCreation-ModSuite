@@ -17497,6 +17497,577 @@
         "direct"
       ],
       "place": "capture"
+    },
+    {
+      "id": "spell-workbench.glyph-list-type-action",
+      "assembly": "assembly-csharp",
+      "type": "GlyphListVariable",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.glyph-list-type-capture",
+      "assembly": "assembly-csharp",
+      "type": "GlyphListVariable",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata spell workbench world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-workbench.spell-list-type-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellListVariable",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.manager-instance-capture",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "instance",
+      "visibility": "public",
+      "static": true,
+      "valueType": "SpellManager",
+      "owners": [
+        "Automata spell workbench world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-workbench.manager-selected-core-capture",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "selectedCoreGlyphs",
+      "visibility": "public",
+      "static": false,
+      "valueType": "GlyphListVariable",
+      "owners": [
+        "Automata spell workbench world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-workbench.manager-selected-core-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "selectedCoreGlyphs",
+      "visibility": "public",
+      "static": false,
+      "valueType": "GlyphListVariable",
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.manager-selected-augments-capture",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "selectedAugmentGlyphs",
+      "visibility": "public",
+      "static": false,
+      "valueType": "GlyphListVariable",
+      "owners": [
+        "Automata spell workbench world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-workbench.manager-selected-augments-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "selectedAugmentGlyphs",
+      "visibility": "public",
+      "static": false,
+      "valueType": "GlyphListVariable",
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.manager-active-spells-capture",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "activeSpells",
+      "visibility": "public",
+      "static": false,
+      "valueType": "SpellListVariable",
+      "owners": [
+        "Automata spell workbench world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-workbench.manager-get-create-cost-capture",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetSpellCreateCost",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [
+        "System.Collections.Generic.List`1<GlyphSO>"
+      ],
+      "owners": [
+        "Automata spell workbench world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-workbench.manager-get-create-cost-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetSpellCreateCost",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [
+        "System.Collections.Generic.List`1<GlyphSO>"
+      ],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.manager-get-from-recipe",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetSpellFromRecipe",
+      "visibility": "public",
+      "static": false,
+      "returnType": "SpellRecipeSO",
+      "parameters": [
+        "System.Collections.Generic.List`1<GlyphSO>"
+      ],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.manager-discover",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "DiscoverSpell",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.manager-create",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CreateSpell",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.recipe-all-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "All",
+      "visibility": "public",
+      "static": true,
+      "valueType": "System.Collections.Generic.List`1<SpellRecipeSO>",
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.recipe-get-glyphs-capture",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetGlyphRecipe",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Collections.Generic.List`1<GlyphSO>",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-workbench.recipe-get-glyphs-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetGlyphRecipe",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Collections.Generic.List`1<GlyphSO>",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.recipe-can-discover",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanDiscover",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.recipe-is-creatable",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsCreatable",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.recipe-get-discover-cost-capture",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetDiscoverCost",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-workbench.recipe-get-discover-cost-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetDiscoverCost",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.glyph-is-available",
+      "assembly": "assembly-csharp",
+      "type": "GlyphSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsAvailable",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.glyph-is-augment",
+      "assembly": "assembly-csharp",
+      "type": "GlyphSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsSpellAugment",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.list-value-capture",
+      "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "value",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<!0>",
+      "owners": [
+        "Automata spell workbench world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-workbench.list-value-action",
+      "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "value",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<!0>",
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.list-add-action",
+      "assembly": "assembly-csharp",
+      "type": "GenericListVariable`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Add",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "!0"
+      ],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.list-empty-action",
+      "assembly": "assembly-csharp",
+      "type": "GenericListVariable`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Empty",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.loadout-has-empty-action",
+      "assembly": "assembly-csharp",
+      "type": "EmptyTypeListVariable`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasEmptySpot",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.spell-reference-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "get_reference",
+      "visibility": "public",
+      "static": false,
+      "returnType": "SpellRecipeSO",
+      "parameters": [],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.spell-guid-container-capture",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "guidContainer",
+      "visibility": "public",
+      "static": false,
+      "valueType": "GuidContainer",
+      "owners": [
+        "Automata spell workbench world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-workbench.spell-guid-container-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "guidContainer",
+      "visibility": "public",
+      "static": false,
+      "valueType": "GuidContainer",
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     }
   ],
   "sourceAudit": {
@@ -17513,6 +18084,7 @@
       "src/DiscoveryTree",
       "src/Mentor",
       "src/ModConfig",
+      "src/SpellWorkbench",
       "src/SpellLeveling"
     ],
     "exemptions": [

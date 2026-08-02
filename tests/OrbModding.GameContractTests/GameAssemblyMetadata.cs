@@ -298,6 +298,32 @@ internal sealed class GameAssemblyMetadata : IDisposable
         return references.OrderBy(reference => reference.Offset).ToArray();
     }
 
+    /// <summary>
+    /// Constructed-generic and external member references used by one uniquely named native
+    /// method body. Definition-reference inspection alone cannot see a call through a closed
+    /// generic base such as GenericListVariable&lt;GlyphSO&gt;.Empty().
+    /// </summary>
+    public IReadOnlyList<MethodBodyDefinitionReference> GetMethodBodyMemberReferences(
+        string sourceType,
+        string sourceMethod)
+    {
+        var source = RequireUniqueMethod(sourceType, sourceMethod);
+        var references = new List<MethodBodyDefinitionReference>();
+        foreach (var handle in Reader.MemberReferences)
+        {
+            var offset = MethodBodyTokenOffset(source, MetadataTokens.GetToken(handle));
+            if (offset < 0) continue;
+            var member = Reader.GetMemberReference(handle);
+            references.Add(new MethodBodyDefinitionReference(
+                offset,
+                MetadataTokens.GetToken(handle),
+                "member-reference",
+                DecodeTypeHandle(member.Parent),
+                Reader.GetString(member.Name)));
+        }
+        return references.OrderBy(reference => reference.Offset).ToArray();
+    }
+
     private static string GetTypeVisibility(TypeAttributes attributes) =>
         (attributes & TypeAttributes.VisibilityMask) switch
         {

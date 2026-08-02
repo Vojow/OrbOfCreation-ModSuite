@@ -117,6 +117,7 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<WorldAlchemyRecipe, WorldAlchemyRecipe> AlchemyRecipes { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyType, WorldAlchemyType> AlchemyTypes { get; } = new();
     internal WorldSampleBuffer<WorldSpellRecipe, WorldSpellRecipe> SpellRecipes { get; } = new();
+    internal WorldSpellWorkbenchBuffer SpellWorkbench { get; } = new();
     internal WorldSampleBuffer<WorldSpellType, WorldSpellType> SpellTypes { get; } = new();
     internal WorldSampleBuffer<WorldEquipment, WorldEquipment> Equipment { get; } = new();
     internal WorldSampleBuffer<WorldEquipmentType, WorldEquipmentType> EquipmentTypes { get; } = new();
@@ -281,6 +282,7 @@ internal static class GameWorldFrameDeriver
             AlchemyRecipes = frame.AlchemyRecipes.Build(WorldIdentityDeriver<WorldAlchemyRecipe>.Shared),
             AlchemyTypes = frame.AlchemyTypes.Build(WorldIdentityDeriver<WorldAlchemyType>.Shared),
             SpellRecipes = frame.SpellRecipes.Build(WorldIdentityDeriver<WorldSpellRecipe>.Shared),
+            SpellWorkbench = frame.SpellWorkbench.Build(),
             SpellTypes = frame.SpellTypes.Build(WorldIdentityDeriver<WorldSpellType>.Shared),
             Equipment = frame.Equipment.Build(WorldIdentityDeriver<WorldEquipment>.Shared),
             EquipmentTypes = frame.EquipmentTypes.Build(WorldIdentityDeriver<WorldEquipmentType>.Shared),

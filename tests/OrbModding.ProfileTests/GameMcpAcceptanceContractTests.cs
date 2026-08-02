@@ -328,7 +328,7 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(scan["nameEvidence"]);
         Assert.Equal(4, (int)scan["masteryLevel"]!);
         Assert.Null(scan["spellPowerMod"]);
-        Assert.Null(scan["category"]);
+        Assert.Equal("spell-recipes", (string?)scan["category"]);
 
         var exact = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,

@@ -117,6 +117,7 @@ does not refresh it by hidden navigation.
 | `game_harvest` | Harvest an audited pair derived from a plot UUID |
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
 | `game_discovery_offer` | Initiate, select, confirm, or reroll one Discovery Tree offer lifecycle |
+| `game_spell_workbench` | Select an authored spell recipe, discover it, or create another equipped instance |
 | `suite_config_set` | Commit one allowlisted setting through the configuration store |
 | `suite_emergency_stop` | Engage or resume the suite's shared emergency stop |
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
@@ -242,6 +243,32 @@ The MCP-only decision/action sequence is seven calls when two offers need explan
 5. Call `select`; its terminal response includes `selectedOffer`.
 6. Call `confirm` with that UUID; its terminal response is the Idle tree plus the next initiate
    costs. There are no post-mutation `world_get` calls, snapshot tokens, or receipt polls.
+
+### Spell discovery and creation loop
+
+`spell-recipes` is also the pre-decision surface for `game_spell_workbench`. Each named row
+contains the authored ordered `coreGlyphs` with current owned and bonus levels, whether that exact
+base recipe is selected, equipped slot positions, and current loadout count/capacity. An
+undiscovered recipe exposes `discover`; a discovered recipe exposes `create`. The action object
+always retains its named exact costs and spendable amounts, including before selection. If the
+recipe is not currently selected, `select.available=true` and the paid action reports
+`selection_required` rather than hiding its economics.
+
+The MCP-only base-recipe sequence is:
+
+1. Page or search `spell-recipes`; compare names, core-glyph holdings, discovery costs, and
+   affordability.
+2. Call `game_spell_workbench(mode="select", spellRecipeUuid=...)`. The compact committed result
+   is the selected recipe row, with `discover` or `create` now callable.
+3. For an undiscovered recipe, call `discover`. The returned newer row reports discovered state,
+   any native auto-equipped slot, and creation economics for the next decision.
+4. If another instance is wanted, select the base recipe again and call `create`. The returned row
+   reports the new equipped-slot state and remaining capacity.
+
+Every referenced entity is named inline. No catalog join, world-generation argument, payment
+stanza, receipt poll, or post-mutation `world_get` is required. B-002 deliberately selects the
+authored base recipe by stable recipe UUID; augment and output-level composition is a separate
+family.
 
 ### Entity explanation
 
@@ -369,6 +396,8 @@ tools/game-mcp-client.py call game_cast --arguments \
   '{"mode":"fire","slotIndex":0,"spellRecipeUuid":"SPELL_UUID"}'
 tools/game-mcp-client.py call game_discovery_offer --arguments \
   '{"mode":"select","treeUuid":"TREE_UUID","offerUuid":"OFFER_UUID"}'
+tools/game-mcp-client.py call game_spell_workbench --arguments \
+  '{"mode":"select","spellRecipeUuid":"SPELL_RECIPE_UUID"}'
 ```
 
 `game_discovery_offer` requires `offerUuid` for `select` and `confirm`, and rejects it for
@@ -382,6 +411,14 @@ ordinary collector to publish the resulting Choice state and return its named or
 select returns the selected state; confirm returns Idle plus the next initiate costs. Failures
 retain the full before/after and payment evidence when capture reached native evidence; a preflight
 refusal omits the receipt.
+
+`game_spell_workbench` requires one published `SpellRecipeSO` UUID. `select` replaces the native
+core selection with that recipe's exact authored glyph order and clears augments; `discover`
+revalidates that exact base selection and invokes `SpellManager.DiscoverSpell`; `create` revalidates
+the selection, discovered state, slot room, and current native create-cost verdict before invoking
+`SpellManager.CreateSpell`. Discovery success is the exact target becoming discovered. Creation
+success is a new non-empty runtime spell identity referencing that target. Native payment and list
+accounting never replace those identity/outcome gates.
 
 CLI play commands therefore need no generation option:
 

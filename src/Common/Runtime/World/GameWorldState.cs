@@ -98,6 +98,16 @@ public sealed record GameWorldState
     internal PublicationTable<WorldSpellRecipe> SpellRecipes { get; init; } =
         PublicationTable<WorldSpellRecipe>.Empty;
 
+    /// <summary>The native spell workbench selection and equipped-loadout capacity for this world.</summary>
+    internal WorldSpellWorkbench SpellWorkbench { get; init; } = new(
+        PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
+        PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
+        PublicationTable<WorldSpellWorkbenchCost>.Empty,
+        false,
+        0,
+        0,
+        false);
+
     internal PublicationTable<WorldSpellType> SpellTypes { get; init; } =
         PublicationTable<WorldSpellType>.Empty;
 

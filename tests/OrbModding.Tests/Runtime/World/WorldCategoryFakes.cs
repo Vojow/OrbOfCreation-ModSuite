@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OrbModding.Common;
 
 namespace OrbModding.Tests.Runtime.World;
@@ -28,6 +29,8 @@ internal static class WorldCategoryFakes
         ["AlchemyInstanceListVariable"] = typeof(FakeAlchemyInstanceList),
         ["AlchemyRecipeListVariable"] = typeof(FakeAlchemyRecipeList),
         ["SpellRecipeSO"] = typeof(FakeSpellRecipe),
+        ["SpellManager"] = typeof(FakeSpellManager),
+        ["GlyphListVariable"] = typeof(FakeGlyphList),
         ["SpellTypeSO"] = typeof(FakeSpellType),
         ["EquipmentSO"] = typeof(FakeEquipment),
         ["EquipmentTypeSO"] = typeof(FakeEquipmentType),
@@ -95,6 +98,7 @@ internal static class WorldCategoryFakes
         FakeAlchemyRecipe.All.Clear();
         FakeAlchemyType.All.Clear();
         FakeSpellRecipe.All.Clear();
+        FakeSpellManager.instance = null;
         FakeSpellType.All.Clear();
         FakeEquipment.All.Clear();
         FakeEquipmentType.All.Clear();
@@ -763,13 +767,18 @@ internal sealed class FakeSpellLoadout
 {
     public Guid Identity = Guid.NewGuid();
     public List<FakeSpell?> value = new();
+    public int maximum = 8;
 
     public Guid GetGuid() => Identity;
+    public int GetUsedSpots() => value.Count(spell => spell is not null);
+    public int GetMax() => maximum;
+    public bool HasEmptySpot() => GetUsedSpots() < maximum;
 }
 
 /// <summary>One equipped spell, answering exactly what the loadout reader asks it.</summary>
 internal sealed class FakeSpell
 {
+    public FakeReferencedEntity guidContainer = new();
     public FakeSpellRecipe? spellReference;
     public bool empty;
     public bool casting;
@@ -856,10 +865,57 @@ internal sealed class FakeSpellRecipe
     public FakeModifierRecord spellSpecialMod = new(0d);
     public FakeModifierRecord spellXpMod = new(0d);
     public bool hasAlertedThisMastery;
+    public List<FakeGlyph> coreRecipe = new();
+    public FakeSpellWorkbenchCostList discoveryCost = new();
 
     public Guid GetGuid() => Identity;
 
     public bool IsReadyToLevelMastery() => readyToLevel;
+    public List<FakeGlyph> GetGlyphRecipe() => new(coreRecipe);
+    public FakeSpellWorkbenchCostList GetDiscoverCost() => discoveryCost;
+}
+
+internal sealed class FakeGlyphList
+{
+    public List<FakeGlyph> value = new();
+}
+
+internal sealed class FakeSpellManager
+{
+    public static FakeSpellManager? instance;
+
+    public FakeGlyphList selectedCoreGlyphs = new();
+    public FakeGlyphList selectedAugmentGlyphs = new();
+    public FakeSpellLoadout activeSpells = new();
+    public FakeSpellWorkbenchCostList creationCost = new();
+
+    public FakeSpellWorkbenchCostList GetSpellCreateCost(List<FakeGlyph> glyphs) => creationCost;
+}
+
+internal sealed class FakeSpellWorkbenchCostList
+{
+    public List<FakeSpellWorkbenchCost> costs = new();
+    public bool affordable = true;
+
+    public bool HasEnough() => affordable;
+    public List<FakeSpellWorkbenchCost> GetEntries() => costs;
+}
+
+internal sealed class FakeSpellWorkbenchCost
+{
+    public FakeSpellWorkbenchResource resource = new();
+    public BigDouble amount;
+
+    public BigDouble GetValue() => amount;
+}
+
+internal sealed class FakeSpellWorkbenchResource
+{
+    public Guid Identity = Guid.NewGuid();
+    public BigDouble amount;
+
+    public Guid GetGuid() => Identity;
+    public BigDouble GetTrueQuantity() => amount;
 }
 
 internal sealed class FakeSpellType

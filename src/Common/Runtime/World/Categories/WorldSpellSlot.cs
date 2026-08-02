@@ -50,8 +50,46 @@ internal readonly struct WorldSpellSlot
         int currentCharges,
         int maximumCharges,
         BigDouble cooldownRemaining)
+        : this(
+            slotIndex,
+            Guid.Empty,
+            spellRecipeId,
+            occupied,
+            casting,
+            readyingCast,
+            attuning,
+            channeled,
+            toggled,
+            chargeable,
+            castReady,
+            chargeAvailable,
+            resourcesCovered,
+            currentCharges,
+            maximumCharges,
+            cooldownRemaining)
+    {
+    }
+
+    internal WorldSpellSlot(
+        int slotIndex,
+        Guid spellInstanceId,
+        Guid spellRecipeId,
+        bool occupied,
+        bool casting,
+        bool readyingCast,
+        bool attuning,
+        bool channeled,
+        bool toggled,
+        bool chargeable,
+        bool castReady,
+        bool chargeAvailable,
+        bool resourcesCovered,
+        int currentCharges,
+        int maximumCharges,
+        BigDouble cooldownRemaining)
     {
         SlotIndex = slotIndex;
+        SpellInstanceId = spellInstanceId;
         SpellRecipeId = spellRecipeId;
         Occupied = occupied;
         Casting = casting;
@@ -77,6 +115,9 @@ internal readonly struct WorldSpellSlot
     /// could not read, and a plan that fired the table's index would fire the wrong spell.
     /// </remarks>
     internal int SlotIndex { get; }
+
+    /// <summary>The runtime spell instance identity, distinct from its authored recipe identity.</summary>
+    internal Guid SpellInstanceId { get; }
 
     /// <summary>Which spell the slot holds, or <see cref="Guid.Empty"/> when it holds none.</summary>
     internal Guid SpellRecipeId { get; }
@@ -258,6 +299,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
     private readonly Func<object, int>? _maximumCharges;
     private readonly Func<object, BigDouble>? _cooldown;
     private readonly Func<object, Guid>? _recipeId;
+    private readonly Func<object, Guid>? _spellInstanceId;
 
     private readonly MethodInfo? _getCost;
     private readonly MethodInfo? _getDrainCost;
@@ -304,6 +346,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         _maximumCharges = spell.Call<int>("GetMaxSpellCharges");
         _cooldown = spell.Call<BigDouble>("GetCooldownTimeRemaining");
         _recipeId = spell.CallReferenceGuid("get_reference");
+        _spellInstanceId = spell.ReferenceGuid("guidContainer");
 
         // The two cost accessors return a cost list rather than a value, so their entries are bound
         // off the declared return type the same way the upgrade reader binds its authored costs.
@@ -407,13 +450,14 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         if (!occupied)
         {
             slots.Append(new WorldSpellSlot(
-                index, Guid.Empty, false, false, false, false, false, false, false, false, false,
+                index, Guid.Empty, Guid.Empty, false, false, false, false, false, false, false, false, false,
                 false, 0, 0, default));
             return;
         }
 
         slots.Append(new WorldSpellSlot(
             index,
+            _spellInstanceId!(spell),
             _recipeId!(spell),
             true,
             _isCasting!(spell),

@@ -24,13 +24,14 @@ internal enum GameMcpCommandKind
     TooltipRead = 13,
     ContinueRun = 14,
     DiscoveryTreeOffer = 15,
+    SpellWorkbench = 16,
 }
 
 internal static class GameMcpCommandKinds
 {
     internal static bool IsGameplayAction(GameMcpCommandKind kind) =>
         kind is >= GameMcpCommandKind.Purchase and <= GameMcpCommandKind.SpellLevel or
-            GameMcpCommandKind.DiscoveryTreeOffer;
+            GameMcpCommandKind.DiscoveryTreeOffer or GameMcpCommandKind.SpellWorkbench;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -40,6 +41,7 @@ internal static class GameMcpCommandKinds
         "game_harvest" => GameMcpCommandKind.Harvest,
         "game_spell_level" => GameMcpCommandKind.SpellLevel,
         "game_discovery_offer" => GameMcpCommandKind.DiscoveryTreeOffer,
+        "game_spell_workbench" => GameMcpCommandKind.SpellWorkbench,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -393,6 +395,9 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.DiscoveryTreeOffer)
             return "the Discovery Tree offer boundary returned " + disposition +
                 " with exact preflight code " + exact;
+        if (commandKind == GameMcpCommandKind.SpellWorkbench)
+            return "the spell workbench boundary returned " + disposition +
+                " with exact preflight code " + exact;
         return "the native action boundary returned " + disposition +
             " with exact result code " + exact;
     }
@@ -456,6 +461,25 @@ internal static class GameMcpActionResultCodeNames
             if (code == DiscoveryTreeOfferActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == DiscoveryTreeOfferActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == DiscoveryTreeOfferActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.SpellWorkbench)
+        {
+            if (code == SpellWorkbenchActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == SpellWorkbenchActionResultCodes.Quarantined) return "quarantined";
+            if (code == SpellWorkbenchActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == SpellWorkbenchActionResultCodes.IdentityUnavailable) return "identity_unavailable";
+            if (code == SpellWorkbenchActionResultCodes.SelectionUnavailable) return "selection_unavailable";
+            if (code == SpellWorkbenchActionResultCodes.WrongSelection) return "wrong_selection";
+            if (code == SpellWorkbenchActionResultCodes.AlreadyDiscovered) return "already_discovered";
+            if (code == SpellWorkbenchActionResultCodes.DiscoveryUnavailable) return "discovery_unavailable";
+            if (code == SpellWorkbenchActionResultCodes.RecipeUnavailable) return "recipe_unavailable";
+            if (code == SpellWorkbenchActionResultCodes.Unaffordable) return "unaffordable";
+            if (code == SpellWorkbenchActionResultCodes.LoadoutFull) return "loadout_full";
+            if (code == SpellWorkbenchActionResultCodes.CompositionUnsupported) return "composition_unsupported";
+            if (code == SpellWorkbenchActionResultCodes.MutationPermitUnavailable)
+                return "action_family_unavailable";
+            if (code == SpellWorkbenchActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == SpellWorkbenchActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

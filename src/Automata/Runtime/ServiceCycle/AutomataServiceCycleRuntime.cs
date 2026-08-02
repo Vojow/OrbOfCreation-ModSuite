@@ -25,6 +25,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly ServiceConfigurationPublisher _configurationPublication;
     private ConfigGeneration _configurationGeneration;
     private readonly DiscoveryTreeOfferGameAction? _discoveryTreeOffers;
+    private readonly SpellWorkbenchGameAction? _spellWorkbench;
     private bool _disposed;
 #if SERVICE_CYCLE_PROFILE
     private ulong _nextGameMcpActionIdentity;
@@ -36,7 +37,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         AutomataServiceCycleHost host,
         IAutomataServiceCycleFeatureRuntime[] features,
         ConfigGeneration configurationGeneration,
-        DiscoveryTreeOfferGameAction? discoveryTreeOffers = null)
+        DiscoveryTreeOfferGameAction? discoveryTreeOffers = null,
+        SpellWorkbenchGameAction? spellWorkbench = null)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _configurationPublication = configurationPublication ??
@@ -45,6 +47,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _features = features ?? throw new ArgumentNullException(nameof(features));
         _configurationGeneration = configurationGeneration;
         _discoveryTreeOffers = discoveryTreeOffers;
+        _spellWorkbench = spellWorkbench;
     }
 
     internal SuiteRuntimeConfiguration CurrentConfiguration => _configurationPublication.ReadLatest().Snapshot;
@@ -103,6 +106,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 nativeLifecycle,
                 _configurationGeneration);
         _discoveryTreeOffers?.InvalidateLifecycle();
+        _spellWorkbench?.InvalidateLifecycle();
     }
 
 #if SERVICE_CYCLE_PROFILE
@@ -142,6 +146,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                     command,
                     lifecycle,
                     configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.SpellWorkbench)
+                return ExecuteSpellWorkbench(command, lifecycle, configuration.Generation.Value);
             var service = ServiceForGameMcp(command.Kind);
             var context = CreateGameMcpContext(
                 registry,
@@ -181,6 +187,40 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 lifecycle,
                 configuration.Generation.Value);
         }
+    }
+
+    private GameMcpCommandResult ExecuteSpellWorkbench(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        GameMcpNativeActionAdmission.AssertNativeType(command, "SpellRecipeSO");
+        if (_spellWorkbench is null)
+            return GameMcpCommandResult.Rejected(
+                "contract_unavailable",
+                "the shared spell workbench GameAction was not composed",
+                lifecycle,
+                configurationGeneration);
+        var kind = command.Mode switch
+        {
+            "select" => SpellWorkbenchActionKind.Select,
+            "discover" => SpellWorkbenchActionKind.Discover,
+            "create" => SpellWorkbenchActionKind.Create,
+            _ => throw new ArgumentException("unsupported spell workbench mode " + command.Mode),
+        };
+        var action = new SpellWorkbenchAction(
+            kind,
+            command.TargetId,
+            command.ExpectedLifecycleGeneration);
+        var submission = _spellWorkbench.Submit(in action);
+        var result = SpellWorkbenchActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(
+            in result,
+            command.Kind,
+            lifecycle,
+            configurationGeneration,
+            submission.Reason,
+            GameMcpSpellWorkbenchProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteDiscoveryTreeOffer(
@@ -473,6 +513,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         try
         {
             _discoveryTreeOffers?.Dispose();
+            _spellWorkbench?.Dispose();
             if (!_host.EmergencyStopEngaged)
                 _host.SetEmergencyStop(true, EmergencyStopReason.SuiteShutdown);
         }
