@@ -87,9 +87,11 @@ For a structure, the resolver additionally proves `StructureSO.structureType` is
 `StructureTypeSO` containing that exact structure reference exactly once in its private
 `structures` list. Both view list fields participate; the same view/list route appearing in both
 collapses to one; different matching routes are ambiguous. A missing, unreadable, ambiguous, or
-contradictory route is a named status, not an empty gap. The proving incident: a structure present
-and purchasable in the `ArtificerStructures` list while its owning `WorkshopArtificer` view was
-unavailable — the item itself carried no tab prerequisite.
+contradictory route is a named status, not an empty gap. The proving incident: `ConstructionAura`
+(`6a361a01-8405-4fbc-9af1-42f471911d9e`) present and purchasable in the `ArtificerStructures` list
+(`2c3b16bc-1eb4-4382-9d93-0d20f81f07a9`) while its owning `WorkshopArtificer` view
+(`b8ebce37-ba04-42bc-b36d-63f7a7766a21`) was unavailable — the item itself carried no tab
+prerequisite.
 
 ### Making the mutation
 
@@ -101,12 +103,36 @@ restored afterwards (protocol in [modding-hooks.md](modding-hooks.md)). Both acc
 in `[1, N]` — either can commit fewer levels than asked for, any committed level is a success, and
 only a zero delta is a miss.
 
+### Where an upgrade's reward lands
+
+An `UpgradeSO` can carry authored `viewListAdditions`: `ViewListVariable.ListTuple` values whose
+inherited `list` and `element` fields `UpgradeSO.ApplyListAdditions()` applies. Neither
+`CanPurchase()` nor `Purchase()` inspects that destination, so a full one is admitted and charged
+like any other purchase.
+
+Traverse every tuple before paying. A tuple targeting an unbounded list needs no gate; a
+capacity-bound one must match an audited exact list/max identity pair and answer live
+`HasEmptySpot()`. The audited pair is the world-aspect destination `CreatedWorldAspects`
+(`74ec1f90-e94c-4cd7-a1d0-7b35016b57ff`), whose `AbstractListVariable<ViewSO>.maxSizeVariable` is
+the `WorldAspectSlots` `IntVariable` (`4b1bb2de-723a-4360-827c-8e4483f3ff8d`). An unknown pair, a
+malformed tuple, an identity contradiction, or a full destination refuses before payment. The rule
+has an origin: an aspect bought against zero free pedestals without this gate made the game
+manifest an extra slot, and a later slot grant left one permanently empty.
+
 ### Queue and completion
 
 Queue authority is `ActionManager.GetRemainingRoom()` together with
 `ActionManager.instance.actionableItems.maxQueuedItems.AsInt()`. Read them as a pair immediately
 before acting; capacity grows through ordinary progression without any lifecycle boundary firing,
 and `Player.GetBulkDevelopment()` is a separate value that only shapes grouping.
+
+**The upgrade path never checks room per level.** One committed level is one queue slot —
+`UpgradeSO.Purchase()` loops the multi-buy multiplier and `QueueAction` stacks once per committed
+level — and that loop consults `GetRemainingRoom()` nowhere; its only per-level term is a
+`HasEnough()` that breaks the loop once the next level is unaffordable. A caller holding slots back
+must clamp its own request to `remainingRoom - reservedSlots`: with room 5, a reserve of 3 and a
+request of 4, the admission check passes, four levels queue, and one slot is left. The structure
+path is one slot per call, because `Purchase(true)` queues exactly one level.
 
 A completion can unlock unrelated content — including content in the *other* registry. So
 `CompleteAction()` returning invalidates more than the entity that completed, and a completion
@@ -224,6 +250,14 @@ Investment and Speed are real Scroll and enchantment identities with no recipe i
 the code-side half of the open question in
 [`game-systems/open-questions.md`](../game-systems/open-questions.md). Do not
 infer a production path for them from the existence of the identities.
+
+A triple is proved by edges, never by names: exactly six exact `CraftingRecipeSO` values in the
+registry, exactly one `ScribeCrafting` type reference on the recipe, `useQuantityAsLevel = true`
+alongside `CraftingRecipeTypeSO.isLevelType = true`, exactly one `ConsumableGainEffect` output
+naming that role's Scroll, exactly one `RequestTargetEffectScript` on the Scroll behind an exact
+`TargetStructure` selector, and exactly one `EnchantItemScript` naming the role's enchantment. A
+missing, extra, wrong-typed or contradictory edge leaves the relationship unknown; it never
+degrades to a name-based mapping.
 
 ### There is no non-UI one-shot composite
 

@@ -71,9 +71,6 @@ carried cross-run bonuses (authored constants do not).
 
 ## World and crafting
 
-- **The aspect zero-slot case** — an aspect-granting purchase completing with no free pedestal either
-  never places the aspect or causes an extra slot to appear, leaving one permanently empty after a
-  later slot grant. Which happens, or whether both do on different paths, is unresolved.
 - **The Scribe's roles** — six scribe recipes are registered against eight authored scribe roles,
   while a live inventory held scroll types for two of the roles that have no recipe. Either those
   arrive from a non-Scribe source or the registry reading is incomplete.

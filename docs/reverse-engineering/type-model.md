@@ -61,6 +61,12 @@ The pattern is near-universal; these are the variations worth knowing before you
 | Combat | definitions are ordinary assets, but live state (status effects, engaged effects, targets) exists only in list variables and target containers |
 | Concepts | have no class of their own; see [naming-traps.md](naming-traps.md) |
 
+`AchievementSO.ApplyEffects()` adds that raw strength to `Player.GetAchievementLevel()` under the
+achievement's own UUID and then applies the achievement's completion effects. An
+achievement-driven bonus therefore attaches a narrowly scoped persistent effect to the
+`AchievementStrength` `IntVariable`; multiplying `AchievementSO.GetTotalAchievementStrength()`
+instead amplifies every existing consumer of the same derived global.
+
 ## Modifier layers and double application
 
 A final statistic can receive contributions from the base record, concrete-object modifiers,

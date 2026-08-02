@@ -84,6 +84,11 @@ arithmetic and fold order are player-observable and documented in
 [`game-systems/modifiers.md`](../game-systems/modifiers.md); what the code offers
 is the operand graph above, in native combination order.
 
+`ValueModifierVariable.GetValue()` is the one `GetValue()` in this assembly that is a plain field
+read — no dirty flag, no recalculation, no observable, so it cannot write. Read the field anyway:
+the rule that a reader never calls an accessor is worth more than the single call it would save,
+and the next `GetValue()` someone reaches for will not be this one.
+
 ## Rounding
 
 Two variants, not interchangeable: `RoundToTwoSigsEarly()` closes the Structure cost chain and
@@ -124,6 +129,10 @@ result  = base * active.AsPercent()
 
 The `Max(passive / 100, scaled)` term is the one people drop.
 
+`GetNextQuantity()` and the committed quantity are the same number, which their names hide:
+`GetNextQuantity()` is `GetBaseLevel() + queuedQuantity`, `GetBaseLevel()` returns `quantity`, and
+`q` above is `quantity + queuedQuantity`. Stated because a future reader will assume a bug.
+
 ## Upgrade cost
 
 ```text
@@ -144,6 +153,13 @@ purchaseCost = cost.RoundToTwoSigs()
 The native object **caches its calculated cost by cost level**. Whether a modifier change
 invalidates that cache is not established from IL; treat a cached price as stale after any
 modifier movement.
+
+A modifier list is read by content, while a single modifier is read by identity.
+`costPerQuantity` is a `ValueModifierRef` pointing at one registered
+`ValueModifierVariable`, so it travels as a Guid. `resourceCostModPerLevel` is a
+`ModifierListRef` whose `Standard` subclass resolves one of nine shared lists off
+`GlobalValues.instance` by a `refType` enum rather than by naming a variable, so carrying an
+identity for it would mean reproducing that nine-way mapping.
 
 ## Affordability
 

@@ -42,6 +42,18 @@ already measure the native edge — is blocked rather than unscheduled: the prof
 affine and a worker definition may hold no runtime-owned storage, so worker stages need a different
 probe than the suite has.
 
+## On-demand collection
+
+Collection could wait until a service asks for a snapshot instead of running on a fixed interval. The
+interval is already faster than any consumer evaluates, so the work this would save is cheap, and the
+decision that justifies it is a measured one nobody has taken. It reopens on a measured full-pass
+main-thread cost high enough that four passes a second is a visible frame cost, or on a consumer whose
+interval is much slower than the collection one.
+
+Skipping a cycle because the world has not changed is rejected outright rather than deferred: there is
+no such thing as an unchanged world in this game, so the check would never fire, and it would throttle
+every consumer to the collection rate — a behaviour change disguised as an infrastructure setting.
+
 ## An elapsed-time action budget
 
 Auto Buy's per-turn limit of 16 attempts is a count cap, not a wall-clock one. Measured full slices stay

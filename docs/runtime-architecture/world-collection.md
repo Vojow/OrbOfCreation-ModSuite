@@ -158,6 +158,13 @@ alone knows is its own total, the `Adjust(100)` its tooltip prints as a percenta
 computing it would not breach D16, but it needs the two variable-size modifier dictionaries. Until a
 named service wants that number, the row carries the active-modifier count.
 
+**A reading the chain cannot price honestly publishes no price.** A zero `attributeCostMod` is
+authored at parity, so whatever produced the zero, multiplying by it makes the entity free — the one
+error direction that commits a consumer to a purchase it cannot pay for. A zero quality is the same
+refusal from the other side, being the base of the power the modifier is divided by, and would
+price at infinity. Either way the entity publishes no price, and a consumer that finds none falls
+back rather than reading a zero as cheap.
+
 ## What is deliberately not collected
 
 An immutable publication may not carry a list, and wrapping each list in an audited table is a

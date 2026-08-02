@@ -213,8 +213,11 @@ postfixes, `AfterNativeCompletion` and Auto Concept's signal patches are each an
 
 Three groups survive it. `SpellFirePatch` is the before/after probe of `NativeMutationVerifier.Execute`
 for Auto Cast's fire, which is the declared verifier exception, since a verifier that may not observe
-the game cannot verify anything. The five lifecycle hooks wait on the experiment W55 defers. The hooks
-registered from `ComposeMentor` retire with Mentor.
+the game cannot verify anything. The five lifecycle hooks wait on the experiment W55 defers. The four
+mastery hooks registered from `ComposeMentor` are exact-XP **inputs**, not a signal the world already
+carries: a native rollover consumes saved XP and Mentor's own grant writes the same value, so no
+snapshot delta recovers what was earned. They publish value-only rows with the world and retire only
+with Mentor itself.
 
 ## W57 — Lifecycle observation installs with Automata, not with Mentor
 

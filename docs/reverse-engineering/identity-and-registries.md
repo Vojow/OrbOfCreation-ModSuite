@@ -58,6 +58,11 @@ to a same-named object, because a same-named object is a different object.
 Display names collide harder than internal names; see [naming-traps.md](naming-traps.md) for how
 a player's word resolves to exactly one managed type.
 
+For scale before you walk a registry: the mapping holds 223 `UpgradeSO`, 180 `StructureSO`, 80
+`ResourceSO` and 67 `ConsumableSO` rows, against an observed live action-queue capacity of 304.
+Those are authored populations, not live availability; the per-type census is
+[`data/entity-types.tsv`](../../data/entity-types.tsv).
+
 ## Base-class chain
 
 ```text

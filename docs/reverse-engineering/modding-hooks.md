@@ -74,6 +74,15 @@ If entry or restoration cannot be verified, do not mutate at all — a multiplie
 global change to the player's manual purchases. Take a process-wide lease on it so two features
 cannot interleave writes.
 
+`IntVariable.AsInt()` reaches `GetValue()`, which recalculates and re-stamps an observable when the
+record is dirty — a write on a call that reads like a plain scalar. It is acceptable at this
+boundary, where a write is already being made; a read-only pass takes the multi-buy and
+`Player.GetBulkDevelopment()` values off the world snapshot instead, by the uuids pinned in
+[`data/known-entities.tsv`](../../data/known-entities.tsv), under the memo rule. Nothing offline can
+prove the asset carrying a uuid is the one the singleton returns, so
+`AutomataWorldCollectionCheck.CheckGlobalSingletons` calls both in the running game and compares;
+an unreadable value falls back to 1, which buys one level at a time.
+
 ## The existing developer console
 
 `DevConsoleEngine` already contains `ResourceRefresh`, `ResourceVisible`, `ResourceGain`, and

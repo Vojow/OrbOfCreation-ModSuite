@@ -28,8 +28,3 @@ group total you cannot afford does not partially fire.
 
 With Bulk Development above 1, each level is priced individually and the sum is charged: at
 ≈1.25–1.34× per level, a two-level group costs ≈2.25–2.34× the displayed next-level price.
-
-## Another silent-failure path
-
-An upgrade whose reward is to add something to a capacity-limited list can be **paid for and
-completed while the addition never happens**, because the add is dropped when there is no empty slot.
