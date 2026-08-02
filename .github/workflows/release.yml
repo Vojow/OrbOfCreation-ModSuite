@@ -48,13 +48,12 @@ jobs:
           kind="$(publication_kind "${GITHUB_WORKSPACE}" "${version}")"
           if [[ "${kind}" == "release" ]]; then
             tag="$(release_tag_for_version "${version}")"
-            section="$(extract_changelog_section CHANGELOG.md "${version}")"
-            heading="${section%%$'\n'*}"
-            title="${heading#\#\# }"
+            extract_changelog_section CHANGELOG.md "${version}" >/dev/null
+            title="${version}"
           else
             tag="$(derive_beta_tag "${GITHUB_WORKSPACE}" "${version}" "${GITHUB_SHA}")"
             beta_number="${tag##*.}"
-            title="Orb Of Creation ModSuite ${version} main beta ${beta_number}"
+            title="${version} beta ${beta_number}"
           fi
 
           if git show-ref --verify --quiet "refs/tags/${tag}"; then
