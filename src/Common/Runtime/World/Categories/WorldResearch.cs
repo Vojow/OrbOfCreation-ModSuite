@@ -485,7 +485,7 @@ internal sealed class WorldResearchBinder : WorldPlainBinder<WorldResearch>
         _costResource = NativeAccessorBinder.Reference(tupleType, "resource", resourceType);
         _costValue = NativeAccessorBinder.Call<BigDouble>(tupleType, "GetValue");
         _resourceId = NativeAccessorBinder.Call<Guid>(resourceType, "GetGuid");
-        _resourceAmount = NativeAccessorBinder.Call<BigDouble>(resourceType, "GetTrueQuantity");
+        _resourceAmount = NativeAccessorBinder.Call<BigDouble>(resourceType, "GetQuantity");
         _fillList = bind.Reference("resourceFillList", fillType);
         _fillEntries = NativeAccessorBinder.CollectionField(fillType, "entries");
         _fillResource = NativeAccessorBinder.CallObject(fillEntryType, "get_resource", resourceType);

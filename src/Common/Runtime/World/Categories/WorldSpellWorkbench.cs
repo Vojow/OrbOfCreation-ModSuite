@@ -214,7 +214,7 @@ internal sealed class WorldSpellWorkbenchReader : IWorldCategoryReader
         _costValue = NativeAccessorBinder.Call<BigDouble>(entryType, "GetValue");
         var resourceType = entryType?.GetField("resource", Instance)?.FieldType;
         _costResource = NativeAccessorBinder.Reference(entryType, "resource", resourceType);
-        _resourceAmount = NativeAccessorBinder.Call<BigDouble>(resourceType, "GetTrueQuantity");
+        _resourceAmount = NativeAccessorBinder.Call<BigDouble>(resourceType, "GetQuantity");
         var playerType = resolveType("Player");
         var intVariableType = resolveType("IntVariable");
         _player = BindStaticReference(playerType, "_instance", playerType);

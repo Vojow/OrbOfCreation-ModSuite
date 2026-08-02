@@ -216,7 +216,7 @@ internal sealed class WorldDiscoveryTreeBinder : WorldPlainBinder<WorldDiscovery
         _costValue = tuple.Call<BigDouble>("GetValue");
         var resource = new WorldMemberBinding(resourceType!, "ResourceSO");
         _resourceGuid = resource.Call<Guid>("GetGuid");
-        _resourceQuantity = resource.Call<BigDouble>("GetTrueQuantity");
+        _resourceQuantity = resource.Call<BigDouble>("GetQuantity");
         _overrideRerolls = bind.ReferenceGuid("overrideDiscoveryRerolls");
         _overrideChoices = bind.ReferenceGuid("overrideDiscoveryChoices");
         _additionalDiscoveryChoices = bind.Field<int>("additionalDiscoveryChoices");

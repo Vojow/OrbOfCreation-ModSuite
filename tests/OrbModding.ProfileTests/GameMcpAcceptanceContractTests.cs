@@ -106,7 +106,7 @@ public sealed class GameMcpWorldQueryTests
             },
             row.Children<JProperty>().Select(property => property.Name));
         Assert.Equal("Knowledge", (string?)row["name"]);
-        Assert.Equal("5.63e24", (string?)row["amount"]);
+        Assert.Equal("5e24", (string?)row["amount"]);
         Assert.Equal("8e26", (string?)row["capacity"]);
         Assert.Equal("1.4e21", (string?)row["netRatePerSecond"]);
         Assert.False((bool)row["atCapacity"]!);
@@ -116,7 +116,7 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(row["rateInputs"]);
         Assert.Null(row["traits"]);
         Assert.Null(row["modifiers"]);
-        Assert.Equal(286, System.Text.Encoding.UTF8.GetByteCount(
+        Assert.Equal(283, System.Text.Encoding.UTF8.GetByteCount(
             response.ToString(Newtonsoft.Json.Formatting.None)));
     }
 
@@ -176,7 +176,7 @@ public sealed class GameMcpWorldQueryTests
             string.Empty));
         var row = Assert.Single(response["results"]!.Values<JObject>())!["row"]!;
 
-        Assert.Equal("9.83e24", (string?)row["amount"]);
+        Assert.Equal("5e24", (string?)row["amount"]);
         Assert.Equal("0", (string?)row["netRatePerSecond"]);
         Assert.Null(row["capacity"]);
         Assert.Null(row["atCapacity"]);

@@ -617,7 +617,7 @@ internal static class GameMcpEntityExplainer
         for (var index = 0; index < count; index++)
         {
             var row = world.PurchaseCosts[start + index];
-            rows.Add(GameMcpWorldQuery.ProjectPurchaseCost(in row));
+            rows.Add(GameMcpWorldQuery.ProjectPurchaseCost(world, in row));
             evaluated &= row.AffordabilityEvaluated;
             affordable &= row.Affordable;
         }
@@ -820,7 +820,7 @@ internal static class GameMcpEntityExplainer
         if (WorldLookup.TryFind(world.Resources, resourceId, out var resource))
         {
             bandwidth = resource.Reading.Traits.BandwidthResource;
-            available = bandwidth ? resource.Headroom : resource.TrueQuantity;
+            available = bandwidth ? resource.Headroom : resource.Reading.Quantity;
             blocked = available.CompareTo(amount) < 0;
         }
         else

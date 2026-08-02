@@ -214,7 +214,7 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
         _costValue = tuple.Call<BigDouble>("GetValue");
         var resource = new WorldMemberBinding(resourceType, "ResourceSO");
         _resourceIdentity = resource.Call<Guid>("GetGuid");
-        _resourceAmount = resource.Call<BigDouble>("GetTrueQuantity");
+        _resourceAmount = resource.Call<BigDouble>("GetQuantity");
 
         _unavailable = JoinFailures(
             _allRecipes is null ? "CraftingRecipeSO.All was unavailable" : string.Empty,

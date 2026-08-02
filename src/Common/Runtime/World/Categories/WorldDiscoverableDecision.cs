@@ -109,7 +109,7 @@ internal sealed class WorldDiscoverableBinding
 
         var resource = new WorldMemberBinding(resourceType!, "ResourceSO");
         _resourceIdentity = resource.Call<Guid>("GetGuid");
-        _resourceAmount = resource.Call<BigDouble>("GetTrueQuantity");
+        _resourceAmount = resource.Call<BigDouble>("GetQuantity");
 
         Failure = Join(
             item.Failure,

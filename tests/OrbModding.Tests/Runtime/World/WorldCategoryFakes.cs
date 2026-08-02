@@ -1039,6 +1039,7 @@ internal sealed class FakeSpellWorkbenchResource
     public BigDouble amount;
 
     public Guid GetGuid() => Identity;
+    public BigDouble GetQuantity() => amount;
     public BigDouble GetTrueQuantity() => amount;
 }
 

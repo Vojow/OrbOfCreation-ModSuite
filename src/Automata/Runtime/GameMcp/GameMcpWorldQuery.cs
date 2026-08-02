@@ -884,7 +884,7 @@ internal static class GameMcpWorldQuery
         row is WorldResource resource
             ? ProjectResource(in resource)
             : row is WorldPurchaseCost purchaseCost
-            ? ProjectPurchaseCost(in purchaseCost)
+            ? ProjectPurchaseCost(world, in purchaseCost)
             : row is WorldCraftingRecipe craftingRecipe
             ? ProjectCraftingRecipe(world, in craftingRecipe)
             : row is WorldDiscoveryTree tree
@@ -892,17 +892,17 @@ internal static class GameMcpWorldQuery
             : row is WorldSpellRecipe spellRecipe
             ? ProjectSpellRecipe(world, in spellRecipe)
             : row is WorldAlchemyRecipe alchemyRecipe
-            ? ProjectAlchemyRecipe(in alchemyRecipe)
+            ? ProjectAlchemyRecipe(world, in alchemyRecipe)
             : row is WorldEquipment equipment
             ? ProjectEquipment(world, in equipment)
             : row is WorldChallenge challenge
             ? ProjectChallenge(world, in challenge)
             : row is WorldGlyph glyph
-            ? ProjectGlyph(in glyph)
+            ? ProjectGlyph(world, in glyph)
             : row is WorldRitual ritual
-            ? ProjectRitual(in ritual)
+            ? ProjectRitual(world, in ritual)
             : row is WorldTimeRune timeRune
-            ? ProjectTimeRune(in timeRune)
+            ? ProjectTimeRune(world, in timeRune)
             : row is WorldSpellSlot spellSlot
             ? ProjectSpellSlot(world, in spellSlot)
             : row is WorldTargetingRequest targeting
@@ -966,7 +966,8 @@ internal static class GameMcpWorldQuery
                         {
                             ["resourceId"] = cost.ResourceId.ToString("D"),
                             ["cost"] = new GameMcpDomainValue(cost.Amount),
-                            ["amount"] = new GameMcpDomainValue(cost.AvailableAmount),
+                            ["amount"] = new GameMcpDomainValue(
+                                SpendableAmount(world, cost.ResourceId, cost.AvailableAmount)),
                         });
                     }
                     initiate["costs"] = costs;
@@ -1326,7 +1327,7 @@ internal static class GameMcpWorldQuery
                 ["cost"] = new GameMcpDomainValue(value.Amount),
             };
             if (WorldLookup.TryFind(world.Resources, value.ResourceId, out var resource))
-                cost["amount"] = new GameMcpDomainValue(resource.TrueQuantity);
+                cost["amount"] = new GameMcpDomainValue(resource.Reading.Quantity);
             result.Add(cost);
         }
         return result;
@@ -1534,8 +1535,8 @@ internal static class GameMcpWorldQuery
 
         var next = new JObject();
         var costs = recipe.Discovered
-            ? ProjectSpellCosts(world.SpellWorkbench.CreationCosts)
-            : ProjectSpellCosts(recipe.DiscoveryCosts);
+            ? ProjectSpellCosts(world, world.SpellWorkbench.CreationCosts)
+            : ProjectSpellCosts(world, recipe.DiscoveryCosts);
         if (costs.Count > 0) next["costs"] = costs;
         var affordable = recipe.Discovered
             ? world.SpellWorkbench.CreationAffordable
@@ -1834,15 +1835,17 @@ internal static class GameMcpWorldQuery
             };
             if (WorldLookup.TryFind(world.Resources, value.ResourceId, out var resource))
             {
-                row["amount"] = new GameMcpDomainValue(resource.TrueQuantity);
-                row["affordable"] = resource.TrueQuantity >= value.Amount;
+                row["amount"] = new GameMcpDomainValue(resource.Reading.Quantity);
+                row["affordable"] = resource.Reading.Quantity >= value.Amount;
             }
             result.Add(row);
         }
         return result;
     }
 
-    private static JArray ProjectSpellCosts(PublicationTable<WorldDiscoverableCost> values)
+    private static JArray ProjectSpellCosts(
+        GameWorldState world,
+        PublicationTable<WorldDiscoverableCost> values)
     {
         var result = new JArray();
         for (var index = 0; index < values.Count; index++)
@@ -1852,13 +1855,20 @@ internal static class GameMcpWorldQuery
             {
                 ["resourceId"] = value.ResourceId.ToString("D"),
                 ["cost"] = new GameMcpDomainValue(value.Cost),
-                ["amount"] = new GameMcpDomainValue(value.AvailableAmount),
+                ["amount"] = new GameMcpDomainValue(
+                    SpendableAmount(world, value.ResourceId, value.AvailableAmount)),
+                ["affordable"] = SpendableAmount(
+                    world,
+                    value.ResourceId,
+                    value.AvailableAmount).CompareTo(value.Cost) >= 0,
             });
         }
         return result;
     }
 
-    private static JArray ProjectSpellCosts(PublicationTable<WorldSpellWorkbenchCost> values)
+    private static JArray ProjectSpellCosts(
+        GameWorldState world,
+        PublicationTable<WorldSpellWorkbenchCost> values)
     {
         var result = new JArray();
         for (var index = 0; index < values.Count; index++)
@@ -1868,7 +1878,12 @@ internal static class GameMcpWorldQuery
             {
                 ["resourceId"] = value.ResourceId.ToString("D"),
                 ["cost"] = new GameMcpDomainValue(value.Cost),
-                ["amount"] = new GameMcpDomainValue(value.AvailableAmount),
+                ["amount"] = new GameMcpDomainValue(
+                    SpendableAmount(world, value.ResourceId, value.AvailableAmount)),
+                ["affordable"] = SpendableAmount(
+                    world,
+                    value.ResourceId,
+                    value.AvailableAmount).CompareTo(value.Cost) >= 0,
             });
         }
         return result;
@@ -1893,7 +1908,7 @@ internal static class GameMcpWorldQuery
             ["entityId"] = resource.EntityId.ToString("D"),
             ["category"] = "resources",
             ["nativeType"] = "ResourceSO",
-            ["amount"] = new GameMcpDomainValue(resource.TrueQuantity),
+            ["amount"] = new GameMcpDomainValue(resource.Reading.Quantity),
         };
         if (resource.IsCapped)
             result["capacity"] = new GameMcpDomainValue(resource.Reading.Capacity);
@@ -1902,7 +1917,19 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
-    private static GameMcpValue ProjectAlchemyRecipe(in WorldAlchemyRecipe recipe)
+    private static BigDouble SpendableAmount(
+        GameWorldState world,
+        Guid resourceId,
+        BigDouble fallback) =>
+        WorldLookup.TryFind(world.Resources, resourceId, out var resource)
+            ? resource.Reading.Traits.BandwidthResource
+                ? resource.Headroom
+                : resource.Reading.Quantity
+            : fallback;
+
+    private static GameMcpValue ProjectAlchemyRecipe(
+        GameWorldState world,
+        in WorldAlchemyRecipe recipe)
     {
         var result = new JObject
         {
@@ -1913,7 +1940,7 @@ internal static class GameMcpWorldQuery
             ["maximumLevel"] = recipe.MaxLevel,
             ["masteryLevel"] = recipe.MasteryLevel,
         };
-        AddDiscoveryDecision(result, recipe.Discovery);
+        AddDiscoveryDecision(world, result, recipe.Discovery);
         return result.Freeze();
     }
 
@@ -1971,7 +1998,7 @@ internal static class GameMcpWorldQuery
                         ["cost"] = new GameMcpDomainValue(cost.Cost),
                     };
                     if (WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource))
-                        costRow["amount"] = new GameMcpDomainValue(resource.TrueQuantity);
+                        costRow["amount"] = new GameMcpDomainValue(resource.Reading.Quantity);
                     costs.Add(costRow);
                 }
                 equip["usageCosts"] = costs;
@@ -1994,7 +2021,7 @@ internal static class GameMcpWorldQuery
                     : decision.UnavailableReason,
             };
         }
-        AddDiscoveryDecision(result, equipment.Discovery);
+        AddDiscoveryDecision(world, result, equipment.Discovery);
         return result.Freeze();
     }
 
@@ -2126,7 +2153,7 @@ internal static class GameMcpWorldQuery
             var holding = new JObject { ["resourceId"] = context.PersistentResourceId.ToString("D") };
             if (WorldLookup.TryFind(world.Resources, context.PersistentResourceId, out var resource))
             {
-                holding["amount"] = new GameMcpDomainValue(resource.TrueQuantity);
+                holding["amount"] = new GameMcpDomainValue(resource.Reading.Quantity);
                 if (resource.IsCapped)
                     holding["capacity"] = new GameMcpDomainValue(resource.Reading.Capacity);
                 holding["atCapacity"] = resource.IsAtCapacity;
@@ -2186,7 +2213,7 @@ internal static class GameMcpWorldQuery
         return false;
     }
 
-    private static GameMcpValue ProjectGlyph(in WorldGlyph glyph)
+    private static GameMcpValue ProjectGlyph(GameWorldState world, in WorldGlyph glyph)
     {
         var result = new JObject
         {
@@ -2199,11 +2226,11 @@ internal static class GameMcpWorldQuery
             ["maximumUsages"] = glyph.MaximumUsages,
         };
         if (glyph.FreeLevels != 0) result["bonusLevel"] = glyph.FreeLevels;
-        AddDiscoveryDecision(result, glyph.Discovery);
+        AddDiscoveryDecision(world, result, glyph.Discovery);
         return result.Freeze();
     }
 
-    private static GameMcpValue ProjectRitual(in WorldRitual ritual)
+    private static GameMcpValue ProjectRitual(GameWorldState world, in WorldRitual ritual)
     {
         var result = new JObject
         {
@@ -2216,11 +2243,11 @@ internal static class GameMcpWorldQuery
             ["reachedLevel"] = ritual.ReachedLevel,
             ["selectedLevel"] = ritual.SelectedLevel,
         };
-        AddDiscoveryDecision(result, ritual.Discovery);
+        AddDiscoveryDecision(world, result, ritual.Discovery);
         return result.Freeze();
     }
 
-    private static GameMcpValue ProjectTimeRune(in WorldTimeRune rune)
+    private static GameMcpValue ProjectTimeRune(GameWorldState world, in WorldTimeRune rune)
     {
         var result = new JObject
         {
@@ -2232,11 +2259,12 @@ internal static class GameMcpWorldQuery
             ["masteryLevel"] = rune.MasteryLevel,
             ["seen"] = rune.Seen,
         };
-        AddDiscoveryDecision(result, rune.Discovery);
+        AddDiscoveryDecision(world, result, rune.Discovery);
         return result.Freeze();
     }
 
     private static void AddDiscoveryDecision(
+        GameWorldState world,
         JObject result,
         WorldDiscoverableDecision decision)
     {
@@ -2263,7 +2291,8 @@ internal static class GameMcpWorldQuery
                 {
                     ["resourceId"] = cost.ResourceId.ToString("D"),
                     ["cost"] = new GameMcpDomainValue(cost.Cost),
-                    ["amount"] = new GameMcpDomainValue(cost.Amount),
+                    ["amount"] = new GameMcpDomainValue(
+                        SpendableAmount(world, cost.ResourceId, cost.Amount)),
                     ["affordable"] = cost.Affordable,
                 });
             }
@@ -2273,7 +2302,9 @@ internal static class GameMcpWorldQuery
         result["discover"] = discover;
     }
 
-    internal static GameMcpValue ProjectPurchaseCost(in WorldPurchaseCost cost)
+    internal static GameMcpValue ProjectPurchaseCost(
+        GameWorldState world,
+        in WorldPurchaseCost cost)
     {
         var result = new JObject
         {
@@ -2304,7 +2335,8 @@ internal static class GameMcpWorldQuery
         }
         if (cost.AffordabilityEvaluated)
         {
-            result["amount"] = new GameMcpDomainValue(cost.AvailableAmount);
+            result["amount"] = new GameMcpDomainValue(
+                SpendableAmount(world, cost.ResourceId, cost.AvailableAmount));
             result["totalCost"] = new GameMcpDomainValue(cost.CombinedEffectiveAmount);
             result["resourceAffordable"] = cost.ResourceAffordable;
             result["purchaseAffordable"] = cost.Affordable;
@@ -2407,15 +2439,15 @@ internal static class GameMcpWorldQuery
                     projected["yield"] = new GameMcpDomainValue(resource.Amount);
                 if (resource.ResourceStateAvailable)
                 {
-                    projected["amount"] = new GameMcpDomainValue(
-                        resource.BandwidthResource ? resource.Headroom : resource.TrueQuantity);
+                    var spendable = resource.BandwidthResource
+                        ? resource.Headroom
+                        : SpendableAmount(world, resource.ResourceId, resource.TrueQuantity);
+                    projected["amount"] = new GameMcpDomainValue(spendable);
                     if (resource.IsCapped)
                         projected["capacity"] = new GameMcpDomainValue(resource.Capacity);
                     if (resource.Kind == WorldCraftingRecipeResourceKind.AuthoredInput)
                     {
-                        projected["affordable"] =
-                            (resource.BandwidthResource ? resource.Headroom : resource.TrueQuantity)
-                            .CompareTo(resource.Amount) >= 0;
+                        projected["affordable"] = spendable.CompareTo(resource.Amount) >= 0;
                     }
                 }
                 if (resource.BandwidthResource) projected["bandwidth"] = true;
@@ -2594,7 +2626,7 @@ internal static class GameMcpWorldQuery
         row is WorldResource resource
             ? ProjectResource(in resource)
             : row is WorldPurchaseCost purchaseCost
-            ? ProjectPurchaseCost(in purchaseCost)
+            ? ProjectPurchaseCost(world, in purchaseCost)
             : row is WorldCraftingRecipe craftingRecipe
             ? ProjectCraftingRecipe(world, in craftingRecipe)
             : row is WorldDiscoveryTree tree
@@ -2602,17 +2634,17 @@ internal static class GameMcpWorldQuery
             : row is WorldSpellRecipe spellRecipe
             ? ProjectSpellRecipe(world, in spellRecipe)
             : row is WorldAlchemyRecipe alchemyRecipe
-            ? ProjectAlchemyRecipe(in alchemyRecipe)
+            ? ProjectAlchemyRecipe(world, in alchemyRecipe)
             : row is WorldEquipment equipment
             ? ProjectEquipment(world, in equipment)
             : row is WorldChallenge challenge
             ? ProjectChallenge(world, in challenge)
             : row is WorldGlyph glyph
-            ? ProjectGlyph(in glyph)
+            ? ProjectGlyph(world, in glyph)
             : row is WorldRitual ritual
-            ? ProjectRitual(in ritual)
+            ? ProjectRitual(world, in ritual)
             : row is WorldTimeRune timeRune
-            ? ProjectTimeRune(in timeRune)
+            ? ProjectTimeRune(world, in timeRune)
             : row is WorldSpellSlot spellSlot
             ? ProjectSpellSlot(world, in spellSlot)
             : row is WorldTargetingRequest targeting
