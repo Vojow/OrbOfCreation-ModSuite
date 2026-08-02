@@ -34,6 +34,16 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
+    public void TimedOutPostStateCarriesExceptionalEvidenceInsteadOfAnEmptyCommit()
+    {
+        var value = GameMcpPostStateSettlement.TimedOut();
+
+        Assert.Equal(
+            "{\"postStateUnavailable\":{\"reasonCode\":\"post_state_timeout\",\"reason\":\"no strictly newer published world exposed the committed post-state within one second\"}}",
+            GameMcpTestHarness.Json(value).ToString(Newtonsoft.Json.Formatting.None));
+    }
+
+    [Fact]
     public void ActionProjectionNamesAdmissionWorldAndSuppressesUnknownGenerationMismatch()
     {
         var context = GameMcpTestHarness.Context(

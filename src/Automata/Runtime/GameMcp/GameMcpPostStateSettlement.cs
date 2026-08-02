@@ -29,5 +29,10 @@ internal static class GameMcpPostStateSettlement
              command.TargetId,
              command.Mode,
              command.SecondaryId));
+
+    internal static GameMcpValue TimedOut() =>
+        GameMcpWorldQuery.PostStateUnavailable(
+            "post_state_timeout",
+            "no strictly newer published world exposed the committed post-state within one second");
 }
 #endif

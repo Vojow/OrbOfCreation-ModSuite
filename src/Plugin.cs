@@ -1548,7 +1548,7 @@ public sealed class Plugin : BaseUnityPlugin
         }
         else
         {
-            state = new GameMcpObjectBuilder().Freeze();
+            state = GameMcpPostStateSettlement.TimedOut();
         }
         CompleteGameMcpCommand(command, committed.WithDetails(state));
     }
@@ -2522,6 +2522,12 @@ public sealed class Plugin : BaseUnityPlugin
             var destinationSubtabs = CaptureSubtabs();
             if (destinationSubtabs.Count > 0)
                 details["subtabStrips"] = ProjectSubtabStrips(destinationSubtabs);
+        }
+        else if (!fresh &&
+                 includeDestinationState &&
+                 string.Equals(result.Status, "committed", StringComparison.Ordinal))
+        {
+            details.CopyFrom((GameMcpObject)GameMcpPostStateSettlement.TimedOut());
         }
 
         var settled = result.WithDetails(details.Freeze());

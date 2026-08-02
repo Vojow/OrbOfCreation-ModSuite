@@ -569,7 +569,7 @@ internal static class GameMcpWorldQuery
         return false;
     }
 
-    private static GameMcpValue PostStateUnavailable(string reasonCode, string reason) =>
+    internal static GameMcpValue PostStateUnavailable(string reasonCode, string reason) =>
         new JObject
         {
             ["postStateUnavailable"] = new JObject
