@@ -218,7 +218,7 @@ internal sealed class GameWorldCollector
         _alchemyTypes = Reader(new WorldAlchemyTypeBinder(), resolveType, static frame => frame.AlchemyTypes);
         _spellRecipes = Reader(new WorldSpellRecipeBinder(), resolveType, static frame => frame.SpellRecipes);
         _spellTypes = Reader(new WorldSpellTypeBinder(), resolveType, static frame => frame.SpellTypes);
-        _equipment = Reader(new WorldEquipmentBinder(), resolveType, static frame => frame.Equipment);
+        _equipment = Reader(new WorldEquipmentBinder(resolveType), resolveType, static frame => frame.Equipment);
         _equipmentTypes = Reader(new WorldEquipmentTypeBinder(), resolveType, static frame => frame.EquipmentTypes);
         _resourceTypes = Reader(new WorldResourceTypeBinder(), resolveType, static frame => frame.ResourceTypes);
         _craftingRecipeTypes = Reader(new WorldCraftingRecipeTypeBinder(), resolveType, static frame => frame.CraftingRecipeTypes);

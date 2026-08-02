@@ -107,6 +107,8 @@ internal static class GameMcpEntityCapabilityMap
                     out reason),
             GameMcpCommandKind.GenericDiscovery =>
                 TryResolveGenericDiscoveryType(world, target, out _, out reason),
+            GameMcpCommandKind.EquipmentLoadout =>
+                Entity(world.EntityIdentities, world.Equipment, target, "equipment", capability, out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -350,7 +352,8 @@ internal static class GameMcpEntityCapabilityMap
         D("spell-recipes", "SpellRecipeSO", GameMcpCommandKind.Cast, GameMcpCommandKind.SpellLevel,
             GameMcpCommandKind.SpellWorkbench),
         D("spell-types", "SpellTypeSO"),
-        D("equipment", "EquipmentSO", GameMcpCommandKind.GenericDiscovery),
+        D("equipment", "EquipmentSO", GameMcpCommandKind.GenericDiscovery,
+            GameMcpCommandKind.EquipmentLoadout),
         D("equipment-types", "EquipmentTypeSO"),
         D("resource-types", "ResourceTypeSO"),
         D("crafting-recipe-types", "CraftingRecipeTypeSO"),

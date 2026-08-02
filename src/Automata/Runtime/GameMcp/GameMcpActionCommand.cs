@@ -31,6 +31,7 @@ internal enum GameMcpCommandKind
     Consumable = 20,
     Crafting = 21,
     GenericDiscovery = 22,
+    EquipmentLoadout = 23,
 }
 
 internal static class GameMcpCommandKinds
@@ -40,7 +41,8 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.DiscoveryTreeOffer or GameMcpCommandKind.SpellWorkbench or
             GameMcpCommandKind.SpellComposition or GameMcpCommandKind.SpellLoadout or
             GameMcpCommandKind.Targeting or GameMcpCommandKind.Consumable or
-            GameMcpCommandKind.Crafting or GameMcpCommandKind.GenericDiscovery;
+            GameMcpCommandKind.Crafting or GameMcpCommandKind.GenericDiscovery or
+            GameMcpCommandKind.EquipmentLoadout;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -57,6 +59,7 @@ internal static class GameMcpCommandKinds
         "game_consumable" => GameMcpCommandKind.Consumable,
         "game_craft" => GameMcpCommandKind.Crafting,
         "game_discover" => GameMcpCommandKind.GenericDiscovery,
+        "game_equipment" => GameMcpCommandKind.EquipmentLoadout,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -615,6 +618,22 @@ internal static class GameMcpActionResultCodeNames
             if (code == GenericDiscoveryActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == GenericDiscoveryActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == GenericDiscoveryActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.EquipmentLoadout)
+        {
+            if (code == EquipmentLoadoutActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == EquipmentLoadoutActionResultCodes.Quarantined) return "quarantined";
+            if (code == EquipmentLoadoutActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == EquipmentLoadoutActionResultCodes.IdentityUnavailable) return "identity_unavailable";
+            if (code == EquipmentLoadoutActionResultCodes.NotCreated) return "not_created";
+            if (code == EquipmentLoadoutActionResultCodes.AlreadyInRequestedState) return "already_in_requested_state";
+            if (code == EquipmentLoadoutActionResultCodes.LoadoutFull) return "loadout_full";
+            if (code == EquipmentLoadoutActionResultCodes.EquipmentTypeFull) return "equipment_type_full";
+            if (code == EquipmentLoadoutActionResultCodes.UsageUnaffordable) return "usage_unaffordable";
+            if (code == EquipmentLoadoutActionResultCodes.MultiBuyUnavailable) return "multi_buy_unavailable";
+            if (code == EquipmentLoadoutActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == EquipmentLoadoutActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == EquipmentLoadoutActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

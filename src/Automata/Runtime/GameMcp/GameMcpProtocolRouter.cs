@@ -354,6 +354,11 @@ internal sealed class GameMcpProtocolRouter
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
+            case "game_equipment":
+                builder.Mode = RequireOneOf(arguments, "mode", "equip", "unequip");
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                break;
             case "suite_config_set":
                 builder.ConfigurationGeneration = RequiredUlong(
                     arguments, "configurationGeneration");
@@ -423,7 +428,7 @@ internal sealed class GameMcpProtocolRouter
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
             "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
-            "game_consumable" or "game_craft" or "game_discover" =>
+            "game_consumable" or "game_craft" or "game_discover" or "game_equipment" =>
                 GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
@@ -450,7 +455,7 @@ internal sealed class GameMcpProtocolRouter
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
             "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
-            "game_consumable" or "game_craft" or "game_discover" =>
+            "game_consumable" or "game_craft" or "game_discover" or "game_equipment" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
@@ -709,6 +714,19 @@ internal sealed class GameMcpProtocolRouter
                         ["uuid"] = StringSchema("Published AlchemyRecipeSO, EquipmentSO, GlyphSO, RitualSO, or TimeRuneSO UUID."),
                     },
                     "uuid"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_equipment",
+                "Equip or unequip an artifact",
+                "Apply one native equipment click using the live multi-buy, slot, type-slot, stack, and usage-cost decision. Success returns the newer fully named artifact row and every next loadout decision inline.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("equip", "unequip"),
+                        ["uuid"] = StringSchema("Published EquipmentSO UUID."),
+                    },
+                    "mode", "uuid"),
                 readOnly: false,
                 idempotent: false),
             Tool(

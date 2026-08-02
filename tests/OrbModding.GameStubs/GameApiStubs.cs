@@ -535,6 +535,27 @@ public class EmptyTypeListVariable<T> : GenericListVariable<T>
 
 public class StackableListVariable<T> : GenericListVariable<T>
 {
+    public bool isStackable = true;
+    public Stacked.StackedIdRecord<T> itemStack = new Stacked.StackedIdRecord<T>();
+
+    public int GetStacks(T item) => itemStack.GetQuantity(item);
+
+    public void Stack(T item, int quantity)
+    {
+        if (!value.Contains(item))
+        {
+            if (!HasEmptySpot()) return;
+            Add(item);
+        }
+        itemStack.Set(item, itemStack.GetQuantity(item) + quantity);
+    }
+
+    public void Unstack(T item, int quantity)
+    {
+        if (!value.Contains(item)) return;
+        itemStack.Set(item, Math.Max(itemStack.GetQuantity(item) - quantity, 0));
+        if (itemStack.GetQuantity(item) == 0) value.Remove(item);
+    }
 }
 
 public interface IActionable
@@ -1130,6 +1151,20 @@ public class ResourceCostList
         return true;
     }
     public List<ResourceTuple> GetEntries() => costs;
+    public BigDouble MaximumCostTimes()
+    {
+        if (costs.Count == 0) return new BigDouble(int.MaxValue);
+        var result = new BigDouble(int.MaxValue);
+        foreach (var row in costs)
+        {
+            if (row.resource is null || row.GetValue() <= BigDouble.Zero) return BigDouble.Zero;
+            var available = row.resource.bandwidthResource
+                ? row.resource.GetMissing()
+                : row.resource.GetTrueQuantity();
+            result = BigDouble.Min(result, BigDouble.Floor(available / row.GetValue()));
+        }
+        return BigDouble.Max(result, BigDouble.Zero);
+    }
     public ResourceCostList Multiply(BigDouble factor)
     {
         var result = new ResourceCostList
@@ -1156,10 +1191,21 @@ public class ResourceCostList
         }
         if (AffordableLevels is > 0 and < int.MaxValue) AffordableLevels--;
     }
+
+    public void PerformUsage(Guid guid)
+    {
+        foreach (var row in costs) row.resource?.AddUsage(guid, row.GetValue());
+    }
+
+    public void RemoveUsage(Guid guid)
+    {
+        foreach (var row in costs) row.resource?.RemoveUsage(guid);
+    }
 }
 
 public class ResourceSO : UpgradeableObject
 {
+    private readonly Dictionary<Guid, BigDouble> activeUsage = new Dictionary<Guid, BigDouble>();
     /// <summary>The game's closed vocabulary of resource properties an effect can modify.</summary>
     public enum ModifiableType
     {
@@ -1285,6 +1331,18 @@ public class ResourceSO : UpgradeableObject
     public BigDouble GetMissing() => BigDouble.Max(maxQuantity.GetValue() - quantity, 0);
     public bool HasAmount(BigDouble amount) =>
         bandwidthResource ? GetMissing() >= amount : GetTrueQuantity() >= amount;
+    public void AddUsage(Guid guid, BigDouble amount)
+    {
+        activeUsage[guid] = amount;
+        if (bandwidthResource)
+            quantity = activeUsage.Values.Aggregate(BigDouble.Zero, static (sum, value) => sum + value);
+    }
+    public void RemoveUsage(Guid guid)
+    {
+        activeUsage.Remove(guid);
+        if (bandwidthResource)
+            quantity = activeUsage.Values.Aggregate(BigDouble.Zero, static (sum, value) => sum + value);
+    }
     public void Spend(BigDouble amount)
     {
         if (bandwidthResource)
@@ -1811,17 +1869,43 @@ public sealed class EquipmentSO : IdScriptableObject, IDiscoverable
     public BigDouble masteryXp;
     public int discRarityLevel;
     public bool isCreated = true;
+    public EquipmentTypeSO equipmentType = new EquipmentTypeSO();
     public ResourceCostList createCost = new ResourceCostList();
+    public ResourceCostList usageCost = new ResourceCostList();
+    public int NativeMaximumStacks { get; set; } = 4;
     public bool NativeDiscoverVisible { get; set; } = true;
     public bool NativeCanDiscover { get; set; } = true;
     public bool SuppressDiscovery { get; set; }
     public bool ThrowBeforeDiscovery { get; set; }
     public bool ThrowAfterDiscovery { get; set; }
+    public bool ThrowOnStateRead { get; set; }
     public int DiscoverCalls { get; private set; }
     public new Guid GetGuid() => Guid.Parse(uuid);
     public new Guid GetId() => GetGuid();
     public string GetName() => name;
     public bool IsCreated() => isCreated;
+    public bool IsEquipped() => equippedLevel > 0;
+    public int GetMaxLevel() => ThrowOnStateRead
+        ? throw new InvalidOperationException("injected equipment state-read failure")
+        : NativeMaximumStacks;
+    public ResourceCostList GetUsageCost() => usageCost;
+    public void Equip(int atLevel)
+    {
+        if (atLevel == equippedLevel) return;
+        equippedLevel = atLevel;
+        if (atLevel > 0)
+        {
+            usageCost.Multiply(new BigDouble(atLevel)).PerformUsage(GetGuid());
+            attuningLevel = Math.Min(attuningLevel, atLevel);
+            attunementTimeLeft = 1d;
+        }
+        else
+        {
+            usageCost.RemoveUsage(GetGuid());
+            attuningLevel = 0;
+            attunementTimeLeft = -1d;
+        }
+    }
     public ResourceCostList GetDiscoverCost() => createCost;
     public bool IsDiscoverVisible() => NativeDiscoverVisible;
     public bool CanDiscover() => NativeCanDiscover;
@@ -1855,6 +1939,69 @@ public sealed class EquipmentSO : IdScriptableObject, IDiscoverable
     private int attuningLevel;
     private double attunementTimeLeft;
     private BigDouble baseXpRate;
+}
+
+public sealed class EquipmentListVariable : StackableListVariable<EquipmentSO>
+{
+    public int GetTypesEquipped(EquipmentTypeSO equipmentType) =>
+        value.Count(item => ReferenceEquals(item.equipmentType, equipmentType));
+}
+
+public sealed class EquipmentManager
+{
+    public static EquipmentManager instance = new EquipmentManager();
+    public EquipmentListVariable allEquipment = new EquipmentListVariable { Maximum = int.MaxValue };
+    public EquipmentListVariable equippedEquipment = new EquipmentListVariable();
+    public bool SuppressMutation { get; set; }
+    public bool ThrowBeforeMutation { get; set; }
+    public bool ThrowAfterMutation { get; set; }
+    public bool ThrowAfterMutationWithoutReadablePostState { get; set; }
+    public int EquipCalls { get; private set; }
+    public int UnEquipCalls { get; private set; }
+
+    public void EquipItem(EquipmentSO equipment)
+    {
+        EquipCalls++;
+        if (ThrowBeforeMutation) throw new InvalidOperationException("injected equip failure before mutation");
+        var cost = equipment.GetUsageCost();
+        if (!cost.HasEnough() ||
+            (!equippedEquipment.value.Contains(equipment) && equippedEquipment.IsAtMax())) return;
+        var amount = Math.Min(
+            GlobalVariables.GetMultiBuy().AsInt(),
+            Math.Min(
+                equipment.GetMaxLevel() - equippedEquipment.GetStacks(equipment),
+                cost.MaximumCostTimes().ToInt()));
+        if (!SuppressMutation && amount > 0)
+        {
+            equippedEquipment.Stack(equipment, amount);
+            equipment.Equip(equippedEquipment.GetStacks(equipment));
+        }
+        if (ThrowAfterMutationWithoutReadablePostState)
+        {
+            equipment.ThrowOnStateRead = true;
+            throw new InvalidOperationException("injected equip failure with unreadable post-state");
+        }
+        if (ThrowAfterMutation) throw new InvalidOperationException("injected equip failure after mutation");
+    }
+
+    public void UnEquipItem(EquipmentSO equipment)
+    {
+        UnEquipCalls++;
+        if (ThrowBeforeMutation) throw new InvalidOperationException("injected unequip failure before mutation");
+        if (!equipment.IsEquipped()) return;
+        var amount = Math.Min(GlobalVariables.GetMultiBuy().AsInt(), equippedEquipment.GetStacks(equipment));
+        if (!SuppressMutation && amount > 0)
+        {
+            equippedEquipment.Unstack(equipment, amount);
+            equipment.Equip(equippedEquipment.GetStacks(equipment));
+        }
+        if (ThrowAfterMutationWithoutReadablePostState)
+        {
+            equipment.ThrowOnStateRead = true;
+            throw new InvalidOperationException("injected unequip failure with unreadable post-state");
+        }
+        if (ThrowAfterMutation) throw new InvalidOperationException("injected unequip failure after mutation");
+    }
 }
 
 public sealed class ExperienceContainer

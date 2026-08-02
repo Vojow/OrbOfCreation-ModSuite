@@ -30,6 +30,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly SpellLoadoutGameAction? _spellLoadout;
     private readonly TargetingGameAction? _targeting;
     private readonly GenericDiscoveryGameAction? _genericDiscovery;
+    private readonly EquipmentLoadoutGameAction? _equipmentLoadout;
     private bool _disposed;
 #if SERVICE_CYCLE_PROFILE
     private ulong _nextGameMcpActionIdentity;
@@ -46,7 +47,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         SpellCompositionGameAction? spellComposition = null,
         SpellLoadoutGameAction? spellLoadout = null,
         TargetingGameAction? targeting = null,
-        GenericDiscoveryGameAction? genericDiscovery = null)
+        GenericDiscoveryGameAction? genericDiscovery = null,
+        EquipmentLoadoutGameAction? equipmentLoadout = null)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _configurationPublication = configurationPublication ??
@@ -60,6 +62,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _spellLoadout = spellLoadout;
         _targeting = targeting;
         _genericDiscovery = genericDiscovery;
+        _equipmentLoadout = equipmentLoadout;
     }
 
     internal SuiteRuntimeConfiguration CurrentConfiguration => _configurationPublication.ReadLatest().Snapshot;
@@ -123,6 +126,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _spellLoadout?.InvalidateLifecycle();
         _targeting?.InvalidateLifecycle();
         _genericDiscovery?.InvalidateLifecycle();
+        _equipmentLoadout?.InvalidateLifecycle();
     }
 
 #if SERVICE_CYCLE_PROFILE
@@ -179,6 +183,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                     command,
                     lifecycle,
                     configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.EquipmentLoadout)
+                return ExecuteEquipmentLoadout(command, lifecycle, configuration.Generation.Value);
             var service = ServiceForGameMcp(command.Kind);
             var context = CreateGameMcpContext(
                 registry,
@@ -412,6 +418,28 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             configurationGeneration,
             submission.Reason,
             GameMcpGenericDiscoveryProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecuteEquipmentLoadout(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_equipmentLoadout is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared equipment loadout GameAction was not composed", lifecycle,
+                configurationGeneration);
+        GameMcpNativeActionAdmission.AssertNativeType(command, "EquipmentSO");
+        var kind = command.Mode == "equip"
+            ? EquipmentLoadoutActionKind.Equip
+            : EquipmentLoadoutActionKind.Unequip;
+        var action = new EquipmentLoadoutAction(kind, command.TargetId,
+            command.ExpectedLifecycleGeneration);
+        var submission = _equipmentLoadout.Submit(in action);
+        var result = EquipmentLoadoutActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason,
+            GameMcpEquipmentLoadoutProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteSpellWorkbench(
@@ -746,6 +774,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _spellLoadout?.Dispose();
             _targeting?.Dispose();
             _genericDiscovery?.Dispose();
+            _equipmentLoadout?.Dispose();
             if (!_host.EmergencyStopEngaged)
                 _host.SetEmergencyStop(true, EmergencyStopReason.SuiteShutdown);
         }

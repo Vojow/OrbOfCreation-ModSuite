@@ -559,6 +559,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .GenericDiscoveryOwnershipFailure)
+                    , createEquipmentLoadout: () => new EquipmentLoadoutGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureEquipmentLoadoutMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .EquipmentLoadoutOwnershipFailure)
 #endif
                     );
             },
@@ -1561,6 +1569,7 @@ public sealed class Plugin : BaseUnityPlugin
             "TimeRuneSO" => "time-runes",
             _ => throw new ArgumentOutOfRangeException(nameof(command.DerivedNativeType)),
         },
+        GameMcpCommandKind.EquipmentLoadout => "equipment",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 
@@ -1778,6 +1787,8 @@ public sealed class Plugin : BaseUnityPlugin
                 out nativeType,
                 out _);
         }
+        else if (kind == GameMcpCommandKind.EquipmentLoadout)
+            nativeType = "EquipmentSO";
         else if (kind == GameMcpCommandKind.ConfigurationSet)
         {
             mode = request.Section;

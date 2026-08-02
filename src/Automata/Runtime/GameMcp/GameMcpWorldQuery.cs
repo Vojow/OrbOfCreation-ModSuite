@@ -853,8 +853,8 @@ internal static class GameMcpWorldQuery
             ? ProjectSpellRecipe(world, in spellRecipe)
             : row is WorldAlchemyRecipe alchemyRecipe
             ? ProjectAlchemyRecipe(in alchemyRecipe)
-            : row is WorldEquipment equipment
-            ? ProjectEquipment(in equipment)
+        : row is WorldEquipment equipment
+            ? ProjectEquipment(world, in equipment)
             : row is WorldGlyph glyph
             ? ProjectGlyph(in glyph)
             : row is WorldRitual ritual
@@ -1694,7 +1694,7 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
-    private static GameMcpValue ProjectEquipment(in WorldEquipment equipment)
+    private static GameMcpValue ProjectEquipment(GameWorldState world, in WorldEquipment equipment)
     {
         var result = new JObject
         {
@@ -1703,11 +1703,74 @@ internal static class GameMcpWorldQuery
             ["nativeType"] = "EquipmentSO",
             ["created"] = equipment.IsCreated,
             ["masteryLevel"] = equipment.MasteryLevel,
-            ["equippedLevel"] = equipment.EquippedLevel,
             ["attuningLevel"] = equipment.AttuningLevel,
         };
         if (equipment.AttunementTimeLeft > 0d)
             result["attunementTimeLeft"] = equipment.AttunementTimeLeft;
+        var decision = equipment.Loadout;
+        if (decision.Available)
+        {
+            result["equipmentTypeId"] = decision.EquipmentTypeId.ToString("D");
+            result["equippedStacks"] = new GameMcpDomainValue(new BigDouble(decision.EquippedStacks));
+            result["maximumStacks"] = new GameMcpDomainValue(new BigDouble(decision.MaximumStacks));
+            result["multiBuy"] = new GameMcpDomainValue(new BigDouble(decision.MultiBuy));
+            result["loadout"] = new JObject
+            {
+                ["usedSlots"] = new GameMcpDomainValue(new BigDouble(decision.UsedSlots)),
+                ["maximumSlots"] = new GameMcpDomainValue(new BigDouble(decision.MaximumSlots)),
+                ["typeUsedSlots"] = new GameMcpDomainValue(new BigDouble(decision.TypeUsedSlots)),
+                ["typeMaximumSlots"] = new GameMcpDomainValue(new BigDouble(decision.TypeMaximumSlots)),
+            };
+            var equip = new JObject { ["available"] = equipment.IsCreated && decision.NextEquipAmount > 0 };
+            if (equipment.IsCreated && decision.NextEquipAmount > 0)
+                equip["amount"] = new GameMcpDomainValue(new BigDouble(decision.NextEquipAmount));
+            else
+                equip["reasonCode"] = !equipment.IsCreated
+                    ? "not_created"
+                    : decision.EquippedStacks >= decision.MaximumStacks
+                        ? "maximum_stacks"
+                        : decision.EquippedStacks == 0 && decision.UsedSlots >= decision.MaximumSlots
+                            ? "loadout_full"
+                            : decision.EquippedStacks == 0 && decision.TypeUsedSlots >= decision.TypeMaximumSlots
+                                ? "equipment_type_full"
+                                : !decision.UsageAffordable
+                                    ? "usage_unaffordable"
+                                    : "multi_buy_unavailable";
+            if (decision.Costs.Count > 0)
+            {
+                var costs = new JArray();
+                for (var index = 0; index < decision.Costs.Count; index++)
+                {
+                    var cost = decision.Costs[index];
+                    var costRow = new JObject
+                    {
+                        ["resourceId"] = cost.ResourceId.ToString("D"),
+                        ["cost"] = new GameMcpDomainValue(cost.Cost),
+                    };
+                    if (WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource))
+                        costRow["amount"] = new GameMcpDomainValue(resource.TrueQuantity);
+                    costs.Add(costRow);
+                }
+                equip["usageCosts"] = costs;
+            }
+            result["equip"] = equip;
+            result["unequip"] = decision.NextUnequipAmount > 0
+                ? new JObject
+                {
+                    ["available"] = true,
+                    ["amount"] = new GameMcpDomainValue(new BigDouble(decision.NextUnequipAmount)),
+                }
+                : new JObject { ["available"] = false, ["reasonCode"] = "not_equipped" };
+        }
+        else
+        {
+            result["loadoutUnavailable"] = new JObject
+            {
+                ["reasonCode"] = decision.UnavailableReason.Length == 0
+                    ? "loadout_unavailable"
+                    : decision.UnavailableReason,
+            };
+        }
         AddDiscoveryDecision(result, equipment.Discovery);
         return result.Freeze();
     }
@@ -2129,8 +2192,8 @@ internal static class GameMcpWorldQuery
             ? ProjectSpellRecipe(world, in spellRecipe)
             : row is WorldAlchemyRecipe alchemyRecipe
             ? ProjectAlchemyRecipe(in alchemyRecipe)
-            : row is WorldEquipment equipment
-            ? ProjectEquipment(in equipment)
+        : row is WorldEquipment equipment
+            ? ProjectEquipment(world, in equipment)
             : row is WorldGlyph glyph
             ? ProjectGlyph(in glyph)
             : row is WorldRitual ritual

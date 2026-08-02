@@ -43,6 +43,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.Targeting };
     private static readonly AutomationActionFamily[] GenericDiscoveryFamilies =
         { AutomationActionFamily.GenericDiscovery };
+    private static readonly AutomationActionFamily[] EquipmentLoadoutFamilies =
+        { AutomationActionFamily.EquipmentLoadout };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -147,6 +149,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.Targeting);
     public bool TryCaptureGenericDiscoveryMutationPermit() =>
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.GenericDiscovery);
+    public bool TryCaptureEquipmentLoadoutMutationPermit() =>
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.EquipmentLoadout);
     public string ItemsOwnershipFailure =>
         _itemsClaimFailure.Length != 0
             ? _itemsClaimFailure
@@ -169,6 +173,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         "The current MCP operation does not hold Targeting.";
     public string GenericDiscoveryOwnershipFailure =>
         "The current MCP operation does not hold GenericDiscovery.";
+    public string EquipmentLoadoutOwnershipFailure =>
+        "The current MCP operation does not hold EquipmentLoadout.";
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -458,6 +464,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.Consumable => ConsumableFamilies,
         GameMcpCommandKind.Crafting => ScribeFamilies,
         GameMcpCommandKind.GenericDiscovery => GenericDiscoveryFamilies,
+        GameMcpCommandKind.EquipmentLoadout => EquipmentLoadoutFamilies,
         _ => Array.Empty<AutomationActionFamily>(),
     };
 
@@ -496,6 +503,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         AutomationActionFamily.SpellLoadout => false,
         AutomationActionFamily.Targeting => false,
         AutomationActionFamily.GenericDiscovery => false,
+        AutomationActionFamily.EquipmentLoadout => false,
         _ => false,
     };
 

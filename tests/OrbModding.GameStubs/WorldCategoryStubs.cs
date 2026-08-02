@@ -61,6 +61,7 @@ public sealed class EquipmentTypeSO : IdScriptableObject
     public ValueModifierRecord maxTypeSlots = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ModifierRecord powerMod = new ModifierRecord();
     public ModifierRecord experienceRateMod = new ModifierRecord();
+    public int GetMaxTypeSlots() => maxTypeSlots.GetValue().ToInt();
 }
 
 

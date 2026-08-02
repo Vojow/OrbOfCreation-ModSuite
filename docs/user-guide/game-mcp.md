@@ -118,6 +118,7 @@ does not refresh it by hidden navigation.
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
 | `game_discovery_offer` | Initiate, select, confirm, or reroll one Discovery Tree offer lifecycle |
 | `game_discover` | Discover one published alchemy recipe, equipment asset, glyph, ritual, or time rune |
+| `game_equipment` | Equip/increase or unequip/decrease one created artifact using live native multi-buy |
 | `game_spell_workbench` | Select an authored spell recipe, discover it, or create another equipped instance |
 | `game_spell_composition` | Set the global spell output level or replace one equipped spell's augment stack |
 | `game_spell_loadout` | Remove one exact equipped runtime spell or move it to another loadout slot |
@@ -257,6 +258,14 @@ attempting a mutation is never required to learn affordability.
 `game_spell_workbench`, because selection, discovery, and equipped-instance creation are one
 native workbench lifecycle. Discovery trees use `game_discovery_offer`. This capability split is
 validated from the UUID's published category before any native call.
+
+The `equipment` category is also the artifact-loadout pre-decision surface. Each row names the
+artifact and its primary equipment type, current/maximum stacks, global and type-slot occupancy,
+live multi-buy, usage-cost resources with current holdings, and the exact next equip/unequip amount
+or refusal. Call `game_equipment` with `mode:"equip"` or `mode:"unequip"`; there is no amount
+argument because one call reproduces one native player click. A committed call returns the complete
+newer equipment row inline, so no read-back is required. Usage reservations, effects, and
+attunement are post-state evidence, never payment-verification gates.
 
 The MCP-only decision/action sequence is seven calls when two offers need explanations:
 
@@ -604,6 +613,14 @@ family permit last, then preserves the UI's `PerformCost`-before-`Discover` orde
 exact target becoming discovered and returns its complete newer named world row inline. It carries
 no receipt or payment stanza. A refusal occurs before payment; a fault after native work keeps the
 named before/after evidence and quarantines only when the requested target outcome is absent.
+
+`game_equipment` requires `mode` and one published equipment `uuid`; optional
+`expectedNativeType`, when supplied, must be `EquipmentSO`. On Unity's main thread it re-resolves
+the exact artifact and repeats creation, current stacks, global and primary-type slot room, live
+multi-buy, maximum stacks, and native usage-affordability checks before taking the family permit.
+Success is only the exact requested target-stack transition. It returns the complete newer named
+equipment row with both next decisions and no receipt or payment/usage stanza. A missing transition
+quarantines this family for the lifecycle; a throw after the exact transition commits.
 
 CLI play commands therefore need no generation option:
 

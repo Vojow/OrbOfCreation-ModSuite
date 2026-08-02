@@ -1,0 +1,222 @@
+using System;
+using System.Collections;
+using System.Threading.Tasks;
+using OrbAutomata;
+using OrbModding.Common;
+using Xunit;
+
+namespace OrbModding.Tests.Services.EquipmentLoadout;
+
+public sealed class EquipmentLoadoutGameActionTests : IDisposable
+{
+    private const long Epoch = 83;
+    private readonly IDictionary _registry = new Hashtable();
+
+    public EquipmentLoadoutGameActionTests()
+    {
+        EquipmentManager.instance = new EquipmentManager();
+        EquipmentManager.instance.equippedEquipment.Maximum = 3;
+        GlobalVariables.MultiBuy = new IntVariable { Value = 2 };
+    }
+
+    public void Dispose()
+    {
+        EquipmentManager.instance = new EquipmentManager();
+        GlobalVariables.MultiBuy = new IntVariable { Value = 1 };
+    }
+
+    [Fact]
+    public void Equip_uses_the_native_multi_buy_click_and_verifies_the_exact_target_stack()
+    {
+        var target = Equipment();
+        Register(target);
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(2, EquipmentManager.instance.equippedEquipment.GetStacks(target));
+        Assert.Equal(2, result.Receipt.RequestedAmount);
+        Assert.Equal(0, result.Receipt.Before.EquippedStacks);
+        Assert.Equal(2, result.Receipt.After.EquippedStacks);
+        Assert.Equal(new NativeMutationCallOutcome(1, 1, 1), result.CallOutcome);
+    }
+
+    [Fact]
+    public void Unequip_uses_the_same_native_multi_buy_and_returns_the_remaining_stack()
+    {
+        var target = Equipment();
+        EquipmentManager.instance.equippedEquipment.Stack(target, 3);
+        target.Equip(3);
+        Register(target);
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, target, EquipmentLoadoutActionKind.Unequip);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(1, EquipmentManager.instance.equippedEquipment.GetStacks(target));
+        Assert.Equal(2, result.Receipt.RequestedAmount);
+        Assert.Equal(1, result.Receipt.After.EquippedStacks);
+    }
+
+    [Fact]
+    public void Ui_type_slot_and_global_slot_rules_refuse_before_the_native_manager()
+    {
+        var type = EquipmentType(1);
+        var occupied = Equipment(type);
+        EquipmentManager.instance.equippedEquipment.Stack(occupied, 1);
+        occupied.Equip(1);
+        var target = Equipment(type);
+        Register(target);
+        using var boundary = Boundary();
+
+        var typeFull = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
+        type.maxTypeSlots = new ValueModifierRecord(new BigDouble(2));
+        EquipmentManager.instance.equippedEquipment.Maximum = 1;
+        var globalFull = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
+
+        Assert.Equal(EquipmentLoadoutPreflight.EquipmentTypeFull, typeFull.Preflight);
+        Assert.Equal(EquipmentLoadoutPreflight.LoadoutFull, globalFull.Preflight);
+        Assert.Equal(0, EquipmentManager.instance.EquipCalls);
+    }
+
+    [Fact]
+    public void Native_usage_affordability_and_creation_gate_before_the_mutation_permit()
+    {
+        var target = Equipment();
+        target.isCreated = false;
+        Register(target);
+        var permits = 0;
+        using var boundary = Boundary(permit: () => { permits++; return true; });
+
+        var notCreated = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
+        target.isCreated = true;
+        target.usageCost.affordable = false;
+        var unaffordable = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
+
+        Assert.Equal(EquipmentLoadoutPreflight.NotCreated, notCreated.Preflight);
+        Assert.Equal(EquipmentLoadoutPreflight.UsageUnaffordable, unaffordable.Preflight);
+        Assert.Equal(0, permits);
+        Assert.Equal(0, EquipmentManager.instance.EquipCalls);
+    }
+
+    [Fact]
+    public void Missing_outcome_quarantines_the_family_until_lifecycle_invalidation()
+    {
+        var target = Equipment();
+        Register(target);
+        EquipmentManager.instance.SuppressMutation = true;
+        using var boundary = Boundary();
+
+        var failed = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
+        var quarantined = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
+        EquipmentManager.instance.SuppressMutation = false;
+        boundary.InvalidateLifecycle();
+        var retry = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
+
+        Assert.Equal(EquipmentLoadoutPreflight.VerificationFailed, failed.Preflight);
+        Assert.Equal(EquipmentLoadoutPreflight.Quarantined, quarantined.Preflight);
+        Assert.True(retry.Verified, retry.Reason);
+    }
+
+    [Fact]
+    public void Exception_after_the_requested_stack_transition_commits_without_quarantine()
+    {
+        var target = Equipment();
+        Register(target);
+        EquipmentManager.instance.ThrowAfterMutation = true;
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.False(boundary.IsQuarantined);
+        Assert.Equal(2, EquipmentManager.instance.equippedEquipment.GetStacks(target));
+    }
+
+    [Fact]
+    public void Unreadable_post_state_never_commits_from_a_default_zero_stack()
+    {
+        var target = Equipment();
+        EquipmentManager.instance.equippedEquipment.Stack(target, 2);
+        target.Equip(2);
+        Register(target);
+        EquipmentManager.instance.ThrowAfterMutationWithoutReadablePostState = true;
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, target, EquipmentLoadoutActionKind.Unequip);
+
+        Assert.Equal(EquipmentLoadoutPreflight.PostCommitFault, result.Preflight);
+        Assert.False(result.Verified);
+        Assert.False(result.Receipt.EvidenceAvailable);
+        Assert.True(boundary.IsQuarantined);
+        Assert.Equal(0, EquipmentManager.instance.equippedEquipment.GetStacks(target));
+    }
+
+    [Fact]
+    public async Task Unity_thread_is_revalidated_before_identity_or_native_state()
+    {
+        var target = Equipment();
+        Register(target);
+        using var boundary = Boundary();
+
+        var result = await Task.Run(() => Submit(boundary, target, EquipmentLoadoutActionKind.Equip));
+
+        Assert.Equal(EquipmentLoadoutPreflight.WrongThread, result.Preflight);
+        Assert.Equal(0, EquipmentManager.instance.EquipCalls);
+    }
+
+    [Fact]
+    public void Every_missing_member_disables_the_complete_lifecycle_binding_set()
+    {
+        foreach (var missing in EquipmentLoadoutNativeBindings.ContractIds)
+        {
+            using var boundary = Boundary(includeContract: id => id != missing);
+            Assert.False(boundary.BindingsAvailable);
+            Assert.Contains(missing, boundary.BindingFailure, StringComparison.Ordinal);
+        }
+    }
+
+    private EquipmentLoadoutGameAction Boundary(Func<long>? epoch = null,
+        Func<bool>? permit = null, Func<string, bool>? includeContract = null)
+    {
+        var readEpoch = epoch ?? (() => Epoch);
+        var resolver = new TypedRegistryResolver(readEpoch,
+            () => TypedRegistrySourceSnapshot.Ready(_registry),
+            value => value is IHasGuid item ? item.GetGuid() : null);
+        return new EquipmentLoadoutGameAction(readEpoch, permit ?? (() => true),
+            static () => "EquipmentLoadout ownership was revoked.",
+            includeContract: includeContract, registry: resolver);
+    }
+
+    private static EquipmentLoadoutSubmission Submit(EquipmentLoadoutGameAction boundary,
+        EquipmentSO target, EquipmentLoadoutActionKind kind, long epoch = Epoch)
+    {
+        var action = new EquipmentLoadoutAction(kind, target.GetGuid(), epoch);
+        return boundary.Submit(in action);
+    }
+
+    private void Register(EquipmentSO target) => _registry.Add(target.GetGuid(), target);
+
+    private static EquipmentSO Equipment(EquipmentTypeSO? type = null)
+    {
+        var target = new EquipmentSO
+        {
+            isCreated = true,
+            equipmentType = type ?? EquipmentType(3),
+            NativeMaximumStacks = 4,
+        };
+        target.SetGuid(Guid.NewGuid());
+        return target;
+    }
+
+    private static EquipmentTypeSO EquipmentType(int maximumSlots)
+    {
+        var type = new EquipmentTypeSO
+        {
+            maxTypeSlots = new ValueModifierRecord(new BigDouble(maximumSlots)),
+        };
+        type.SetGuid(Guid.NewGuid());
+        return type;
+    }
+}

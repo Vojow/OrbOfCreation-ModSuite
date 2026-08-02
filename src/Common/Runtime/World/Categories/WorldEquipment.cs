@@ -19,7 +19,8 @@ internal readonly struct WorldEquipment : IWorldEntity
         int attuningLevel,
         double attunementTimeLeft,
         BigDouble baseXpRate,
-        WorldDiscoverableDecision discovery = default)
+        WorldDiscoverableDecision discovery = default,
+        WorldEquipmentDecision loadout = default)
     {
         EquipmentId = equipmentId;
         IsCreated = isCreated;
@@ -35,6 +36,7 @@ internal readonly struct WorldEquipment : IWorldEntity
         AttunementTimeLeft = attunementTimeLeft;
         BaseXpRate = baseXpRate;
         Discovery = discovery;
+        Loadout = loadout;
     }
 
     internal Guid EquipmentId { get; }
@@ -66,6 +68,8 @@ internal readonly struct WorldEquipment : IWorldEntity
     internal BigDouble BaseXpRate { get; }
 
     internal WorldDiscoverableDecision Discovery { get; }
+
+    internal WorldEquipmentDecision Loadout { get; }
 }
 
 internal sealed class WorldEquipmentBinder : WorldPlainBinder<WorldEquipment>
@@ -84,6 +88,11 @@ internal sealed class WorldEquipmentBinder : WorldPlainBinder<WorldEquipment>
     private Func<object, double>? _attunementTimeLeft;
     private Func<object, BigDouble>? _baseXpRate;
     private WorldDiscoverableBinding? _discovery;
+    private readonly Func<string, Type?> _resolveType;
+    private WorldEquipmentDecisionBinding? _loadout;
+
+    internal WorldEquipmentBinder(Func<string, Type?> resolveType) =>
+        _resolveType = resolveType ?? throw new ArgumentNullException(nameof(resolveType));
 
     internal override string Category => "equipment";
 
@@ -106,7 +115,8 @@ internal sealed class WorldEquipmentBinder : WorldPlainBinder<WorldEquipment>
         _attunementTimeLeft = bind.Field<double>("attunementTimeLeft");
         _baseXpRate = bind.Field<BigDouble>("baseXpRate");
         _discovery = new WorldDiscoverableBinding(type, TypeName);
-        return Join(bind.Failure, _discovery.Failure);
+        _loadout = new WorldEquipmentDecisionBinding(type, _resolveType);
+        return Join(Join(bind.Failure, _discovery.Failure), _loadout.Failure);
     }
 
     internal override WorldEquipment Read(object entity) =>
@@ -124,7 +134,8 @@ internal sealed class WorldEquipmentBinder : WorldPlainBinder<WorldEquipment>
             _attuningLevel!(entity),
             _attunementTimeLeft!(entity),
             _baseXpRate!(entity),
-            _discovery!.Read(entity));
+            _discovery!.Read(entity),
+            _loadout!.Read(entity));
 
     private static string Join(string left, string right) =>
         left.Length == 0 ? right : right.Length == 0 ? left : left + "; " + right;

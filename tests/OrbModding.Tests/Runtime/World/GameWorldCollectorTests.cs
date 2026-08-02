@@ -77,6 +77,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             // Not categories: the frame-wide globals reader resolves these two by name, and a
             // collector that cannot reach them silently prices every structure at parity.
             ["Player"] = typeof(FakePlayerGlobals),
+            ["GlobalVariables"] = typeof(FakeGlobalVariables),
             ["ValueModifierRecord"] = typeof(FakeModifierRecord),
             ["TargetingManager"] = typeof(FakeTargetingManager),
             ["TargetingManager+TargetLink"] = typeof(FakeTargetingManager.TargetLink),
@@ -170,6 +171,56 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         Assert.True(WorldLookup.TryFind(world.RecipeBooks, grimoire, out var recipeBook));
         Assert.True(recipeBook.Available);
+    }
+
+    [Fact]
+    public void Equipment_rows_publish_the_exact_native_loadout_decision_and_usage_holdings()
+    {
+        var resource = new FakeResource
+        {
+            Identity = Guid.NewGuid(),
+            Quantity = 80d,
+            quality = new FakeModifierRecord(100d),
+        };
+        FakeResource.All.Add(resource);
+        var type = new FakeEquipmentType
+        {
+            Identity = Guid.NewGuid(),
+            maxTypeSlots = new FakeModifierRecord(2d),
+        };
+        FakeEquipmentType.All.Add(type);
+        var equipment = new FakeEquipment
+        {
+            Identity = Guid.NewGuid(),
+            isCreated = true,
+            equipmentType = type,
+            maximumStacks = 4,
+            usageCost = new FakeCraftingResourceCostList
+            {
+                maximumCostTimes = new BigDouble(3),
+            }.With(resource, new BigDouble(20)),
+        };
+        FakeEquipment.All.Add(equipment);
+        FakeEquipmentManager.instance.equippedEquipment.maximum = 3;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var equipmentRows = collector.Build().Equipment;
+        Assert.Equal(1, equipmentRows.Count);
+        var row = equipmentRows[0];
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(row.Loadout.Available, row.Loadout.UnavailableReason);
+        Assert.Equal(type.Identity, row.Loadout.EquipmentTypeId);
+        Assert.Equal(0, row.Loadout.EquippedStacks);
+        Assert.Equal(4, row.Loadout.MaximumStacks);
+        Assert.Equal(1, row.Loadout.NextEquipAmount);
+        Assert.Equal(0, row.Loadout.NextUnequipAmount);
+        Assert.True(row.Loadout.UsageAffordable);
+        Assert.Equal(1, row.Loadout.Costs.Count);
+        var cost = row.Loadout.Costs[0];
+        Assert.Equal(resource.Identity, cost.ResourceId);
+        Assert.Equal(0, cost.Cost.CompareTo(new BigDouble(20)));
     }
 
     [Fact]
@@ -1620,6 +1671,13 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         public Guid GetGuid() => Identity;
         public int AsInt() => (int)value.GetValue().ToDouble();
+    }
+
+    private static class FakeGlobalVariables
+    {
+        private static readonly FakeCount MultiBuy = new(1);
+
+        public static FakeCount GetMultiBuy() => MultiBuy;
     }
 
     internal sealed class FakeCraftingPage : UnityEngine.Object

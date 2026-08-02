@@ -224,6 +224,9 @@ internal sealed class GameAssemblyMetadata : IDisposable
     public int GetMethodToken(string fullName, string methodName) =>
         MetadataTokens.GetToken(RequireUniqueMethod(fullName, methodName));
 
+    public int GetMethodToken(string fullName, string methodName, params string[] parameterTypes) =>
+        MetadataTokens.GetToken(RequireMethod(fullName, methodName, parameterTypes));
+
     public int GetFieldToken(string fullName, string fieldName) =>
         MetadataTokens.GetToken(RequireField(fullName, fieldName));
 
@@ -298,6 +301,12 @@ internal sealed class GameAssemblyMetadata : IDisposable
         return references.OrderBy(reference => reference.Offset).ToArray();
     }
 
+    public IReadOnlyList<MethodBodyDefinitionReference> GetMethodBodyDefinitionReferences(
+        string sourceType,
+        string sourceMethod,
+        params string[] parameterTypes) =>
+        GetMethodBodyDefinitionReferences(RequireMethod(sourceType, sourceMethod, parameterTypes));
+
     /// <summary>
     /// Constructed-generic and external member references used by one uniquely named native
     /// method body. Definition-reference inspection alone cannot see a call through a closed
@@ -320,6 +329,55 @@ internal sealed class GameAssemblyMetadata : IDisposable
                 "member-reference",
                 DecodeTypeHandle(member.Parent),
                 Reader.GetString(member.Name)));
+        }
+        return references.OrderBy(reference => reference.Offset).ToArray();
+    }
+
+    public IReadOnlyList<MethodBodyDefinitionReference> GetMethodBodyMemberReferences(
+        string sourceType,
+        string sourceMethod,
+        params string[] parameterTypes) =>
+        GetMethodBodyMemberReferences(RequireMethod(sourceType, sourceMethod, parameterTypes));
+
+    private IReadOnlyList<MethodBodyDefinitionReference> GetMethodBodyDefinitionReferences(
+        MethodDefinitionHandle source)
+    {
+        var references = new List<MethodBodyDefinitionReference>();
+        foreach (var typeHandle in Reader.TypeDefinitions)
+        {
+            var type = Reader.GetTypeDefinition(typeHandle);
+            var typeName = GetFullTypeName(typeHandle);
+            foreach (var methodHandle in type.GetMethods())
+            {
+                var offset = MethodBodyTokenOffset(source, MetadataTokens.GetToken(methodHandle));
+                if (offset < 0) continue;
+                var method = Reader.GetMethodDefinition(methodHandle);
+                references.Add(new MethodBodyDefinitionReference(offset, MetadataTokens.GetToken(methodHandle),
+                    "method", typeName, Reader.GetString(method.Name)));
+            }
+            foreach (var fieldHandle in type.GetFields())
+            {
+                var offset = MethodBodyTokenOffset(source, MetadataTokens.GetToken(fieldHandle));
+                if (offset < 0) continue;
+                var field = Reader.GetFieldDefinition(fieldHandle);
+                references.Add(new MethodBodyDefinitionReference(offset, MetadataTokens.GetToken(fieldHandle),
+                    "field", typeName, Reader.GetString(field.Name)));
+            }
+        }
+        return references.OrderBy(reference => reference.Offset).ToArray();
+    }
+
+    private IReadOnlyList<MethodBodyDefinitionReference> GetMethodBodyMemberReferences(
+        MethodDefinitionHandle source)
+    {
+        var references = new List<MethodBodyDefinitionReference>();
+        foreach (var handle in Reader.MemberReferences)
+        {
+            var offset = MethodBodyTokenOffset(source, MetadataTokens.GetToken(handle));
+            if (offset < 0) continue;
+            var member = Reader.GetMemberReference(handle);
+            references.Add(new MethodBodyDefinitionReference(offset, MetadataTokens.GetToken(handle),
+                "member-reference", DecodeTypeHandle(member.Parent), Reader.GetString(member.Name)));
         }
         return references.OrderBy(reference => reference.Offset).ToArray();
     }
@@ -398,6 +456,30 @@ internal sealed class GameAssemblyMetadata : IDisposable
         }
         if (found.IsNil)
             throw new InvalidOperationException($"Method {fullName}.{methodName} was not found.");
+        return found;
+    }
+
+    private MethodDefinitionHandle RequireMethod(
+        string fullName,
+        string methodName,
+        IReadOnlyList<string> parameterTypes)
+    {
+        var definition = Reader.GetTypeDefinition(RequireType(fullName));
+        MethodDefinitionHandle found = default;
+        foreach (var handle in definition.GetMethods())
+        {
+            var method = Reader.GetMethodDefinition(handle);
+            if (Reader.GetString(method.Name) != methodName) continue;
+            var signature = method.DecodeSignature(_typeProvider, null);
+            if (!signature.ParameterTypes.SequenceEqual(parameterTypes, StringComparer.Ordinal)) continue;
+            if (!found.IsNil)
+                throw new InvalidOperationException(
+                    $"Method {fullName}.{methodName}({string.Join(", ", parameterTypes)}) is ambiguous.");
+            found = handle;
+        }
+        if (found.IsNil)
+            throw new InvalidOperationException(
+                $"Method {fullName}.{methodName}({string.Join(", ", parameterTypes)}) was not found.");
         return found;
     }
 

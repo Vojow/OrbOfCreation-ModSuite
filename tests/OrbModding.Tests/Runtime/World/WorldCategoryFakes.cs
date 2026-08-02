@@ -34,6 +34,8 @@ internal static class WorldCategoryFakes
         ["SpellTypeSO"] = typeof(FakeSpellType),
         ["EquipmentSO"] = typeof(FakeEquipment),
         ["EquipmentTypeSO"] = typeof(FakeEquipmentType),
+        ["EquipmentManager"] = typeof(FakeEquipmentManager),
+        ["EquipmentListVariable"] = typeof(FakeEquipmentList),
         ["ResourceTypeSO"] = typeof(FakeResourceType),
         ["CraftingRecipeTypeSO"] = typeof(FakeCraftingRecipeType),
         ["CraftingRecipeSO"] = typeof(FakeScribeRecipe),
@@ -103,6 +105,7 @@ internal static class WorldCategoryFakes
         FakeSpellManager.instance = null;
         FakeSpellType.All.Clear();
         FakeEquipment.All.Clear();
+        FakeEquipmentManager.instance = new FakeEquipmentManager();
         FakeEquipmentType.All.Clear();
         FakeResourceType.All.Clear();
         FakeCraftingRecipeType.All.Clear();
@@ -230,9 +233,12 @@ internal sealed class FakeCraftingResourceCostList
 {
     public List<FakeCraftingResourceTuple> costs = new();
     public bool withinCapacity = true;
+    public bool affordable = true;
+    public BigDouble maximumCostTimes = new(int.MaxValue);
 
     public bool IsWithinCapacity() => withinCapacity;
-    public bool HasEnough() => true;
+    public bool HasEnough() => affordable;
+    public BigDouble MaximumCostTimes() => maximumCostTimes;
     public List<FakeCraftingResourceTuple> GetEntries() => costs;
 
     public FakeCraftingResourceCostList Multiply(BigDouble factor)
@@ -1058,6 +1064,7 @@ internal sealed class FakeEquipment : global::IDiscoverable
     public Guid Identity = Guid.NewGuid();
     public bool isCreated;
     public int discRarityLevel;
+    public FakeEquipmentType equipmentType = new();
     public BigDouble masteryXp;
     public int masteryLevel;
     public bool isRequiredDiscovery;
@@ -1069,10 +1076,14 @@ internal sealed class FakeEquipment : global::IDiscoverable
     public double attunementTimeLeft;
     public BigDouble baseXpRate;
     public global::ResourceCostList genericDiscoveryCost = new();
+    public FakeCraftingResourceCostList usageCost = new();
+    public int maximumStacks = 4;
     public bool NativeDiscoverVisible = true;
     public bool NativeCanDiscover = true;
 
     public Guid GetGuid() => Identity;
+    public int GetMaxLevel() => maximumStacks;
+    public FakeCraftingResourceCostList GetUsageCost() => usageCost;
     global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
     bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
     bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
@@ -1096,6 +1107,40 @@ internal sealed class FakeEquipmentType
     public FakeModifierRecord experienceRateMod = new(0d);
 
     public Guid GetGuid() => Identity;
+    public int GetMaxTypeSlots() => (int)maxTypeSlots.GetValue().ToDouble();
+}
+
+internal sealed class FakeEquipmentList
+{
+    private readonly Dictionary<FakeEquipment, int> stacks = new();
+
+    public List<FakeEquipment> value = new();
+    public int maximum = 4;
+
+    public int GetMax() => maximum;
+    public bool IsAtMax() => value.Count >= maximum;
+    public int GetStacks(FakeEquipment equipment) =>
+        stacks.TryGetValue(equipment, out var quantity) ? quantity : 0;
+    public int GetTypesEquipped(FakeEquipmentType equipmentType) =>
+        value.Count(equipment => ReferenceEquals(equipment.equipmentType, equipmentType));
+
+    internal void SetStacks(FakeEquipment equipment, int quantity)
+    {
+        if (quantity <= 0)
+        {
+            stacks.Remove(equipment);
+            value.Remove(equipment);
+            return;
+        }
+        stacks[equipment] = quantity;
+        if (!value.Contains(equipment)) value.Add(equipment);
+    }
+}
+
+internal sealed class FakeEquipmentManager
+{
+    public static FakeEquipmentManager instance = new();
+    public FakeEquipmentList equippedEquipment = new();
 }
 
 internal sealed class FakeResourceType
