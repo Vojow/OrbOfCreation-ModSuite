@@ -19,13 +19,23 @@ internal readonly struct AutoBuyFeatureStatus
     public string Summary { get; }
 }
 
+internal enum AutoBuyDecisionBlockReason
+{
+    None = 0,
+    OwningViewUnavailable,
+    OwningViewRelationMissing,
+    OwningViewRelationUnreadable,
+    OwningViewRelationContradictory,
+}
+
 internal static class AutoBuyFeatureStatusProjector
 {
     /// <summary>What the running Auto Buy service reports, independent of saved intent.</summary>
     public static AutoBuyFeatureStatus Project(
         bool emergencyDisabled,
         AutoBuyCandidateKinds owned,
-        bool cycleObserved)
+        bool cycleObserved,
+        AutoBuyDecisionBlockReason decisionBlock = AutoBuyDecisionBlockReason.None)
     {
         if (emergencyDisabled)
         {
@@ -57,6 +67,31 @@ internal static class AutoBuyFeatureStatusProjector
                 FeatureStatusState.NotReady,
                 FeatureStatusReasonCode.Initializing,
                 "Auto Buy is waiting for its first evaluation.");
+        }
+
+
+        switch (decisionBlock)
+        {
+            case AutoBuyDecisionBlockReason.OwningViewUnavailable:
+                return new AutoBuyFeatureStatus(
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ProgressionLocked,
+                    "All captured Auto Buy candidates have zero currently-visible authored routes.");
+            case AutoBuyDecisionBlockReason.OwningViewRelationMissing:
+                return new AutoBuyFeatureStatus(
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ContractUnavailable,
+                    "All captured Auto Buy candidates have zero authored purchase-view routes.");
+            case AutoBuyDecisionBlockReason.OwningViewRelationUnreadable:
+                return new AutoBuyFeatureStatus(
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.EvidenceUnavailable,
+                    "Every captured Auto Buy candidate was excluded by unreadable purchase-view evidence.");
+            case AutoBuyDecisionBlockReason.OwningViewRelationContradictory:
+                return new AutoBuyFeatureStatus(
+                    FeatureStatusState.TemporarilyBlocked,
+                    FeatureStatusReasonCode.ContractMismatch,
+                    "Every captured Auto Buy candidate was excluded by contradictory purchase-view evidence.");
         }
 
         return new AutoBuyFeatureStatus(

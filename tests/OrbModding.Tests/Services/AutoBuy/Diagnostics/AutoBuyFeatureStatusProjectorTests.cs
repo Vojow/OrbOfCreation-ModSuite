@@ -52,6 +52,24 @@ public sealed class AutoBuyFeatureStatusProjectorTests
         Assert.Equal(FeatureStatusReasonCode.PartialCapabilityUnavailable, result.Reason);
     }
 
+    [Theory]
+    [InlineData((int)AutoBuyDecisionBlockReason.OwningViewUnavailable, (int)FeatureStatusReasonCode.ProgressionLocked)]
+    [InlineData((int)AutoBuyDecisionBlockReason.OwningViewRelationMissing, (int)FeatureStatusReasonCode.ContractUnavailable)]
+    [InlineData((int)AutoBuyDecisionBlockReason.OwningViewRelationUnreadable, (int)FeatureStatusReasonCode.EvidenceUnavailable)]
+    [InlineData((int)AutoBuyDecisionBlockReason.OwningViewRelationContradictory, (int)FeatureStatusReasonCode.ContractMismatch)]
+    public void TotalRelationExclusionCannotReportOperational(int block, int reason)
+    {
+        var result = AutoBuyFeatureStatusProjector.Project(
+            emergencyDisabled: false,
+            AutoBuyCandidateKinds.All,
+            cycleObserved: true,
+            (AutoBuyDecisionBlockReason)block);
+
+        Assert.Equal(FeatureStatusState.TemporarilyBlocked, result.State);
+        Assert.Equal((FeatureStatusReasonCode)reason, result.Reason);
+        Assert.NotEmpty(result.Summary);
+    }
+
     private static AutoBuyFeatureStatus Project(
         bool emergencyDisabled = false,
         AutoBuyCandidateKinds owned = AutoBuyCandidateKinds.All,

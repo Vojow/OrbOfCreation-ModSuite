@@ -4,6 +4,7 @@ using OrbModding.Common;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common.Runtime.ServiceCycle.Registration;
 using OrbModding.Tests.Runtime.ServiceCycle.TestSupport;
@@ -125,6 +126,68 @@ public sealed class AutoBuyServiceCycleDiagnosticsBridgeTests
 
         Assert.Equal(FeatureStatusState.NotReady, status.Current.State);
         Assert.Equal(FeatureStatusReasonCode.Initializing, status.Current.Reason.Code);
+    }
+
+    [Theory]
+    [InlineData(2, 0, 0, 0, (int)AutoBuyDecisionBlockReason.OwningViewUnavailable)]
+    [InlineData(0, 2, 0, 0, (int)AutoBuyDecisionBlockReason.OwningViewRelationMissing)]
+    [InlineData(0, 0, 2, 0, (int)AutoBuyDecisionBlockReason.OwningViewRelationUnreadable)]
+    [InlineData(0, 0, 0, 2, (int)AutoBuyDecisionBlockReason.OwningViewRelationContradictory)]
+    public void AUniformTotalRelationExclusionBecomesTheExactRuntimeBlock(
+        int unavailable,
+        int missing,
+        int unreadable,
+        int contradictory,
+        int expected)
+    {
+        var exclusions = new AutoBuyExclusionHistogram(
+            kindNotSelected: 0,
+            unavailable: 0,
+            requirementsUnmet: 0,
+            terminal: 0,
+            unaffordable: 0,
+            unpriceable: 0,
+            owningViewUnavailable: unavailable,
+            owningViewRelationMissing: missing,
+            owningViewRelationUnreadable: unreadable,
+            owningViewRelationContradictory: contradictory);
+        var state = AutoBuyCycleState.Create(new LifecycleGeneration(1));
+        state.RecordDecision(new AutoBuyDecisionMetrics(2, 0, 0, 0, 0, in exclusions));
+
+        Assert.Equal(
+            (AutoBuyDecisionBlockReason)expected,
+            AutoBuyServiceCycleDiagnosticsBridge.TotalRelationBlock(Projection(in state)));
+    }
+
+    [Fact]
+    public void MixedRelationExclusionsDoNotClaimOneExactBlockingReason()
+    {
+        var exclusions = new AutoBuyExclusionHistogram(
+            kindNotSelected: 0,
+            unavailable: 0,
+            requirementsUnmet: 0,
+            terminal: 0,
+            unaffordable: 0,
+            unpriceable: 0,
+            owningViewUnavailable: 1,
+            owningViewRelationMissing: 1,
+            owningViewRelationUnreadable: 0,
+            owningViewRelationContradictory: 0);
+        var state = AutoBuyCycleState.Create(new LifecycleGeneration(1));
+        state.RecordDecision(new AutoBuyDecisionMetrics(2, 0, 0, 0, 0, in exclusions));
+
+        Assert.Equal(
+            AutoBuyDecisionBlockReason.None,
+            AutoBuyServiceCycleDiagnosticsBridge.TotalRelationBlock(Projection(in state)));
+    }
+
+    private static ServiceStateProjectionSnapshot Projection(in AutoBuyCycleState state)
+    {
+        var buffer = new ServiceStateProjectionWriteBuffer(
+            ServiceStateProjectionSnapshot.MaximumEntryCount);
+        var builder = new ServiceStateProjectionBuilder(buffer);
+        AutoBuyServiceProjection.Write(in state, builder);
+        return builder.CaptureSnapshot();
     }
 
     private static AutomataFeatureStatusReporter Reporter(

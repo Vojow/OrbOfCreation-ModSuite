@@ -3,6 +3,8 @@ using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
+using OrbModding;
 
 namespace OrbAutomata;
 
@@ -27,6 +29,8 @@ internal sealed class AutoBuyServiceCycleDiagnosticsBridge
     private AutoBuyCandidateKinds _owned;
     private bool _cycleObserved;
     private bool _evaluationRefreshPending;
+    private AutoBuyDecisionBlockReason _decisionBlock;
+    private AutoBuyDecisionBlockReason _narratedDecisionBlock;
 
     public AutoBuyServiceCycleDiagnosticsBridge(
         long lifecycle,
@@ -52,12 +56,19 @@ internal sealed class AutoBuyServiceCycleDiagnosticsBridge
         _emergencyDisabled = pump.IsEmergencyStopEngaged;
         _owned = owned;
         if (report.ResponsesAcquired != 0) _evaluationRefreshPending = true;
-        if (!_cycleObserved && _evaluationRefreshPending && HasEvaluated(pump))
+        if (_evaluationRefreshPending && TryReadProjection(pump, out var projection))
         {
             _evaluationRefreshPending = false;
+            var wasObserved = _cycleObserved;
+            var priorBlock = _decisionBlock;
             _cycleObserved = true;
-            PublishFeatureStatus();
-            return;
+            var snapshot = projection.Snapshot;
+            _decisionBlock = TotalRelationBlock(in snapshot);
+            if (!wasObserved || priorBlock != _decisionBlock)
+            {
+                PublishFeatureStatus();
+                return;
+            }
         }
         if (conditionsChanged) PublishFeatureStatus();
     }
@@ -68,6 +79,7 @@ internal sealed class AutoBuyServiceCycleDiagnosticsBridge
         _configurationGeneration = configurationGeneration;
         _cycleObserved = false;
         _evaluationRefreshPending = false;
+        _decisionBlock = AutoBuyDecisionBlockReason.None;
     }
 
     public void ObserveLifecycle(
@@ -83,6 +95,8 @@ internal sealed class AutoBuyServiceCycleDiagnosticsBridge
         // the feature is waiting on a first evaluation again.
         _cycleObserved = false;
         _evaluationRefreshPending = false;
+        _decisionBlock = AutoBuyDecisionBlockReason.None;
+        _narratedDecisionBlock = AutoBuyDecisionBlockReason.None;
         PublishFeatureStatus();
     }
 
@@ -91,16 +105,20 @@ internal sealed class AutoBuyServiceCycleDiagnosticsBridge
         var health = AutoBuyFeatureStatusProjector.Project(
             _emergencyDisabled,
             _owned,
-            _cycleObserved);
+            _cycleObserved,
+            _decisionBlock);
         _featureStatus.ObserveRuntimeLifecycle(
             health.State,
             health.Reason,
             health.Summary,
             _lifecycle,
             _configurationGeneration);
+        NarrateDecisionBlock(health);
     }
 
-    private bool HasEvaluated(SuiteFramePump pump)
+    private bool TryReadProjection(
+        SuiteFramePump pump,
+        out ServiceProjectionPublication projection)
     {
         var copy = ServiceCycleDiagnostics.CopyServices(pump, _services);
         if (copy.RequiredCount > _services.Length)
@@ -111,8 +129,53 @@ internal sealed class AutoBuyServiceCycleDiagnosticsBridge
         for (var index = 0; index < copy.WrittenCount; index++)
         {
             if (!_services[index].ServiceId.Equals(AutoBuyServicePolicies.ServiceId)) continue;
-            return _services[index].LatestProjection.IsPresent;
+            projection = _services[index].LatestProjection;
+            return projection.IsPresent;
         }
+        projection = default;
         return false;
+    }
+
+    internal static AutoBuyDecisionBlockReason TotalRelationBlock(
+        in ServiceStateProjectionSnapshot projection)
+    {
+        var captured = ReadInteger(in projection, AutoBuyServiceProjection.CapturedCandidatesKey);
+        if (captured <= 0 || ReadInteger(in projection, AutoBuyServiceProjection.EligibleCandidatesKey) != 0)
+            return AutoBuyDecisionBlockReason.None;
+        if (ReadInteger(in projection, AutoBuyServiceProjection.ExcludedOwningViewUnavailableKey) == captured)
+            return AutoBuyDecisionBlockReason.OwningViewUnavailable;
+        if (ReadInteger(in projection, AutoBuyServiceProjection.ExcludedOwningViewRelationMissingKey) == captured)
+            return AutoBuyDecisionBlockReason.OwningViewRelationMissing;
+        if (ReadInteger(in projection, AutoBuyServiceProjection.ExcludedOwningViewRelationUnreadableKey) == captured)
+            return AutoBuyDecisionBlockReason.OwningViewRelationUnreadable;
+        if (ReadInteger(in projection, AutoBuyServiceProjection.ExcludedOwningViewRelationContradictoryKey) == captured)
+            return AutoBuyDecisionBlockReason.OwningViewRelationContradictory;
+        return AutoBuyDecisionBlockReason.None;
+    }
+
+    private static long ReadInteger(in ServiceStateProjectionSnapshot projection, int key)
+    {
+        for (var index = 0; index < projection.Count; index++)
+        {
+            var entry = projection.GetEntry(index);
+            if (entry.Key.Value == key && entry.Value.Kind == ServiceProjectionValueKind.Integer)
+                return entry.Value.Integer;
+        }
+        return -1;
+    }
+
+    private void NarrateDecisionBlock(in AutoBuyFeatureStatus health)
+    {
+        if (_decisionBlock == _narratedDecisionBlock) return;
+        if (_decisionBlock == AutoBuyDecisionBlockReason.None)
+        {
+            if (_narratedDecisionBlock != AutoBuyDecisionBlockReason.None)
+                Plugin.Log?.LogAutomataInfo("Auto Buy recovered from its prior total purchase-view block.");
+        }
+        else
+        {
+            Plugin.Log?.LogAutomataWarning("Auto Buy is temporarily blocked: " + health.Summary);
+        }
+        _narratedDecisionBlock = _decisionBlock;
     }
 }
