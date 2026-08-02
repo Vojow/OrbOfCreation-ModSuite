@@ -841,6 +841,8 @@ public class Player
     private static Player _instance = new Player(initializeOutputVariables: true);
     public IntVariable spellOutputLevel;
     public IntVariable maxSpellOutputLevel;
+    public IntVariable reserveLevel;
+    public IntVariable maxReserveLevel;
 
     public Player() : this(initializeOutputVariables: true)
     {
@@ -850,6 +852,8 @@ public class Player
     {
         spellOutputLevel = new IntVariable { Value = initializeOutputVariables ? 1 : 0 };
         maxSpellOutputLevel = new IntVariable { Value = initializeOutputVariables ? 100 : 0 };
+        reserveLevel = new IntVariable { Value = initializeOutputVariables ? 1 : 0 };
+        maxReserveLevel = new IntVariable { Value = initializeOutputVariables ? 100 : 0 };
     }
 
     public static Player Current
@@ -859,6 +863,7 @@ public class Player
     }
 
     public static IntVariable GetSpellOutputLevel() => _instance.spellOutputLevel;
+    public static IntVariable GetReserveLevel() => _instance.reserveLevel;
 
     private static IntVariable bulkDevelopment =
         IntVariable.Register(KnownVariableIds.BulkDevelopment);

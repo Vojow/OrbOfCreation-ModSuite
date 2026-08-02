@@ -256,13 +256,20 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 "the shared spell composition GameAction was not composed",
                 lifecycle,
                 configurationGeneration);
-        if (command.Mode != "set_output_level")
+        var dial = command.Mode switch
+        {
+            "set_output_level" => CastingDial.Output,
+            "set_reserve_level" => CastingDial.Reserve,
+            _ => (CastingDial?)null,
+        };
+        if (dial is null)
             return GameMcpCommandResult.Rejected(
                 "unsupported_mode",
-                "the Casting action boundary accepts only the global Output Level dial",
+                "the Casting action boundary accepts only the global Output and Reserve dials",
                 lifecycle,
                 configurationGeneration);
         var action = new SpellCompositionAction(
+            dial.Value,
             command.Amount,
             command.ExpectedLifecycleGeneration);
         var submission = _spellComposition.Submit(in action);

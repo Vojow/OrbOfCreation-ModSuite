@@ -60,9 +60,8 @@ internal static class GameMcpWorldQuery
                 },
                 ["reserve"] = new JObject
                 {
-                    ["status"] = "unavailable",
-                    ["reasonCode"] = "contract_unavailable",
-                    ["reason"] = "this build cannot yet read or set the global Reserve Level",
+                    ["current"] = world.SpellWorkbench.ReserveLevel,
+                    ["maximum"] = world.SpellWorkbench.MaximumReserveLevel,
                 },
             };
         return result;
@@ -1828,6 +1827,11 @@ internal static class GameMcpWorldQuery
                 {
                     ["current"] = world.SpellWorkbench.OutputLevel,
                     ["maximum"] = world.SpellWorkbench.MaximumOutputLevel,
+                },
+                ["reserve"] = new JObject
+                {
+                    ["current"] = world.SpellWorkbench.ReserveLevel,
+                    ["maximum"] = world.SpellWorkbench.MaximumReserveLevel,
                 },
             },
         };

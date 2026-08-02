@@ -18126,6 +18126,43 @@
       "place": "capture"
     },
     {
+      "id": "spell-composition.player-reserve-level-capture",
+      "assembly": "assembly-csharp",
+      "type": "Player",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetReserveLevel",
+      "visibility": "public",
+      "static": true,
+      "returnType": "IntVariable",
+      "parameters": [],
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-composition.player-maximum-reserve-level-capture",
+      "assembly": "assembly-csharp",
+      "type": "Player",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "maxReserveLevel",
+      "visibility": "public",
+      "static": false,
+      "valueType": "IntVariable",
+      "owners": [
+        "Common spell composition world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "spell-composition.int-as-int-capture",
       "assembly": "assembly-csharp",
       "type": "IntVariable",
@@ -18380,6 +18417,43 @@
       "typeVisibility": "public",
       "kind": "field",
       "member": "maxSpellOutputLevel",
+      "visibility": "public",
+      "static": false,
+      "valueType": "IntVariable",
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.player-reserve-level-action",
+      "assembly": "assembly-csharp",
+      "type": "Player",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetReserveLevel",
+      "visibility": "public",
+      "static": true,
+      "returnType": "IntVariable",
+      "parameters": [],
+      "owners": [
+        "Automata spell composition GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-composition.player-maximum-reserve-level-action",
+      "assembly": "assembly-csharp",
+      "type": "Player",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "maxReserveLevel",
       "visibility": "public",
       "static": false,
       "valueType": "IntVariable",

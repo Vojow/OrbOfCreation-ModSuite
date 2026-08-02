@@ -24,8 +24,9 @@ internal static class GameMcpSpellCompositionProjection
     private static JObject State(in SpellCompositionState state) =>
         new JObject
         {
-            ["outputLevel"] = state.OutputLevel,
-            ["maximumOutputLevel"] = state.MaximumOutputLevel,
+            ["dial"] = state.Dial == CastingDial.Output ? "output" : "reserve",
+            ["current"] = state.Current,
+            ["maximum"] = state.Maximum,
         };
 }
 #endif

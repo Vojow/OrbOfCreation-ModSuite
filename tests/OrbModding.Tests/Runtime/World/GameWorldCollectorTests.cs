@@ -670,6 +670,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(world.SpellWorkbench.HasEmptySlot);
         Assert.Equal(1, world.SpellWorkbench.OutputLevel);
         Assert.Equal(100, world.SpellWorkbench.MaximumOutputLevel);
+        Assert.Equal(1, world.SpellWorkbench.ReserveLevel);
+        Assert.Equal(100, world.SpellWorkbench.MaximumReserveLevel);
     }
 
     [Fact]
@@ -4091,6 +4093,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         private static FakeGlobalVariable _attributeQualityBonus = new(0d);
         private FakeCount spellOutputLevel = new(1);
         public FakeCount maxSpellOutputLevel = new(100);
+        private FakeCount reserveLevel = new(1);
+        public FakeCount maxReserveLevel = new(100);
 
         private FakePlayerGlobals()
         {
@@ -4106,6 +4110,8 @@ public sealed class GameWorldCollectorTests : IDisposable
             _attributeQualityBonus = new FakeGlobalVariable(0d);
             _instance.spellOutputLevel = new FakeCount(1);
             _instance.maxSpellOutputLevel = new FakeCount(100);
+            _instance.reserveLevel = new FakeCount(1);
+            _instance.maxReserveLevel = new FakeCount(100);
         }
 
         internal static void SetOverflow(double percent) => _overflow = new FakeGlobalVariable(percent);
@@ -4127,6 +4133,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         public static FakeGlobalVariable GetAttributeQualityBonus() => _attributeQualityBonus;
 
         public static FakeCount GetSpellOutputLevel() => _instance.spellOutputLevel;
+        public static FakeCount GetReserveLevel() => _instance.reserveLevel;
     }
 
     private sealed class FakeGlobalVariable

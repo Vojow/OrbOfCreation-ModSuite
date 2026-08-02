@@ -4,17 +4,27 @@ using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
-/// <summary>One global Casting-screen Output Level change.</summary>
+internal enum CastingDial
+{
+    Output = 0,
+    Reserve = 1,
+}
+
+/// <summary>One global Casting-screen dial change.</summary>
 internal readonly struct SpellCompositionAction
 {
-    internal SpellCompositionAction(int outputLevel, long lifecycleEpoch)
+    internal SpellCompositionAction(CastingDial dial, int value, long lifecycleEpoch)
     {
-        if (outputLevel <= 0) throw new ArgumentOutOfRangeException(nameof(outputLevel));
-        OutputLevel = outputLevel;
+        if (!Enum.IsDefined(typeof(CastingDial), dial))
+            throw new ArgumentOutOfRangeException(nameof(dial));
+        if (value <= 0) throw new ArgumentOutOfRangeException(nameof(value));
+        Dial = dial;
+        Value = value;
         LifecycleEpoch = lifecycleEpoch;
     }
 
-    internal int OutputLevel { get; }
+    internal CastingDial Dial { get; }
+    internal int Value { get; }
     internal long LifecycleEpoch { get; }
 }
 
@@ -24,7 +34,7 @@ internal enum SpellCompositionPreflight
     LifecycleReplaced = 1,
     ContractUnavailable = 2,
     WrongThread = 4,
-    OutputLevelOutOfRange = 6,
+    LevelOutOfRange = 6,
     AlreadyInRequestedState = 7,
     MutationPermitUnavailable = 15,
     PostCommitFault = 16,
@@ -34,20 +44,22 @@ internal enum SpellCompositionPreflight
 internal enum SpellCompositionNativeStage
 {
     None = 0,
-    OutputLevel = 1,
+    Dial = 1,
     Verification = 2,
 }
 
 internal readonly struct SpellCompositionState
 {
-    internal SpellCompositionState(int outputLevel, int maximumOutputLevel)
+    internal SpellCompositionState(CastingDial dial, int current, int maximum)
     {
-        OutputLevel = outputLevel;
-        MaximumOutputLevel = maximumOutputLevel;
+        Dial = dial;
+        Current = current;
+        Maximum = maximum;
     }
 
-    internal int OutputLevel { get; }
-    internal int MaximumOutputLevel { get; }
+    internal CastingDial Dial { get; }
+    internal int Current { get; }
+    internal int Maximum { get; }
 }
 
 internal readonly struct SpellCompositionEvidence
@@ -110,7 +122,7 @@ internal static class SpellCompositionActionResultCodes
 {
     internal static readonly ServiceActionResultCode ContractUnavailable = new(7301);
     internal static readonly ServiceActionResultCode WrongThread = new(7303);
-    internal static readonly ServiceActionResultCode OutputLevelOutOfRange = new(7305);
+    internal static readonly ServiceActionResultCode LevelOutOfRange = new(7305);
     internal static readonly ServiceActionResultCode AlreadyInRequestedState = new(7306);
     internal static readonly ServiceActionResultCode MutationPermitUnavailable = new(7314);
     internal static readonly ServiceActionResultCode PostCommitFault = new(7315);

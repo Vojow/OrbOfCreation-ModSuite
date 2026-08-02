@@ -633,7 +633,7 @@ internal static class GameMcpActionResultCodeNames
         {
             if (code == SpellCompositionActionResultCodes.ContractUnavailable) return "contract_unavailable";
             if (code == SpellCompositionActionResultCodes.WrongThread) return "wrong_thread";
-            if (code == SpellCompositionActionResultCodes.OutputLevelOutOfRange) return "output_level_out_of_range";
+            if (code == SpellCompositionActionResultCodes.LevelOutOfRange) return "level_out_of_range";
             if (code == SpellCompositionActionResultCodes.AlreadyInRequestedState) return "already_in_requested_state";
             if (code == SpellCompositionActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == SpellCompositionActionResultCodes.PostCommitFault) return "post_commit_fault";

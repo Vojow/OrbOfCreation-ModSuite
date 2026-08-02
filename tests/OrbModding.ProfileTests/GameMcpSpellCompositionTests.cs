@@ -84,8 +84,8 @@ public sealed class GameMcpSpellCompositionTests
 
         Assert.Equal(4, (int)overview["casting"]!["output"]!["current"]!);
         Assert.Equal(12, (int)overview["casting"]!["output"]!["maximum"]!);
-        Assert.Equal("contract_unavailable",
-            (string?)overview["casting"]!["reserve"]!["reasonCode"]);
+        Assert.Equal(3, (int)overview["casting"]!["reserve"]!["current"]!);
+        Assert.Equal(9, (int)overview["casting"]!["reserve"]!["maximum"]!);
         Assert.Null(row["outputLevel"]);
         Assert.Equal("Gather Knowledge", (string?)equipped["spellRecipe"]!["name"]);
         Assert.Equal(SpellInstanceId.ToString("D"), (string?)equipped["spellInstance"]!["uuid"]);
@@ -119,8 +119,8 @@ public sealed class GameMcpSpellCompositionTests
     [Fact]
     public void CommittedMutationReturnsOnlyTheCompleteNamedPostState()
     {
-        var before = new SpellCompositionState(4, 12);
-        var after = new SpellCompositionState(5, 12);
+        var before = new SpellCompositionState(CastingDial.Output, 4, 12);
+        var after = new SpellCompositionState(CastingDial.Output, 5, 12);
         var evidence = new SpellCompositionEvidence(true, in before, in after);
         var submission = new SpellCompositionSubmission(
             SpellCompositionPreflight.Proceeded,
@@ -148,6 +148,7 @@ public sealed class GameMcpSpellCompositionTests
             new[] { "status", "casting", "equipped", "augmentOptions", "moveDestinations" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
+        Assert.Equal(3, (int)success["casting"]!["reserve"]!["current"]!);
         var equipped = Assert.Single(success["equipped"]!.Values<JObject>())!;
         Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
         Assert.Equal(2, (int)Assert.Single(
@@ -166,8 +167,8 @@ public sealed class GameMcpSpellCompositionTests
     [Fact]
     public void FailureKeepsNamedOutcomeEvidenceWithoutPersistentQuarantine()
     {
-        var before = new SpellCompositionState(4, 12);
-        var after = new SpellCompositionState(4, 12);
+        var before = new SpellCompositionState(CastingDial.Reserve, 4, 12);
+        var after = new SpellCompositionState(CastingDial.Reserve, 4, 12);
         var evidence = new SpellCompositionEvidence(true, in before, in after);
         var submission = new SpellCompositionSubmission(
             SpellCompositionPreflight.VerificationFailed,
@@ -186,7 +187,8 @@ public sealed class GameMcpSpellCompositionTests
             },
             failure.Properties().Select(property => property.Name));
         Assert.Null(failure["preflight"]);
-        Assert.Equal(4, (int)failure["before"]!["outputLevel"]!);
+        Assert.Equal("reserve", (string?)failure["before"]!["dial"]);
+        Assert.Equal(4, (int)failure["before"]!["current"]!);
         Assert.Null(failure["quarantined"]);
         Assert.DoesNotContain("payment", failure.ToString(), StringComparison.OrdinalIgnoreCase);
     }
@@ -298,7 +300,9 @@ public sealed class GameMcpSpellCompositionTests
                 3,
                 true,
                 4,
-                12),
+                12,
+                3,
+                9),
             SpellSlots = PublicationTable<WorldSpellSlot>.Create(new[]
             {
                 new WorldSpellSlot(

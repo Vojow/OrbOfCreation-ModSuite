@@ -12,6 +12,8 @@ public sealed class SpellCompositionContractTests
 
         Assert.Equal(0x0400044B, assembly.GetFieldToken("Player", "_instance"));
         Assert.Equal(0x04000420, assembly.GetFieldToken("Player", "maxSpellOutputLevel"));
+        Assert.Equal(0x0400041D, assembly.GetFieldToken("Player", "reserveLevel"));
+        Assert.Equal(0x0400041F, assembly.GetFieldToken("Player", "maxReserveLevel"));
         Assert.Equal(0x040004AD, assembly.GetFieldToken("SpellManager", "instance"));
         Assert.Equal(0x0400049C, assembly.GetFieldToken("SpellManager", "activeSpells"));
         Assert.Equal(0x04000A6F, assembly.GetFieldToken("AbstractListVariable`1", "value"));
@@ -19,6 +21,7 @@ public sealed class SpellCompositionContractTests
         Assert.Equal(0x040006D9, assembly.GetFieldToken("GlyphSO", "All"));
 
         Assert.Equal(0x06000690, assembly.GetMethodToken("Player", "GetSpellOutputLevel"));
+        Assert.Equal(0x0600068F, assembly.GetMethodToken("Player", "GetReserveLevel"));
         Assert.Equal(0x060015AE, assembly.GetMethodToken("IntVariable", "AsInt"));
         Assert.Equal(0x060015AC, assembly.GetMethodToken("IntVariable", "SetValue"));
         Assert.Equal(0x06001B44, assembly.GetMethodToken("GuidContainer", "get_guid"));

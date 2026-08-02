@@ -108,6 +108,8 @@ public sealed record GameWorldState
         0,
         false,
         0,
+        0,
+        0,
         0);
 
     /// <summary>The native current target request, empty when the game is not targeting.</summary>

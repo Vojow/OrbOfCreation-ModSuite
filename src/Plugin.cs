@@ -1815,7 +1815,7 @@ public sealed class Plugin : BaseUnityPlugin
                 mode = "create";
         }
         else if (kind == GameMcpCommandKind.SpellComposition)
-            nativeType = request.Mode == "set_output_level" ? "IntVariable" : "Spell";
+            nativeType = "IntVariable";
         else if (kind == GameMcpCommandKind.SpellLoadout)
         {
             nativeType = "Spell";
@@ -1935,13 +1935,6 @@ public sealed class Plugin : BaseUnityPlugin
         if (preparationFailure is not null)
         {
             failure = preparationFailure;
-            return false;
-        }
-        if (kind == GameMcpCommandKind.SpellComposition && mode == "set_reserve_level")
-        {
-            failure = GameMcpCommandResult.Rejected(
-                "contract_unavailable",
-                "this build cannot yet read or set the global Reserve Level");
             return false;
         }
         var reason = string.Empty;

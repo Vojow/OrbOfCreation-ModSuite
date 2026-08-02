@@ -18,7 +18,9 @@ internal readonly struct WorldSpellWorkbench
         int maximumEquipped,
         bool hasEmptySlot,
         int outputLevel = 0,
-        int maximumOutputLevel = 0)
+        int maximumOutputLevel = 0,
+        int reserveLevel = 0,
+        int maximumReserveLevel = 0)
     {
         CoreGlyphs = coreGlyphs ?? throw new ArgumentNullException(nameof(coreGlyphs));
         AugmentGlyphs = augmentGlyphs ?? throw new ArgumentNullException(nameof(augmentGlyphs));
@@ -29,6 +31,8 @@ internal readonly struct WorldSpellWorkbench
         HasEmptySlot = hasEmptySlot;
         OutputLevel = outputLevel;
         MaximumOutputLevel = maximumOutputLevel;
+        ReserveLevel = reserveLevel;
+        MaximumReserveLevel = maximumReserveLevel;
     }
 
     internal PublicationTable<WorldSpellWorkbenchGlyph> CoreGlyphs { get; }
@@ -40,6 +44,8 @@ internal readonly struct WorldSpellWorkbench
     internal bool HasEmptySlot { get; }
     internal int OutputLevel { get; }
     internal int MaximumOutputLevel { get; }
+    internal int ReserveLevel { get; }
+    internal int MaximumReserveLevel { get; }
 }
 
 internal readonly struct WorldSpellWorkbenchCost
@@ -86,6 +92,8 @@ internal sealed class WorldSpellWorkbenchBuffer
     internal bool HasEmptySlot { get; private set; }
     internal int OutputLevel { get; private set; }
     internal int MaximumOutputLevel { get; private set; }
+    internal int ReserveLevel { get; private set; }
+    internal int MaximumReserveLevel { get; private set; }
 
     internal void Reset()
     {
@@ -98,6 +106,8 @@ internal sealed class WorldSpellWorkbenchBuffer
         HasEmptySlot = false;
         OutputLevel = 0;
         MaximumOutputLevel = 0;
+        ReserveLevel = 0;
+        MaximumReserveLevel = 0;
     }
 
     internal void AppendCore(Guid id) => Append(ref _core, ref _coreCount, id);
@@ -118,10 +128,16 @@ internal sealed class WorldSpellWorkbenchBuffer
         HasEmptySlot = hasEmptySlot;
     }
 
-    internal void SetOutputLevel(int outputLevel, int maximumOutputLevel)
+    internal void SetCastingDials(
+        int outputLevel,
+        int maximumOutputLevel,
+        int reserveLevel,
+        int maximumReserveLevel)
     {
         OutputLevel = outputLevel;
         MaximumOutputLevel = maximumOutputLevel;
+        ReserveLevel = reserveLevel;
+        MaximumReserveLevel = maximumReserveLevel;
     }
 
     internal WorldSpellWorkbench Build() => new(
@@ -133,7 +149,9 @@ internal sealed class WorldSpellWorkbenchBuffer
         MaximumEquipped,
         HasEmptySlot,
         OutputLevel,
-        MaximumOutputLevel);
+        MaximumOutputLevel,
+        ReserveLevel,
+        MaximumReserveLevel);
 
     private static void Append(
         ref WorldSpellWorkbenchGlyph[] values,
@@ -175,6 +193,8 @@ internal sealed class WorldSpellWorkbenchReader : IWorldCategoryReader
     private readonly Func<object?>? _player;
     private readonly Func<object?>? _outputLevel;
     private readonly Func<object, object?>? _maximumOutputLevel;
+    private readonly Func<object?>? _reserveLevel;
+    private readonly Func<object, object?>? _maximumReserveLevel;
     private readonly Func<object, int>? _asInt;
     private readonly string _unavailable;
 
@@ -221,6 +241,9 @@ internal sealed class WorldSpellWorkbenchReader : IWorldCategoryReader
         _outputLevel = BindStaticObjectCall(playerType, "GetSpellOutputLevel", intVariableType);
         _maximumOutputLevel = NativeAccessorBinder.Reference(
             playerType, "maxSpellOutputLevel", intVariableType);
+        _reserveLevel = BindStaticObjectCall(playerType, "GetReserveLevel", intVariableType);
+        _maximumReserveLevel = NativeAccessorBinder.Reference(
+            playerType, "maxReserveLevel", intVariableType);
         _asInt = NativeAccessorBinder.Call<int>(intVariableType, "AsInt");
         _unavailable = _managerType is null || _glyphType is null || glyphListType is null ||
             spellListType is null || _manager is null || _core is null || _augments is null ||
@@ -228,7 +251,8 @@ internal sealed class WorldSpellWorkbenchReader : IWorldCategoryReader
             _maximum is null || _hasEmpty is null || _getCreateCost is null ||
             _costAffordable is null || _costEntries is null || _costResourceId is null ||
             _costValue is null || _costResource is null || _resourceAmount is null ||
-            _player is null || _outputLevel is null || _maximumOutputLevel is null || _asInt is null
+            _player is null || _outputLevel is null || _maximumOutputLevel is null ||
+            _reserveLevel is null || _maximumReserveLevel is null || _asInt is null
             ? "the complete SpellManager selection and loadout binding set was unavailable"
             : string.Empty;
     }
@@ -278,11 +302,18 @@ internal sealed class WorldSpellWorkbenchReader : IWorldCategoryReader
             var player = _player!();
             var output = _outputLevel!();
             var maximumOutput = player is null ? null : _maximumOutputLevel!(player);
-            if (player is null || output is null || maximumOutput is null)
+            var reserve = _reserveLevel!();
+            var maximumReserve = player is null ? null : _maximumReserveLevel!(player);
+            if (player is null || output is null || maximumOutput is null ||
+                reserve is null || maximumReserve is null)
                 return WorldCategoryReport.Missing(
                     Category,
-                    "Player output-level variables were null");
-            buffer.SetOutputLevel(_asInt!(output), _asInt!(maximumOutput));
+                    "Player casting-dial variables were null");
+            buffer.SetCastingDials(
+                _asInt!(output),
+                _asInt!(maximumOutput),
+                _asInt!(reserve),
+                _asInt!(maximumReserve));
             return new WorldCategoryReport(Category, WorldCategoryOutcome.Collected, 1, 0, string.Empty);
         }
         catch (Exception ex)

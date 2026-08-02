@@ -5,7 +5,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
-/// <summary>Lifecycle-bound mutation boundary for the global Casting-screen Output Level.</summary>
+/// <summary>Lifecycle-bound mutation boundary for both global Casting-screen dials.</summary>
 internal sealed class SpellCompositionGameAction : IDisposable
 {
     private readonly Func<long> _readLifecycleEpoch;
@@ -43,13 +43,13 @@ internal sealed class SpellCompositionGameAction : IDisposable
         if (Environment.CurrentManagedThreadId != _mainThreadId)
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.WrongThread,
-                "The Casting Output Level dial is bound to Unity thread " + _mainThreadId +
+                "The Casting dial is bound to Unity thread " + _mainThreadId +
                 ", not thread " + Environment.CurrentManagedThreadId + ".");
         if (_bindings is not { } native)
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.ContractUnavailable,
                 _bindingFailure.Length == 0
-                    ? "The lifecycle-scoped Casting Output Level binding set is unavailable."
+                    ? "The lifecycle-scoped Casting-dial binding set is unavailable."
                     : _bindingFailure);
 
         long currentEpoch;
@@ -66,12 +66,12 @@ internal sealed class SpellCompositionGameAction : IDisposable
                 "Action lifecycle " + action.LifecycleEpoch +
                 " is stale; the live lifecycle is " + currentEpoch + ".");
 
-        try { return SetOutputLevel(in action, native); }
+        try { return SetDial(in action, native); }
         catch (Exception ex) when (IsExpected(ex))
         {
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.ContractUnavailable,
-                "Casting Output Level preflight failed before mutation: " +
+                "Casting-dial preflight failed before mutation: " +
                 ex.GetBaseException().Message);
         }
     }
@@ -89,28 +89,28 @@ internal sealed class SpellCompositionGameAction : IDisposable
         _bindingFailure = string.Empty;
     }
 
-    private SpellCompositionSubmission SetOutputLevel(
+    private SpellCompositionSubmission SetDial(
         in SpellCompositionAction action,
         SpellCompositionNativeBindings native)
     {
         var player = native.ReadPlayer();
-        var output = native.ReadOutputVariable();
-        if (player is null || output is null)
+        var variable = ReadVariable(native, action.Dial);
+        if (player is null || variable is null)
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.ContractUnavailable,
-                "Player output-level state is not initialized in this lifecycle.");
-        var current = native.ReadInt(output);
-        var maximum = native.ReadInt(native.ReadMaximumOutputVariable(player));
-        if (action.OutputLevel < 1 || action.OutputLevel > maximum)
+                "Player " + Name(action.Dial) + " state is not initialized in this lifecycle.");
+        var current = native.ReadInt(variable);
+        var maximum = native.ReadInt(ReadMaximumVariable(native, player, action.Dial));
+        if (action.Value < 1 || action.Value > maximum)
             return SpellCompositionSubmission.Reject(
-                SpellCompositionPreflight.OutputLevelOutOfRange,
-                "Requested Output Level " + action.OutputLevel +
+                SpellCompositionPreflight.LevelOutOfRange,
+                "Requested " + Name(action.Dial) + " " + action.Value +
                 " is outside the live native range 1.." + maximum + ".");
-        if (current == action.OutputLevel)
+        if (current == action.Value)
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.AlreadyInRequestedState,
-                "The global Output Level is already " + current + ".");
-        var before = Capture(native);
+                "The global " + Name(action.Dial) + " is already " + current + ".");
+        var before = Capture(native, player, action.Dial);
         if (!TryCapturePermit(out var reason))
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.MutationPermitUnavailable,
@@ -118,52 +118,56 @@ internal sealed class SpellCompositionGameAction : IDisposable
 
         try
         {
-            native.SetInt(output, action.OutputLevel);
-            var after = Capture(native);
-            return after.OutputLevel == action.OutputLevel
+            native.SetInt(variable, action.Value);
+            var after = Capture(native, player, action.Dial);
+            return after.Current == action.Value
                 ? Verified(in before, in after,
-                    "The global Output Level is now " + action.OutputLevel + ".")
+                    "The global " + Name(action.Dial) + " is now " + action.Value + ".")
                 : Fault(
                     SpellCompositionPreflight.VerificationFailed,
                     SpellCompositionNativeStage.Verification,
                     NativeMutationOutcome.PostconditionFailed,
                     in before,
                     in after,
-                    "The global Output Level variable did not hold the requested value.");
+                    "The global " + Name(action.Dial) + " variable did not hold the requested value.");
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            var after = CaptureBestEffort(native, in before);
-            if (after.OutputLevel == action.OutputLevel)
+            var after = CaptureBestEffort(native, player, action.Dial, in before);
+            if (after.Current == action.Value)
                 return Verified(in before, in after,
-                    "The Output Level setter threw after the requested value became observable.");
+                    "The " + Name(action.Dial) + " setter threw after the requested value became observable.");
             return Fault(
                 SpellCompositionPreflight.PostCommitFault,
-                SpellCompositionNativeStage.OutputLevel,
+                SpellCompositionNativeStage.Dial,
                 NativeMutationOutcome.ExecutionThrew,
                 in before,
                 in after,
-                "The Output Level setter threw before the requested outcome was observable: " +
+                "The " + Name(action.Dial) + " setter threw before the requested outcome was observable: " +
                 ex.GetBaseException().Message);
         }
     }
 
-    private static SpellCompositionState Capture(SpellCompositionNativeBindings native)
+    private static SpellCompositionState Capture(
+        SpellCompositionNativeBindings native,
+        object player,
+        CastingDial dial)
     {
-        var player = native.ReadPlayer() ??
-            throw new InvalidOperationException("Player._instance was null.");
-        var output = native.ReadOutputVariable() ??
-            throw new InvalidOperationException("Player.GetSpellOutputLevel() returned null.");
+        var variable = ReadVariable(native, dial) ??
+            throw new InvalidOperationException("Player " + Name(dial) + " variable was null.");
         return new SpellCompositionState(
-            native.ReadInt(output),
-            native.ReadInt(native.ReadMaximumOutputVariable(player)));
+            dial,
+            native.ReadInt(variable),
+            native.ReadInt(ReadMaximumVariable(native, player, dial)));
     }
 
     private static SpellCompositionState CaptureBestEffort(
         SpellCompositionNativeBindings native,
+        object player,
+        CastingDial dial,
         in SpellCompositionState fallback)
     {
-        try { return Capture(native); }
+        try { return Capture(native, player, dial); }
         catch (Exception ex) when (IsExpected(ex)) { return fallback; }
     }
 
@@ -197,7 +201,7 @@ internal sealed class SpellCompositionGameAction : IDisposable
             outcome,
             new NativeMutationCallOutcome(1, 1, 0),
             in evidence,
-            "Casting Output Level faulted after " + stage + ": " + reason);
+            "Casting dial faulted after " + stage + ": " + reason);
     }
 
     private bool TryCapturePermit(out string reason)
@@ -209,7 +213,7 @@ internal sealed class SpellCompositionGameAction : IDisposable
         }
         reason = _readOwnershipFailure();
         if (reason.Length == 0)
-            reason = "The suite does not own the Casting Output Level action family.";
+            reason = "The suite does not own the Casting-dial action family.";
         return false;
     }
 
@@ -228,4 +232,21 @@ internal sealed class SpellCompositionGameAction : IDisposable
     private static bool IsExpected(Exception ex) =>
         ex is ArgumentException or InvalidOperationException or OverflowException or
             TargetInvocationException or MemberAccessException;
+
+    private static object? ReadVariable(
+        SpellCompositionNativeBindings native,
+        CastingDial dial) => dial == CastingDial.Output
+            ? native.ReadOutputVariable()
+            : native.ReadReserveVariable();
+
+    private static object ReadMaximumVariable(
+        SpellCompositionNativeBindings native,
+        object player,
+        CastingDial dial) => dial == CastingDial.Output
+            ? native.ReadMaximumOutputVariable(player)
+            : native.ReadMaximumReserveVariable(player);
+
+    private static string Name(CastingDial dial) => dial == CastingDial.Output
+        ? "Output Level"
+        : "Reserve Level";
 }

@@ -4,7 +4,7 @@ using System.Reflection;
 
 namespace OrbAutomata;
 
-/// <summary>Complete lifecycle binding set for the global Casting-screen Output Level.</summary>
+/// <summary>Complete lifecycle binding set for both global Casting-screen dials.</summary>
 internal sealed class SpellCompositionNativeBindings
 {
     internal static readonly string[] ContractIds =
@@ -12,6 +12,8 @@ internal sealed class SpellCompositionNativeBindings
         "spell-composition.player-instance-action",
         "spell-composition.player-output-level-action",
         "spell-composition.player-maximum-output-level-action",
+        "spell-composition.player-reserve-level-action",
+        "spell-composition.player-maximum-reserve-level-action",
         "int-variable.as-int",
         "int-variable.set-value",
     };
@@ -20,12 +22,16 @@ internal sealed class SpellCompositionNativeBindings
         Func<object?> player,
         Func<object?> outputVariable,
         Func<object, object> maximumOutputVariable,
+        Func<object?> reserveVariable,
+        Func<object, object> maximumReserveVariable,
         Func<object, int> asInt,
         Action<object, int> setInt)
     {
         ReadPlayer = player;
         ReadOutputVariable = outputVariable;
         ReadMaximumOutputVariable = maximumOutputVariable;
+        ReadReserveVariable = reserveVariable;
+        ReadMaximumReserveVariable = maximumReserveVariable;
         ReadInt = asInt;
         SetInt = setInt;
     }
@@ -33,6 +39,8 @@ internal sealed class SpellCompositionNativeBindings
     internal Func<object?> ReadPlayer { get; }
     internal Func<object?> ReadOutputVariable { get; }
     internal Func<object, object> ReadMaximumOutputVariable { get; }
+    internal Func<object?> ReadReserveVariable { get; }
+    internal Func<object, object> ReadMaximumReserveVariable { get; }
     internal Func<object, int> ReadInt { get; }
     internal Action<object, int> SetInt { get; }
 
@@ -58,6 +66,12 @@ internal sealed class SpellCompositionNativeBindings
                 "maxSpellOutputLevel",
                 intType,
                 isStatic: false);
+            var reserve = StaticMethod(playerType, "GetReserveLevel", intType);
+            var maximumReserve = Field(
+                playerType,
+                "maxReserveLevel",
+                intType,
+                isStatic: false);
             var asInt = Method(intType, "AsInt", typeof(int));
             var setInt = Method(intType, "SetValue", typeof(void), typeof(int));
 
@@ -65,6 +79,8 @@ internal sealed class SpellCompositionNativeBindings
                 StaticObject(playerInstance),
                 StaticCall(output),
                 ObjectField(maximumOutput),
+                StaticCall(reserve),
+                ObjectField(maximumReserve),
                 InstanceFunc<int>(asInt),
                 InstanceValueAction<int>(setInt));
             reason = string.Empty;
@@ -73,7 +89,7 @@ internal sealed class SpellCompositionNativeBindings
         catch (Exception ex) when (
             ex is InvalidOperationException or ArgumentException or AmbiguousMatchException)
         {
-            reason = "The complete Casting Output Level binding set is unavailable: " + ex.Message;
+            reason = "The complete Casting-dial binding set is unavailable: " + ex.Message;
             return false;
         }
     }
