@@ -85,15 +85,14 @@ public sealed class PrestigeGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Exception_after_lifecycle_prefix_never_promotes_a_partial_reset_to_success()
+    public void Exception_after_the_lifecycle_sentinel_commits_the_requested_reset()
     {
         PersistentResetManager.instance.ThrowAfterReset = true;
         using var boundary = Boundary();
 
         var submission = Submit(boundary);
 
-        Assert.Equal(PrestigePreflight.PostCommitFault, submission.Preflight);
-        Assert.Equal(NativeMutationOutcome.ExecutionThrew, submission.Outcome);
+        Assert.True(submission.Verified, submission.Reason);
         Assert.Equal(11, _epoch);
     }
 

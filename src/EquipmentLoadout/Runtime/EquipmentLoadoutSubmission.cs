@@ -40,45 +40,25 @@ internal readonly struct EquipmentLoadoutState
     internal int MaximumAffordableStacks { get; }
 }
 
-internal readonly struct EquipmentLoadoutReceipt
-{
-    internal EquipmentLoadoutReceipt(bool evidenceAvailable, EquipmentLoadoutActionKind kind,
-        int requestedAmount, in EquipmentLoadoutState before, in EquipmentLoadoutState after)
-    {
-        EvidenceAvailable = evidenceAvailable;
-        Kind = kind;
-        RequestedAmount = requestedAmount;
-        Before = before;
-        After = after;
-    }
-    internal bool EvidenceAvailable { get; }
-    internal EquipmentLoadoutActionKind Kind { get; }
-    internal int RequestedAmount { get; }
-    internal EquipmentLoadoutState Before { get; }
-    internal EquipmentLoadoutState After { get; }
-}
-
 internal readonly struct EquipmentLoadoutSubmission
 {
     internal EquipmentLoadoutSubmission(EquipmentLoadoutPreflight preflight,
         EquipmentLoadoutNativeStage stage, NativeMutationOutcome outcome,
-        NativeMutationCallOutcome callOutcome, in EquipmentLoadoutReceipt receipt, string reason)
+        NativeMutationCallOutcome callOutcome, string reason)
     {
         Preflight = preflight;
         Stage = stage;
         Outcome = outcome;
         CallOutcome = callOutcome;
-        Receipt = receipt;
         Reason = reason ?? string.Empty;
     }
     internal EquipmentLoadoutPreflight Preflight { get; }
     internal EquipmentLoadoutNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
-    internal EquipmentLoadoutReceipt Receipt { get; }
     internal string Reason { get; }
     internal bool Verified => Preflight == EquipmentLoadoutPreflight.Proceeded && Outcome == NativeMutationOutcome.Verified;
     internal static EquipmentLoadoutSubmission Reject(EquipmentLoadoutPreflight preflight, string reason) =>
         new(preflight, EquipmentLoadoutNativeStage.None, NativeMutationOutcome.BeforeCaptureFailed,
-            default, default, reason);
+            default, reason);
 }

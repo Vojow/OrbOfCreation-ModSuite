@@ -58,43 +58,6 @@ internal enum SpellLoadoutNativeStage
     Verification = 4,
 }
 
-internal readonly struct SpellLoadoutState
-{
-    internal SpellLoadoutState(Guid[] slots, string[] names)
-    {
-        Slots = slots is null ? Array.Empty<Guid>() : (Guid[])slots.Clone();
-        Names = names is null ? Array.Empty<string>() : (string[])names.Clone();
-        if (Slots.Length != Names.Length)
-            throw new ArgumentException("Spell loadout identity and name rows must align.");
-    }
-
-    internal Guid[] Slots { get; }
-    internal string[] Names { get; }
-}
-
-internal readonly struct SpellLoadoutEvidence
-{
-    internal SpellLoadoutEvidence(
-        bool available,
-        int sourceSlot,
-        int destinationSlot,
-        in SpellLoadoutState before,
-        in SpellLoadoutState after)
-    {
-        Available = available;
-        SourceSlot = sourceSlot;
-        DestinationSlot = destinationSlot;
-        Before = before;
-        After = after;
-    }
-
-    internal bool Available { get; }
-    internal int SourceSlot { get; }
-    internal int DestinationSlot { get; }
-    internal SpellLoadoutState Before { get; }
-    internal SpellLoadoutState After { get; }
-}
-
 internal readonly struct SpellLoadoutSubmission
 {
     internal SpellLoadoutSubmission(
@@ -102,14 +65,12 @@ internal readonly struct SpellLoadoutSubmission
         SpellLoadoutNativeStage stage,
         NativeMutationOutcome outcome,
         NativeMutationCallOutcome callOutcome,
-        in SpellLoadoutEvidence evidence,
         string reason)
     {
         Preflight = preflight;
         Stage = stage;
         Outcome = outcome;
         CallOutcome = callOutcome;
-        Evidence = evidence;
         Reason = reason ?? string.Empty;
     }
 
@@ -117,7 +78,6 @@ internal readonly struct SpellLoadoutSubmission
     internal SpellLoadoutNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
-    internal SpellLoadoutEvidence Evidence { get; }
     internal string Reason { get; }
     internal bool Verified => Preflight == SpellLoadoutPreflight.Proceeded &&
         Outcome == NativeMutationOutcome.Verified;
@@ -125,7 +85,7 @@ internal readonly struct SpellLoadoutSubmission
     internal static SpellLoadoutSubmission Reject(
         SpellLoadoutPreflight preflight,
         string reason) =>
-        new(preflight, SpellLoadoutNativeStage.None, default, default, default, reason);
+        new(preflight, SpellLoadoutNativeStage.None, default, default, reason);
 }
 
 internal static class SpellLoadoutActionResultCodes

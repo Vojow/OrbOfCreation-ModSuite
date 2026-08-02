@@ -162,24 +162,14 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.False(pending.IsCompleted, "the mutating request bypassed the Unity-frame claim");
         var operation = Assert.Single(claimed);
 
-        var before = new DiscoveryTreeOfferState(
-            0, BigDouble.Zero, 1, 1, false, Array.Empty<Guid>(), Array.Empty<Guid>(), Guid.Empty,
-            2, 2, true, false, false);
-        var after = new DiscoveryTreeOfferState(
-            0, BigDouble.Zero, 1, 1, false, Array.Empty<Guid>(), Array.Empty<Guid>(), Guid.Empty,
-            2, 2, true, false, false);
-        var receipt = new DiscoveryTreeOfferMutationReceipt(
-            true, false, false, false, false, in before, in after,
-            Array.Empty<DiscoveryTreeCostReceipt>());
         const string reason =
             "Initiate postconditions did not match the audited native transition: " +
-            "expected mode 1 with at least one offered choice, observed mode 0 with 0 choices";
+            "expected Crafting mode 1, observed mode 0";
         var submission = new DiscoveryTreeOfferSubmission(
             DiscoveryTreeOfferPreflight.VerificationFailed,
             DiscoveryTreeOfferNativeStage.Verification,
             NativeMutationOutcome.PostconditionFailed,
             new NativeMutationCallOutcome(2, 1, 0),
-            in receipt,
             reason);
         var mapped = DiscoveryTreeOfferActionResultMapper.Map(in submission);
         var context = GameMcpTestHarness.Context(
@@ -241,15 +231,17 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Null(body["result"]!["content"]);
         var structured = body["result"]!["structuredContent"]!;
         Assert.Equal("faulted", (string?)structured["status"]);
-        Assert.Equal("verification_failed", (string?)structured["reasonCode"]);
+        Assert.Equal("verification_failed", (string?)structured["code"]);
         Assert.Equal(reason, (string?)structured["reason"]);
-        Assert.Equal(77UL, (ulong)structured["worldGeneration"]!);
+        Assert.Equal("crafting mode", (string?)structured["missingOutcome"]);
+        Assert.Equal(4, ((JObject)structured).Count);
+        Assert.Null(structured["worldGeneration"]);
+        Assert.Null(structured["readWith"]);
         Assert.Null(structured["mutationScope"]);
         Assert.Null(structured["nativeCallsAttempted"]);
         Assert.Null(structured["mutationAttempts"]);
         Assert.Null(structured["mutationsCommitted"]);
-        Assert.False((bool)structured["receipt"]!["postconditionMatched"]!);
-        Assert.Equal("idle", (string?)structured["receipt"]!["after"]!["mode"]);
+        Assert.Null(structured["receipt"]);
     }
 
     [Fact]
@@ -304,7 +296,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
             observedConfigurationGeneration: 9).Project(command));
 
         Assert.Equal("refused", (string?)result["status"]);
-        Assert.Equal("native_rejected", (string?)result["reasonCode"]);
+        Assert.Equal("native_rejected", (string?)result["code"]);
         Assert.Equal("exact refusal", (string?)result["reason"]);
         Assert.Null(result["mutationScope"]);
         Assert.Null(result["worldGenerationMismatch"]);

@@ -35,8 +35,6 @@ public sealed class GenericDiscoveryGameActionTests
         Assert.Equal(1, Discoverable(target).GetDiscoverCost().PerformCalls);
         Assert.Equal(0, resource.GetTrueQuantity().CompareTo(new BigDouble(65, 0)));
         Assert.Equal(new NativeMutationCallOutcome(2, 1, 1), result.CallOutcome);
-        Assert.True(result.Receipt.PostconditionMatched);
-        Assert.Single(result.Receipt.Costs);
     }
 
     [Fact]
@@ -186,7 +184,7 @@ public sealed class GenericDiscoveryGameActionTests
     }
 
     [Fact]
-    public void Partial_payment_fault_without_discovery_preserves_evidence_without_persistent_state()
+    public void Partial_payment_fault_without_discovery_fails_without_persistent_action_state()
     {
         var target = Target("TimeRuneSO");
         var first = Resource(10);
@@ -202,9 +200,6 @@ public sealed class GenericDiscoveryGameActionTests
 
         Assert.Equal(GenericDiscoveryPreflight.PostCommitFault, result.Preflight);
         Assert.Equal(GenericDiscoveryNativeStage.Payment, result.Stage);
-        Assert.True(result.Receipt.EvidenceAvailable);
-        Assert.True(result.Receipt.PaymentInvoked);
-        Assert.True(result.Receipt.ResourcesCharged);
         Assert.False(Discoverable(target).IsDiscovered());
     }
 

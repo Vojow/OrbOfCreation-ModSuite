@@ -24,7 +24,6 @@ public sealed class TargetingGameActionTests : IDisposable
         var result = action.Submit(new TargetingAction(TargetingActionKind.Submit, target.GetGuid(), Epoch));
 
         Assert.True(result.Verified);
-        Assert.Equal(target.GetGuid(), result.Evidence.SubmittedTarget);
         Assert.Same(target, Assert.Single(TargetingManager.SubmittedTargets));
         Assert.False(TargetingManager.IsTargeting());
     }
@@ -39,7 +38,6 @@ public sealed class TargetingGameActionTests : IDisposable
         var result = action.Submit(new TargetingAction(TargetingActionKind.Randomize, Guid.Empty, Epoch));
 
         Assert.True(result.Verified);
-        Assert.Equal(target.GetGuid(), result.Evidence.SubmittedTarget);
         Assert.Same(target, Assert.Single(TargetingManager.SubmittedTargets));
     }
 
@@ -146,12 +144,11 @@ public sealed class TargetingGameActionTests : IDisposable
     }
 
     [Fact]
-    public void ResultMapperPreservesFaultEvidence()
+    public void ResultMapperPreservesFaultDisposition()
     {
-        var evidence = new TargetingEvidence(true, Guid.NewGuid(), Guid.NewGuid(), true, true);
         var submission = new TargetingSubmission(TargetingPreflight.VerificationFailed,
             TargetingNativeStage.Verification, NativeMutationOutcome.PostconditionFailed,
-            new NativeMutationCallOutcome(1, 1, 0), in evidence, "failed");
+            new NativeMutationCallOutcome(1, 1, 0), Guid.Empty, "failed");
         var mapped = TargetingActionResultMapper.Map(in submission);
         Assert.Equal(ServiceActionDisposition.Faulted, mapped.Disposition);
         Assert.Equal(TargetingActionResultCodes.VerificationFailed, mapped.Code);

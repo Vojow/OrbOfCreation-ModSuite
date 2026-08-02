@@ -104,7 +104,6 @@ public sealed class ConsumablePlayerContractTests
             "consumable-player.consumable-discard-action",
             "consumable-player.consumable-next-usage-action",
             "consumable-player.usage-result-info-action",
-            "consumable-player.result-info-cancel-action",
             "consumable-player.result-info-is-cancelled-action",
             "consumable-player.inventory-instance-action",
             "consumable-player.inventory-list-action",

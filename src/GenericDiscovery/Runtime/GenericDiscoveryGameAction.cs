@@ -115,17 +115,16 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
                     GenericDiscoveryPreflight.CompositionChanged,
                     compositionReason);
 
-            var before = CaptureState(native, target, action.ExpectedNativeType);
-            if (before.Discovered)
+            if (native.IsDiscovered(target))
                 return GenericDiscoverySubmission.Reject(
                     GenericDiscoveryPreflight.AlreadyDiscovered,
                     EntityIdentityFormatter.Format(action.TargetId) + " is already discovered.");
-            if (!before.Visible)
+            if (!native.IsVisible(target))
                 return GenericDiscoverySubmission.Reject(
                     GenericDiscoveryPreflight.NotVisible,
                     "IDiscoverable.IsDiscoverVisible() refused " +
                     EntityIdentityFormatter.Format(action.TargetId) + ".");
-            if (!before.CanDiscover)
+            if (!native.CanDiscover(target))
                 return GenericDiscoverySubmission.Reject(
                     GenericDiscoveryPreflight.DiscoveryUnavailable,
                     "IDiscoverable.CanDiscover() refused " +
@@ -141,13 +140,12 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
                     GenericDiscoveryPreflight.Unaffordable,
                     "GetDiscoverCost().HasEnough() refused " +
                     EntityIdentityFormatter.Format(action.TargetId) + ".");
-            var costs = CaptureCosts(native, cost);
             if (!TryCapturePermit(out var permitReason))
                 return GenericDiscoverySubmission.Reject(
                     GenericDiscoveryPreflight.MutationPermitUnavailable,
                     permitReason);
 
-            return Execute(in action, native, target, cost, in before, costs);
+            return Execute(in action, native, target, cost);
         }
         catch (Exception exception) when (IsExpected(exception))
         {
@@ -175,69 +173,51 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
         in GenericDiscoveryAction action,
         GenericDiscoveryNativeBindings native,
         object target,
-        object cost,
-        in GenericDiscoveryState before,
-        CostBefore[] costs)
+        object cost)
     {
         var stage = GenericDiscoveryNativeStage.Payment;
         var nativeCalls = 0;
-        var paymentInvoked = false;
         try
         {
-            paymentInvoked = true;
             nativeCalls = 1;
             native.PerformCost(cost);
             stage = GenericDiscoveryNativeStage.Discover;
             nativeCalls = 2;
             native.Discover(target);
             stage = GenericDiscoveryNativeStage.Verification;
-            var after = CaptureState(native, target, action.ExpectedNativeType);
-            var receipt = BuildReceipt(
-                native, in before, in after, costs, paymentInvoked, after.Discovered);
-            return after.Discovered
-                ? Verified(nativeCalls, in receipt)
+            return native.IsDiscovered(target)
+                ? Verified(nativeCalls)
                 : Fault(
                     in action,
                     GenericDiscoveryPreflight.VerificationFailed,
                     stage,
                     NativeMutationOutcome.PostconditionFailed,
                     nativeCalls,
-                    in receipt,
                     "The requested target remained undiscovered after the native callback.");
         }
         catch (Exception exception) when (IsExpected(exception))
         {
-            var receipt = CaptureReceiptBestEffort(
-                native,
-                target,
-                action.ExpectedNativeType,
-                in before,
-                costs,
-                paymentInvoked);
-            if (receipt.EvidenceAvailable && receipt.After.Discovered)
-                return Verified(nativeCalls, in receipt);
+            if (IsDiscoveredBestEffort(native, target))
+                return Verified(nativeCalls);
             return Fault(
                 in action,
                 GenericDiscoveryPreflight.PostCommitFault,
                 stage,
                 NativeMutationOutcome.ExecutionThrew,
                 nativeCalls,
-                in receipt,
                 "Native generic discovery threw before the requested discovered outcome was observable: " +
                 exception.GetBaseException().Message);
         }
     }
 
     private static GenericDiscoverySubmission Verified(
-        int nativeCalls,
-        in GenericDiscoveryMutationReceipt receipt) =>
+        int nativeCalls) =>
         new(
             GenericDiscoveryPreflight.Proceeded,
             GenericDiscoveryNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(nativeCalls, 1, 1),
-            in receipt,
-            "Verified that the exact requested UUID became discovered; payment observations are evidence only.");
+            "The exact requested UUID is discovered.");
 
     private static GenericDiscoverySubmission Fault(
         in GenericDiscoveryAction action,
@@ -245,7 +225,6 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
         GenericDiscoveryNativeStage stage,
         NativeMutationOutcome outcome,
         int nativeCalls,
-        in GenericDiscoveryMutationReceipt receipt,
         string reason)
     {
         var exactReason = "Generic discovery " + stage + " failed on " +
@@ -255,94 +234,15 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
             stage,
             outcome,
             new NativeMutationCallOutcome(nativeCalls, 1, 0),
-            in receipt,
             exactReason);
     }
 
-    private static GenericDiscoveryState CaptureState(
+    private static bool IsDiscoveredBestEffort(
         GenericDiscoveryNativeBindings native,
-        object target,
-        string nativeType) =>
-        new(
-            nativeType,
-            native.IsVisible(target),
-            native.CanDiscover(target),
-            native.IsDiscovered(target),
-            native.IsRequired(target));
-
-    private static CostBefore[] CaptureCosts(
-        GenericDiscoveryNativeBindings native,
-        object cost)
+        object target)
     {
-        var entries = native.GetEntries(cost);
-        var result = new CostBefore[entries.Count];
-        for (var index = 0; index < entries.Count; index++)
-        {
-            var entry = entries[index] ??
-                throw new InvalidOperationException("Discovery cost entry " + index + " was null.");
-            var resource = native.ReadResource(entry);
-            result[index] = new CostBefore(
-                native.ReadResourceIdentity(resource),
-                native.ReadCost(entry),
-                native.ReadResourceAmount(resource),
-                resource);
-        }
-        return result;
-    }
-
-    private static GenericDiscoveryMutationReceipt BuildReceipt(
-        GenericDiscoveryNativeBindings native,
-        in GenericDiscoveryState before,
-        in GenericDiscoveryState after,
-        CostBefore[] costs,
-        bool paymentInvoked,
-        bool postconditionMatched)
-    {
-        var rows = new GenericDiscoveryCostReceipt[costs.Length];
-        var charged = false;
-        for (var index = 0; index < rows.Length; index++)
-        {
-            var current = native.ReadResourceAmount(costs[index].Resource);
-            rows[index] = new GenericDiscoveryCostReceipt(
-                costs[index].ResourceId,
-                costs[index].Expected,
-                costs[index].Amount,
-                current);
-            if (costs[index].Amount.CompareTo(current) != 0) charged = true;
-        }
-        return new GenericDiscoveryMutationReceipt(
-            true,
-            paymentInvoked,
-            charged,
-            postconditionMatched,
-            in before,
-            in after,
-            rows);
-    }
-
-    private static GenericDiscoveryMutationReceipt CaptureReceiptBestEffort(
-        GenericDiscoveryNativeBindings native,
-        object target,
-        string nativeType,
-        in GenericDiscoveryState before,
-        CostBefore[] costs,
-        bool paymentInvoked)
-    {
-        try
-        {
-            var after = CaptureState(native, target, nativeType);
-            return BuildReceipt(
-                native,
-                in before,
-                in after,
-                costs,
-                paymentInvoked,
-                after.Discovered);
-        }
-        catch (Exception exception) when (IsExpected(exception))
-        {
-            return default;
-        }
+        try { return native.IsDiscovered(target); }
+        catch (Exception exception) when (IsExpected(exception)) { return false; }
     }
 
     private bool TryCapturePermit(out string reason)
@@ -455,26 +355,6 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
         StackOverflowException and not
         OutOfMemoryException and not
         AccessViolationException;
-
-    private readonly struct CostBefore
-    {
-        internal CostBefore(
-            Guid resourceId,
-            BigDouble expected,
-            BigDouble amount,
-            object resource)
-        {
-            ResourceId = resourceId;
-            Expected = expected;
-            Amount = amount;
-            Resource = resource;
-        }
-
-        internal Guid ResourceId { get; }
-        internal BigDouble Expected { get; }
-        internal BigDouble Amount { get; }
-        internal object Resource { get; }
-    }
 
     private readonly struct ResolvedComponent
     {

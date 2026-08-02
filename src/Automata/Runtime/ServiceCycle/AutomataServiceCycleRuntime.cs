@@ -481,7 +481,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         var kind = command.Mode switch
         {
             "select" => ChallengeActionKind.Select,
-            "activate" or "queue" => ChallengeActionKind.Queue,
+            "activate" => ChallengeActionKind.Queue,
             "abandon" => ChallengeActionKind.Abandon,
             "fetch_time" => ChallengeActionKind.FetchTime,
             "fetch_prestige" => ChallengeActionKind.FetchPrestige,

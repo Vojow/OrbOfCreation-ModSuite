@@ -10,18 +10,13 @@ namespace OrbModding.ProfileTests;
 
 public sealed class GameMcpCorrectnessCoreTests
 {
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ActionRegistrationDependsOnRuntimeAdmissionNotAutomationConfiguration(
-        bool automationEnabled)
+    [Fact]
+    public void ActionRegistrationDependsOnlyOnRuntimeAdmission()
     {
         Assert.True(GameMcpActionRegistrationPolicy.ShouldCompose(
-            runtimeActivationAllowed: true,
-            automationEnabled));
+            runtimeActivationAllowed: true));
         Assert.False(GameMcpActionRegistrationPolicy.ShouldCompose(
-            runtimeActivationAllowed: false,
-            automationEnabled));
+            runtimeActivationAllowed: false));
     }
 
     [Fact]
@@ -44,7 +39,7 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
-    public void ActionProjectionNamesAdmissionWorldAndSuppressesUnknownGenerationMismatch()
+    public void ActionFailureProjectionCarriesOnlyStableCodeAndActionableReason()
     {
         var context = GameMcpTestHarness.Context(
             GameWorldStateDefaults.Empty,
@@ -80,10 +75,12 @@ public sealed class GameMcpCorrectnessCoreTests
             observedLifecycleGeneration: 0,
             observedConfigurationGeneration: 0).Project(command));
 
-        Assert.Equal(77UL, (ulong)response["worldGeneration"]!);
-        Assert.Equal("world_get", (string?)response["readWith"]!["tool"]);
-        Assert.Equal("structures", (string?)response["readWith"]!["category"]);
-        Assert.Equal(command.TargetId.ToString("D"), (string?)response["readWith"]!["uuid"]);
+        Assert.Equal("refused", (string?)response["status"]);
+        Assert.Equal("native_rejected", (string?)response["code"]);
+        Assert.Equal("live native admission refused", (string?)response["reason"]);
+        Assert.Equal(3, response.Count);
+        Assert.Null(response["worldGeneration"]);
+        Assert.Null(response["readWith"]);
         Assert.Null(response["lifecycleGenerationMismatch"]);
         Assert.Null(response["configurationGenerationMismatch"]);
     }

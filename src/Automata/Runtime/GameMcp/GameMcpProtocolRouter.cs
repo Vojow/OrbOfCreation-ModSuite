@@ -262,7 +262,6 @@ internal sealed class GameMcpProtocolRouter
                 break;
             case "game_concept":
                 builder.Uuid = RequireUuid(arguments, "recipeUuid");
-                builder.SecondaryUuid = OptionalUuid(arguments, "replacementUuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "add", "remove_owned");
                 builder.Amount = OptionalIntInRange(

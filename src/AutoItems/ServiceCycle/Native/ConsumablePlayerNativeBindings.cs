@@ -10,7 +10,6 @@ internal sealed class ConsumablePlayerNativeBindings
 {
     internal static readonly string[] ContractIds =
     {
-        "id-scriptable-object.get-guid-action",
         "consumable.is-visible",
         "consumable.can-fire",
         "consumable.select-and-fire",
@@ -28,7 +27,6 @@ internal sealed class ConsumablePlayerNativeBindings
         "consumable-player.consumable-discard-action",
         "consumable-player.consumable-next-usage-action",
         "consumable-player.usage-result-info-action",
-        "consumable-player.result-info-cancel-action",
         "consumable-player.result-info-is-cancelled-action",
         "consumable-player.inventory-instance-action",
         "consumable-player.inventory-list-action",
@@ -43,7 +41,6 @@ internal sealed class ConsumablePlayerNativeBindings
         Type consumableType,
         Type usageType,
         Type listType,
-        Func<object, Guid> getGuid,
         Func<object, bool> isVisible,
         Func<object, bool> canFire,
         Action<object> selectAndFire,
@@ -59,7 +56,6 @@ internal sealed class ConsumablePlayerNativeBindings
         Func<object, bool> usageEngaged,
         Func<object, Guid> usageGuid,
         Func<object, object?> usageResultInfo,
-        Action<object> cancelResult,
         Func<object, bool> isCancelled,
         Func<bool> canUse,
         Func<bool> isTargeting,
@@ -74,7 +70,6 @@ internal sealed class ConsumablePlayerNativeBindings
         ConsumableType = consumableType;
         UsageType = usageType;
         ListType = listType;
-        GetGuid = getGuid;
         IsVisible = isVisible;
         CanFire = canFire;
         SelectAndFire = selectAndFire;
@@ -90,7 +85,6 @@ internal sealed class ConsumablePlayerNativeBindings
         UsageEngaged = usageEngaged;
         UsageGuid = usageGuid;
         UsageResultInfo = usageResultInfo;
-        CancelResult = cancelResult;
         IsCancelled = isCancelled;
         CanUse = canUse;
         IsTargeting = isTargeting;
@@ -106,7 +100,6 @@ internal sealed class ConsumablePlayerNativeBindings
     internal Type ConsumableType { get; }
     internal Type UsageType { get; }
     internal Type ListType { get; }
-    internal Func<object, Guid> GetGuid { get; }
     internal Func<object, bool> IsVisible { get; }
     internal Func<object, bool> CanFire { get; }
     internal Action<object> SelectAndFire { get; }
@@ -122,7 +115,6 @@ internal sealed class ConsumablePlayerNativeBindings
     internal Func<object, bool> UsageEngaged { get; }
     internal Func<object, Guid> UsageGuid { get; }
     internal Func<object, object?> UsageResultInfo { get; }
-    internal Action<object> CancelResult { get; }
     internal Func<object, bool> IsCancelled { get; }
     internal Func<bool> CanUse { get; }
     internal Func<bool> IsTargeting { get; }
@@ -161,7 +153,6 @@ internal sealed class ConsumablePlayerNativeBindings
                 consumable,
                 usage,
                 list,
-                InstanceFunc<Guid>(HierarchyMethod(consumable, "GetGuid", typeof(Guid))),
                 InstanceFunc<bool>(Method(consumable, "IsVisible", typeof(bool))),
                 InstanceFunc<bool>(Method(consumable, "CanFire", typeof(bool))),
                 InstanceAction(Method(consumable, "SelectAndFire", typeof(void))),
@@ -181,7 +172,6 @@ internal sealed class ConsumablePlayerNativeBindings
                 InstanceField<bool>(Field(usage, "en", typeof(bool))),
                 InstanceFunc<Guid>(Method(usage, "GetGuid", typeof(Guid))),
                 InstanceObject(Method(usage, "GetResultInfo", resultInfo)),
-                InstanceAction(Method(resultInfo, "Cancel", typeof(void))),
                 InstanceFunc<bool>(Method(resultInfo, "IsCancelled", typeof(bool))),
                 StaticFunc<bool>(Method(inventory, "CanUseConsumable", typeof(bool), true)),
                 StaticFunc<bool>(Method(manager, "IsTargeting", typeof(bool), true)),

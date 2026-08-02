@@ -101,8 +101,8 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
             if (!_tryCaptureMutationPermit())
                 return EquipmentLoadoutSubmission.Reject(EquipmentLoadoutPreflight.MutationPermitUnavailable,
                     _readOwnershipFailure());
-            return Execute(in action, native, manager, list, target, kind, cost, multiBuyValue,
-                in before, requested);
+            return Execute(in action, native, manager, list, target,
+                before.EquippedStacks, requested);
         }
         catch (Exception exception) when (IsExpected(exception))
         {
@@ -126,7 +126,7 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
 
     private EquipmentLoadoutSubmission Execute(in EquipmentLoadoutAction action,
         EquipmentLoadoutNativeBindings native, object manager, object list, object target,
-        object kind, object cost, object multiBuyValue, in EquipmentLoadoutState before, int requested)
+        int beforeStacks, int requested)
     {
         var stage = EquipmentLoadoutNativeStage.NativeCallback;
         try
@@ -134,25 +134,21 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
             if (action.Kind == EquipmentLoadoutActionKind.Equip) native.Equip(manager, target);
             else native.Unequip(manager, target);
             stage = EquipmentLoadoutNativeStage.Verification;
-            var after = Capture(native, list, target, kind, cost, multiBuyValue);
-            var receipt = new EquipmentLoadoutReceipt(true, action.Kind, requested, in before, in after);
-            return OutcomeMatches(action.Kind, in before, in after, requested)
-                ? Verified(in receipt)
+            var afterStacks = Math.Max(native.Stacks(list, target), 0);
+            return OutcomeMatches(action.Kind, beforeStacks, afterStacks, requested)
+                ? Verified()
                 : Fault(in action, EquipmentLoadoutPreflight.VerificationFailed, stage,
-                    NativeMutationOutcome.PostconditionFailed, in receipt,
-                    "The exact requested artifact stack did not make the audited native transition.");
+                    NativeMutationOutcome.PostconditionFailed,
+                    "Expected equipped stacks " + ExpectedStacks(action.Kind, beforeStacks, requested) +
+                    ", observed " + afterStacks + ".");
         }
         catch (Exception exception) when (IsExpected(exception))
         {
-            EquipmentLoadoutState after;
-            var evidenceAvailable = true;
-            try { after = Capture(native, list, target, kind, cost, multiBuyValue); }
-            catch (Exception) { after = default; evidenceAvailable = false; }
-            var receipt = new EquipmentLoadoutReceipt(evidenceAvailable, action.Kind, requested, in before, in after);
-            if (evidenceAvailable && OutcomeMatches(action.Kind, in before, in after, requested))
-                return Verified(in receipt);
+            var observed = ReadStacksBestEffort(native, list, target);
+            if (observed >= 0 && OutcomeMatches(action.Kind, beforeStacks, observed, requested))
+                return Verified();
             return Fault(in action, EquipmentLoadoutPreflight.PostCommitFault, stage,
-                NativeMutationOutcome.ExecutionThrew, in receipt,
+                NativeMutationOutcome.ExecutionThrew,
                 "The native equipment callback threw before the requested target outcome was observable: " +
                 exception.GetBaseException().Message);
         }
@@ -173,25 +169,35 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
                 state.MaximumAffordableStacks))
             : Math.Min(state.MultiBuy, state.EquippedStacks);
 
-    private static bool OutcomeMatches(EquipmentLoadoutActionKind kind,
-        in EquipmentLoadoutState before, in EquipmentLoadoutState after, int requested) =>
+    private static int ExpectedStacks(EquipmentLoadoutActionKind kind, int before, int requested) =>
         kind == EquipmentLoadoutActionKind.Equip
-            ? after.EquippedStacks == checked(before.EquippedStacks + requested)
-            : after.EquippedStacks == checked(before.EquippedStacks - requested);
+            ? checked(before + requested)
+            : checked(before - requested);
 
-    private static EquipmentLoadoutSubmission Verified(in EquipmentLoadoutReceipt receipt) =>
+    private static bool OutcomeMatches(EquipmentLoadoutActionKind kind,
+        int before, int after, int requested) =>
+        after == ExpectedStacks(kind, before, requested);
+
+    private static int ReadStacksBestEffort(
+        EquipmentLoadoutNativeBindings native, object list, object target)
+    {
+        try { return Math.Max(native.Stacks(list, target), 0); }
+        catch (Exception exception) when (IsExpected(exception)) { return -1; }
+    }
+
+    private static EquipmentLoadoutSubmission Verified() =>
         new(EquipmentLoadoutPreflight.Proceeded, EquipmentLoadoutNativeStage.Verification,
-            NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1), in receipt,
-            "Verified the exact requested artifact stack transition; usage reservations are evidence only.");
+            NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1),
+            "The requested artifact stack is equipped.");
 
     private static EquipmentLoadoutSubmission Fault(in EquipmentLoadoutAction action,
         EquipmentLoadoutPreflight preflight, EquipmentLoadoutNativeStage stage,
-        NativeMutationOutcome outcome, in EquipmentLoadoutReceipt receipt, string reason)
+        NativeMutationOutcome outcome, string reason)
     {
         var exactReason = "Equipment loadout " + stage + " failed on " +
             EntityIdentityFormatter.Format(action.TargetId) + ": " + reason;
         return new EquipmentLoadoutSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, exactReason);
+            new NativeMutationCallOutcome(1, 1, 0), exactReason);
     }
 
     private void BindLifecycle()

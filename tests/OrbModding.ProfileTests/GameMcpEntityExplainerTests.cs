@@ -270,7 +270,7 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         Assert.Equal("5e0", (string?)leaves[0]["required"]);
         Assert.True((bool)leaves[0]["met"]!);
         Assert.Equal(expansionId.ToString("D"), (string?)leaves[1]["requirement"]!["uuid"]);
-        Assert.Equal("0e0", (string?)leaves[1]["current"]);
+        Assert.Equal("0", (string?)leaves[1]["current"]);
         Assert.Equal("1.5e1", (string?)leaves[1]["required"]);
         Assert.False((bool)leaves[1]["met"]!);
         Assert.Equal(

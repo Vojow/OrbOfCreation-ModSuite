@@ -21,7 +21,6 @@ internal sealed class GenericDiscoveryNativeBindings
     {
         "generic-discovery.discoverable.type-action",
         "generic-discovery.cost-list.type-action",
-        "generic-discovery.cost-entry.type-action",
         "generic-discovery.resource.type-action",
         "generic-discovery.alchemy-recipe.type-action",
         "generic-discovery.equipment.type-action",
@@ -34,13 +33,8 @@ internal sealed class GenericDiscoveryNativeBindings
         "generic-discovery.is-discovered-action",
         "generic-discovery.is-required-action",
         "generic-discovery.discover-action",
-        "generic-discovery.cost-entries-action",
         "generic-discovery.cost-enough-action",
         "generic-discovery.cost-perform-action",
-        "generic-discovery.entry-resource-action",
-        "generic-discovery.entry-value-action",
-        "generic-discovery.resource-identity-action",
-        "generic-discovery.resource-amount-action",
         "generic-discovery.get-glyph-recipe-action",
         "generic-discovery.get-resource-recipe-action",
     };
@@ -56,13 +50,8 @@ internal sealed class GenericDiscoveryNativeBindings
         Func<object, bool> isDiscovered,
         Func<object, bool> isRequired,
         Action<object> discover,
-        Func<object, IList> getEntries,
         Func<object, bool> hasEnough,
         Action<object> performCost,
-        Func<object, object> readResource,
-        Func<object, BigDouble> readCost,
-        Func<object, Guid> readResourceIdentity,
-        Func<object, BigDouble> readResourceAmount,
         Func<object, IList> getGlyphRecipe,
         Func<object, IList> getResourceRecipe)
     {
@@ -76,13 +65,8 @@ internal sealed class GenericDiscoveryNativeBindings
         IsDiscovered = isDiscovered;
         IsRequired = isRequired;
         Discover = discover;
-        GetEntries = getEntries;
         HasEnough = hasEnough;
         PerformCost = performCost;
-        ReadResource = readResource;
-        ReadCost = readCost;
-        ReadResourceIdentity = readResourceIdentity;
-        ReadResourceAmount = readResourceAmount;
         GetGlyphRecipe = getGlyphRecipe;
         GetResourceRecipe = getResourceRecipe;
     }
@@ -98,13 +82,8 @@ internal sealed class GenericDiscoveryNativeBindings
     internal Func<object, bool> IsDiscovered { get; }
     internal Func<object, bool> IsRequired { get; }
     internal Action<object> Discover { get; }
-    internal Func<object, IList> GetEntries { get; }
     internal Func<object, bool> HasEnough { get; }
     internal Action<object> PerformCost { get; }
-    internal Func<object, object> ReadResource { get; }
-    internal Func<object, BigDouble> ReadCost { get; }
-    internal Func<object, Guid> ReadResourceIdentity { get; }
-    internal Func<object, BigDouble> ReadResourceAmount { get; }
     internal Func<object, IList> GetGlyphRecipe { get; }
     internal Func<object, IList> GetResourceRecipe { get; }
 
@@ -139,75 +118,37 @@ internal sealed class GenericDiscoveryNativeBindings
                         type.Name + "." + name + " did not match the audited signature");
                 return method;
             }
-            MethodInfo MH(string contract, Type type, string name, Type result)
-            {
-                Require(contract, includeContract);
-                for (var current = type; current is not null; current = current.BaseType)
-                {
-                    var method = current.GetMethod(
-                        name,
-                        Instance | BindingFlags.DeclaredOnly,
-                        null,
-                        Type.EmptyTypes,
-                        null);
-                    if (method is not null && !method.IsStatic && method.ReturnType == result)
-                        return method;
-                }
-                throw new InvalidOperationException(
-                    type.Name + "." + name + " did not match the audited inherited signature");
-            }
-            FieldInfo F(string contract, Type type, string name, Type fieldType)
-            {
-                Require(contract, includeContract);
-                var field = type.GetField(name, Instance);
-                if (field is null || field.IsStatic || field.FieldType != fieldType)
-                    throw new InvalidOperationException(
-                        type.Name + "." + name + " did not match the audited field signature");
-                return field;
-            }
-
             var discoverable = T(ContractIds[0], "IDiscoverable");
             var cost = T(ContractIds[1], "ResourceCostList");
-            var entry = T(ContractIds[2], "ResourceTuple");
-            var resource = T(ContractIds[3], "ResourceSO");
+            var resource = T(ContractIds[2], "ResourceSO");
             var supported = new Dictionary<string, Type>(StringComparer.Ordinal)
             {
-                ["AlchemyRecipeSO"] = T(ContractIds[4], "AlchemyRecipeSO"),
-                ["EquipmentSO"] = T(ContractIds[5], "EquipmentSO"),
-                ["GlyphSO"] = T(ContractIds[6], "GlyphSO"),
-                ["RitualSO"] = T(ContractIds[7], "RitualSO"),
-                ["TimeRuneSO"] = T(ContractIds[8], "TimeRuneSO"),
+                ["AlchemyRecipeSO"] = T(ContractIds[3], "AlchemyRecipeSO"),
+                ["EquipmentSO"] = T(ContractIds[4], "EquipmentSO"),
+                ["GlyphSO"] = T(ContractIds[5], "GlyphSO"),
+                ["RitualSO"] = T(ContractIds[6], "RitualSO"),
+                ["TimeRuneSO"] = T(ContractIds[7], "TimeRuneSO"),
             };
             foreach (var pair in supported)
                 if (!discoverable.IsAssignableFrom(pair.Value))
                     throw new InvalidOperationException(
                         pair.Key + " does not implement the exact IDiscoverable contract");
 
-            var big = resolveType("BigDouble") ?? typeof(BigDouble);
-            var getCost = M(ContractIds[9], discoverable, "GetDiscoverCost", cost);
-            var visible = M(ContractIds[10], discoverable, "IsDiscoverVisible", typeof(bool));
-            var canDiscover = M(ContractIds[11], discoverable, "CanDiscover", typeof(bool));
-            var discovered = M(ContractIds[12], discoverable, "IsDiscovered", typeof(bool));
-            var required = M(ContractIds[13], discoverable, "IsDiscoverRequired", typeof(bool));
-            var discover = M(ContractIds[14], discoverable, "Discover", typeof(void));
-            var entries = M(
-                ContractIds[15],
-                cost,
-                "GetEntries",
-                typeof(List<>).MakeGenericType(entry));
-            var enough = M(ContractIds[16], cost, "HasEnough", typeof(bool));
-            var perform = M(ContractIds[17], cost, "PerformCost", typeof(void));
-            var entryResource = F(ContractIds[18], entry, "resource", resource);
-            var entryValue = M(ContractIds[19], entry, "GetValue", big);
-            var resourceIdentity = MH(ContractIds[20], resource, "GetGuid", typeof(Guid));
-            var resourceAmount = M(ContractIds[21], resource, "GetTrueQuantity", big);
+            var getCost = M(ContractIds[8], discoverable, "GetDiscoverCost", cost);
+            var visible = M(ContractIds[9], discoverable, "IsDiscoverVisible", typeof(bool));
+            var canDiscover = M(ContractIds[10], discoverable, "CanDiscover", typeof(bool));
+            var discovered = M(ContractIds[11], discoverable, "IsDiscovered", typeof(bool));
+            var required = M(ContractIds[12], discoverable, "IsDiscoverRequired", typeof(bool));
+            var discover = M(ContractIds[13], discoverable, "Discover", typeof(void));
+            var enough = M(ContractIds[14], cost, "HasEnough", typeof(bool));
+            var perform = M(ContractIds[15], cost, "PerformCost", typeof(void));
             var glyphRecipe = M(
-                ContractIds[22],
+                ContractIds[16],
                 discoverable,
                 "GetGlyphRecipe",
                 typeof(List<>).MakeGenericType(supported["GlyphSO"]));
             var resourceRecipe = M(
-                ContractIds[23],
+                ContractIds[17],
                 discoverable,
                 "GetResourceRecipe",
                 typeof(List<>).MakeGenericType(resource));
@@ -223,13 +164,8 @@ internal sealed class GenericDiscoveryNativeBindings
                 InstanceFunc<bool>(discovered),
                 InstanceFunc<bool>(required),
                 InstanceAction(discover),
-                InstanceListFunc(entries),
                 InstanceFunc<bool>(enough),
                 InstanceAction(perform),
-                ObjectFieldGetter(entryResource),
-                InstanceFunc<BigDouble>(entryValue),
-                InstanceFunc<Guid>(resourceIdentity),
-                InstanceFunc<BigDouble>(resourceAmount),
                 InstanceListFunc(glyphRecipe),
                 InstanceListFunc(resourceRecipe));
             reason = string.Empty;
@@ -281,11 +217,4 @@ internal sealed class GenericDiscoveryNativeBindings
             target).Compile();
     }
 
-    private static Func<object, object> ObjectFieldGetter(FieldInfo field)
-    {
-        var target = Expression.Parameter(typeof(object), "target");
-        var value = Expression.Field(Expression.Convert(target, field.DeclaringType!), field);
-        return Expression.Lambda<Func<object, object>>(
-            Expression.Convert(value, typeof(object)), target).Compile();
-    }
 }

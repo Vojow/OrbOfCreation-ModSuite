@@ -105,25 +105,20 @@ public sealed class GameMcpPrestigeTests
     }
 
     [Fact]
-    public void Failure_keeps_pre_reset_evidence_while_success_yields_to_fresh_poststate()
+    public void Failure_names_the_missing_outcome_while_success_yields_to_fresh_poststate()
     {
-        var before = new PrestigeState(true, 20, true, true, 4);
-        var after = new PrestigeState(false, 21, false, false, 0);
-        var receipt = new PrestigeReceipt(in before, in after);
         var failed = new PrestigeSubmission(PrestigePreflight.PostCommitFault,
             PrestigeNativeStage.NativeTransaction, NativeMutationOutcome.ExecutionThrew,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, "boom");
+            new NativeMutationCallOutcome(1, 1, 0), "boom");
         var success = new PrestigeSubmission(PrestigePreflight.Proceeded,
             PrestigeNativeStage.Verification, NativeMutationOutcome.Verified,
-            new NativeMutationCallOutcome(1, 1, 1), in receipt, "done");
+            new NativeMutationCallOutcome(1, 1, 1), "done");
 
         var failure = Json(GameMcpPrestigeProjection.Project(in failed), World());
         var committed = Json(GameMcpPrestigeProjection.Project(in success), World());
 
-        Assert.Null(failure["preflight"]);
-        Assert.Equal(4, (int)failure["before"]!["resetCount"]!);
-        Assert.Equal(21, (long?)failure["observedLifecycleGeneration"]);
-        Assert.Null(failure["quarantined"]);
+        Assert.Equal("next lifecycle", (string?)failure["missingOutcome"]);
+        Assert.Single(failure.Properties());
         Assert.Empty(committed.Properties());
     }
 

@@ -54,28 +54,20 @@ public sealed class GameMcpEquipmentLoadoutTests
     }
 
     [Fact]
-    public void Failure_keeps_outcome_evidence_while_success_yields_to_newer_world_poststate()
+    public void Failure_names_the_missing_outcome_while_success_yields_to_newer_world_poststate()
     {
-        var before = new EquipmentLoadoutState(0, 4, 2, 0, 3, 0, 2, true, 4);
-        var after = new EquipmentLoadoutState(0, 4, 2, 0, 3, 0, 2, true, 4);
-        var receipt = new EquipmentLoadoutReceipt(true, EquipmentLoadoutActionKind.Equip, 2,
-            in before, in after);
         var failure = new EquipmentLoadoutSubmission(EquipmentLoadoutPreflight.VerificationFailed,
             EquipmentLoadoutNativeStage.Verification, NativeMutationOutcome.PostconditionFailed,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, "stack unchanged");
+            new NativeMutationCallOutcome(1, 1, 0), "stack unchanged");
         var success = new EquipmentLoadoutSubmission(EquipmentLoadoutPreflight.Proceeded,
             EquipmentLoadoutNativeStage.Verification, NativeMutationOutcome.Verified,
-            new NativeMutationCallOutcome(1, 1, 1), in receipt, "stack changed");
+            new NativeMutationCallOutcome(1, 1, 1), "stack changed");
 
         var failed = Json(GameMcpEquipmentLoadoutProjection.Project(in failure));
         var committed = Json(GameMcpEquipmentLoadoutProjection.Project(in success));
 
-        Assert.Null(failed["preflight"]);
-        Assert.Equal("equip", (string?)failed["requestedMode"]);
-        Assert.Equal(2, (int)failed["requestedAmount"]!);
-        Assert.Null(failed["quarantined"]);
-        Assert.Null(failed["payment"]);
-        Assert.Null(failed["receipt"]);
+        Assert.Equal("requested equipped stack count", (string?)failed["missingOutcome"]);
+        Assert.Single(failed.Properties());
         Assert.Empty(committed.Properties());
     }
 

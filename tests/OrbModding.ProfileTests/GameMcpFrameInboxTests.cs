@@ -56,7 +56,7 @@ public sealed class GameMcpFrameInboxTests
             TimeSpan.FromMilliseconds(50), out var terminal));
         Assert.Equal(
             "request_canceled_before_claim",
-            (string?)GameMcpTestHarness.Json(terminal.Payload!)["reasonCode"]);
+            (string?)GameMcpTestHarness.Json(terminal.Payload!)["code"]);
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class GameMcpFrameInboxTests
         Assert.Equal(
             "native_terminal",
             (string?)GameMcpTestHarness.Json(
-                operation.Completion.WaitForClaimedTerminal().Payload!)["reasonCode"]);
+                operation.Completion.WaitForClaimedTerminal().Payload!)["code"]);
     }
 
     [Fact]
@@ -96,8 +96,8 @@ public sealed class GameMcpFrameInboxTests
 
         Assert.True(first.Completion.TryWait(TimeSpan.FromMilliseconds(50), out var firstResult));
         Assert.True(second.Completion.TryWait(TimeSpan.FromMilliseconds(50), out var secondResult));
-        Assert.Equal("shutdown", (string?)GameMcpTestHarness.Json(firstResult.Payload!)["reasonCode"]);
-        Assert.Equal("shutdown", (string?)GameMcpTestHarness.Json(secondResult.Payload!)["reasonCode"]);
+        Assert.Equal("shutdown", (string?)GameMcpTestHarness.Json(firstResult.Payload!)["code"]);
+        Assert.Equal("shutdown", (string?)GameMcpTestHarness.Json(secondResult.Payload!)["code"]);
         Assert.Empty(inbox.ClaimPending());
     }
 

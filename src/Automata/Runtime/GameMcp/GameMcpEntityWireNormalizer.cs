@@ -56,19 +56,11 @@ internal static class GameMcpEntityWireNormalizer
     {
         FlattenDetails(item);
         FlattenReading(item);
-        Rename(item, "playerFacingName", "name");
         Rename(item, "unlocked", "available");
         Rename(item, "quantity", "amount");
         Rename(item, "availableAmount", "amount");
-        Rename(item, "balance", "amount");
-        Rename(item, "balanceBefore", "amountBefore");
-        Rename(item, "balanceAfter", "amountAfter");
         Rename(item, "trueQuantity", "amount");
         Rename(item, "trueRate", "netRatePerSecond");
-        Rename(item, "netRate", "netRatePerSecond");
-        item.Remove("truncated");
-        item.Remove("preflight");
-        item.Remove("nativeOutcome");
 
         if (item["status"] is JValue statusValue)
         {
@@ -79,10 +71,15 @@ internal static class GameMcpEntityWireNormalizer
                 "rejected" or "skipped" => "refused",
                 _ => status,
             };
-            if (status is "available" or "committed") item.Remove("code");
-            else if (item["code"] is JToken code)
+            if (status == "available") item.Remove("code");
+            else if (status is "committed" or "refused" or "rejected" or "skipped" or "faulted")
             {
-                item["reasonCode"] = Snake((string?)code ?? string.Empty);
+                if (item["code"] is JValue mutationCode)
+                    item["code"] = Snake((string?)mutationCode ?? string.Empty);
+            }
+            else if (item["code"] is JToken readCode)
+            {
+                item["reasonCode"] = Snake((string?)readCode ?? string.Empty);
                 item.Remove("code");
             }
         }
@@ -90,9 +87,7 @@ internal static class GameMcpEntityWireNormalizer
             item["reasonCode"] = Snake((string?)reasonCode ?? string.Empty);
         if (item["kind"] is JValue { Type: JTokenType.String } kind)
             item["kind"] = Snake((string?)kind ?? string.Empty);
-        NormalizeCode(item, "nativeStage");
         NormalizeCode(item, "outcome");
-        NormalizeCode(item, "requestedMode");
         NormalizeCode(item, "execution");
 
         if (item["mcpCategory"] is JToken category)
@@ -144,7 +139,6 @@ internal static class GameMcpEntityWireNormalizer
 
         RemovePassingPredicates(item);
         DeduplicateChildIdentity(item, "state");
-        RemoveEqualPair(item);
         PromoteIdentity(item);
     }
 
@@ -294,16 +288,6 @@ internal static class GameMcpEntityWireNormalizer
         child.Remove("nativeType");
     }
 
-    private static void RemoveEqualPair(JObject item)
-    {
-        if (item.Count != 2 || item["before"] is not JToken before ||
-            item["after"] is not JToken after || !JToken.DeepEquals(before, after))
-        {
-            return;
-        }
-        item.RemoveAll();
-    }
-
     private static void PromoteIdentity(JObject item)
     {
         if (item["uuid"] is null) return;
@@ -323,7 +307,7 @@ internal static class GameMcpEntityWireNormalizer
 
     private static bool IsPlayerMagnitude(string field) => field switch
     {
-        "amount" or "amountBefore" or "amountAfter" or
+        "amount" or
         "baseCost" or "effectiveCost" or "groupCost" or "totalCost" or "cost" or
         "capacity" or "netRatePerSecond" or "yield" or
         "startingAmount" or "maximumAmount" or "maximumCarry" or

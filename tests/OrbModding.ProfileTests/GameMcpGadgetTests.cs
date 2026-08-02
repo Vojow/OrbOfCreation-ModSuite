@@ -135,7 +135,6 @@ public sealed class GameMcpGadgetTests
             saveCapture: false);
         var terminal = GameMcpCommandResult.Committed(
             "navigation_arrived",
-            "the requested catalog destination was invoked through native UI controls",
             observedLifecycleGeneration: 12,
             observedConfigurationGeneration: 34,
             details: new GameMcpObjectBuilder
@@ -247,7 +246,6 @@ public sealed class GameMcpGadgetTests
             saveCapture: false);
         var terminal = GameMcpCommandResult.Committed(
             "continue_invoked",
-            "the selected save entered its live scene",
             observedLifecycleGeneration: 2,
             observedConfigurationGeneration: 3,
             details: new GameMcpObjectBuilder
@@ -258,9 +256,10 @@ public sealed class GameMcpGadgetTests
 
         var projected = GameMcpTestHarness.Json(terminal.Project(command));
 
-        Assert.Equal(new[] { "status", "scene", "runtimeAvailable" },
+        Assert.Equal(new[] { "status", "code", "scene", "runtimeAvailable" },
             projected.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)projected["status"]);
+        Assert.Equal("continue_invoked", (string?)projected["code"]);
         Assert.Equal("Main", (string?)projected["scene"]);
         Assert.True((bool)projected["runtimeAvailable"]!);
     }
@@ -285,11 +284,11 @@ public sealed class GameMcpGadgetTests
         var mutation = Command(GameMcpCommandKind.Navigation, "navigate", mutationOperation);
 
         Assert.Equal("available", (string?)GameMcpTestHarness.Json(
-            GameMcpCommandResult.Committed("probe_read", "ok", 1, 1).Project(read))["status"]);
+            GameMcpCommandResult.Committed("probe_read", 1, 1).Project(read))["status"]);
         Assert.Equal("unavailable", (string?)GameMcpTestHarness.Json(
             GameMcpCommandResult.Rejected("probe_unavailable", "no data").Project(read))["status"]);
         Assert.Equal("committed", (string?)GameMcpTestHarness.Json(
-            GameMcpCommandResult.Committed("navigation_arrived", "ok", 1, 1)
+            GameMcpCommandResult.Committed("navigation_arrived", 1, 1)
                 .Project(mutation))["status"]);
         Assert.Equal("refused", (string?)GameMcpTestHarness.Json(
             GameMcpCommandResult.Rejected("tab_match_failed", "no match")

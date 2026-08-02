@@ -98,75 +98,26 @@ internal enum ConsumablePlayerNativeStage
     Verification = 6,
 }
 
-internal readonly struct ConsumablePlayerState
-{
-    internal ConsumablePlayerState(
-        int amount,
-        int queued,
-        bool randomized,
-        Guid[] usageIds,
-        Guid[] orderedList)
-    {
-        Amount = amount;
-        Queued = queued;
-        Randomized = randomized;
-        UsageIds = usageIds ?? Array.Empty<Guid>();
-        OrderedList = orderedList ?? Array.Empty<Guid>();
-    }
-
-    internal int Amount { get; }
-    internal int Queued { get; }
-    internal bool Randomized { get; }
-    internal Guid[] UsageIds { get; }
-    internal Guid[] OrderedList { get; }
-}
-
-internal readonly struct ConsumablePlayerEvidence
-{
-    internal ConsumablePlayerEvidence(
-        bool available,
-        in ConsumablePlayerState before,
-        in ConsumablePlayerState after)
-    {
-        Available = available;
-        Before = before;
-        After = after;
-    }
-
-    internal bool Available { get; }
-    internal ConsumablePlayerState Before { get; }
-    internal ConsumablePlayerState After { get; }
-}
-
 internal readonly struct ConsumablePlayerSubmission
 {
     internal ConsumablePlayerSubmission(
-        ConsumablePlayerActionKind kind,
-        Guid consumableId,
         ConsumablePlayerPreflight preflight,
         ConsumablePlayerNativeStage stage,
         NativeMutationOutcome outcome,
         NativeMutationCallOutcome callOutcome,
-        in ConsumablePlayerEvidence evidence,
         string reason)
     {
-        Kind = kind;
-        ConsumableId = consumableId;
         Preflight = preflight;
         Stage = stage;
         Outcome = outcome;
         CallOutcome = callOutcome;
-        Evidence = evidence;
         Reason = reason ?? string.Empty;
     }
 
-    internal ConsumablePlayerActionKind Kind { get; }
-    internal Guid ConsumableId { get; }
     internal ConsumablePlayerPreflight Preflight { get; }
     internal ConsumablePlayerNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
-    internal ConsumablePlayerEvidence Evidence { get; }
     internal string Reason { get; }
     internal bool Verified =>
         Preflight == ConsumablePlayerPreflight.Proceeded &&
@@ -177,11 +128,8 @@ internal readonly struct ConsumablePlayerSubmission
         ConsumablePlayerPreflight preflight,
         string reason) =>
         new(
-            action.Kind,
-            action.ConsumableId,
             preflight,
             ConsumablePlayerNativeStage.None,
-            default,
             default,
             default,
             reason);

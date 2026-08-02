@@ -374,10 +374,8 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         var result = gameAction.Submit(in action);
 
         Assert.True(result.Verified, result.Reason);
-        Assert.Equal(1, result.Evidence.Before.Amount);
-        Assert.Equal(0, result.Evidence.After.Amount);
-        Assert.Equal(0, result.Evidence.Before.Queued);
-        Assert.Equal(1, result.Evidence.After.Queued);
+        Assert.Equal(0, item.GetQuantity());
+        Assert.Single(item.consumableUsages);
         Assert.Equal(new NativeMutationCallOutcome(1, 1, 1), result.CallOutcome);
     }
 
@@ -402,8 +400,6 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.True(usage.GetResultInfo().IsCancelled());
         Assert.Empty(item.consumableUsages);
-        Assert.Equal(1, result.Evidence.Before.Queued);
-        Assert.Equal(0, result.Evidence.After.Queued);
     }
 
     [Fact]
@@ -420,8 +416,6 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         var result = gameAction.Submit(in action);
 
         Assert.True(result.Verified, result.Reason);
-        Assert.Equal(1, result.Evidence.Before.Amount);
-        Assert.Equal(0, result.Evidence.After.Amount);
         Assert.Equal(0, item.GetQuantity());
     }
 
@@ -452,9 +446,6 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         Assert.True(moved.Verified, moved.Reason);
         Assert.True(first.IsRandomized());
         Assert.Equal(new[] { second, first }, Inventory.Current.allConsumables.value);
-        Assert.Equal(
-            new[] { second.GetGuid(), first.GetGuid() },
-            moved.Evidence.After.OrderedList);
         Assert.Equal(1, Inventory.Current.allConsumables.UpdateObservableCalls);
     }
 
@@ -552,7 +543,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
         var next = gameAction.Submit(in discard);
 
         Assert.Equal(ConsumablePlayerPreflight.VerificationFailed, faulted.Preflight);
-        Assert.True(faulted.Evidence.Available);
+        Assert.Equal(new[] { first, second }, Inventory.Current.allConsumables.value);
         Assert.True(next.Verified, next.Reason);
     }
 

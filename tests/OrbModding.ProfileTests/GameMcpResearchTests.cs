@@ -101,27 +101,20 @@ public sealed class GameMcpResearchTests
     }
 
     [Fact]
-    public void Failure_keeps_decomposed_state_while_success_yields_to_fresh_world_poststate()
+    public void Failure_names_the_missing_outcome_while_success_yields_to_fresh_world_poststate()
     {
-        var before = State(active: false, developing: false, queued: 0, selfBonus: 0);
-        var after = State(active: false, developing: false, queued: 0, selfBonus: 0);
-        var receipt = new ResearchReceipt(ResearchActionKind.Develop, before, after);
         var failed = new ResearchSubmission(ResearchPreflight.VerificationFailed,
             ResearchNativeStage.Verification, NativeMutationOutcome.PostconditionFailed,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, "unchanged");
+            new NativeMutationCallOutcome(1, 1, 0), "unchanged");
         var success = new ResearchSubmission(ResearchPreflight.Proceeded,
             ResearchNativeStage.Verification, NativeMutationOutcome.Verified,
-            new NativeMutationCallOutcome(1, 1, 1), in receipt, "changed");
+            new NativeMutationCallOutcome(1, 1, 1), "changed");
 
         var failure = Json(GameMcpResearchProjection.Project(in failed), World());
         var committed = Json(GameMcpResearchProjection.Project(in success), World());
 
-        Assert.Null(failure["preflight"]);
-        Assert.Equal("develop", (string?)failure["requestedMode"]);
-        Assert.Null(failure["quarantined"]);
-        Assert.NotNull(failure["before"]);
-        Assert.Null(failure["payment"]);
-        Assert.Null(failure["receipt"]);
+        Assert.Equal("requested research transition", (string?)failure["missingOutcome"]);
+        Assert.Single(failure.Properties());
         Assert.Empty(committed.Properties());
     }
 
@@ -139,10 +132,6 @@ public sealed class GameMcpResearchTests
         Assert.Null(response["receipt"]);
         Assert.Null(response["payment"]);
     }
-
-    private static ResearchState State(bool active, bool developing, int queued, int selfBonus) =>
-        new(true, true, 3, 1, 0, queued, 0, selfBonus, active, developing,
-            1, 0, 1, 1, new BigDouble(0.5), true, true, true, 2, true, 10, 2);
 
     private static GameWorldState World(
         bool developmentCostAffordable = true,

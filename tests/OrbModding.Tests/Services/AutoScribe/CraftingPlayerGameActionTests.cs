@@ -35,7 +35,6 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
         var result = Submit(boundary, recipe);
 
         Assert.True(result.Verified, result.Reason);
-        Assert.Equal(CraftingPlayerPipeline.Direct, result.Evidence.After.Pipeline);
         Assert.Equal(1, recipe.ExecuteCalls);
         Assert.Equal(0, recipe.PurchaseCalls);
         Assert.Equal(new NativeMutationCallOutcome(1, 1, 1), result.CallOutcome);
@@ -68,7 +67,6 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
         var result = Submit(boundary, recipe);
 
         Assert.True(result.Verified, result.Reason);
-        Assert.Equal(CraftingPlayerPipeline.QueueStack, result.Evidence.After.Pipeline);
         Assert.Equal(new BigDouble(3, 0), instance.Quantity);
         Assert.Single(page.craftingQueueInstances.value);
         Assert.Equal(1, recipe.PurchaseCalls);
@@ -88,7 +86,6 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
         var instance = Assert.Single(page.craftingQueueInstances.value);
         Assert.Same(recipe, instance.reference);
         Assert.True(instance.Initiated);
-        Assert.Equal(CraftingPlayerPipeline.QueueNew, result.Evidence.After.Pipeline);
         Assert.Equal(new NativeMutationCallOutcome(5, 1, 1), result.CallOutcome);
     }
 
@@ -106,7 +103,6 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.Empty(page.craftingQueueInstances.value);
         Assert.Equal(1, Assert.Single(recipe.InstantOutput.consumableCounts).Quantity);
-        Assert.Equal(CraftingPlayerPipeline.QueueInstant, result.Evidence.After.Pipeline);
         Assert.Equal(new NativeMutationCallOutcome(4, 1, 1), result.CallOutcome);
     }
 

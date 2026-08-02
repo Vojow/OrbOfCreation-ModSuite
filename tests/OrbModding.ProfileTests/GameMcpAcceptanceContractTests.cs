@@ -177,7 +177,7 @@ public sealed class GameMcpWorldQueryTests
         var row = Assert.Single(response["results"]!.Values<JObject>())!["row"]!;
 
         Assert.Equal("5e24", (string?)row["amount"]);
-        Assert.Equal("0e0", (string?)row["netRatePerSecond"]);
+        Assert.Equal("0", (string?)row["netRatePerSecond"]);
         Assert.Null(row["capacity"]);
         Assert.Null(row["atCapacity"]);
     }
@@ -203,22 +203,17 @@ public sealed class GameMcpWorldQueryTests
     }
 
     [Fact]
-    public void LegacyProjectionFieldsNormalizeToOneWireDialect()
+    public void DomainProjectionFieldsNormalizeToOneWireDialect()
     {
         var uuid = Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
         var encoded = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
             new GameMcpObjectBuilder
             {
                 ["entityId"] = uuid,
-                ["playerFacingName"] = "legacy label",
                 ["mcpCategory"] = "resources",
                 ["quantity"] = new GameMcpDomainValue(new BigDouble(2.5d, 3)),
-                ["netRate"] = new GameMcpDomainValue(new BigDouble(4d, 1)),
                 ["unlocked"] = true,
-                ["truncated"] = true,
-                ["nativeStage"] = "ApplySelection",
                 ["outcome"] = "PostconditionFailed",
-                ["requestedMode"] = "RemoveOwned",
                 ["execution"] = "OneShotQueue",
             }.Freeze(),
             GameMcpTestHarness.EntityCatalog));
@@ -227,20 +222,13 @@ public sealed class GameMcpWorldQueryTests
         Assert.Equal("Knowledge", (string?)encoded["name"]);
         Assert.Equal("resources", (string?)encoded["category"]);
         Assert.Equal("2.5e3", (string?)encoded["amount"]);
-        Assert.Equal("4e1", (string?)encoded["netRatePerSecond"]);
         Assert.True((bool)encoded["available"]!);
-        Assert.Equal("apply_selection", (string?)encoded["nativeStage"]);
         Assert.Equal("postcondition_failed", (string?)encoded["outcome"]);
-        Assert.Equal("remove_owned", (string?)encoded["requestedMode"]);
         Assert.Equal("one_shot_queue", (string?)encoded["execution"]);
-        Assert.Null(encoded["hasMore"]);
         Assert.Null(encoded["entityId"]);
-        Assert.Null(encoded["playerFacingName"]);
         Assert.Null(encoded["mcpCategory"]);
         Assert.Null(encoded["quantity"]);
-        Assert.Null(encoded["netRate"]);
         Assert.Null(encoded["unlocked"]);
-        Assert.Null(encoded["truncated"]);
     }
 
     [Fact]
@@ -429,8 +417,8 @@ public sealed class GameMcpInlineCompletionTests
             }.Freeze());
         var projected = GameMcpTestHarness.Json(terminal.Project(command));
         Assert.Equal("committed", (string?)projected["status"]);
-        Assert.Null(projected["code"]);
-        Assert.Equal(new[] { "status", "level", "available" },
+        Assert.Equal("committed", (string?)projected["code"]);
+        Assert.Equal(new[] { "status", "code", "level", "available" },
             projected.Properties().Select(property => property.Name));
         Assert.Null(projected["receiptId"]);
     }
@@ -535,13 +523,13 @@ public sealed class GameMcpProtocolSurfaceTests
     [Fact]
     public void TraceHealthIsWriterHealthOnly()
     {
-        var result = GameMcpAcceptanceFixture.Call("trace_health");
-        Assert.NotNull(result["traceWriterStatus"]);
-        Assert.Null(result["scope"]);
-        Assert.Null(result["events"]);
-        Assert.Null(result["worldGeneration"]);
-        Assert.Null(result["mcpEvents"]);
-        Assert.Null(result["cursor"]);
+        var result = GameMcpAcceptanceFixture.CallText("trace_health");
+        Assert.Contains("trace writer: unavailable", result, StringComparison.Ordinal);
+        Assert.Contains("records: accepted 0, written 0, discarded 0", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("scope", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("events", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("worldGeneration", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("cursor", result, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -564,18 +552,12 @@ public sealed class GameMcpProtocolSurfaceTests
             new FeatureStatusReason(FeatureStatusReasonCode.None, string.Empty),
             lifecycleGeneration: 9);
         var context = GameMcpTestHarness.Context(features: new[] { feature, mentor });
-        var compact = GameMcpTestHarness.Json(Plugin.ProjectGameMcpHealth(context));
-        Assert.Equal("available", (string?)compact["status"]);
-        var groups = compact["featureGroups"]!.Values<JObject>().ToArray();
-        Assert.Contains(groups, group =>
-            (string?)group["state"] == "configuration_disabled" &&
-            group["features"]!.Values<string>().SequenceEqual(new[] { "Auto Buy" }));
-        Assert.Contains(groups, group =>
-            (string?)group["state"] == "operational" &&
-            group["features"]!.Values<string>().SequenceEqual(new[] { "Mentor" }));
-        var encoded = compact.ToString(Newtonsoft.Json.Formatting.None);
-        Assert.DoesNotContain("Orb Mentor", encoded, StringComparison.Ordinal);
-        Assert.DoesNotContain("mailbox", encoded, StringComparison.Ordinal);
+        var compact = Plugin.ProjectGameMcpHealthText(context);
+        Assert.StartsWith("available\n", compact, StringComparison.Ordinal);
+        Assert.Contains("features configuration_disabled: Auto Buy", compact, StringComparison.Ordinal);
+        Assert.Contains("features operational: Mentor", compact, StringComparison.Ordinal);
+        Assert.DoesNotContain("Orb Mentor", compact, StringComparison.Ordinal);
+        Assert.DoesNotContain("mailbox", compact, StringComparison.Ordinal);
 
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
@@ -804,17 +786,48 @@ internal static class GameMcpAcceptanceFixture
                 ["arguments"] = arguments ?? new JObject(),
             }), operation => operation.Request.ToolName switch
             {
-                "suite_health" => GameMcpToolExecution.Read(
-                    Plugin.ProjectGameMcpHealth(pinned)),
+                "suite_health" => GameMcpToolExecution.Text(
+                    Plugin.ProjectGameMcpHealthText(pinned)),
                 "suite_configuration" => GameMcpToolExecution.Read(
                     Plugin.ProjectGameMcpConfiguration(pinned)),
-                "trace_health" => GameMcpToolExecution.Read(
-                    Plugin.ProjectGameMcpTraceHealth(pinned)),
+                "trace_health" => GameMcpToolExecution.Text(
+                    Plugin.ProjectGameMcpTraceHealthText(pinned)),
                 _ => GameMcpTestHarness.ExecuteRead(operation, pinned),
             });
         Assert.Equal(200, response.StatusCode);
         Assert.Null(response.Body?["error"]);
         return (JObject)response.Body!["result"]!["structuredContent"]!;
+    }
+
+    internal static string CallText(
+        string tool,
+        JObject? arguments = null,
+        GameMcpFrameContext? context = null)
+    {
+        var inbox = new GameMcpFrameInbox();
+        var router = new GameMcpProtocolRouter(inbox);
+        var pinned = context ?? GameMcpTestHarness.Context();
+        var response = GameMcpTestHarness.Handle(router, inbox, Request(
+            1,
+            "tools/call",
+            new JObject
+            {
+                ["name"] = tool,
+                ["arguments"] = arguments ?? new JObject(),
+            }), operation => operation.Request.ToolName switch
+            {
+                "suite_health" => GameMcpToolExecution.Text(
+                    Plugin.ProjectGameMcpHealthText(pinned)),
+                "trace_health" => GameMcpToolExecution.Text(
+                    Plugin.ProjectGameMcpTraceHealthText(pinned)),
+                _ => GameMcpTestHarness.ExecuteRead(operation, pinned),
+            });
+        Assert.Equal(200, response.StatusCode);
+        Assert.Null(response.Body?["error"]);
+        Assert.Null(response.Body!["result"]!["structuredContent"]);
+        var content = Assert.Single(response.Body["result"]!["content"]!.Values<JObject>());
+        Assert.Equal("text", (string?)content["type"]);
+        return (string)content["text"]!;
     }
 
     internal static GameMcpFrameContext SpellSnapshot(int masteryLevel) =>

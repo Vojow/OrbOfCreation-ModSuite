@@ -115,32 +115,13 @@ public sealed class GameMcpDiscoveryTreeOfferTests
     }
 
     [Fact]
-    public void FaultReceiptKeepsNamedEvidenceWithoutExactDeltaVerdictsOrNativeVocabulary()
+    public void FaultNamesOnlyTheMissingOutcome()
     {
-        var offer = Guid.Parse("168e3734-1ecb-4938-bd4a-d011ff13e201");
-        var resource = Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
-        var before = new DiscoveryTreeOfferState(
-            2, BigDouble.Zero, 1, 1, false, new[] { offer }, Array.Empty<Guid>(),
-            offer, 3, 1, true, false, false);
-        var after = new DiscoveryTreeOfferState(
-            2, BigDouble.Zero, 1, 1, false, new[] { offer }, Array.Empty<Guid>(),
-            offer, 3, 1, true, false, false);
-        var costs = new[]
-        {
-            new DiscoveryTreeCostReceipt(
-                resource,
-                new BigDouble(1.1d, 24),
-                new BigDouble(5.63d, 24),
-                new BigDouble(4.530000000000001d, 24)),
-        };
-        var receipt = new DiscoveryTreeOfferMutationReceipt(
-            true, true, true, false, false, in before, in after, costs);
         var submission = new DiscoveryTreeOfferSubmission(
             DiscoveryTreeOfferPreflight.VerificationFailed,
             DiscoveryTreeOfferNativeStage.Verification,
             NativeMutationOutcome.PostconditionFailed,
-            new NativeMutationCallOutcome(1, 1, 1),
-            in receipt,
+            new NativeMutationCallOutcome(1, 1, 0),
             "the requested transition was not observed");
 
         var projected = GameMcpTestHarness.Json(
@@ -148,16 +129,8 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                 DiscoveryTreeOfferActionKind.Initiate,
                 in submission));
 
-        Assert.Equal("choice", (string?)projected["receipt"]!["before"]!["mode"]);
-        Assert.Equal("Weak", (string?)projected["receipt"]!["before"]!
-            ["selectedOffer"]!["name"]);
-        var cost = Assert.Single(projected["receipt"]!["costs"]!.Values<JObject>())!;
-        Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
-        Assert.Equal("1.1e24", (string?)cost["cost"]);
-        Assert.Equal("1.1e24", (string?)cost["observedDelta"]);
-        Assert.Null(cost["exactDeltaMatched"]);
-        Assert.Null(projected["receipt"]!["before"]!["currentChoices"]);
-        Assert.NotNull(projected["receipt"]!["before"]!["currentOffers"]);
+        Assert.Equal("crafting mode", (string?)projected["missingOutcome"]);
+        Assert.Single(projected.Properties());
     }
 
     [Fact]
@@ -657,21 +630,11 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var tree = Guid.Parse("d88aa06b-7a71-4db4-a293-d27ab21befd8");
         var offer = Guid.Parse("a98e5e7d-3bf5-46cf-a6df-73747ed57797");
         var resource = Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
-        var before = new DiscoveryTreeOfferState(
-            2, BigDouble.Zero, 1, 2, false, new[] { offer }, Array.Empty<Guid>(), offer,
-            4, 3, true, false, false);
-        var after = new DiscoveryTreeOfferState(
-            0, BigDouble.Zero, 1, 2, false, Array.Empty<Guid>(), Array.Empty<Guid>(), Guid.Empty,
-            5, 4, true, true, false);
-        var receipt = new DiscoveryTreeOfferMutationReceipt(
-            true, false, false, true, false, in before, in after,
-            Array.Empty<DiscoveryTreeCostReceipt>());
         var submission = new DiscoveryTreeOfferSubmission(
             DiscoveryTreeOfferPreflight.Proceeded,
             DiscoveryTreeOfferNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(1, 1, 1),
-            in receipt,
             "verified confirm");
         var mapped = DiscoveryTreeOfferActionResultMapper.Map(in submission);
         var command = new GameMcpCommand(
@@ -709,10 +672,11 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         Assert.Equal(new[]
             {
                 "status", "uuid", "name", "internalName", "category", "nativeType",
-                "mode", "rerollsLeft", "discoveredCount", "hasRemainingDiscoveries",
+                "code", "mode", "rerollsLeft", "discoveredCount", "hasRemainingDiscoveries",
                 "initiate",
             },
             projected.Properties().Select(property => property.Name));
+        Assert.Equal("committed", (string?)projected["code"]);
         Assert.Equal("idle", (string?)projected["mode"]);
         Assert.Equal(5, (int)projected["discoveredCount"]!);
         Assert.True((bool)projected["initiate"]!["available"]!);
@@ -730,31 +694,11 @@ public sealed class GameMcpDiscoveryTreeOfferTests
     public void CommittedInitiateReturnsNamedOrderedOffersAndErasesPaymentCeremony()
     {
         var tree = Guid.Parse("d88aa06b-7a71-4db4-a293-d27ab21befd8");
-        var resourceOne = Guid.Parse("a1000000-0000-4000-8000-000000000001");
-        var resourceTwo = Guid.Parse("a1000000-0000-4000-8000-000000000002");
-        var balanceOne = new BigDouble(2.1, 19);
-        var balanceTwo = new BigDouble(5.7, 23);
-        var before = new DiscoveryTreeOfferState(
-            0, BigDouble.Zero, 1, 1, false, Array.Empty<Guid>(), Array.Empty<Guid>(),
-            Guid.Empty, 2, 2, true, false, false);
-        var after = new DiscoveryTreeOfferState(
-            1, BigDouble.Zero, 1, 1, false, Array.Empty<Guid>(), Array.Empty<Guid>(),
-            Guid.Empty, 2, 2, true, false, false);
-        var costs = new[]
-        {
-            new DiscoveryTreeCostReceipt(
-                resourceOne, new BigDouble(4.4, 3), balanceOne, balanceOne),
-            new DiscoveryTreeCostReceipt(
-                resourceTwo, new BigDouble(8.9, 6), balanceTwo, balanceTwo),
-        };
-        var receipt = new DiscoveryTreeOfferMutationReceipt(
-            true, true, false, true, true, in before, in after, costs);
         var submission = new DiscoveryTreeOfferSubmission(
             DiscoveryTreeOfferPreflight.Proceeded,
             DiscoveryTreeOfferNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(2, 2, 2),
-            in receipt,
             "verified initiate");
         var mapped = DiscoveryTreeOfferActionResultMapper.Map(in submission);
         var command = new GameMcpCommand(
@@ -801,10 +745,11 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         Assert.Equal(new[]
             {
                 "status", "uuid", "name", "internalName", "category", "nativeType",
-                "mode", "rerollsLeft", "discoveredCount", "hasRemainingDiscoveries",
+                "code", "mode", "rerollsLeft", "discoveredCount", "hasRemainingDiscoveries",
                 "offers", "rerollAvailable",
             },
             projected.Properties().Select(property => property.Name));
+        Assert.Equal("committed", (string?)projected["code"]);
         Assert.Equal("choice", (string?)projected["mode"]);
         Assert.Equal(
             new[] { "Weak", "Magnified" },
@@ -893,8 +838,9 @@ public sealed class GameMcpDiscoveryTreeOfferTests
 
             Assert.Equal("committed", result.Status);
             Assert.Equal(1, tree.initiateCalls);
-            Assert.Equal(new[] { "status" },
+            Assert.Equal(new[] { "status", "code" },
                 projected.Properties().Select(property => property.Name));
+            Assert.Equal("committed", (string?)projected["code"]);
             Assert.Null(projected["nativeCallsAttempted"]);
         }
         finally

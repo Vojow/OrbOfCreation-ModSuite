@@ -48,37 +48,6 @@ internal enum SpellCompositionNativeStage
     Verification = 2,
 }
 
-internal readonly struct SpellCompositionState
-{
-    internal SpellCompositionState(CastingDial dial, int current, int maximum)
-    {
-        Dial = dial;
-        Current = current;
-        Maximum = maximum;
-    }
-
-    internal CastingDial Dial { get; }
-    internal int Current { get; }
-    internal int Maximum { get; }
-}
-
-internal readonly struct SpellCompositionEvidence
-{
-    internal SpellCompositionEvidence(
-        bool available,
-        in SpellCompositionState before,
-        in SpellCompositionState after)
-    {
-        Available = available;
-        Before = before;
-        After = after;
-    }
-
-    internal bool Available { get; }
-    internal SpellCompositionState Before { get; }
-    internal SpellCompositionState After { get; }
-}
-
 internal readonly struct SpellCompositionSubmission
 {
     internal SpellCompositionSubmission(
@@ -86,14 +55,12 @@ internal readonly struct SpellCompositionSubmission
         SpellCompositionNativeStage stage,
         NativeMutationOutcome outcome,
         NativeMutationCallOutcome callOutcome,
-        in SpellCompositionEvidence evidence,
         string reason)
     {
         Preflight = preflight;
         Stage = stage;
         Outcome = outcome;
         CallOutcome = callOutcome;
-        Evidence = evidence;
         Reason = reason ?? string.Empty;
     }
 
@@ -101,7 +68,6 @@ internal readonly struct SpellCompositionSubmission
     internal SpellCompositionNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
-    internal SpellCompositionEvidence Evidence { get; }
     internal string Reason { get; }
     internal bool Verified => Preflight == SpellCompositionPreflight.Proceeded &&
         Outcome == NativeMutationOutcome.Verified;
@@ -112,7 +78,6 @@ internal readonly struct SpellCompositionSubmission
         new(
             preflight,
             SpellCompositionNativeStage.None,
-            default,
             default,
             default,
             reason);

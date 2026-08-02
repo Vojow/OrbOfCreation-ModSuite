@@ -28,10 +28,6 @@ public sealed class SpellCompositionGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(7, Player.GetSpellOutputLevel().AsInt());
-        Assert.Equal(CastingDial.Output, result.Evidence.Before.Dial);
-        Assert.Equal(2, result.Evidence.Before.Current);
-        Assert.Equal(7, result.Evidence.After.Current);
-        Assert.Equal(12, result.Evidence.After.Maximum);
     }
 
     [Fact]
@@ -43,9 +39,6 @@ public sealed class SpellCompositionGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(8, Player.GetReserveLevel().AsInt());
-        Assert.Equal(CastingDial.Reserve, result.Evidence.After.Dial);
-        Assert.Equal(8, result.Evidence.After.Current);
-        Assert.Equal(9, result.Evidence.After.Maximum);
     }
 
     [Fact]

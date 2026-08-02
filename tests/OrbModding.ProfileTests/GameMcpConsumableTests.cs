@@ -123,40 +123,26 @@ public sealed class GameMcpConsumableTests
     }
 
     [Fact]
-    public void FaultKeepsDecomposedBeforeAfterEvidenceWhileSuccessIsEmptyForPostStateReplacement()
+    public void FaultNamesTheMissingOutcomeWhileSuccessIsEmptyForPostStateReplacement()
     {
-        var before = new ConsumablePlayerState(
-            3, 1, false, new[] { UsageId }, new[] { ConsumableId, OtherConsumableId });
-        var after = new ConsumablePlayerState(
-            3, 1, false, new[] { UsageId }, new[] { ConsumableId, OtherConsumableId });
-        var evidence = new ConsumablePlayerEvidence(true, in before, in after);
         var fault = new ConsumablePlayerSubmission(
-            ConsumablePlayerActionKind.Move,
-            ConsumableId,
             ConsumablePlayerPreflight.VerificationFailed,
             ConsumablePlayerNativeStage.Verification,
             NativeMutationOutcome.PostconditionFailed,
             new NativeMutationCallOutcome(2, 1, 0),
-            in evidence,
             "order did not change");
         var committed = new ConsumablePlayerSubmission(
-            ConsumablePlayerActionKind.Move,
-            ConsumableId,
             ConsumablePlayerPreflight.Proceeded,
             ConsumablePlayerNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(2, 1, 1),
-            in evidence,
             "order changed");
 
         var failure = Json(GameMcpConsumableProjection.Project(in fault));
         var success = Json(GameMcpConsumableProjection.Project(in committed));
 
-        Assert.Null(failure["preflight"]);
-        Assert.Null(failure["quarantined"]);
-        Assert.Equal("Swift Thread",
-            (string?)failure["before"]!["orderedList"]![0]!["consumable"]!["name"]);
-        Assert.NotNull(failure["after"]);
+        Assert.Equal("requested consumable transition", (string?)failure["missingOutcome"]);
+        Assert.Single(failure.Properties());
         Assert.Empty(success.Properties());
     }
 

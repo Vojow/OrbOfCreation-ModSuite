@@ -141,7 +141,6 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 SpellWorkbenchPreflight.Unaffordable,
                 "GetDiscoverCost().HasEnough() refused the resolved recipe.");
 
-        var before = Capture(native, manager, recipe);
         if (!TryCapturePermit(out var permitReason))
             return SpellWorkbenchSubmission.Reject(
                 SpellWorkbenchPreflight.MutationPermitUnavailable, permitReason);
@@ -164,45 +163,54 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                     return SpellWorkbenchSubmission.Reject(
                         SpellWorkbenchPreflight.WrongSelection,
                         "The exact live component sequence did not resolve to the previewed spell recipe.");
-                var divergent = CaptureBestEffort(native, manager, recipe, in before);
                 return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
                     SpellWorkbenchNativeStage.ApplySelection,
                     NativeMutationOutcome.PostconditionFailed, nativeCalls,
-                    in before, in divergent,
                     "The live component selection diverged and its prior UI state could not be restored.");
             }
             if (!native.CanDiscover(selected) || !native.IsCreatable(selected))
-                return SpellWorkbenchSubmission.Reject(
-                    SpellWorkbenchPreflight.DiscoveryUnavailable,
-                    "The resolved recipe stopped being discoverable before payment.");
+            {
+                return RestoreSelection(
+                        native, manager, previousCore, previousAugments, ref nativeCalls)
+                    ? SpellWorkbenchSubmission.Reject(
+                        SpellWorkbenchPreflight.DiscoveryUnavailable,
+                        "The resolved recipe stopped being discoverable before payment.")
+                    : FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
+                        SpellWorkbenchNativeStage.ApplySelection,
+                        NativeMutationOutcome.PostconditionFailed, nativeCalls,
+                        "Live discovery admission changed and the prior workbench selection could not be restored.");
+            }
             stage = SpellWorkbenchNativeStage.Discover;
             native.Discover(manager);
             nativeCalls++;
-            var after = Capture(native, manager, recipe);
-            return after.TargetDiscovered
+            var restored = RestoreSelection(
+                native, manager, previousCore, previousAugments, ref nativeCalls);
+            if (!restored)
+                return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
+                    SpellWorkbenchNativeStage.Verification,
+                    NativeMutationOutcome.PostconditionFailed, nativeCalls,
+                    "The recipe discovery call returned but the prior workbench selection could not be restored.");
+            return native.IsDiscovered(recipe)
                 ? Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
-                    in before, in after,
                     "The component-resolved spell recipe is now discovered.")
                 : FaultAfterCommit(in action, SpellWorkbenchPreflight.VerificationFailed,
                     SpellWorkbenchNativeStage.Verification,
                     NativeMutationOutcome.PostconditionFailed, nativeCalls,
-                    in before, in after,
                     "The resolved recipe did not become discovered.");
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            var after = CaptureBestEffort(native, manager, recipe, in before);
-            if (after.TargetDiscovered)
-                return Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
-                    in before, in after,
-                    "The component-resolved recipe became discovered before the native fault.");
-            RestoreSelection(
+            var restored = RestoreSelection(
                 native, manager, previousCore, previousAugments, ref nativeCalls);
-            after = CaptureBestEffort(native, manager, recipe, in before);
+            if (restored && IsDiscoveredBestEffort(native, recipe))
+                return Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
+                    "The component-resolved recipe became discovered before the native fault.");
             return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
                 stage, NativeMutationOutcome.ExecutionThrew, nativeCalls,
-                in before, in after,
-                "Component discovery faulted before its outcome was observable: " +
+                restored
+                    ? "Component discovery faulted before its outcome was observable: " +
+                        ex.GetBaseException().Message
+                    : "Component discovery faulted and the prior workbench selection could not be restored: " +
                 ex.GetBaseException().Message);
         }
     }
@@ -230,7 +238,7 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             return SpellWorkbenchSubmission.Reject(refusal, refusalReason);
 
         var expectedLayout = ReadIds(native, augments);
-        var before = Capture(native, manager, recipe, expectedLayout);
+        var before = ReadMatchingInstanceIds(native, manager, recipe, expectedLayout);
         if (!TryCapturePermit(out var permitReason))
             return SpellWorkbenchSubmission.Reject(
                 SpellWorkbenchPreflight.MutationPermitUnavailable, permitReason);
@@ -252,12 +260,9 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 if (RestoreSelection(
                         native, manager, previousCore, previousAugments, ref nativeCalls))
                     return SpellWorkbenchSubmission.Reject(refusal, refusalReason);
-                var divergent = CaptureBestEffort(
-                    native, manager, recipe, expectedLayout, in before);
                 return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
                     SpellWorkbenchNativeStage.ApplySelection,
                     NativeMutationOutcome.PostconditionFailed, nativeCalls,
-                    in before, in divergent,
                     "Live admission changed and the prior workbench selection could not be restored.");
             }
 
@@ -267,35 +272,36 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             stage = SpellWorkbenchNativeStage.Create;
             native.Create(manager);
             nativeCalls++;
-            var after = Capture(native, manager, recipe, expectedLayout);
-            return HasNewInstance(
-                    before.MatchingLayoutSpellInstanceIds,
-                    after.MatchingLayoutSpellInstanceIds)
+            var restored = RestoreSelection(
+                native, manager, previousCore, previousAugments, ref nativeCalls);
+            if (!restored)
+                return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
+                    SpellWorkbenchNativeStage.Verification,
+                    NativeMutationOutcome.PostconditionFailed, nativeCalls,
+                    "The spell creation call returned but the prior workbench selection could not be restored.");
+            return HasNewMatchingInstance(
+                    native, manager, recipe, expectedLayout, before)
                 ? Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
-                    in before, in after,
                     "A new spell with the exact requested augment layout is equipped.")
-                : FaultAfterMissingCreate(
-                    in action, native, manager, recipe, expectedLayout, nativeCalls,
-                    previousCore, previousAugments, in before);
+                : FaultAfterCommit(in action, SpellWorkbenchPreflight.VerificationFailed,
+                    SpellWorkbenchNativeStage.Verification,
+                    NativeMutationOutcome.PostconditionFailed, nativeCalls,
+                    "No new spell with the requested exact layout was added.");
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            var after = CaptureBestEffort(
-                native, manager, recipe, expectedLayout, in before);
-            if (HasNewInstance(
-                    before.MatchingLayoutSpellInstanceIds,
-                    after.MatchingLayoutSpellInstanceIds))
-                return Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
-                    in before, in after,
-                    "The exact layout was added before the native fault.");
-            RestoreSelection(
+            var restored = RestoreSelection(
                 native, manager, previousCore, previousAugments, ref nativeCalls);
-            after = CaptureBestEffort(
-                native, manager, recipe, expectedLayout, in before);
+            if (restored && HasNewMatchingInstanceBestEffort(
+                    native, manager, recipe, expectedLayout, before))
+                return Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
+                    "The exact layout was added before the native fault.");
             return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
                 stage, NativeMutationOutcome.ExecutionThrew, nativeCalls,
-                in before, in after,
-                "Loadout add faulted after its payment boundary without the requested exact layout: " +
+                restored
+                    ? "Loadout add faulted after its payment boundary without the requested exact layout: " +
+                        ex.GetBaseException().Message
+                    : "Loadout add faulted and the prior workbench selection could not be restored: " +
                 ex.GetBaseException().Message);
         }
     }
@@ -445,27 +451,6 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             native.SetStackedRecord(record, values[pair.Key], pair.Value);
     }
 
-    private SpellWorkbenchSubmission FaultAfterMissingCreate(
-        in SpellWorkbenchAction action,
-        SpellWorkbenchNativeBindings native,
-        object manager,
-        object recipe,
-        Guid[] expectedLayout,
-        int nativeCalls,
-        List<object> previousCore,
-        List<object> previousAugments,
-        in SpellWorkbenchState before)
-    {
-        RestoreSelection(native, manager, previousCore, previousAugments, ref nativeCalls);
-        var after = CaptureBestEffort(
-            native, manager, recipe, expectedLayout, in before);
-        return FaultAfterCommit(in action, SpellWorkbenchPreflight.VerificationFailed,
-            SpellWorkbenchNativeStage.Verification,
-            NativeMutationOutcome.PostconditionFailed, nativeCalls,
-            in before, in after,
-            "The creation payment boundary ran but no new spell with the requested exact layout was added.");
-    }
-
     private bool TryResolveGlyphLayout(
         SpellWorkbenchGlyphStack[] layout,
         bool expectAugment,
@@ -597,17 +582,11 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         }
     }
 
-    private static SpellWorkbenchState Capture(SpellWorkbenchNativeBindings native,
-        object manager, object targetRecipe, Guid[]? expectedLayout = null)
+    private static Guid[] ReadMatchingInstanceIds(SpellWorkbenchNativeBindings native,
+        object manager, object targetRecipe, Guid[] expectedLayout)
     {
-        var core = native.ReadGlyphValues(native.ReadCore(manager));
-        var augments = native.ReadGlyphValues(native.ReadAugments(manager));
-        var resolved = native.ResolveRecipe(manager, core);
-        var resolvedId = resolved is not null && resolved.GetType() == native.RecipeType
-            ? native.ReadIdentity(resolved)
-            : Guid.Empty;
-        var instances = new List<Guid>();
         var matching = new List<Guid>();
+        var targetId = native.ReadIdentity(targetRecipe);
         var active = native.ReadActiveValues(native.ReadActive(manager));
         for (var index = 0; index < active.Count; index++)
         {
@@ -615,28 +594,40 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             if (spell is null) continue;
             var reference = native.ReadSpellReference(spell);
             if (reference is null || reference.GetType() != native.RecipeType ||
-                native.ReadIdentity(reference) != native.ReadIdentity(targetRecipe)) continue;
+                native.ReadIdentity(reference) != targetId) continue;
             var container = native.ReadSpellGuid(spell);
             var instanceId = container is null ? Guid.Empty : native.ReadGuidValue(container);
-            instances.Add(instanceId);
-            if (expectedLayout is not null &&
-                SameLayout(native, native.ReadSpellAugments(spell), expectedLayout))
+            if (SameLayout(native, native.ReadSpellAugments(spell), expectedLayout))
                 matching.Add(instanceId);
         }
-        return new SpellWorkbenchState(resolvedId, native.IsDiscovered(targetRecipe),
-            ReadIds(native, core), ReadIds(native, augments), instances.ToArray(),
-            matching.ToArray());
+        return matching.ToArray();
     }
 
-    private static SpellWorkbenchState CaptureBestEffort(SpellWorkbenchNativeBindings native,
-        object manager, object recipe, in SpellWorkbenchState fallback) =>
-        CaptureBestEffort(native, manager, recipe, null, in fallback);
+    private static bool HasNewMatchingInstance(
+        SpellWorkbenchNativeBindings native,
+        object manager,
+        object recipe,
+        Guid[] expectedLayout,
+        Guid[] before) =>
+        HasNewInstance(before, ReadMatchingInstanceIds(native, manager, recipe, expectedLayout));
 
-    private static SpellWorkbenchState CaptureBestEffort(SpellWorkbenchNativeBindings native,
-        object manager, object recipe, Guid[]? expectedLayout, in SpellWorkbenchState fallback)
+    private static bool HasNewMatchingInstanceBestEffort(
+        SpellWorkbenchNativeBindings native,
+        object manager,
+        object recipe,
+        Guid[] expectedLayout,
+        Guid[] before)
     {
-        try { return Capture(native, manager, recipe, expectedLayout); }
-        catch (Exception ex) when (IsExpected(ex)) { return fallback; }
+        try { return HasNewMatchingInstance(native, manager, recipe, expectedLayout, before); }
+        catch (Exception ex) when (IsExpected(ex)) { return false; }
+    }
+
+    private static bool IsDiscoveredBestEffort(
+        SpellWorkbenchNativeBindings native,
+        object recipe)
+    {
+        try { return native.IsDiscovered(recipe); }
+        catch (Exception ex) when (IsExpected(ex)) { return false; }
     }
 
     private static Guid[] ReadIds(SpellWorkbenchNativeBindings native, IList values)
@@ -707,30 +698,21 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
     }
 
     private static SpellWorkbenchSubmission Verified(SpellWorkbenchNativeStage stage,
-        int nativeCalls, in SpellWorkbenchState before, in SpellWorkbenchState after, string reason)
+        int nativeCalls, string reason)
     {
-        var evidence = new SpellWorkbenchEvidence(true, in before, in after);
         return new SpellWorkbenchSubmission(SpellWorkbenchPreflight.Proceeded, stage,
             NativeMutationOutcome.Verified, new NativeMutationCallOutcome(nativeCalls, 1, 1),
-            in evidence, reason);
+            reason);
     }
 
     private static SpellWorkbenchSubmission FaultAfterCommit(in SpellWorkbenchAction action,
         SpellWorkbenchPreflight preflight, SpellWorkbenchNativeStage stage,
-        NativeMutationOutcome outcome, int nativeCalls, in SpellWorkbenchState before,
-        in SpellWorkbenchState after, string reason)
+        NativeMutationOutcome outcome, int nativeCalls, string reason)
     {
         var exactReason = $"Spell workbench action faulted after {stage} on " +
             $"recipe {EntityIdentityFormatter.Format(action.SpellRecipeId)}: {reason}";
-        var paymentInvoked =
-            (action.Kind == SpellWorkbenchActionKind.Discover &&
-                stage >= SpellWorkbenchNativeStage.Discover) ||
-            (action.Kind == SpellWorkbenchActionKind.CreateWithLayout &&
-                stage >= SpellWorkbenchNativeStage.Payment);
-        var evidence = new SpellWorkbenchEvidence(
-            true, in before, in after, paymentInvoked);
         return new SpellWorkbenchSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(nativeCalls, 1, 0), in evidence, exactReason);
+            new NativeMutationCallOutcome(nativeCalls, 1, 0), exactReason);
     }
 
     private bool TryCapturePermit(out string reason)

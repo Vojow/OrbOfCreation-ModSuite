@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -261,9 +262,7 @@ public sealed class Plugin : BaseUnityPlugin
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
         ComposeModConfig();
-        if (GameMcpActionRegistrationPolicy.ShouldCompose(
-                _runtimeActivationAllowed,
-                _configurationStore.Current.General.Enabled))
+        if (GameMcpActionRegistrationPolicy.ShouldCompose(_runtimeActivationAllowed))
         {
             // The shared runtime also owns the player's MCP GameActions. Automation policy still
             // honors General/Enabled and every feature mode, but those settings must not remove
@@ -669,9 +668,7 @@ public sealed class Plugin : BaseUnityPlugin
         UpdateBuildCompatibilityOverride();
         PublishChangedConfiguration();
         ValidateSuiteShortcuts();
-        if (!GameMcpActionRegistrationPolicy.ShouldCompose(
-                _runtimeActivationAllowed,
-                _configurationStore!.Current.General.Enabled))
+        if (!GameMcpActionRegistrationPolicy.ShouldCompose(_runtimeActivationAllowed))
         {
             _runtimeCompositionAttempted = false;
         }
@@ -686,7 +683,7 @@ public sealed class Plugin : BaseUnityPlugin
                 Logger.LogError("Could not compose the shared gameplay runtime: " +
                                 ex.GetBaseException().Message);
                 _featureStatuses?.ObserveServiceCycleUnavailable(
-                    _configurationStore.Current,
+                    _configurationStore!.Current,
                     _configurationStore.CurrentGeneration);
             }
         }
@@ -1419,7 +1416,7 @@ public sealed class Plugin : BaseUnityPlugin
                     GameMcpWorldQuery.Search(context, request.Query, request.Limit).Freeze());
                 return true;
             case "suite_health":
-                execution = GameMcpToolExecution.Read(ProjectGameMcpHealth(context));
+                execution = GameMcpToolExecution.Text(ProjectGameMcpHealthText(context));
                 return true;
             case "game_screen_catalog":
                 execution = GameMcpToolExecution.Read(CaptureScreenCatalogGameMcp());
@@ -1428,7 +1425,7 @@ public sealed class Plugin : BaseUnityPlugin
                 execution = GameMcpToolExecution.Read(ProjectGameMcpConfiguration(context));
                 return true;
             case "trace_health":
-                execution = GameMcpToolExecution.Read(ProjectGameMcpTraceHealth(context));
+                execution = GameMcpToolExecution.Text(ProjectGameMcpTraceHealthText(context));
                 return true;
             case "game_discover" when request.Mode == "preview":
                 execution = GameMcpToolExecution.Read(
@@ -1536,15 +1533,8 @@ public sealed class Plugin : BaseUnityPlugin
         if (GameMcpPostStateSettlement.IsReady(
                 latest, actionWorldGeneration, command))
         {
-            var projected = GameMcpWorldQuery.ProjectGameplayPostState(
+            state = GameMcpWorldQuery.ProjectGameplayPostState(
                 latest!, command, committed);
-            var fresh = new GameMcpObjectBuilder
-            {
-                ["worldGeneration"] = latest!.World!.Generation.Value,
-            };
-            if (projected is GameMcpObject projectedObject) fresh.CopyFrom(projectedObject);
-            else fresh["postState"] = projected;
-            state = fresh.Freeze();
         }
         else
         {
@@ -1577,11 +1567,11 @@ public sealed class Plugin : BaseUnityPlugin
         if (uri == "orb://world/categories")
             return GameMcpToolExecution.Read(GameMcpWorldQuery.ListCategories(context).Freeze());
         if (uri == "orb://suite/health")
-            return GameMcpToolExecution.Read(ProjectGameMcpHealth(context));
+            return GameMcpToolExecution.Text(ProjectGameMcpHealthText(context));
         if (uri == "orb://suite/configuration")
             return GameMcpToolExecution.Read(ProjectGameMcpConfiguration(context));
         if (uri == "orb://trace/health")
-            return GameMcpToolExecution.Read(ProjectGameMcpTraceHealth(context));
+            return GameMcpToolExecution.Text(ProjectGameMcpTraceHealthText(context));
         var category = Uri.UnescapeDataString(
             uri.Substring("orb://world/category/".Length));
         return GameMcpToolExecution.Read(GameMcpWorldQuery.ListRows(
@@ -1591,69 +1581,53 @@ public sealed class Plugin : BaseUnityPlugin
             GameMcpWorldQuery.DefaultLimit).Freeze());
     }
 
-    internal static GameMcpValue ProjectGameMcpHealth(GameMcpFrameContext context)
+    internal static string ProjectGameMcpHealthText(GameMcpFrameContext context)
     {
         var stopped = context.Runtime?.EmergencyStopEngaged ??
             context.Configuration.Snapshot.Safety.EmergencyDisable;
-        var result = new GameMcpObjectBuilder
-        {
-            ["status"] = "available",
-            ["scene"] = context.SceneName,
-            ["runtime"] = new GameMcpObjectBuilder
-            {
-                ["available"] = context.RuntimeAvailable,
-            },
-            ["nativeContracts"] = new GameMcpObjectBuilder
-            {
-                ["available"] = context.NativeContractsAvailable,
-            },
-            ["emergencyStop"] = new GameMcpObjectBuilder
-            {
-                ["engaged"] = stopped,
-            },
-        };
+        var result = new StringBuilder()
+            .AppendLine("available")
+            .Append("scene: ").AppendLine(GameMcpTextFormatter.Plain(context.SceneName))
+            .Append("runtime: ").AppendLine(context.RuntimeAvailable ? "available" : "unavailable")
+            .Append("native contracts: ").AppendLine(
+                context.NativeContractsAvailable ? "available" : "unavailable")
+            .Append("emergency stop: ").AppendLine(stopped ? "engaged" : "clear");
         if (!context.RuntimeAvailable && context.RuntimeNotAvailableReason.Length > 0)
-            ((GameMcpObjectBuilder)result["runtime"]!)["reason"] =
-                context.RuntimeNotAvailableReason;
+            result.Append("runtime reason: ").AppendLine(
+                GameMcpTextFormatter.Plain(context.RuntimeNotAvailableReason));
 
-        var features = new GameMcpArrayBuilder();
         var featureGroups = context.FeatureStatuses
             .GroupBy(feature => new { feature.State, feature.Reason.Code })
             .OrderBy(group => group.Key.State.ToString(), StringComparer.Ordinal)
             .ThenBy(group => group.Key.Code.ToString(), StringComparer.Ordinal);
         foreach (var group in featureGroups)
         {
-            var row = new GameMcpObjectBuilder
-            {
-                ["state"] = GameMcpEntityWireNormalizer.Snake(group.Key.State.ToString()),
-                ["features"] = group.Select(
-                    feature => CanonicalGameMcpFeatureName(feature.DisplayName)).ToArray(),
-            };
+            var state = GameMcpEntityWireNormalizer.Snake(group.Key.State.ToString());
             var reasonCode = GameMcpEntityWireNormalizer.Snake(group.Key.Code.ToString());
+            result.Append("features ").Append(state);
             if (reasonCode.Length > 0 && reasonCode != "none" &&
-                !string.Equals(reasonCode, (string?)row["state"], StringComparison.Ordinal))
-                row["reasonCode"] = reasonCode;
-            features.Add(row);
+                !string.Equals(reasonCode, state, StringComparison.Ordinal))
+                result.Append(" (").Append(reasonCode).Append(')');
+            result.Append(": ").AppendLine(string.Join(", ", group.Select(
+                feature => GameMcpTextFormatter.Plain(
+                    CanonicalGameMcpFeatureName(feature.DisplayName)))));
         }
-        result["featureGroups"] = features;
 
         var runtimeServices = context.Runtime?.Services ?? Array.Empty<AutomataServiceFrameFacts>();
         var serviceGroups = runtimeServices.GroupBy(service =>
             service.HasRunner
                 ? service.Runner.Fault.IsValid ? "faulted" : service.Runner.Phase.ToString()
                 : "unavailable");
-        var services = new GameMcpArrayBuilder();
         foreach (var group in serviceGroups.OrderBy(group => group.Key, StringComparer.Ordinal))
         {
-            services.Add(new GameMcpObjectBuilder
-            {
-                ["state"] = GameMcpEntityWireNormalizer.Snake(group.Key),
-                ["services"] = group.Select(
-                    service => CanonicalGameMcpFeatureName(service.DisplayName)).ToArray(),
-            });
+            result.Append("services ")
+                .Append(GameMcpEntityWireNormalizer.Snake(group.Key))
+                .Append(": ")
+                .AppendLine(string.Join(", ", group.Select(
+                    service => GameMcpTextFormatter.Plain(
+                        CanonicalGameMcpFeatureName(service.DisplayName)))));
         }
-        result["serviceGroups"] = services;
-        return result.Freeze();
+        return result.ToString().TrimEnd();
     }
 
     private static string CanonicalGameMcpFeatureName(string name) =>
@@ -1710,31 +1684,45 @@ public sealed class Plugin : BaseUnityPlugin
         return result;
     }
 
-    internal static GameMcpValue ProjectGameMcpTraceHealth(GameMcpFrameContext context)
+    internal static string ProjectGameMcpTraceHealthText(GameMcpFrameContext context)
     {
         var status = context.TraceWriterStatus;
-        var writer = new GameMcpObjectBuilder
-        {
-            ["state"] = status.State.ToString(),
-            ["result"] = status.Result.ToString(),
-            ["acceptedRecords"] = status.AcceptedRecords,
-            ["writtenRecords"] = status.WrittenRecords,
-            ["discardedRecords"] = status.DiscardedRecords,
-            ["bytesWritten"] = status.BytesWritten,
-            ["writtenSegments"] = status.WrittenSegments,
-            ["retainedSegments"] = status.RetainedSegments,
-            ["pendingBlocks"] = status.PendingBlocks,
-            ["peakPendingBlocks"] = status.PeakPendingBlocks,
-        };
-        if (status.ArtifactName.Length > 0) writer["artifactName"] = status.ArtifactName;
-        if (status.FaultSite.Length > 0) writer["faultSite"] = status.FaultSite;
-        if (status.FaultMessage.Length > 0) writer["faultMessage"] = status.FaultMessage;
-        return new GameMcpObjectBuilder
-        {
-            ["status"] = "available",
-            ["traceWriterRevision"] = context.TraceWriterRevision,
-            ["traceWriterStatus"] = writer,
-        }.Freeze();
+        var result = new StringBuilder()
+            .AppendLine("available")
+            .Append("trace writer: ").AppendLine(
+                GameMcpEntityWireNormalizer.Snake(status.State.ToString()));
+        var outcome = GameMcpEntityWireNormalizer.Snake(status.Result.ToString());
+        if (outcome.Length > 0 && outcome != "none")
+            result.Append("result: ").AppendLine(outcome);
+        result.Append("records: accepted ").Append(
+                status.AcceptedRecords.ToString(CultureInfo.InvariantCulture))
+            .Append(", written ").Append(
+                status.WrittenRecords.ToString(CultureInfo.InvariantCulture))
+            .Append(", discarded ").AppendLine(
+                status.DiscardedRecords.ToString(CultureInfo.InvariantCulture))
+            .Append("bytes written: ").AppendLine(
+                status.BytesWritten.ToString(CultureInfo.InvariantCulture))
+            .Append("segments: written ").Append(
+                status.WrittenSegments.ToString(CultureInfo.InvariantCulture))
+            .Append(", retained ").AppendLine(
+                status.RetainedSegments.ToString(CultureInfo.InvariantCulture))
+            .Append("pending blocks: ").Append(
+                status.PendingBlocks.ToString(CultureInfo.InvariantCulture))
+            .Append(" (peak ").Append(
+                status.PeakPendingBlocks.ToString(CultureInfo.InvariantCulture))
+            .AppendLine(")");
+        if (status.ArtifactName.Length > 0)
+            result.Append("artifact: ").AppendLine(
+                GameMcpTextFormatter.Plain(status.ArtifactName));
+        if (status.FaultSite.Length > 0)
+            result.Append("fault site: ").AppendLine(
+                GameMcpTextFormatter.Plain(status.FaultSite));
+        if (status.FaultMessage.Length > 0)
+            result.Append("fault: ").AppendLine(
+                GameMcpTextFormatter.Plain(status.FaultMessage));
+        result.Append("revision: ").Append(
+            context.TraceWriterRevision.ToString(CultureInfo.InvariantCulture));
+        return result.ToString();
     }
 
     private static bool TryPrepareGameMcpCommand(
@@ -1849,10 +1837,7 @@ public sealed class Plugin : BaseUnityPlugin
         else if (kind == GameMcpCommandKind.EquipmentLoadout)
             nativeType = "EquipmentSO";
         else if (kind == GameMcpCommandKind.Challenge)
-        {
             nativeType = "ChallengeSO";
-            if (mode == "activate") mode = "queue";
-        }
         else if (kind == GameMcpCommandKind.Prestige)
             nativeType = "PersistentResetManager";
         else if (kind == GameMcpCommandKind.Research)
@@ -2033,8 +2018,6 @@ public sealed class Plugin : BaseUnityPlugin
             }
             return GameMcpCommandResult.Committed(
                 "configuration_committed",
-                "the BepInEx entry was committed through configuration generation " +
-                _configurationStore.CurrentGeneration.Value,
                 observedLifecycleGeneration: _lifecycleGeneration,
                 observedConfigurationGeneration:
                     _configurationStore.CurrentGeneration.Value,
@@ -2081,9 +2064,6 @@ public sealed class Plugin : BaseUnityPlugin
         _configurationStore.SetEmergencyStop(engage);
         return GameMcpCommandResult.Committed(
             engage ? "emergency_stop_engaged" : "emergency_stop_resume_committed",
-            engage
-                ? "the committed safety setting is true and prepared native actions were cancelled"
-                : "the committed safety setting is false; dispatch resumes only after the host accepts a fresh world",
             observedLifecycleGeneration: _lifecycleGeneration,
             observedConfigurationGeneration:
                 _configurationStore.CurrentGeneration.Value,
@@ -2104,7 +2084,6 @@ public sealed class Plugin : BaseUnityPlugin
                 command,
                 GadgetCommitted(
                     "screenshot_captured",
-                    "the game framebuffer was captured after the current frame completed",
                     new GameMcpObjectBuilder())));
             result = null!;
             return false;
@@ -2179,7 +2158,6 @@ public sealed class Plugin : BaseUnityPlugin
         startGame.Invoke(manager, Array.Empty<object>());
         return GadgetCommitted(
             "continue_invoked",
-            "the game's audited native Continue action was invoked for the selected save",
             new GameMcpObjectBuilder());
     }
 
@@ -2201,7 +2179,6 @@ public sealed class Plugin : BaseUnityPlugin
 
         var details = new GameMcpObjectBuilder
         {
-            ["worldGeneration"] = state.World?.Generation.Value ?? 0,
             ["scene"] = state.SceneName,
             ["runtimeAvailable"] = state.RuntimeAvailable,
         };
@@ -2233,7 +2210,6 @@ public sealed class Plugin : BaseUnityPlugin
             details["width"] = encodedTexture.width;
             details["height"] = encodedTexture.height;
             details["scene"] = SceneManager.GetActiveScene().name;
-            details["worldGeneration"] = command.FrameContext?.World?.Generation.Value ?? 0;
             if (command.SaveCapture)
             {
                 var directory = AutomataTraceRunRoot.Child("mcp-screenshots");
@@ -2485,7 +2461,6 @@ public sealed class Plugin : BaseUnityPlugin
         }
         var result = GadgetCommitted(
             "navigation_arrived",
-            "the requested catalog destination was invoked through native UI controls",
             details);
         yield return CompleteNavigateGameMcpAfterSettlement(
             command,
@@ -2519,7 +2494,6 @@ public sealed class Plugin : BaseUnityPlugin
             state, mutationWorldGeneration);
         if (fresh && includeDestinationState)
         {
-            details["worldGeneration"] = state!.World!.Generation.Value;
             var destinationSubtabs = CaptureSubtabs();
             if (destinationSubtabs.Count > 0)
                 details["subtabStrips"] = ProjectSubtabStrips(destinationSubtabs);
@@ -2600,7 +2574,6 @@ public sealed class Plugin : BaseUnityPlugin
         onNodeClick.Invoke(activeLists[0], new[] { plot.Value });
         return GadgetCommitted(
             "navigation_invoked",
-            "the exact audited plot was selected through the native plot-list click path",
             new GameMcpObjectBuilder
             {
                 ["plotUuid"] = stableUuid.ToString("D"),
@@ -2823,7 +2796,6 @@ public sealed class Plugin : BaseUnityPlugin
         if (end < entries.Count) details["nextOffset"] = end;
         return GadgetCommitted(
             "tooltip_catalog_read",
-            "active tooltip-bearing elements were enumerated from the current native screen",
             details);
     }
 
@@ -2885,7 +2857,6 @@ public sealed class Plugin : BaseUnityPlugin
         if (command.Capture) hover.OpenTooltip();
         var result = GadgetCommitted(
             "tooltip_read",
-            "typed authored, computed, nested, and inspected tooltip nodes were read from the native element",
             details);
         return result;
     }
@@ -2948,17 +2919,14 @@ public sealed class Plugin : BaseUnityPlugin
         }
         return GadgetCommitted(
             "probe_read",
-            "the allowlisted read-only probe completed on Unity's main thread",
             details);
     }
 
     private GameMcpCommandResult GadgetCommitted(
         string code,
-        string reason,
         GameMcpObjectBuilder details) =>
         GameMcpCommandResult.Committed(
             code,
-            reason,
             observedLifecycleGeneration: _lifecycleGeneration,
             observedConfigurationGeneration:
                 _configurationStore?.CurrentGeneration.Value ?? 0,

@@ -110,7 +110,6 @@ internal sealed class SpellCompositionGameAction : IDisposable
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.AlreadyInRequestedState,
                 "The global " + Name(action.Dial) + " is already " + current + ".");
-        var before = Capture(native, player, action.Dial);
         if (!TryCapturePermit(out var reason))
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.MutationPermitUnavailable,
@@ -119,70 +118,47 @@ internal sealed class SpellCompositionGameAction : IDisposable
         try
         {
             native.SetInt(variable, action.Value);
-            var after = Capture(native, player, action.Dial);
-            return after.Current == action.Value
-                ? Verified(in before, in after,
+            var observed = native.ReadInt(variable);
+            return observed == action.Value
+                ? Verified(
                     "The global " + Name(action.Dial) + " is now " + action.Value + ".")
                 : Fault(
                     SpellCompositionPreflight.VerificationFailed,
                     SpellCompositionNativeStage.Verification,
                     NativeMutationOutcome.PostconditionFailed,
-                    in before,
-                    in after,
-                    "The global " + Name(action.Dial) + " variable did not hold the requested value.");
+                    "Expected " + action.Value + ", observed " + observed + ".");
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            var after = CaptureBestEffort(native, player, action.Dial, in before);
-            if (after.Current == action.Value)
-                return Verified(in before, in after,
+            if (ReadCurrentBestEffort(native, variable, current) == action.Value)
+                return Verified(
                     "The " + Name(action.Dial) + " setter threw after the requested value became observable.");
             return Fault(
                 SpellCompositionPreflight.PostCommitFault,
                 SpellCompositionNativeStage.Dial,
                 NativeMutationOutcome.ExecutionThrew,
-                in before,
-                in after,
                 "The " + Name(action.Dial) + " setter threw before the requested outcome was observable: " +
                 ex.GetBaseException().Message);
         }
     }
 
-    private static SpellCompositionState Capture(
+    private static int ReadCurrentBestEffort(
         SpellCompositionNativeBindings native,
-        object player,
-        CastingDial dial)
+        object variable,
+        int fallback)
     {
-        var variable = ReadVariable(native, dial) ??
-            throw new InvalidOperationException("Player " + Name(dial) + " variable was null.");
-        return new SpellCompositionState(
-            dial,
-            native.ReadInt(variable),
-            native.ReadInt(ReadMaximumVariable(native, player, dial)));
-    }
-
-    private static SpellCompositionState CaptureBestEffort(
-        SpellCompositionNativeBindings native,
-        object player,
-        CastingDial dial,
-        in SpellCompositionState fallback)
-    {
-        try { return Capture(native, player, dial); }
+        try { return native.ReadInt(variable); }
         catch (Exception ex) when (IsExpected(ex)) { return fallback; }
     }
 
     private static SpellCompositionSubmission Verified(
-        in SpellCompositionState before,
-        in SpellCompositionState after,
         string reason)
     {
-        var evidence = new SpellCompositionEvidence(true, in before, in after);
         return new SpellCompositionSubmission(
             SpellCompositionPreflight.Proceeded,
             SpellCompositionNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(1, 1, 1),
-            in evidence,
             reason);
     }
 
@@ -190,17 +166,13 @@ internal sealed class SpellCompositionGameAction : IDisposable
         SpellCompositionPreflight preflight,
         SpellCompositionNativeStage stage,
         NativeMutationOutcome outcome,
-        in SpellCompositionState before,
-        in SpellCompositionState after,
         string reason)
     {
-        var evidence = new SpellCompositionEvidence(true, in before, in after);
         return new SpellCompositionSubmission(
             preflight,
             stage,
             outcome,
             new NativeMutationCallOutcome(1, 1, 0),
-            in evidence,
             "Casting dial faulted after " + stage + ": " + reason);
     }
 

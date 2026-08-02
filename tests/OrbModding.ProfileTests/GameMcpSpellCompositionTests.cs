@@ -119,15 +119,11 @@ public sealed class GameMcpSpellCompositionTests
     [Fact]
     public void CommittedMutationReturnsOnlyTheCompleteNamedPostState()
     {
-        var before = new SpellCompositionState(CastingDial.Output, 4, 12);
-        var after = new SpellCompositionState(CastingDial.Output, 5, 12);
-        var evidence = new SpellCompositionEvidence(true, in before, in after);
         var submission = new SpellCompositionSubmission(
             SpellCompositionPreflight.Proceeded,
             SpellCompositionNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(1, 1, 1),
-            in evidence,
             "the global output level is observable");
         var mapped = SpellCompositionActionResultMapper.Map(in submission);
         var command = Command("set_output_level");
@@ -145,9 +141,10 @@ public sealed class GameMcpSpellCompositionTests
         var success = GameMcpTestHarness.Json(terminal.Project(command));
 
         Assert.Equal(
-            new[] { "status", "casting", "equipped", "augmentOptions", "moveDestinations" },
+            new[] { "status", "code", "casting", "equipped", "augmentOptions", "moveDestinations" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
+        Assert.Equal("committed", (string?)success["code"]);
         Assert.Equal(3, (int)success["casting"]!["reserve"]!["current"]!);
         var equipped = Assert.Single(success["equipped"]!.Values<JObject>())!;
         Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
@@ -165,31 +162,20 @@ public sealed class GameMcpSpellCompositionTests
     }
 
     [Fact]
-    public void FailureKeepsNamedOutcomeEvidenceWithoutPersistentQuarantine()
+    public void FailureNamesTheSingleMissingOutcomeWithoutPersistentQuarantine()
     {
-        var before = new SpellCompositionState(CastingDial.Reserve, 4, 12);
-        var after = new SpellCompositionState(CastingDial.Reserve, 4, 12);
-        var evidence = new SpellCompositionEvidence(true, in before, in after);
         var submission = new SpellCompositionSubmission(
             SpellCompositionPreflight.VerificationFailed,
             SpellCompositionNativeStage.Verification,
             NativeMutationOutcome.PostconditionFailed,
             new NativeMutationCallOutcome(1, 1, 0),
-            in evidence,
             "the requested composition was not observable");
 
         var failure = GameMcpTestHarness.Json(
             GameMcpSpellCompositionProjection.Project(in submission));
 
-        Assert.Equal(new[]
-            {
-                "nativeStage", "outcome", "before", "after",
-            },
-            failure.Properties().Select(property => property.Name));
-        Assert.Null(failure["preflight"]);
-        Assert.Equal("reserve", (string?)failure["before"]!["dial"]);
-        Assert.Equal(4, (int)failure["before"]!["current"]!);
-        Assert.Null(failure["quarantined"]);
+        Assert.Equal("requested dial value", (string?)failure["missingOutcome"]);
+        Assert.Single(failure.Properties());
         Assert.DoesNotContain("payment", failure.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 

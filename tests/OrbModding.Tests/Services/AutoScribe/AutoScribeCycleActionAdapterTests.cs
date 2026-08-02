@@ -8,24 +8,13 @@ namespace OrbModding.Tests.Services.AutoScribe;
 public sealed class AutoScribeCycleActionAdapterTests
 {
     [Fact]
-    public void PaidPartialCommitMapsToFaultedEvidenceWithItsExactCallShape()
+    public void PostPaymentFaultMapsToFaultedOutcomeWithItsExactCallShape()
     {
-        var receipt = new AutoScribeMutationReceipt(
-            evidenceAvailable: true,
-            paymentInvoked: true,
-            resourcesCharged: true,
-            costMatched: true,
-            ceilingTransitionObserved: true,
-            admittedToQueue: false,
-            admittedToInstantStock: false,
-            queueDelta: 0,
-            stockDelta: 0);
         var submission = new AutoScribeSubmission(
             AutoScribePreflight.PostPaymentFault,
             AutoScribeNativeStage.Construction,
             NativeMutationOutcome.ExecutionThrew,
             new NativeMutationCallOutcome(2, 1, 0),
-            in receipt,
             "Construction failed after exact payment.");
 
         var result = AutoScribeCycleActionAdapter.Map(in submission);

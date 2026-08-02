@@ -98,27 +98,20 @@ public sealed class GameMcpChallengeTests
     }
 
     [Fact]
-    public void Failure_keeps_decomposed_evidence_while_success_yields_to_newer_poststate()
+    public void Failure_names_the_missing_outcome_while_success_yields_to_newer_poststate()
     {
-        var before = new ChallengeState(true, 0, false, true, false, true, true, 2, 3,
-            new[] { First }, Array.Empty<Guid>());
-        var after = new ChallengeState(true, 0, false, true, false, true, true, 2, 3,
-            new[] { First }, Array.Empty<Guid>());
-        var receipt = new ChallengeReceipt(ChallengeActionKind.Queue, in before, in after);
         var failure = new ChallengeSubmission(ChallengePreflight.VerificationFailed,
             ChallengeNativeStage.Verification, NativeMutationOutcome.PostconditionFailed,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, "state unchanged");
+            new NativeMutationCallOutcome(1, 1, 0), "state unchanged");
         var success = new ChallengeSubmission(ChallengePreflight.Proceeded,
             ChallengeNativeStage.Verification, NativeMutationOutcome.Verified,
-            new NativeMutationCallOutcome(1, 1, 1), in receipt, "state changed");
+            new NativeMutationCallOutcome(1, 1, 1), "state changed");
 
         var failed = Json(GameMcpChallengeProjection.Project(in failure), World());
         var committed = Json(GameMcpChallengeProjection.Project(in success), World());
 
-        Assert.Null(failed["preflight"]);
-        Assert.Equal("activate", (string?)failed["requestedMode"]);
-        Assert.Equal("Prismatic Trial", (string?)failed["before"]!["timeOffers"]![0]!["name"]);
-        Assert.Null(failed["quarantined"]);
+        Assert.Equal("requested challenge transition", (string?)failed["missingOutcome"]);
+        Assert.Single(failed.Properties());
         Assert.Empty(committed.Properties());
     }
 

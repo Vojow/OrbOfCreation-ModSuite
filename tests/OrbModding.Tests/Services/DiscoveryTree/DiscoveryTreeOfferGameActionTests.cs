@@ -24,7 +24,7 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Initiate_reports_exact_cost_evidence_and_delayed_offer_transition()
+    public void Initiate_pays_and_commits_the_crafting_transition()
     {
         var resource = Resource();
         var tree = Tree();
@@ -38,20 +38,12 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
         Assert.Equal(1, tree.nextItemCost.PerformCalls);
         Assert.Equal(1, tree.initiateCalls);
-        Assert.True(result.Receipt.PaymentInvoked);
-        Assert.True(result.Receipt.ResourcesCharged);
-        Assert.True(result.Receipt.PostconditionMatched);
-        Assert.True(result.Receipt.OffersPendingNativeIncrement);
-        var cost = Assert.Single(result.Receipt.Costs);
-        Assert.Equal(resource.GetGuid(), cost.ResourceId);
-        Assert.Equal(0, cost.Expected.CompareTo(new BigDouble(25, 0)));
-        Assert.Equal(0, cost.Charged.CompareTo(new BigDouble(25, 0)));
         Assert.Equal(2, result.CallOutcome.NativeCallsAttempted);
         Assert.Equal(1, result.CallOutcome.MutationsCommitted);
     }
 
     [Fact]
-    public void Initiate_sub_ulp_cost_evidence_does_not_gate_the_requested_transition()
+    public void Initiate_sub_ulp_payment_does_not_gate_the_requested_transition()
     {
         var mana = Resource(new BigDouble(2.1, 19));
         var knowledge = Resource(new BigDouble(5.7, 23));
@@ -65,11 +57,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
-        Assert.True(result.Receipt.PaymentInvoked);
-        Assert.False(result.Receipt.ResourcesCharged);
-        Assert.All(result.Receipt.Costs, cost => Assert.Equal(0, cost.Charged.CompareTo(BigDouble.Zero)));
-        Assert.True(result.Receipt.OffersPendingNativeIncrement);
-        Assert.True(result.Receipt.PostconditionMatched);
     }
 
     [Fact]
@@ -85,7 +72,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(0, tree.rerollsLeft);
-        Assert.Equal(0, result.Receipt.After.Rerolls);
     }
 
     [Fact]
@@ -100,10 +86,9 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
-        Assert.Equal(99, result.Receipt.After.Rerolls);
-        Assert.True(result.Receipt.After.UsedRerollsLastDiscover);
-        Assert.NotEmpty(result.Receipt.After.CurrentChoices);
-        Assert.Equal(3, result.Receipt.After.TotalDiscovered);
+        Assert.Equal(99, tree.rerollsLeft);
+        Assert.True(tree.usedRerollsLastDiscover);
+        Assert.NotEmpty(tree.currentChoiceIds);
     }
 
     [Fact]
@@ -117,7 +102,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
             DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
 
         Assert.True(result.Verified, result.Reason);
-        Assert.True(result.Receipt.PostconditionMatched);
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
     }
 
@@ -134,11 +118,7 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.Equal(DiscoveryTreeOfferPreflight.VerificationFailed, result.Preflight);
         Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Idle, tree.actionMode);
-        Assert.Empty(result.Receipt.After.CurrentChoices);
-        Assert.True(result.Receipt.PaymentInvoked);
-        Assert.False(result.Receipt.ResourcesCharged);
-        Assert.Contains("expected Crafting mode", result.Reason, StringComparison.Ordinal);
-        Assert.Contains("observed 0", result.Reason, StringComparison.Ordinal);
+        Assert.Contains("did not enter Crafting mode", result.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -154,9 +134,7 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(item.GetGuid(), tree.selectedChoiceId.guid);
         Assert.False(item.discovered);
-        Assert.Equal(new[] { item.GetGuid() }, result.Receipt.After.CurrentChoices);
         Assert.Equal(1, tree.selectCalls);
-        Assert.False(result.Receipt.PaymentInvoked);
     }
 
     [Fact]
@@ -170,10 +148,9 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
             DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), Epoch));
 
         Assert.True(result.Verified, result.Reason);
-        Assert.Equal(item.GetGuid(), result.Receipt.After.SelectedChoice);
+        Assert.Equal(item.GetGuid(), tree.selectedChoiceId.guid);
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Idle, tree.actionMode);
-        Assert.Empty(result.Receipt.After.CurrentChoices);
-        Assert.Equal(2, result.Receipt.After.TotalDiscovered);
+        Assert.Empty(tree.currentChoiceIds);
     }
 
     [Fact]
@@ -187,11 +164,11 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
             DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), Epoch));
 
         Assert.True(result.Verified, result.Reason);
-        Assert.Equal(item.GetGuid(), result.Receipt.After.SelectedChoice);
+        Assert.Equal(item.GetGuid(), tree.selectedChoiceId.guid);
     }
 
     [Fact]
-    public void Confirm_receipts_exact_discovery_and_required_versus_pool_count_delta()
+    public void Confirm_commits_exact_discovery_and_returns_to_idle()
     {
         var (tree, item) = ChoiceTree();
         item.required = false;
@@ -203,15 +180,11 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.True(item.discovered);
-        Assert.Equal(1, result.Receipt.After.TotalDiscovered);
-        Assert.Equal(1, result.Receipt.After.PoolDiscovered);
-        Assert.Empty(result.Receipt.After.CurrentChoices);
-        Assert.Equal(Guid.Empty, result.Receipt.After.SelectedChoice);
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Idle, tree.actionMode);
     }
 
     [Fact]
-    public void Confirm_required_offer_does_not_increment_pool_count()
+    public void Confirm_required_offer_commits_target_discovery()
     {
         var (tree, item) = ChoiceTree();
         item.required = true;
@@ -222,8 +195,7 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
             DiscoveryTreeOfferActionKind.Confirm, tree.GetGuid(), item.GetGuid(), Epoch));
 
         Assert.True(result.Verified, result.Reason);
-        Assert.Equal(1, result.Receipt.After.TotalDiscovered);
-        Assert.Equal(0, result.Receipt.After.PoolDiscovered);
+        Assert.True(item.discovered);
     }
 
     [Fact]
@@ -238,10 +210,9 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
             DiscoveryTreeOfferActionKind.Confirm, tree.GetGuid(), item.GetGuid(), Epoch));
 
         Assert.True(result.Verified, result.Reason);
-        Assert.True(result.Receipt.After.TargetDiscovered);
+        Assert.True(item.discovered);
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Choice, tree.actionMode);
-        Assert.NotEmpty(result.Receipt.After.CurrentChoices);
-        Assert.Equal(5, result.Receipt.After.TotalDiscovered);
+        Assert.NotEmpty(tree.currentChoiceIds);
     }
 
     [Fact]
@@ -256,11 +227,11 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
             DiscoveryTreeOfferActionKind.Confirm, tree.GetGuid(), item.GetGuid(), Epoch));
 
         Assert.True(result.Verified, result.Reason);
-        Assert.True(result.Receipt.After.TargetDiscovered);
+        Assert.True(item.discovered);
     }
 
     [Fact]
-    public void Reroll_receipts_debit_exclusions_and_suite_stale_selection_clear()
+    public void Reroll_commits_crafting_and_clears_the_stale_selection()
     {
         var (tree, item) = ChoiceTree();
         var second = Item();
@@ -281,7 +252,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
             tree.nextExcludedIds.Select(value => value.guid));
         Assert.Equal(Guid.Empty, tree.selectedChoiceId.guid);
         Assert.Equal(2, result.CallOutcome.NativeCallsAttempted);
-        Assert.True(result.Receipt.OffersPendingNativeIncrement);
     }
 
     [Fact]
@@ -298,11 +268,10 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
-        Assert.Equal(6, result.Receipt.After.Rerolls);
-        Assert.False(result.Receipt.After.UsedRerollsLastDiscover);
-        Assert.NotEmpty(result.Receipt.After.CurrentChoices);
-        Assert.Empty(result.Receipt.After.NextExclusions);
-        Assert.Equal(2, result.Receipt.After.TotalDiscovered);
+        Assert.Equal(6, tree.rerollsLeft);
+        Assert.False(tree.usedRerollsLastDiscover);
+        Assert.NotEmpty(tree.currentChoiceIds);
+        Assert.Empty(tree.nextExcludedIds);
     }
 
     [Fact]
@@ -464,7 +433,7 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Partial_payment_is_receipted_and_the_next_call_revalidates()
+    public void Partial_payment_faults_and_the_next_call_revalidates()
     {
         var first = Resource();
         var second = Resource();
@@ -478,8 +447,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
             DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
 
         Assert.Equal(DiscoveryTreeOfferPreflight.PostCommitFault, result.Preflight);
-        Assert.True(result.Receipt.PaymentInvoked);
-        Assert.True(result.Receipt.ResourcesCharged);
         Assert.Equal(0, result.CallOutcome.MutationsCommitted);
         var next = action.Submit(new DiscoveryTreeOfferAction(
             DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
@@ -487,7 +454,7 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Confirm_fault_after_native_reset_preserves_partial_evidence()
+    public void Confirm_fault_after_native_reset_does_not_claim_the_target_outcome()
     {
         var (tree, item) = ChoiceTree();
         tree.selectedChoiceId = new GuidContainer(item.GetGuid());
@@ -498,9 +465,7 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
             DiscoveryTreeOfferActionKind.Confirm, tree.GetGuid(), item.GetGuid(), Epoch));
 
         Assert.Equal(DiscoveryTreeOfferPreflight.PostCommitFault, result.Preflight);
-        Assert.True(result.Receipt.EvidenceAvailable);
-        Assert.Equal(1, result.Receipt.After.TotalDiscovered);
-        Assert.False(result.Receipt.After.TargetDiscovered);
+        Assert.False(item.discovered);
     }
 
     [Fact]
@@ -517,12 +482,12 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(DiscoveryTreeOfferNativeStage.Verification, result.Stage);
-        Assert.Equal(Guid.Empty, result.Receipt.After.SelectedChoice);
-        Assert.Equal(0, result.Receipt.After.Rerolls);
+        Assert.Equal(Guid.Empty, tree.selectedChoiceId.guid);
+        Assert.Equal(0, tree.rerollsLeft);
     }
 
     [Fact]
-    public void Native_postcondition_mismatch_is_partial_without_persistent_blocking()
+    public void Native_postcondition_mismatch_faults_without_persistent_blocking()
     {
         var (tree, item) = ChoiceTree();
         tree.suppressSelect = true;
@@ -533,8 +498,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
 
         Assert.Equal(DiscoveryTreeOfferPreflight.VerificationFailed, result.Preflight);
         Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
-        Assert.True(result.Receipt.EvidenceAvailable);
-        Assert.False(result.Receipt.PostconditionMatched);
         Assert.Equal(1, result.CallOutcome.NativeCallsAttempted);
         Assert.Equal(0, result.CallOutcome.MutationsCommitted);
     }

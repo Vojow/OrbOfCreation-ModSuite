@@ -15,7 +15,7 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void RemoveCommitsExactAbsenceAndSurvivorOrderForHoleOrShift(bool preserveSlot)
+    public void RemoveCommitsExactAbsenceForHoleOrShift(bool preserveSlot)
     {
         var first = Spell("First");
         var target = Spell("Target");
@@ -28,10 +28,6 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(new[] { first, last }, SpellManager.instance.activeSpells.value.Where(x => !x.IsEmpty()));
-        Assert.Equal(1, result.Evidence.SourceSlot);
-        Assert.Equal(new[] { first.guidContainer.guid, target.guidContainer.guid, last.guidContainer.guid },
-            result.Evidence.Before.Slots);
-        Assert.DoesNotContain(target.guidContainer.guid, result.Evidence.After.Slots);
     }
 
     [Fact]
@@ -62,7 +58,7 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
         var result = action.Submit(Remove(spell));
 
         Assert.True(result.Verified, result.Reason);
-        Assert.DoesNotContain(spell.guidContainer.guid, result.Evidence.After.Slots);
+        Assert.DoesNotContain(spell, SpellManager.instance.activeSpells.value);
     }
 
     [Fact]
@@ -78,8 +74,7 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
 
         Assert.Equal(SpellLoadoutPreflight.VerificationFailed, failed.Preflight);
         Assert.Equal(SpellLoadoutPreflight.VerificationFailed, retry.Preflight);
-        Assert.True(failed.Evidence.Available);
-        Assert.Contains(spell.guidContainer.guid, failed.Evidence.After.Slots);
+        Assert.Contains(spell, SpellManager.instance.activeSpells.value);
     }
 
     [Fact]
@@ -98,8 +93,6 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
         Assert.Equal(new[] { last, middle, first }, list.value);
         Assert.Equal(1, list.SwapCalls);
         Assert.Equal(1, list.UpdateObservableCalls);
-        Assert.Equal(0, result.Evidence.SourceSlot);
-        Assert.Equal(2, result.Evidence.DestinationSlot);
     }
 
     [Fact]
@@ -116,7 +109,6 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.True(list.value[0].IsEmpty());
         Assert.Same(spell, list.value[1]);
-        Assert.Equal(new[] { Guid.Empty, spell.guidContainer.guid }, result.Evidence.After.Slots);
     }
 
     [Fact]
@@ -137,7 +129,7 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
     }
 
     [Fact]
-    public void MissingSwapOutcomeFaultsEachAttemptAndPreservesFailureEvidence()
+    public void MissingSwapOutcomeFaultsEachAttempt()
     {
         var first = Spell("First");
         var second = Spell("Second");
@@ -151,7 +143,7 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
 
         Assert.Equal(SpellLoadoutPreflight.VerificationFailed, failed.Preflight);
         Assert.Equal(SpellLoadoutPreflight.VerificationFailed, retry.Preflight);
-        Assert.Equal(failed.Evidence.Before.Slots, failed.Evidence.After.Slots);
+        Assert.Equal(new[] { first, second }, list.value);
     }
 
     [Fact]

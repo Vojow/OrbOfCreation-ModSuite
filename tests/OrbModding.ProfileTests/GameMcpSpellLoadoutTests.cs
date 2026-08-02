@@ -141,19 +141,11 @@ public sealed class GameMcpSpellLoadoutTests
     [Fact]
     public void CommittedMutationReturnsOnlyTheCompleteNamedLoadoutPostState()
     {
-        var before = new SpellLoadoutState(
-            new[] { FirstInstanceId, SecondInstanceId, Guid.Empty },
-            new[] { "Gather Knowledge", "Whirling Sorcery", string.Empty });
-        var after = new SpellLoadoutState(
-            new[] { SecondInstanceId, FirstInstanceId, Guid.Empty },
-            new[] { "Whirling Sorcery", "Gather Knowledge", string.Empty });
-        var evidence = new SpellLoadoutEvidence(true, 0, 1, in before, in after);
         var submission = new SpellLoadoutSubmission(
             SpellLoadoutPreflight.Proceeded,
             SpellLoadoutNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(2, 1, 1),
-            in evidence,
             "the exact requested swap is observable");
         var mapped = SpellLoadoutActionResultMapper.Map(in submission);
         var command = Command("move", destinationSlot: 1);
@@ -169,9 +161,10 @@ public sealed class GameMcpSpellLoadoutTests
 
         var success = GameMcpTestHarness.Json(terminal.Project(command));
 
-        Assert.Equal(new[] { "status", "loadout", "augmentOptions", "moveDestinations" },
+        Assert.Equal(new[] { "status", "code", "loadout", "augmentOptions", "moveDestinations" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
+        Assert.Equal("committed", (string?)success["code"]);
         Assert.Equal(2, (int)success["loadout"]!["loadBudget"]!["used"]!);
         Assert.Equal(3, (int)success["loadout"]!["loadBudget"]!["maximum"]!);
         Assert.True((bool)success["loadout"]!["loadBudget"]!["fitsAnotherSpell"]!);
@@ -190,27 +183,20 @@ public sealed class GameMcpSpellLoadoutTests
     }
 
     [Fact]
-    public void FailureKeepsNamedOrderedEvidenceWithoutPersistentState()
+    public void FailureNamesTheMissingOutcomeWithoutPersistentState()
     {
-        var state = new SpellLoadoutState(
-            new[] { FirstInstanceId, SecondInstanceId },
-            new[] { "Gather Knowledge", "Whirling Sorcery" });
-        var evidence = new SpellLoadoutEvidence(true, 0, 1, in state, in state);
         var submission = new SpellLoadoutSubmission(
             SpellLoadoutPreflight.VerificationFailed,
             SpellLoadoutNativeStage.Verification,
             NativeMutationOutcome.PostconditionFailed,
             new NativeMutationCallOutcome(2, 1, 0),
-            in evidence,
             "the requested swap was not observable");
 
         var failure = GameMcpTestHarness.Json(
             GameMcpSpellLoadoutProjection.Project(in submission));
 
-        Assert.Null(failure["preflight"]);
-        Assert.Equal("Gather Knowledge", (string?)failure["before"]!["slots"]![0]!["spellInstance"]!["name"]);
-        Assert.Equal("Whirling Sorcery", (string?)failure["after"]!["slots"]![1]!["spellInstance"]!["name"]);
-        Assert.Null(failure["quarantined"]);
+        Assert.Equal("requested spell slot state", (string?)failure["missingOutcome"]);
+        Assert.Single(failure.Properties());
     }
 
     [Fact]

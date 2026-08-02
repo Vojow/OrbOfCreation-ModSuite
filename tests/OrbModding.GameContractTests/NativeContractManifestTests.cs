@@ -181,7 +181,7 @@ public sealed class NativeContractManifestTests
         var repositoryRoot = RepositoryPaths.RequireRoot();
 
         Assert.Equal(3, manifest.SchemaVersion);
-        Assert.Equal(1247, manifest.Contracts.Count);
+        Assert.Equal(1221, manifest.Contracts.Count);
         Assert.Equal(10, manifest.SourceAudit.Exemptions.Count);
         Assert.False(string.IsNullOrWhiteSpace(manifest.AuditedAt));
         Assert.False(string.IsNullOrWhiteSpace(manifest.GameBuild));
@@ -509,8 +509,8 @@ public sealed class NativeContractManifestTests
     /// </summary>
     /// <remarks>
     /// This is deliberately independent of <c>OOC_GAME_DIR</c>. In particular, the private-member
-    /// count prevents a public-only Refasmer regeneration from looking complete merely because the
-    /// suite's ordinary source build does not compile directly against those reflected members.
+    /// non-empty private set prevents a public-only Refasmer regeneration from looking complete;
+    /// the member-exact loop below proves every declared private member independently.
     /// </remarks>
     [Fact]
     public void CheckedInGameReferences_MatchEveryDeclaredContract()
@@ -520,7 +520,7 @@ public sealed class NativeContractManifestTests
         var referenceRoot = Path.Combine(repositoryRoot, "lib", "game-refs", "v1.0.5");
         var failures = new List<string>();
 
-        Assert.Equal(85, manifest.Contracts.Count(contract => contract.Visibility == "private"));
+        Assert.Contains(manifest.Contracts, contract => contract.Visibility == "private");
 
         foreach (var assemblyEntry in manifest.Assemblies)
         {

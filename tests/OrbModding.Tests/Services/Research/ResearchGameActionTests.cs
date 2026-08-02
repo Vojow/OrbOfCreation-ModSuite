@@ -36,7 +36,6 @@ public sealed class ResearchGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.True(target.isDeveloping);
         Assert.True(target.isActive);
-        Assert.Equal(1, result.Receipt.After.QueuedLevels);
         Assert.Equal(new NativeMutationCallOutcome(1, 1, 1), result.CallOutcome);
     }
 
@@ -54,8 +53,6 @@ public sealed class ResearchGameActionTests : IDisposable
         var result = Submit(boundary, target, ResearchActionKind.Develop);
 
         Assert.True(result.Verified, result.Reason);
-        Assert.Equal(1, result.Receipt.Before.LevelsAvailable);
-        Assert.Equal(1, result.Receipt.After.QueuedLevels);
         Assert.Equal(0, target.queuedLevels);
         Assert.True(target.isDeveloping);
     }
@@ -97,7 +94,6 @@ public sealed class ResearchGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(1, target.selfBonusLevels);
         Assert.Equal(1, type.UsedBonusLevels);
-        Assert.Equal(1, result.Receipt.After.FreeBonusLevels);
     }
 
     [Fact]

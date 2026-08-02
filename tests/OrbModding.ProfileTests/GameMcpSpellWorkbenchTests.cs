@@ -162,21 +162,13 @@ public sealed class GameMcpSpellWorkbenchTests
     }
 
     [Fact]
-    public void SuccessIsOnlyNamedPostStateWhileFailuresRetainEarnedEvidence()
+    public void SuccessIsOnlyNamedPostStateWhileFailuresNameTheMissingOutcome()
     {
-        var before = new SpellWorkbenchState(
-            RecipeId, false, new[] { FirstGlyphId, SecondGlyphId },
-            Array.Empty<Guid>(), Array.Empty<Guid>());
-        var after = new SpellWorkbenchState(
-            RecipeId, true, Array.Empty<Guid>(), Array.Empty<Guid>(), Array.Empty<Guid>());
-        var evidence = new SpellWorkbenchEvidence(
-            true, in before, in after, paymentInvoked: true);
         var submission = new SpellWorkbenchSubmission(
             SpellWorkbenchPreflight.Proceeded,
             SpellWorkbenchNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(1, 1, 1),
-            in evidence,
             "the requested recipe is discovered");
         var mapped = SpellWorkbenchActionResultMapper.Map(in submission);
         var command = Command("discover");
@@ -199,11 +191,12 @@ public sealed class GameMcpSpellWorkbenchTests
         var success = GameMcpTestHarness.Json(terminal.Project(command));
         Assert.Equal(new[]
             {
-                "status", "uuid", "name", "internalName", "category", "nativeType", "discovered",
-                "masteryLevel", "coreGlyphs", "loadBudget", "loadoutAdd",
+                "status", "uuid", "name", "internalName", "category", "nativeType", "code",
+                "discovered", "masteryLevel", "coreGlyphs", "loadBudget", "loadoutAdd",
             },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
+        Assert.Equal("committed", (string?)success["code"]);
         Assert.Equal("Gather Knowledge", (string?)success["name"]);
         Assert.True((bool)success["loadoutAdd"]!["available"]!);
         Assert.Null(success["loadoutAdd"]!["reasonCode"]);
@@ -225,15 +218,12 @@ public sealed class GameMcpSpellWorkbenchTests
             SpellWorkbenchNativeStage.Verification,
             NativeMutationOutcome.PostconditionFailed,
             new NativeMutationCallOutcome(1, 1, 0),
-            in evidence,
             "the target was not discovered");
         var failure = GameMcpTestHarness.Json(
             GameMcpSpellWorkbenchProjection.Project(in failedSubmission));
-        Assert.Null(failure["preflight"]);
-        Assert.True((bool)failure["paymentInvoked"]!);
-        Assert.Equal("Gather Knowledge", (string?)failure["before"]!["resolvedRecipe"]!["name"]);
-        Assert.Equal("Brew", (string?)failure["before"]!["coreGlyphs"]![0]!["name"]);
-        Assert.Null(failure["quarantined"]);
+        Assert.Equal("requested spell workbench transition",
+            (string?)failure["missingOutcome"]);
+        Assert.Single(failure.Properties());
     }
 
     [Fact]

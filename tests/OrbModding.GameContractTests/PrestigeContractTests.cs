@@ -67,11 +67,10 @@ public sealed class PrestigeContractTests
         var manifest = NativeContractManifest.Load();
         var expected = new[]
         {
-            "prestige.reset-manager.type-action", "prestige.int-variable.type-action",
-            "prestige.bool-variable.type-action", "prestige.reset-manager-instance-action",
+            "prestige.reset-manager.type-action", "prestige.bool-variable.type-action",
+            "prestige.reset-manager-instance-action",
             "prestige.reset-cycle-complete-action", "prestige.reset-fetched-action",
-            "prestige.reset-count-action", "prestige.bool-get-action",
-            "prestige.int-as-int-action", "prestige.reset-logic-action",
+            "prestige.bool-get-action", "prestige.reset-logic-action",
             "prestige.persistent-resource-capture", "prestige.persist-value-capture",
             "prestige.persist-value-new-capture", "prestige.persist-value-last-capture",
             "prestige.reset-count-capture", "prestige.resource-guid-capture",

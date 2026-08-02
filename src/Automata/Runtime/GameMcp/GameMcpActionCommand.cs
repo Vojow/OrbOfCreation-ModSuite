@@ -226,7 +226,7 @@ internal sealed class GameMcpCommandResult
     internal bool HasActionResult { get; }
     /// <summary>
     /// True only when the MCP tool itself failed before it produced a canonical domain result.
-    /// A faulted GameAction is still a successfully delivered tool result: its exact receipt must
+    /// A faulted GameAction is still a successfully delivered tool result: its exact reason must
     /// remain available to clients through structuredContent.
     /// </summary>
     internal bool IsProtocolError =>
@@ -283,12 +283,15 @@ internal sealed class GameMcpCommandResult
             _ => "faulted",
         };
         var code = GameMcpActionResultCodeNames.Name(result.Code, commandKind);
+        var reason = status == "committed"
+            ? string.Empty
+            : string.IsNullOrWhiteSpace(exactReason)
+                ? GameMcpActionResultCodeNames.Reason(result.Code, commandKind, result.Disposition)
+                : exactReason!;
         return new GameMcpCommandResult(
             status,
             code,
-            string.IsNullOrWhiteSpace(exactReason)
-                ? GameMcpActionResultCodeNames.Reason(result.Code, commandKind, result.Disposition)
-                : exactReason!,
+            reason,
             observedLifecycleGeneration,
             observedConfigurationGeneration,
             details,
@@ -299,7 +302,6 @@ internal sealed class GameMcpCommandResult
 
     internal static GameMcpCommandResult Committed(
         string code,
-        string reason,
         long observedLifecycleGeneration,
         ulong observedConfigurationGeneration,
         GameMcpValue? details = null,
@@ -307,7 +309,7 @@ internal sealed class GameMcpCommandResult
         new(
             "committed",
             code,
-            reason,
+            string.Empty,
             observedLifecycleGeneration,
             observedConfigurationGeneration,
             details,
@@ -363,132 +365,18 @@ internal sealed class GameMcpCommandResult
         var projected = new GameMcpObjectBuilder
         {
             ["status"] = status,
+            ["code"] = stableCode,
         };
         var succeeded = status is "committed" or "available";
-        if (!succeeded &&
-            (command.SourceOperation?.Request.Classification == GameMcpOperationClass.Gameplay ||
-             command.SourceOperation?.Request.Classification == GameMcpOperationClass.UiState) &&
-            command.FrameContext?.World is { } actionWorld)
-        {
-            // A refusal names the immutable world used for admission. Successful mutations add
-            // only the strictly newer world that actually observed their post-state.
-            projected["worldGeneration"] = actionWorld.Generation.Value;
-        }
         if (!succeeded)
         {
-            projected["reasonCode"] = stableCode;
             projected["reason"] = Reason;
-            if (command.TargetId != Guid.Empty) projected["targetId"] = command.TargetId;
-            projected["readWith"] = GameMcpFailureRemedy.For(command);
-            AddGenerationMismatch(projected, command);
         }
         if (Details is GameMcpObject details) projected.CopyFrom(details);
         else if (Details is not null) projected["result"] = Details;
         return projected.Freeze();
     }
 
-    private void AddGenerationMismatch(GameMcpObjectBuilder projected, GameMcpCommand command)
-    {
-        if (command.ExpectedLifecycleGeneration > 0 &&
-            ObservedLifecycleGeneration > 0 &&
-            command.ExpectedLifecycleGeneration != ObservedLifecycleGeneration)
-        {
-            projected["lifecycleGenerationMismatch"] = new GameMcpObjectBuilder
-            {
-                ["expected"] = command.ExpectedLifecycleGeneration,
-                ["observed"] = ObservedLifecycleGeneration,
-            };
-        }
-        if (command.ExpectedConfigurationGeneration > 0 &&
-            ObservedConfigurationGeneration > 0 &&
-            command.ExpectedConfigurationGeneration != ObservedConfigurationGeneration)
-        {
-            projected["configurationGenerationMismatch"] = new GameMcpObjectBuilder
-            {
-                ["expected"] = command.ExpectedConfigurationGeneration,
-                ["observed"] = ObservedConfigurationGeneration,
-            };
-        }
-    }
-
-}
-
-internal static class GameMcpFailureRemedy
-{
-    internal static GameMcpValue For(GameMcpCommand command)
-    {
-        var result = new GameMcpObjectBuilder();
-        switch (command.Kind)
-        {
-            case GameMcpCommandKind.Purchase:
-                WorldGet(result,
-                    command.DerivedNativeType == "StructureSO" ? "structures" : "upgrades",
-                    command.TargetId);
-                break;
-            case GameMcpCommandKind.Cast:
-            case GameMcpCommandKind.SpellLoadout:
-                WorldList(result, "spell-slots");
-                break;
-            case GameMcpCommandKind.Concept:
-                WorldGet(result, "alchemy-recipes", command.TargetId);
-                break;
-            case GameMcpCommandKind.Harvest:
-                WorldGet(result, "plot-nodes", command.TargetId);
-                break;
-            case GameMcpCommandKind.SpellLevel:
-                if (command.TargetId == Guid.Empty) WorldList(result, "spell-recipes");
-                else WorldGet(result, "spell-recipes", command.TargetId);
-                break;
-            case GameMcpCommandKind.DiscoveryTreeOffer:
-                WorldGet(result, "discovery-trees", command.TargetId);
-                break;
-            case GameMcpCommandKind.SpellWorkbench:
-            case GameMcpCommandKind.GenericDiscovery:
-                result["tool"] = "game_discover";
-                result["mode"] = "preview";
-                break;
-            case GameMcpCommandKind.SpellComposition:
-            case GameMcpCommandKind.Prestige:
-                result["tool"] = "world_overview";
-                break;
-            case GameMcpCommandKind.Targeting:
-                WorldList(result, "targeting");
-                break;
-            case GameMcpCommandKind.Consumable:
-                WorldGet(result, "consumables", command.TargetId);
-                break;
-            case GameMcpCommandKind.Crafting:
-                WorldGet(result, "crafting-recipes", command.TargetId);
-                break;
-            case GameMcpCommandKind.EquipmentLoadout:
-                WorldGet(result, "equipment", command.TargetId);
-                break;
-            case GameMcpCommandKind.Challenge:
-                if (command.TargetId == Guid.Empty) WorldList(result, "challenges");
-                else WorldGet(result, "challenges", command.TargetId);
-                break;
-            case GameMcpCommandKind.Research:
-                WorldGet(result, "research", command.TargetId);
-                break;
-            default:
-                result["tool"] = "suite_health";
-                break;
-        }
-        return result.Freeze();
-    }
-
-    private static void WorldGet(GameMcpObjectBuilder result, string category, Guid uuid)
-    {
-        result["tool"] = "world_get";
-        result["category"] = category;
-        if (uuid != Guid.Empty) result["uuid"] = uuid.ToString("D");
-    }
-
-    private static void WorldList(GameMcpObjectBuilder result, string category)
-    {
-        result["tool"] = "world_list";
-        result["category"] = category;
-    }
 }
 
 

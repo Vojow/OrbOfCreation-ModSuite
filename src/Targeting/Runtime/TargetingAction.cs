@@ -34,39 +34,24 @@ internal enum TargetingPreflight
 
 internal enum TargetingNativeStage { None = 0, SelectRandom = 1, Submit = 2, Cancel = 3, Verification = 4 }
 
-internal readonly struct TargetingEvidence
-{
-    internal TargetingEvidence(bool available, Guid requestedTarget, Guid submittedTarget,
-        bool requestPendingBefore, bool requestPendingAfter)
-    {
-        Available = available; RequestedTarget = requestedTarget; SubmittedTarget = submittedTarget;
-        RequestPendingBefore = requestPendingBefore; RequestPendingAfter = requestPendingAfter;
-    }
-    internal bool Available { get; }
-    internal Guid RequestedTarget { get; }
-    internal Guid SubmittedTarget { get; }
-    internal bool RequestPendingBefore { get; }
-    internal bool RequestPendingAfter { get; }
-}
-
 internal readonly struct TargetingSubmission
 {
     internal TargetingSubmission(TargetingPreflight preflight, TargetingNativeStage stage,
         NativeMutationOutcome outcome, NativeMutationCallOutcome callOutcome,
-        in TargetingEvidence evidence, string reason)
+        Guid submittedTarget, string reason)
     {
         Preflight = preflight; Stage = stage; Outcome = outcome; CallOutcome = callOutcome;
-        Evidence = evidence; Reason = reason ?? string.Empty;
+        SubmittedTarget = submittedTarget; Reason = reason ?? string.Empty;
     }
     internal TargetingPreflight Preflight { get; }
     internal TargetingNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
-    internal TargetingEvidence Evidence { get; }
+    internal Guid SubmittedTarget { get; }
     internal string Reason { get; }
     internal bool Verified => Preflight == TargetingPreflight.Proceeded && Outcome == NativeMutationOutcome.Verified;
     internal static TargetingSubmission Reject(TargetingPreflight preflight, string reason) =>
-        new(preflight, TargetingNativeStage.None, default, default, default, reason);
+        new(preflight, TargetingNativeStage.None, default, default, Guid.Empty, reason);
 }
 
 internal static class TargetingActionResultCodes

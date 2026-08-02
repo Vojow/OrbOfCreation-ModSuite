@@ -93,12 +93,6 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 in action,
                 CraftingPlayerPreflight.Unaffordable,
                 "CraftingRecipeSO.CanBuy() refused the exact direct-craft recipe.");
-        var beforeState = new CraftingPlayerState(
-            CraftingPlayerPipeline.Direct,
-            purchase,
-            BigDouble.Zero,
-            0,
-            0);
         if (!TryPlayerCraftingPermit(in action, out var permitFailure)) return permitFailure;
 
         try
@@ -113,20 +107,16 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 CraftingPlayerNativeStage.DirectExecute,
                 NativeMutationOutcome.ExecutionThrew,
                 1,
-                in beforeState,
-                in beforeState,
                 "CraftingRecipeSO.Execute threw after the direct composite began: " +
                 ex.GetBaseException().Message);
         }
 
-        var evidence = new CraftingPlayerEvidence(true, in beforeState, in beforeState);
         return new CraftingPlayerSubmission(
             action.RecipeId,
             CraftingPlayerPreflight.Proceeded,
             CraftingPlayerNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(1, 1, 1),
-            in evidence,
             "The exact recipe completed its native direct Execute composite.");
     }
 
@@ -175,10 +165,9 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 in action,
                 CraftingPlayerPreflight.QueueFull,
                 "The authored manual crafting queue has no empty spot for a new instance.");
-        var planned = existing is null
-            ? CraftingPlayerPipeline.QueueNew
-            : CraftingPlayerPipeline.QueueStack;
-        var before = CapturePlayerState(native, queue, recipe, planned, purchase);
+        var previousInstanceQuantity = existing is null
+            ? BigDouble.Zero
+            : native.InstanceQuantity(existing);
         if (!TryPlayerCraftingPermit(in action, out var permitFailure)) return permitFailure;
 
         var stage = CraftingPlayerNativeStage.Payment;
@@ -191,15 +180,12 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 stage = CraftingPlayerNativeStage.Admission;
                 calls = 2;
                 native.InstanceAddQuantity(existing, purchase);
-                return VerifyQueued(
+                return VerifyStacked(
                     in action,
                     native,
-                    queue,
-                    recipe,
                     existing,
-                    planned,
+                    previousInstanceQuantity,
                     purchase,
-                    in before,
                     calls);
             }
 
@@ -212,20 +198,12 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 stage = CraftingPlayerNativeStage.Admission;
                 calls = 4;
                 native.InstanceInstant(instance);
-                var after = CapturePlayerState(
-                    native,
-                    queue,
-                    recipe,
-                    CraftingPlayerPipeline.QueueInstant,
-                    purchase);
-                var evidence = new CraftingPlayerEvidence(true, in before, in after);
                 return new CraftingPlayerSubmission(
                     action.RecipeId,
                     CraftingPlayerPreflight.Proceeded,
                     CraftingPlayerNativeStage.Verification,
                     NativeMutationOutcome.Verified,
                     new NativeMutationCallOutcome(calls, 1, 1),
-                    in evidence,
                     "The exact recipe completed through native instant admission.");
             }
 
@@ -239,33 +217,22 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 in action,
                 native,
                 queue,
-                recipe,
                 instance,
-                planned,
-                purchase,
-                in before,
                 calls);
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            var after = CapturePlayerStateBestEffort(native, queue, recipe, planned, purchase, in before);
-            if (OutcomeObserved(
-                    native,
-                    queue,
-                    recipe,
-                    action.RecipeId,
-                    existing,
-                    previous,
-                    purchase))
+            var landed = existing is null
+                ? ContainsExactInstanceBestEffort(native, queue, action.RecipeId)
+                : InstanceQuantityBestEffort(native, existing) == previousInstanceQuantity + purchase;
+            if (landed)
             {
-                var evidence = new CraftingPlayerEvidence(true, in before, in after);
                 return new CraftingPlayerSubmission(
                     action.RecipeId,
                     CraftingPlayerPreflight.Proceeded,
                     CraftingPlayerNativeStage.Verification,
                     NativeMutationOutcome.Verified,
                     new NativeMutationCallOutcome(calls, 1, 1),
-                    in evidence,
                     "The exact queued outcome was observed after native code threw: " +
                     ex.GetBaseException().Message);
             }
@@ -275,47 +242,60 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 stage,
                 NativeMutationOutcome.ExecutionThrew,
                 calls,
-                in before,
-                in after,
                 "Queued crafting failed after payment began: " + ex.GetBaseException().Message);
         }
     }
 
-    private CraftingPlayerSubmission VerifyQueued(
+    private CraftingPlayerSubmission VerifyStacked(
         in CraftingPlayerAction action,
         CraftingPlayerNativeBindings native,
-        object queue,
-        object recipe,
         object instance,
-        CraftingPlayerPipeline pipeline,
+        BigDouble previous,
         BigDouble purchase,
-        in CraftingPlayerState before,
         int calls)
     {
-        var after = CapturePlayerState(native, queue, recipe, pipeline, purchase);
-        var expected = before.QueuedAmount + purchase;
-        var verified = after.QueuedAmount == expected &&
-            ContainsExactInstance(native, queue, instance, action.RecipeId);
-        if (!verified)
+        if (native.InstanceQuantity(instance) != previous + purchase)
             return PlayerCraftingFault(
                 in action,
                 CraftingPlayerPreflight.VerificationFailed,
                 CraftingPlayerNativeStage.Verification,
                 NativeMutationOutcome.PostconditionFailed,
                 calls,
-                in before,
-                in after,
-                "The exact recipe did not reach its requested queued amount on the authored queue.");
-        var evidence = new CraftingPlayerEvidence(true, in before, in after);
-        return new CraftingPlayerSubmission(
+                "The exact crafting instance did not reach its requested quantity.");
+        return Verified(in action, calls,
+            "The exact crafting instance reached its requested quantity.");
+    }
+
+    private CraftingPlayerSubmission VerifyQueued(
+        in CraftingPlayerAction action,
+        CraftingPlayerNativeBindings native,
+        object queue,
+        object instance,
+        int calls)
+    {
+        if (!ContainsExactInstance(native, queue, instance, action.RecipeId))
+            return PlayerCraftingFault(
+                in action,
+                CraftingPlayerPreflight.VerificationFailed,
+                CraftingPlayerNativeStage.Verification,
+                NativeMutationOutcome.PostconditionFailed,
+                calls,
+                "The exact crafting instance was not admitted to the authored queue.");
+        return Verified(in action, calls,
+            "The exact crafting instance was admitted to the authored queue.");
+    }
+
+    private static CraftingPlayerSubmission Verified(
+        in CraftingPlayerAction action,
+        int calls,
+        string reason) =>
+        new CraftingPlayerSubmission(
             action.RecipeId,
             CraftingPlayerPreflight.Proceeded,
             CraftingPlayerNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(calls, 1, 1),
-            in evidence,
-            "The exact recipe reached its requested native queue outcome.");
-    }
+            reason);
 
     private static bool TryFindPage(
         CraftingPlayerNativeBindings native,
@@ -379,50 +359,32 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         return false;
     }
 
-    private static bool OutcomeObserved(
+    private static bool ContainsExactInstanceBestEffort(
         CraftingPlayerNativeBindings native,
         object queue,
-        object recipe,
-        Guid recipeId,
-        object? existing,
-        BigDouble previous,
-        BigDouble purchase)
-    {
-        if (native.QueueQuantity(queue, recipe) != previous + purchase)
-            return false;
-        if (existing is not null)
-            return ContainsExactInstance(native, queue, existing, recipeId);
-        return FindInstance(native, queue, recipeId) is not null;
-    }
-
-    private static CraftingPlayerState CapturePlayerState(
-        CraftingPlayerNativeBindings native,
-        object queue,
-        object recipe,
-        CraftingPlayerPipeline pipeline,
-        BigDouble purchase) =>
-        new(
-            pipeline,
-            purchase,
-            native.QueueQuantity(queue, recipe),
-            CountNonNull(native.QueueValues(queue)),
-            native.QueueMaximum(queue));
-
-    private static CraftingPlayerState CapturePlayerStateBestEffort(
-        CraftingPlayerNativeBindings native,
-        object queue,
-        object recipe,
-        CraftingPlayerPipeline pipeline,
-        BigDouble purchase,
-        in CraftingPlayerState fallback)
+        Guid recipeId)
     {
         try
         {
-            return CapturePlayerState(native, queue, recipe, pipeline, purchase);
+            return FindInstance(native, queue, recipeId) is not null;
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            return fallback;
+            return false;
+        }
+    }
+
+    private static BigDouble InstanceQuantityBestEffort(
+        CraftingPlayerNativeBindings native,
+        object instance)
+    {
+        try
+        {
+            return native.InstanceQuantity(instance);
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            return BigDouble.NaN;
         }
     }
 
@@ -448,20 +410,16 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         CraftingPlayerNativeStage stage,
         NativeMutationOutcome outcome,
         int calls,
-        in CraftingPlayerState before,
-        in CraftingPlayerState after,
         string reason)
     {
         var exactReason = "One-shot crafting " + stage + " failed on " +
             EntityIdentityFormatter.Format(action.RecipeId) + ": " + reason;
-        var evidence = new CraftingPlayerEvidence(true, in before, in after);
         return new CraftingPlayerSubmission(
             action.RecipeId,
             preflight,
             stage,
             outcome,
             new NativeMutationCallOutcome(calls, 1, 0),
-            in evidence,
             exactReason);
     }
 }

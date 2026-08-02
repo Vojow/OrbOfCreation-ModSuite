@@ -117,28 +117,14 @@ public sealed class GameMcpCraftingTests
     }
 
     [Fact]
-    public void SuccessDetailsYieldToPostStateWhileFaultKeepsDecomposedEvidence()
+    public void SuccessDetailsYieldToPostStateWhileFaultNamesTheMissingOutcome()
     {
-        var before = new CraftingPlayerState(
-            CraftingPlayerPipeline.QueueStack,
-            new BigDouble(2),
-            new BigDouble(4),
-            1,
-            3);
-        var after = new CraftingPlayerState(
-            CraftingPlayerPipeline.QueueStack,
-            new BigDouble(2),
-            new BigDouble(4),
-            1,
-            3);
-        var evidence = new CraftingPlayerEvidence(true, in before, in after);
         var fault = new CraftingPlayerSubmission(
             RecipeId,
             CraftingPlayerPreflight.VerificationFailed,
             CraftingPlayerNativeStage.Verification,
             NativeMutationOutcome.PostconditionFailed,
             new NativeMutationCallOutcome(2, 1, 0),
-            in evidence,
             "queue did not change");
         var committed = new CraftingPlayerSubmission(
             RecipeId,
@@ -146,17 +132,13 @@ public sealed class GameMcpCraftingTests
             CraftingPlayerNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(2, 1, 1),
-            in evidence,
             "queue changed");
 
         var failure = Json(GameMcpCraftingProjection.Project(in fault));
         var success = Json(GameMcpCraftingProjection.Project(in committed));
 
-        Assert.Null(failure["preflight"]);
-        Assert.Equal("verification", (string?)failure["nativeStage"]);
-        Assert.Equal(4, (int)failure["before"]!["queuedAmount"]!);
-        Assert.NotNull(failure["after"]);
-        Assert.Null(failure["quarantined"]);
+        Assert.Equal("requested craft completion", (string?)failure["missingOutcome"]);
+        Assert.Single(failure.Properties());
         Assert.Empty(success.Properties());
     }
 

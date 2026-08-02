@@ -16659,24 +16659,6 @@
       "place": "action"
     },
     {
-      "id": "discovery-tree-offer.next-excluded-ids",
-      "assembly": "assembly-csharp",
-      "type": "DiscoveryTreeSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "nextExcludedIds",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Collections.Generic.List`1<GuidContainer>",
-      "owners": [
-        "Automata Discovery Tree offer GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
       "id": "discovery-tree-offer.guid-container-value",
       "assembly": "assembly-csharp",
       "type": "GuidContainer",
@@ -16819,25 +16801,6 @@
       "visibility": "public",
       "static": false,
       "returnType": "ResourceCostList",
-      "parameters": [],
-      "owners": [
-        "Automata Discovery Tree offer GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "discovery-tree-offer.tree-max-rerolls",
-      "assembly": "assembly-csharp",
-      "type": "DiscoveryTreeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetMaxRerolls",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Int32",
       "parameters": [],
       "owners": [
         "Automata Discovery Tree offer GameAction"
@@ -17040,24 +17003,6 @@
       "place": "action"
     },
     {
-      "id": "discovery-tree-offer.tree-action-time",
-      "assembly": "assembly-csharp",
-      "type": "DiscoveryTreeSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "actionTime",
-      "visibility": "public",
-      "static": false,
-      "valueType": "BigDouble",
-      "owners": [
-        "Automata Discovery Tree offer GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
       "id": "discovery-tree-offer.tree-rerolls",
       "assembly": "assembly-csharp",
       "type": "DiscoveryTreeSO",
@@ -17076,24 +17021,6 @@
       "place": "action"
     },
     {
-      "id": "discovery-tree-offer.tree-used-rerolls",
-      "assembly": "assembly-csharp",
-      "type": "DiscoveryTreeSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "usedRerollsLastDiscover",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Boolean",
-      "owners": [
-        "Automata Discovery Tree offer GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
       "id": "discovery-tree-offer.tree-selected",
       "assembly": "assembly-csharp",
       "type": "DiscoveryTreeSO",
@@ -17103,42 +17030,6 @@
       "visibility": "public",
       "static": false,
       "valueType": "GuidContainer",
-      "owners": [
-        "Automata Discovery Tree offer GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "discovery-tree-offer.tree-total-discovered",
-      "assembly": "assembly-csharp",
-      "type": "DiscoveryTreeSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "totalDiscoveredCount",
-      "visibility": "private",
-      "static": false,
-      "valueType": "System.Int32",
-      "owners": [
-        "Automata Discovery Tree offer GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "discovery-tree-offer.tree-pool-discovered",
-      "assembly": "assembly-csharp",
-      "type": "DiscoveryTreeSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "poolDiscoveredCount",
-      "visibility": "private",
-      "static": false,
-      "valueType": "System.Int32",
       "owners": [
         "Automata Discovery Tree offer GameAction"
       ],
@@ -18695,25 +18586,6 @@
       "place": "action"
     },
     {
-      "id": "spell-loadout.spell-get-name-action",
-      "assembly": "assembly-csharp",
-      "type": "Spell",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetName",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.String",
-      "parameters": [],
-      "owners": [
-        "Automata spell loadout GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
       "id": "spell-loadout.manager-remove-spell-action",
       "assembly": "assembly-csharp",
       "type": "SpellManager",
@@ -19036,21 +18908,6 @@
       "visibility": "public",
       "static": false,
       "returnType": "EffectResultInfo",
-      "parameters": [],
-      "owners": ["Automata consumable GameAction"],
-      "usages": ["reflection"],
-      "place": "action"
-    },
-    {
-      "id": "consumable-player.result-info-cancel-action",
-      "assembly": "assembly-csharp",
-      "type": "EffectResultInfo",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "Cancel",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Void",
       "parameters": [],
       "owners": ["Automata consumable GameAction"],
       "usages": ["reflection"],
@@ -19558,16 +19415,6 @@
       "place": "action"
     },
     {
-      "id": "generic-discovery.cost-entry.type-action",
-      "assembly": "assembly-csharp",
-      "type": "ResourceTuple",
-      "typeVisibility": "public",
-      "kind": "type",
-      "owners": ["Automata generic discovery GameAction"],
-      "usages": ["reflection"],
-      "place": "action"
-    },
-    {
       "id": "generic-discovery.resource.type-action",
       "assembly": "assembly-csharp",
       "type": "ResourceSO",
@@ -19748,21 +19595,6 @@
       "place": "action"
     },
     {
-      "id": "generic-discovery.cost-entries-action",
-      "assembly": "assembly-csharp",
-      "type": "ResourceCostList",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetEntries",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Collections.Generic.List`1<ResourceTuple>",
-      "parameters": [],
-      "owners": ["Automata generic discovery GameAction"],
-      "usages": ["reflection"],
-      "place": "action"
-    },
-    {
       "id": "generic-discovery.cost-enough-action",
       "assembly": "assembly-csharp",
       "type": "ResourceCostList",
@@ -19787,65 +19619,6 @@
       "visibility": "public",
       "static": false,
       "returnType": "System.Void",
-      "parameters": [],
-      "owners": ["Automata generic discovery GameAction"],
-      "usages": ["reflection"],
-      "place": "action"
-    },
-    {
-      "id": "generic-discovery.entry-resource-action",
-      "assembly": "assembly-csharp",
-      "type": "ResourceTuple",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "resource",
-      "visibility": "public",
-      "static": false,
-      "valueType": "ResourceSO",
-      "owners": ["Automata generic discovery GameAction"],
-      "usages": ["reflection"],
-      "place": "action"
-    },
-    {
-      "id": "generic-discovery.entry-value-action",
-      "assembly": "assembly-csharp",
-      "type": "ResourceTuple",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetValue",
-      "visibility": "public",
-      "static": false,
-      "returnType": "BigDouble",
-      "parameters": [],
-      "owners": ["Automata generic discovery GameAction"],
-      "usages": ["reflection"],
-      "place": "action"
-    },
-    {
-      "id": "generic-discovery.resource-identity-action",
-      "assembly": "assembly-csharp",
-      "type": "IdScriptableObject",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetGuid",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Guid",
-      "parameters": [],
-      "owners": ["Automata generic discovery GameAction"],
-      "usages": ["reflection"],
-      "place": "action"
-    },
-    {
-      "id": "generic-discovery.resource-amount-action",
-      "assembly": "assembly-csharp",
-      "type": "ResourceSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetTrueQuantity",
-      "visibility": "public",
-      "static": false,
-      "returnType": "BigDouble",
       "parameters": [],
       "owners": ["Automata generic discovery GameAction"],
       "usages": ["reflection"],
@@ -20007,21 +19780,6 @@
       "static": false,
       "returnType": "System.Void",
       "parameters": ["BigDouble"],
-      "owners": ["Automata one-shot crafting action boundary"],
-      "usages": ["reflection"],
-      "place": "action"
-    },
-    {
-      "id": "crafting-player.list-get-max-action",
-      "assembly": "assembly-csharp",
-      "type": "AbstractListVariable`1",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetMax",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Int32",
-      "parameters": [],
       "owners": ["Automata one-shot crafting action boundary"],
       "usages": ["reflection"],
       "place": "action"
@@ -20403,11 +20161,6 @@
       "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
     },
     {
-      "id": "prestige.int-variable.type-action", "assembly": "assembly-csharp",
-      "type": "IntVariable", "typeVisibility": "public", "kind": "type",
-      "owners": ["Automata prestige GameAction", "Common prestige world collection"], "usages": ["reflection"], "place": "action"
-    },
-    {
       "id": "prestige.bool-variable.type-action", "assembly": "assembly-csharp",
       "type": "BoolVariable", "typeVisibility": "public", "kind": "type",
       "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
@@ -20431,22 +20184,10 @@
       "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
     },
     {
-      "id": "prestige.reset-count-action", "assembly": "assembly-csharp",
-      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "persistentResetCount",
-      "visibility": "public", "static": false, "valueType": "IntVariable",
-      "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
-    },
-    {
       "id": "prestige.bool-get-action", "assembly": "assembly-csharp",
       "type": "BoolVariable", "typeVisibility": "public", "kind": "method", "member": "GetValue",
       "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
       "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "prestige.int-as-int-action", "assembly": "assembly-csharp",
-      "type": "IntVariable", "typeVisibility": "public", "kind": "method", "member": "AsInt",
-      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
-      "owners": ["Automata prestige GameAction", "Common prestige world collection"], "usages": ["reflection"], "place": "action"
     },
     {
       "id": "prestige.reset-logic-action", "assembly": "assembly-csharp",
@@ -20557,12 +20298,6 @@
       "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
     },
     {
-      "id": "challenge.reset-rerolls-maximum-action", "assembly": "assembly-csharp",
-      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "challengeRerollsMax",
-      "visibility": "public", "static": false, "valueType": "IntVariable",
-      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
-    },
-    {
       "id": "challenge.reset-cycle-complete-action", "assembly": "assembly-csharp",
       "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "hasCompleteWorldCycle",
       "visibility": "public", "static": false, "valueType": "BoolVariable",
@@ -20578,12 +20313,6 @@
       "id": "challenge.list-values-action", "assembly": "assembly-csharp",
       "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "field", "member": "value",
       "visibility": "public", "static": false, "valueType": "System.Collections.Generic.List`1<!0>",
-      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "challenge.list-maximum-action", "assembly": "assembly-csharp",
-      "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "method", "member": "GetMax",
-      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
       "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
     },
     {
@@ -20788,42 +20517,6 @@
       "place": "action"
     },
     {
-      "id": "research-action.waiting-levels-action",
-      "assembly": "assembly-csharp",
-      "type": "ResearchSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "queuedLevels",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Int32",
-      "owners": [
-        "Automata research GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "research-action.stage-action",
-      "assembly": "assembly-csharp",
-      "type": "ResearchSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "researchStage",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Int32",
-      "owners": [
-        "Automata research GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
       "id": "research-action.self-bonus-action",
       "assembly": "assembly-csharp",
       "type": "ResearchSO",
@@ -20915,25 +20608,6 @@
       "place": "action"
     },
     {
-      "id": "research-action.within-range-action",
-      "assembly": "assembly-csharp",
-      "type": "ResearchSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "IsWithinDevelopRange",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Boolean",
-      "parameters": [],
-      "owners": [
-        "Automata research GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
       "id": "research-action.can-bonus-action",
       "assembly": "assembly-csharp",
       "type": "ResearchSO",
@@ -20947,63 +20621,6 @@
       "owners": [
         "Automata research GameAction",
         "Common research world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "research-action.purchased-levels-action",
-      "assembly": "assembly-csharp",
-      "type": "ResearchSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetPurchasedLevels",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Int32",
-      "parameters": [],
-      "owners": [
-        "Automata research GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "research-action.bonus-level-action",
-      "assembly": "assembly-csharp",
-      "type": "ResearchSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetBonusLevels",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Int32",
-      "parameters": [],
-      "owners": [
-        "Automata research GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "research-action.total-level-action",
-      "assembly": "assembly-csharp",
-      "type": "ResearchSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetLevel",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Int32",
-      "parameters": [],
-      "owners": [
-        "Automata research GameAction"
       ],
       "usages": [
         "reflection"
@@ -21042,13 +20659,12 @@
       "returnType": "System.Int32",
       "parameters": [],
       "owners": [
-        "Automata research GameAction",
         "Common research world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "action"
+      "place": "capture"
     },
     {
       "id": "research-action.time-ratio-action",
@@ -21062,13 +20678,12 @@
       "returnType": "BigDouble",
       "parameters": [],
       "owners": [
-        "Automata research GameAction",
         "Common research world collection"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "action"
+      "place": "capture"
     },
     {
       "id": "research-action.free-bonus-action",

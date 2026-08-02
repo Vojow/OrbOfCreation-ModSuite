@@ -54,13 +54,14 @@ public sealed class ChallengeGameActionTests : IDisposable
         using var boundary = Boundary();
 
         var queued = Submit(boundary, ChallengeActionKind.Queue, target);
+        var queuedState = target.state;
         var idle = Submit(boundary, ChallengeActionKind.Queue, target);
         var refusedAbandon = Submit(boundary, ChallengeActionKind.Abandon, target);
         target.state = ChallengeSO.ChallengeState.CurrentlyActive;
         var abandoned = Submit(boundary, ChallengeActionKind.Abandon, target);
 
         Assert.True(queued.Verified, queued.Reason);
-        Assert.Equal(1, queued.Receipt.After.TargetState);
+        Assert.Equal(ChallengeSO.ChallengeState.QueuedStart, queuedState);
         Assert.True(idle.Verified, idle.Reason);
         Assert.Equal(ChallengePreflight.InvalidState, refusedAbandon.Preflight);
         Assert.True(abandoned.Verified, abandoned.Reason);
@@ -81,8 +82,7 @@ public sealed class ChallengeGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.True(PersistentResetManager.instance.hasFetchedChallenges.value);
         Assert.Equal(2, PersistentResetManager.instance.challengeRerollsLeft.AsInt());
-        Assert.Equal(new[] { first.GetGuid(), second.GetGuid() }, result.Receipt.After.TimeOffers);
-        Assert.True(result.Receipt.After.TimeOffersQueued);
+        Assert.Equal(new[] { first, second }, ChallengeManager.instance.activeChallenges.value);
         Assert.All(ChallengeManager.instance.activeChallenges.value,
             challenge => Assert.Equal(ChallengeSO.ChallengeState.QueuedStart, challenge.state));
     }
@@ -101,25 +101,22 @@ public sealed class ChallengeGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(1, PersistentResetManager.instance.challengeRerollsLeft.AsInt());
-        Assert.Equal(new[] { first.GetGuid(), second.GetGuid() }, result.Receipt.After.PrestigeOffers);
-        Assert.True(result.Receipt.After.PrestigeOffersQueued);
+        Assert.Equal(new[] { first, second }, PersistentResetManager.instance.activeChallenges.value);
     }
 
     [Fact]
-    public void Fetch_requires_every_materialized_offer_to_enter_the_native_queued_state()
+    public void Fetch_commits_when_the_requested_offer_list_materializes()
     {
         var target = Register(Challenge());
         target.SuppressQueueActivation = true;
         ChallengeManager.instance.NextChallenges.Add(target);
         using var boundary = Boundary();
 
-        var failed = Submit(boundary, ChallengeActionKind.FetchTime);
-        var retry = Submit(boundary, ChallengeActionKind.FetchTime);
+        var result = Submit(boundary, ChallengeActionKind.FetchTime);
 
-        Assert.Equal(new[] { target.GetGuid() }, failed.Receipt.After.TimeOffers);
-        Assert.False(failed.Receipt.After.TimeOffersQueued);
-        Assert.Equal(ChallengePreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(ChallengePreflight.VerificationFailed, retry.Preflight);
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(new[] { target }, ChallengeManager.instance.activeChallenges.value);
+        Assert.NotEqual(ChallengeSO.ChallengeState.QueuedStart, target.state);
     }
 
     [Fact]

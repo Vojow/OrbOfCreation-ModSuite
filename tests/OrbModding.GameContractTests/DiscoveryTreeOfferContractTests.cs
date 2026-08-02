@@ -42,44 +42,18 @@ public sealed class DiscoveryTreeOfferContractTests
     }
 
     [GameAssemblyFact]
-    public void DiscoveryTreeInitiate_IsSynchronousDataPipelineWithExactNativeRerollClamp()
+    public void DiscoveryTreeInitiate_IsSynchronousAndEntersCraftingModeWithoutUi()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
         Assert.Equal(0x06000AA8, assembly.GetMethodToken("DiscoveryTreeSO", "InitiateCraftingMode"));
         Assert.Equal(0x06000AA9, assembly.GetMethodToken("DiscoveryTreeSO", "EnterCraftingMode"));
         Assert.Equal(0x06000AA7, assembly.GetMethodToken("DiscoveryTreeSO", "EnterMode"));
-        Assert.Equal(0x06000ACB, assembly.GetMethodToken("DiscoveryTreeSO", "GetMaxRerolls"));
-
-        Assert.Equal(
-            new[]
-            {
-                "IL_0002 0x04000646 field DiscoveryTreeSO.usedRerollsLastDiscover",
-                "IL_000B 0x04000645 field DiscoveryTreeSO.rerollsLeft",
-                "IL_0013 0x06000ACB method DiscoveryTreeSO.GetMaxRerolls",
-                "IL_002A 0x06000AB3 method DiscoveryTreeSO.FetchRarityLevels",
-                "IL_0030 0x06000AA9 method DiscoveryTreeSO.EnterCraftingMode",
-            },
-            References(assembly, "DiscoveryTreeSO", "InitiateCraftingMode"));
-        Assert.Equal(
-            new[]
-            {
-                "IL_0003 0x06000AA7 method DiscoveryTreeSO.EnterMode",
-                "IL_0009 0x04000637 field DiscoveryTreeSO.startCraftSound",
-                "IL_000E 0x0600191F method AudioInstance.Play",
-            },
-            References(assembly, "DiscoveryTreeSO", "EnterCraftingMode"));
-        Assert.Equal(
-            new[]
-            {
-                "IL_0003 0x04000643 field DiscoveryTreeSO.actionMode",
-                "IL_000F 0x04000644 field DiscoveryTreeSO.actionTime",
-                "IL_0015 0x04000656 field DiscoveryTreeSO.modeObservable",
-                "IL_001A 0x06001DD9 method PassiveObservable.UpdateObservable",
-            },
-            References(assembly, "DiscoveryTreeSO", "EnterMode"));
-        Assert.Equal(
-            new[] { "IL_0003 0x04000CF4 field PassiveObservable.observedId" },
-            References(assembly, "PassiveObservable", "UpdateObservable"));
+        Assert.True(assembly.MethodReferencesMethod(
+            "DiscoveryTreeSO", "InitiateCraftingMode", "DiscoveryTreeSO", "EnterCraftingMode"));
+        Assert.True(assembly.MethodReferencesMethod(
+            "DiscoveryTreeSO", "EnterCraftingMode", "DiscoveryTreeSO", "EnterMode"));
+        Assert.True(assembly.MethodReferencesField(
+            "DiscoveryTreeSO", "EnterMode", "DiscoveryTreeSO", "actionMode"));
 
         var synchronousReferences = References(assembly, "DiscoveryTreeSO", "InitiateCraftingMode")
             .Concat(References(assembly, "DiscoveryTreeSO", "EnterCraftingMode"))
@@ -106,20 +80,11 @@ public sealed class DiscoveryTreeOfferContractTests
             assembly.GetFieldType("DiscoveryTreeSO", "All"));
         Assert.Equal("DiscoveryTreeSO+DiscoveryTreeModes",
             assembly.GetFieldType("DiscoveryTreeSO", "actionMode"));
-        Assert.Equal("BigDouble", assembly.GetFieldType("DiscoveryTreeSO", "actionTime"));
         Assert.Equal("System.Int32", assembly.GetFieldType("DiscoveryTreeSO", "rerollsLeft"));
-        Assert.Equal("System.Boolean",
-            assembly.GetFieldType("DiscoveryTreeSO", "usedRerollsLastDiscover"));
         Assert.Equal("System.Collections.Generic.List`1<GuidContainer>",
             assembly.GetFieldType("DiscoveryTreeSO", "currentChoiceIds"));
-        Assert.Equal("System.Collections.Generic.List`1<GuidContainer>",
-            assembly.GetFieldType("DiscoveryTreeSO", "nextExcludedIds"));
         Assert.Equal("GuidContainer",
             assembly.GetFieldType("DiscoveryTreeSO", "selectedChoiceId"));
-        Assert.Equal("System.Int32",
-            assembly.GetFieldType("DiscoveryTreeSO", "totalDiscoveredCount"));
-        Assert.Equal("System.Int32",
-            assembly.GetFieldType("DiscoveryTreeSO", "poolDiscoveredCount"));
 
         AssertMethod(assembly, "IdScriptableObject", "GetGuid", false, "System.Guid");
         AssertMethod(assembly, "GuidContainer", "get_guid", false, "System.Guid");
@@ -129,7 +94,6 @@ public sealed class DiscoveryTreeOfferContractTests
         AssertMethod(assembly, "DiscoveryTreeSO", "IsInChoiceMode", false, "System.Boolean");
         AssertMethod(assembly, "DiscoveryTreeSO", "HasCurrentlyRemMainPoolDiscoveries", false, "System.Boolean");
         AssertMethod(assembly, "DiscoveryTreeSO", "HasImmediateRequiredDiscover", false, "System.Boolean");
-        AssertMethod(assembly, "DiscoveryTreeSO", "GetMaxRerolls", false, "System.Int32");
         AssertMethod(assembly, "DiscoveryTreeSO", "GetNextItemCost", false, "ResourceCostList");
         AssertMethod(assembly, "DiscoveryTreeSO", "GetItemFromGuid", false, "IDiscoverable", "System.Guid");
         AssertMethod(assembly, "DiscoveryTreeSO", "InitiateCraftingMode", false, "System.Void");
@@ -139,13 +103,8 @@ public sealed class DiscoveryTreeOfferContractTests
         AssertMethod(assembly, "IHasGuid", "GetGuid", false, "System.Guid");
         AssertMethod(assembly, "IDiscoverable", "IsDiscovered", false, "System.Boolean");
         AssertMethod(assembly, "IDiscoverable", "IsDiscoverRequired", false, "System.Boolean");
-        AssertMethod(assembly, "ResourceCostList", "GetEntries", false,
-            "System.Collections.Generic.List`1<ResourceTuple>");
         AssertMethod(assembly, "ResourceCostList", "HasEnough", false, "System.Boolean");
         AssertMethod(assembly, "ResourceCostList", "PerformCost", false, "System.Void");
-        Assert.Equal("ResourceSO", assembly.GetFieldType("ResourceTuple", "resource"));
-        AssertMethod(assembly, "ResourceTuple", "GetValue", false, "BigDouble");
-        AssertMethod(assembly, "ResourceSO", "GetTrueQuantity", false, "BigDouble");
     }
 
     [GameAssemblyFact]
@@ -175,7 +134,7 @@ public sealed class DiscoveryTreeOfferContractTests
     }
 
     [GameAssemblyFact]
-    public void DiscoveryTreeNativeStages_PinDelayedOffersConfirmCountsAndStaleRerollSelection()
+    public void DiscoveryTreeNativeStages_MaterializeOffersThroughThePublishedChoiceList()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
 
@@ -183,18 +142,6 @@ public sealed class DiscoveryTreeOfferContractTests
             "DiscoveryTreeSO", "IncrementCrafting", "DiscoveryTreeSO", "EnterChoiceMode"));
         Assert.True(assembly.MethodReferencesField(
             "DiscoveryTreeSO", "EnterChoiceMode", "DiscoveryTreeSO", "currentChoiceIds"));
-        Assert.True(assembly.MethodReferencesMethod(
-            "DiscoveryTreeSO", "DiscoverSelectedItem", "DiscoveryTreeSO", "DiscoverItem"));
-        Assert.True(assembly.MethodReferencesField(
-            "DiscoveryTreeSO", "DiscoverItem", "DiscoveryTreeSO", "totalDiscoveredCount"));
-        Assert.True(assembly.MethodReferencesField(
-            "DiscoveryTreeSO", "DiscoverItem", "DiscoveryTreeSO", "poolDiscoveredCount"));
-        Assert.True(assembly.MethodReferencesField(
-            "DiscoveryTreeSO", "RerollChoices", "DiscoveryTreeSO", "currentChoiceIds"));
-        Assert.True(assembly.MethodReferencesField(
-            "DiscoveryTreeSO", "RerollChoices", "DiscoveryTreeSO", "nextExcludedIds"));
-        Assert.False(assembly.MethodReferencesField(
-            "DiscoveryTreeSO", "RerollChoices", "DiscoveryTreeSO", "selectedChoiceId"));
     }
 
     private static void AssertMethod(

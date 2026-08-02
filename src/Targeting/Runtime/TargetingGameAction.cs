@@ -113,18 +113,18 @@ internal sealed class TargetingGameAction : IDisposable
         catch (Exception ex) when (Expected(ex))
         {
             return Fault(TargetingPreflight.PostCommitFault, TargetingNativeStage.SelectRandom,
-                NativeMutationOutcome.ExecutionThrew, in action, Guid.Empty, native.IsTargeting(),
+                NativeMutationOutcome.ExecutionThrew, in action,
                 new NativeMutationCallOutcome(1, 1, 0),
                 "TargetLink.GetRandom threw after random selection began: " + ex.GetBaseException().Message);
         }
         if (candidate is null || candidate.GetType() != native.StructureType)
             return Fault(TargetingPreflight.VerificationFailed, TargetingNativeStage.SelectRandom,
-                NativeMutationOutcome.PostconditionFailed, in action, Guid.Empty, native.IsTargeting(),
+                NativeMutationOutcome.PostconditionFailed, in action,
                 new NativeMutationCallOutcome(1, 1, 0),
                 "TargetLink.GetRandom did not return one exact StructureSO.");
         if (!native.CheckTarget(link, candidate))
             return Fault(TargetingPreflight.VerificationFailed, TargetingNativeStage.SelectRandom,
-                NativeMutationOutcome.PostconditionFailed, in action, native.GetGuid(candidate), native.IsTargeting(),
+                NativeMutationOutcome.PostconditionFailed, in action,
                 new NativeMutationCallOutcome(1, 1, 0),
                 "The native random target failed the same TargetLink.CheckTarget verdict.");
         return MutateSubmit(in action, native, link, candidate, TargetingNativeStage.Submit, 1);
@@ -139,20 +139,20 @@ internal sealed class TargetingGameAction : IDisposable
         {
             native.SubmitTarget(candidate);
             return Submitted(native, link, candidate)
-                ? Verified(in action, id, native.IsTargeting(), priorCalls + 1,
+                ? Verified(id, priorCalls + 1,
                     "The exact target was assigned and its original request left the queue.")
                 : Fault(TargetingPreflight.VerificationFailed, TargetingNativeStage.Verification,
-                    NativeMutationOutcome.PostconditionFailed, in action, id, native.IsTargeting(),
+                    NativeMutationOutcome.PostconditionFailed, in action,
                     new NativeMutationCallOutcome(priorCalls + 1, 1, 0),
                     "SubmitTarget did not assign the exact object and retire its request.");
         }
         catch (Exception ex) when (Expected(ex))
         {
             if (Submitted(native, link, candidate))
-                return Verified(in action, id, native.IsTargeting(), priorCalls + 1,
+                return Verified(id, priorCalls + 1,
                     "SubmitTarget threw after the exact requested outcome became observable.");
             return Fault(TargetingPreflight.PostCommitFault, stage,
-                NativeMutationOutcome.ExecutionThrew, in action, id, SafeIsTargeting(native),
+                NativeMutationOutcome.ExecutionThrew, in action,
                 new NativeMutationCallOutcome(priorCalls + 1, 1, 0),
                 "SubmitTarget threw before the requested outcome was observable: " + ex.GetBaseException().Message);
         }
@@ -171,20 +171,20 @@ internal sealed class TargetingGameAction : IDisposable
         {
             native.Cancel(resultInfo);
             return native.IsCancelled(resultInfo) && OriginalRequestGone(native, link)
-                ? Verified(in action, Guid.Empty, native.IsTargeting(), 1,
+                ? Verified(Guid.Empty, 1,
                     "EffectResultInfo is cancelled and its exact request left the queue.")
                 : Fault(TargetingPreflight.VerificationFailed, TargetingNativeStage.Verification,
-                    NativeMutationOutcome.PostconditionFailed, in action, Guid.Empty, native.IsTargeting(),
+                    NativeMutationOutcome.PostconditionFailed, in action,
                     new NativeMutationCallOutcome(1, 1, 0),
                     "Cancel did not cancel its EffectResultInfo and retire the exact request.");
         }
         catch (Exception ex) when (Expected(ex))
         {
             if (native.IsCancelled(resultInfo) && OriginalRequestGone(native, link))
-                return Verified(in action, Guid.Empty, native.IsTargeting(), 1,
+                return Verified(Guid.Empty, 1,
                     "Cancel threw after the exact requested outcome became observable.");
             return Fault(TargetingPreflight.PostCommitFault, TargetingNativeStage.Cancel,
-                NativeMutationOutcome.ExecutionThrew, in action, Guid.Empty, SafeIsTargeting(native),
+                NativeMutationOutcome.ExecutionThrew, in action,
                 new NativeMutationCallOutcome(1, 1, 0),
                 "Cancel threw before the requested outcome was observable: " + ex.GetBaseException().Message);
         }
@@ -195,24 +195,18 @@ internal sealed class TargetingGameAction : IDisposable
         OriginalRequestGone(native, link);
     private static bool OriginalRequestGone(TargetingNativeBindings native, object link) =>
         !native.IsTargeting() || !ReferenceEquals(native.GetLink(), link);
-    private static bool SafeIsTargeting(TargetingNativeBindings native)
-    { try { return native.IsTargeting(); } catch (Exception) { return false; } }
-
-    private TargetingSubmission Verified(in TargetingAction action, Guid submitted,
-        bool pendingAfter, int calls, string reason)
+    private static TargetingSubmission Verified(Guid submitted, int calls, string reason)
     {
-        var evidence = new TargetingEvidence(true, action.TargetId, submitted, true, pendingAfter);
         return new TargetingSubmission(TargetingPreflight.Proceeded, TargetingNativeStage.Verification,
-            NativeMutationOutcome.Verified, new NativeMutationCallOutcome(calls, 1, 1), in evidence, reason);
+            NativeMutationOutcome.Verified, new NativeMutationCallOutcome(calls, 1, 1), submitted, reason);
     }
     private static TargetingSubmission Fault(TargetingPreflight preflight, TargetingNativeStage stage,
-        NativeMutationOutcome outcome, in TargetingAction action, Guid submitted, bool pendingAfter,
+        NativeMutationOutcome outcome, in TargetingAction action,
         NativeMutationCallOutcome calls, string reason)
     {
         var exactReason = "Targeting " + action.Kind +
             " could not prove its exact outcome: " + reason;
-        var evidence = new TargetingEvidence(true, action.TargetId, submitted, true, pendingAfter);
-        return new TargetingSubmission(preflight, stage, outcome, calls, in evidence, exactReason);
+        return new TargetingSubmission(preflight, stage, outcome, calls, Guid.Empty, exactReason);
     }
     private bool TryPermit(out string reason)
     {

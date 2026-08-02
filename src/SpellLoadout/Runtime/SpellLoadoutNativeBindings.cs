@@ -22,7 +22,6 @@ internal sealed class SpellLoadoutNativeBindings
         "discovery-tree-offer.guid-container-value",
         "spell-loadout.spell-is-empty-action",
         "spell-loadout.spell-can-remove-action",
-        "spell-loadout.spell-get-name-action",
         "spell-loadout.manager-remove-spell-action",
         "spell-loadout.list-swap-positions-action",
         "spell-loadout.list-update-observable-action",
@@ -37,7 +36,6 @@ internal sealed class SpellLoadoutNativeBindings
         Func<object, Guid> guidValue,
         Func<object, bool> isEmpty,
         Func<object, bool> canRemove,
-        Func<object, string> getName,
         Action<object, object> remove,
         Action<object, int, int> swap,
         Action<object> updateObservable)
@@ -50,7 +48,6 @@ internal sealed class SpellLoadoutNativeBindings
         ReadGuidValue = guidValue;
         IsEmpty = isEmpty;
         CanRemove = canRemove;
-        GetName = getName;
         Remove = remove;
         Swap = swap;
         UpdateObservable = updateObservable;
@@ -64,7 +61,6 @@ internal sealed class SpellLoadoutNativeBindings
     internal Func<object, Guid> ReadGuidValue { get; }
     internal Func<object, bool> IsEmpty { get; }
     internal Func<object, bool> CanRemove { get; }
-    internal Func<object, string> GetName { get; }
     internal Action<object, object> Remove { get; }
     internal Action<object, int, int> Swap { get; }
     internal Action<object> UpdateObservable { get; }
@@ -97,7 +93,6 @@ internal sealed class SpellLoadoutNativeBindings
             var guidValue = Method(guidType, "get_guid", typeof(Guid));
             var isEmpty = Method(spellType, "IsEmpty", typeof(bool));
             var canRemove = Method(spellType, "CanRemove", typeof(bool));
-            var getName = Method(spellType, "GetName", typeof(string));
             var remove = Method(managerType, "RemoveSpell", typeof(void), spellType);
             var swap = HierarchyMethod(
                 spellListType,
@@ -116,7 +111,6 @@ internal sealed class SpellLoadoutNativeBindings
                 InstanceFunc<Guid>(guidValue),
                 InstanceFunc<bool>(isEmpty),
                 InstanceFunc<bool>(canRemove),
-                InstanceFunc<string>(getName),
                 InstanceObjectAction(remove),
                 InstanceValueValueAction<int, int>(swap),
                 InstanceAction(update));

@@ -187,50 +187,26 @@ public sealed class GameMcpGenericDiscoveryTests
     }
 
     [Fact]
-    public void Success_yields_to_poststate_while_failure_keeps_named_decomposed_evidence()
+    public void Success_yields_to_poststate_while_failure_names_the_missing_outcome()
     {
-        var before = new GenericDiscoveryState(
-            "GlyphSO", true, true, false, true);
-        var after = new GenericDiscoveryState(
-            "GlyphSO", true, true, false, true);
-        var receipt = new GenericDiscoveryMutationReceipt(
-            true,
-            true,
-            true,
-            false,
-            in before,
-            in after,
-            new[]
-            {
-                new GenericDiscoveryCostReceipt(
-                    ResourceId,
-                    new BigDouble(5),
-                    new BigDouble(8),
-                    new BigDouble(3)),
-            });
         var failure = new GenericDiscoverySubmission(
             GenericDiscoveryPreflight.VerificationFailed,
             GenericDiscoveryNativeStage.Verification,
             NativeMutationOutcome.PostconditionFailed,
             new NativeMutationCallOutcome(2, 1, 0),
-            in receipt,
             "target remained undiscovered");
         var success = new GenericDiscoverySubmission(
             GenericDiscoveryPreflight.Proceeded,
             GenericDiscoveryNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(2, 1, 1),
-            in receipt,
             "target discovered");
 
         var failed = Json(GameMcpGenericDiscoveryProjection.Project(in failure));
         var committed = Json(GameMcpGenericDiscoveryProjection.Project(in success));
 
-        Assert.Null(failed["preflight"]);
-        Assert.Null(failed["quarantined"]);
-        var cost = Assert.Single(failed["receipt"]!["costs"]!).Value<JObject>()!;
-        Assert.Equal("Arcane Dust", (string?)cost["resource"]!["name"]);
-        Assert.Equal("5e0", (string?)cost["observedDelta"]);
+        Assert.Equal("requested entity discovered", (string?)failed["missingOutcome"]);
+        Assert.Single(failed.Properties());
         Assert.Empty(committed.Properties());
     }
 

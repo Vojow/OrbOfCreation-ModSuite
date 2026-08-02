@@ -8,7 +8,7 @@ namespace OrbAutomata;
 
 /// <summary>
 /// The single consumable-use GameAction: lifecycle-scoped complete bindings, live preflights,
-/// one native transaction, and exact before/after evidence.
+/// one native transaction, and one native preparation-queue sentinel.
 /// </summary>
 internal sealed partial class AutoItemsConsumableUseGameAction : IDisposable
 {
@@ -145,22 +145,16 @@ internal sealed partial class AutoItemsConsumableUseGameAction : IDisposable
 
         var itemId = action.ItemId;
         var family = action.Family;
-        NativeMutationEvidence<ItemState> evidence;
+        NativeMutationEvidence<int> evidence;
         using (multiBuy)
         {
             evidence = NativeMutationVerifier.Execute(
                 "Auto Items consumable use",
                 EntityIdentityFormatter.Format(itemId),
-                temporary
-                    ? "one item leaves stock, one enters the native queue, and one temporary usage appears"
-                    : "one item leaves stock and one item enters the native preparation queue",
-                () => Capture(item, native),
+                "the exact item enters the native preparation queue",
+                () => Invoke<int>(native.GetQueued, item),
                 () => Mutate(item, family, native),
-                (before, after) =>
-                    after.Quantity == before.Quantity - 1 &&
-                    after.Queued == before.Queued + 1 &&
-                    (!temporary || after.Usages == before.Usages + 1) &&
-                    (family != AutoItemsConsumableFamily.Scroll || after.Randomized));
+                (before, after) => after == before + 1);
         }
 
         var callOutcome = new NativeMutationCallOutcome(
@@ -193,7 +187,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction : IDisposable
         {
             preflight = AutoItemsPreflight.ContractUnavailable;
             failureReason =
-                "Auto Items could not capture consumable before-state evidence for " +
+                "Auto Items could not read the consumable preparation queue for " +
                 $"{EntityIdentityFormatter.Format(action.ItemId)}: {evidence.Detail}";
         }
         return new AutoItemsSubmission(
@@ -201,8 +195,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction : IDisposable
             evidence.Outcome,
             callOutcome,
             evidence.IsVerified
-                ? $"Verified {action.Family} {EntityIdentityFormatter.Format(action.ItemId)}: stock -1, queue +1" +
-                  (temporary ? ", usage +1." : ".")
+                ? $"{action.Family} {EntityIdentityFormatter.Format(action.ItemId)} entered native preparation."
                 : failureReason);
     }
 
@@ -547,16 +540,6 @@ internal sealed partial class AutoItemsConsumableUseGameAction : IDisposable
         native.SelectAndFire.Invoke(item, Array.Empty<object>());
     }
 
-    private static ItemState Capture(object item, AutoItemsNativeBindings native) =>
-        new(
-            Invoke<int>(native.GetQuantity, item),
-            Invoke<int>(native.GetQueued, item),
-            InvokeBool(native.IsRandomized, item),
-            native.Usages.GetValue(item) is ICollection usages
-                ? usages.Count
-                : throw new InvalidOperationException(
-                    "ConsumableSO.consumableUsages was unavailable during mutation evidence capture."));
-
     private static bool InvokeBool(MethodInfo method, object? target) =>
         Invoke<bool>(method, target);
 
@@ -566,19 +549,4 @@ internal sealed partial class AutoItemsConsumableUseGameAction : IDisposable
             : throw new InvalidOperationException(
                 $"{method.DeclaringType?.Name}.{method.Name} did not return {typeof(T).Name}.");
 
-    private readonly struct ItemState
-    {
-        internal ItemState(int quantity, int queued, bool randomized, int usages)
-        {
-            Quantity = quantity;
-            Queued = queued;
-            Randomized = randomized;
-            Usages = usages;
-        }
-
-        internal int Quantity { get; }
-        internal int Queued { get; }
-        internal bool Randomized { get; }
-        internal int Usages { get; }
-    }
 }

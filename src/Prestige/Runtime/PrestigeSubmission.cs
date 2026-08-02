@@ -22,48 +22,31 @@ internal enum PrestigeNativeStage
     Verification = 2,
 }
 
-internal readonly struct PrestigeState
+internal readonly struct PrestigeAdmissionState
 {
-    internal PrestigeState(bool evidenceAvailable, long lifecycleEpoch,
-        bool worldCycleComplete, bool challengesFetched, int resetCount)
+    internal PrestigeAdmissionState(long lifecycleEpoch,
+        bool worldCycleComplete, bool challengesFetched)
     {
-        EvidenceAvailable = evidenceAvailable;
         LifecycleEpoch = lifecycleEpoch;
         WorldCycleComplete = worldCycleComplete;
         ChallengesFetched = challengesFetched;
-        ResetCount = resetCount;
     }
 
-    internal bool EvidenceAvailable { get; }
     internal long LifecycleEpoch { get; }
     internal bool WorldCycleComplete { get; }
     internal bool ChallengesFetched { get; }
-    internal int ResetCount { get; }
-}
-
-internal readonly struct PrestigeReceipt
-{
-    internal PrestigeReceipt(in PrestigeState before, in PrestigeState after)
-    {
-        Before = before;
-        After = after;
-    }
-    internal PrestigeState Before { get; }
-    internal PrestigeState After { get; }
-    internal bool EvidenceAvailable => Before.EvidenceAvailable || After.EvidenceAvailable;
 }
 
 internal readonly struct PrestigeSubmission
 {
     internal PrestigeSubmission(PrestigePreflight preflight, PrestigeNativeStage stage,
         NativeMutationOutcome outcome, NativeMutationCallOutcome callOutcome,
-        in PrestigeReceipt receipt, string reason)
+        string reason)
     {
         Preflight = preflight;
         Stage = stage;
         Outcome = outcome;
         CallOutcome = callOutcome;
-        Receipt = receipt;
         Reason = reason ?? string.Empty;
     }
 
@@ -71,12 +54,11 @@ internal readonly struct PrestigeSubmission
     internal PrestigeNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
-    internal PrestigeReceipt Receipt { get; }
     internal string Reason { get; }
     internal bool Verified => Preflight == PrestigePreflight.Proceeded &&
         Outcome == NativeMutationOutcome.Verified;
 
     internal static PrestigeSubmission Reject(PrestigePreflight preflight, string reason) =>
         new(preflight, PrestigeNativeStage.None, NativeMutationOutcome.BeforeCaptureFailed,
-            default, default, reason);
+            default, reason);
 }

@@ -85,14 +85,10 @@ public sealed class ResearchLifecycleContractTests
             "research-action.research.type-action", "research-action.cost.type-action",
             "research-action.settings.type-action", "research-action.globals.type-action",
             "research-action.int-variable.type-action", "research-action.level-action",
-            "research-action.waiting-levels-action", "research-action.stage-action",
             "research-action.self-bonus-action", "research-action.active-action",
             "research-action.developing-action", "research-action.max-level-action",
-            "research-action.can-develop-action", "research-action.within-range-action",
-            "research-action.can-bonus-action", "research-action.purchased-levels-action",
-            "research-action.bonus-level-action", "research-action.total-level-action",
-            "research-action.queued-levels-action", "research-action.investment-level-action",
-            "research-action.time-ratio-action", "research-action.free-bonus-action",
+            "research-action.can-develop-action", "research-action.can-bonus-action",
+            "research-action.queued-levels-action", "research-action.free-bonus-action",
             "research-action.development-cost-action", "research-action.cost-enough-action",
             "research-action.queue-mode-action", "research-action.multi-buy-action",
             "research-action.int-as-int-action", "research-action.purchase-action",
@@ -116,7 +112,7 @@ public sealed class ResearchLifecycleContractTests
             "research-decision.type-investment-capture",
             "research-decision.type-maximum-investment-capture",
         };
-        Assert.Equal(59, expected.Length);
+        Assert.Equal(51, expected.Length);
         Assert.All(expected, id => Assert.Single(manifest.Contracts, contract => contract.Id == id));
     }
 

@@ -18,15 +18,6 @@ internal readonly struct CraftingPlayerAction
     internal long LifecycleEpoch { get; }
 }
 
-internal enum CraftingPlayerPipeline
-{
-    None = 0,
-    Direct = 1,
-    QueueStack = 2,
-    QueueNew = 3,
-    QueueInstant = 4,
-}
-
 internal enum CraftingPlayerPreflight
 {
     Proceeded = 0,
@@ -55,46 +46,6 @@ internal enum CraftingPlayerNativeStage
     Verification = 6,
 }
 
-internal readonly struct CraftingPlayerState
-{
-    internal CraftingPlayerState(
-        CraftingPlayerPipeline pipeline,
-        BigDouble purchaseAmount,
-        BigDouble queuedAmount,
-        int queueUsed,
-        int queueMaximum)
-    {
-        Pipeline = pipeline;
-        PurchaseAmount = purchaseAmount;
-        QueuedAmount = queuedAmount;
-        QueueUsed = queueUsed;
-        QueueMaximum = queueMaximum;
-    }
-
-    internal CraftingPlayerPipeline Pipeline { get; }
-    internal BigDouble PurchaseAmount { get; }
-    internal BigDouble QueuedAmount { get; }
-    internal int QueueUsed { get; }
-    internal int QueueMaximum { get; }
-}
-
-internal readonly struct CraftingPlayerEvidence
-{
-    internal CraftingPlayerEvidence(
-        bool available,
-        in CraftingPlayerState before,
-        in CraftingPlayerState after)
-    {
-        Available = available;
-        Before = before;
-        After = after;
-    }
-
-    internal bool Available { get; }
-    internal CraftingPlayerState Before { get; }
-    internal CraftingPlayerState After { get; }
-}
-
 internal readonly struct CraftingPlayerSubmission
 {
     internal CraftingPlayerSubmission(
@@ -103,7 +54,6 @@ internal readonly struct CraftingPlayerSubmission
         CraftingPlayerNativeStage stage,
         NativeMutationOutcome outcome,
         NativeMutationCallOutcome callOutcome,
-        in CraftingPlayerEvidence evidence,
         string reason)
     {
         RecipeId = recipeId;
@@ -111,7 +61,6 @@ internal readonly struct CraftingPlayerSubmission
         Stage = stage;
         Outcome = outcome;
         CallOutcome = callOutcome;
-        Evidence = evidence;
         Reason = reason ?? string.Empty;
     }
 
@@ -120,7 +69,6 @@ internal readonly struct CraftingPlayerSubmission
     internal CraftingPlayerNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
-    internal CraftingPlayerEvidence Evidence { get; }
     internal string Reason { get; }
     internal bool Verified =>
         Preflight == CraftingPlayerPreflight.Proceeded &&
@@ -134,7 +82,6 @@ internal readonly struct CraftingPlayerSubmission
             action.RecipeId,
             preflight,
             CraftingPlayerNativeStage.None,
-            default,
             default,
             default,
             reason);

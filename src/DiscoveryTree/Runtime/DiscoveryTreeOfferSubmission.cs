@@ -34,102 +34,6 @@ internal enum DiscoveryTreeOfferNativeStage
     Verification = 7,
 }
 
-internal readonly struct DiscoveryTreeCostReceipt
-{
-    internal DiscoveryTreeCostReceipt(Guid resourceId, BigDouble expected, BigDouble before, BigDouble after)
-    {
-        ResourceId = resourceId;
-        Expected = expected;
-        Before = before;
-        After = after;
-    }
-
-    internal Guid ResourceId { get; }
-    internal BigDouble Expected { get; }
-    internal BigDouble Before { get; }
-    internal BigDouble After { get; }
-    internal BigDouble Charged => Before - After;
-}
-
-internal readonly struct DiscoveryTreeOfferState
-{
-    internal DiscoveryTreeOfferState(
-        int mode,
-        BigDouble actionTime,
-        int rerolls,
-        int maximumRerolls,
-        bool usedRerollsLastDiscover,
-        Guid[] currentChoices,
-        Guid[] nextExclusions,
-        Guid selectedChoice,
-        int totalDiscovered,
-        int poolDiscovered,
-        bool targetResolved,
-        bool targetDiscovered,
-        bool targetRequired)
-    {
-        Mode = mode;
-        ActionTime = actionTime;
-        Rerolls = rerolls;
-        MaximumRerolls = maximumRerolls;
-        UsedRerollsLastDiscover = usedRerollsLastDiscover;
-        CurrentChoices = currentChoices ?? Array.Empty<Guid>();
-        NextExclusions = nextExclusions ?? Array.Empty<Guid>();
-        SelectedChoice = selectedChoice;
-        TotalDiscovered = totalDiscovered;
-        PoolDiscovered = poolDiscovered;
-        TargetResolved = targetResolved;
-        TargetDiscovered = targetDiscovered;
-        TargetRequired = targetRequired;
-    }
-
-    internal int Mode { get; }
-    internal BigDouble ActionTime { get; }
-    internal int Rerolls { get; }
-    internal int MaximumRerolls { get; }
-    internal bool UsedRerollsLastDiscover { get; }
-    internal Guid[] CurrentChoices { get; }
-    internal Guid[] NextExclusions { get; }
-    internal Guid SelectedChoice { get; }
-    internal int TotalDiscovered { get; }
-    internal int PoolDiscovered { get; }
-    internal bool TargetResolved { get; }
-    internal bool TargetDiscovered { get; }
-    internal bool TargetRequired { get; }
-}
-
-internal readonly struct DiscoveryTreeOfferMutationReceipt
-{
-    internal DiscoveryTreeOfferMutationReceipt(
-        bool evidenceAvailable,
-        bool paymentInvoked,
-        bool resourcesCharged,
-        bool postconditionMatched,
-        bool offersPendingNativeIncrement,
-        in DiscoveryTreeOfferState before,
-        in DiscoveryTreeOfferState after,
-        DiscoveryTreeCostReceipt[] costs)
-    {
-        EvidenceAvailable = evidenceAvailable;
-        PaymentInvoked = paymentInvoked;
-        ResourcesCharged = resourcesCharged;
-        PostconditionMatched = postconditionMatched;
-        OffersPendingNativeIncrement = offersPendingNativeIncrement;
-        Before = before;
-        After = after;
-        Costs = costs ?? Array.Empty<DiscoveryTreeCostReceipt>();
-    }
-
-    internal bool EvidenceAvailable { get; }
-    internal bool PaymentInvoked { get; }
-    internal bool ResourcesCharged { get; }
-    internal bool PostconditionMatched { get; }
-    internal bool OffersPendingNativeIncrement { get; }
-    internal DiscoveryTreeOfferState Before { get; }
-    internal DiscoveryTreeOfferState After { get; }
-    internal DiscoveryTreeCostReceipt[] Costs { get; }
-}
-
 internal readonly struct DiscoveryTreeOfferSubmission
 {
     internal DiscoveryTreeOfferSubmission(
@@ -137,7 +41,6 @@ internal readonly struct DiscoveryTreeOfferSubmission
         DiscoveryTreeOfferNativeStage stage,
         NativeMutationOutcome outcome,
         NativeMutationCallOutcome callOutcome,
-        in DiscoveryTreeOfferMutationReceipt receipt,
         string reason)
     {
         if (preflight != DiscoveryTreeOfferPreflight.Proceeded && string.IsNullOrWhiteSpace(reason))
@@ -146,7 +49,6 @@ internal readonly struct DiscoveryTreeOfferSubmission
         Stage = stage;
         Outcome = outcome;
         CallOutcome = callOutcome;
-        Receipt = receipt;
         Reason = reason ?? string.Empty;
     }
 
@@ -154,7 +56,6 @@ internal readonly struct DiscoveryTreeOfferSubmission
     internal DiscoveryTreeOfferNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
-    internal DiscoveryTreeOfferMutationReceipt Receipt { get; }
     internal string Reason { get; }
     internal bool Verified =>
         Preflight == DiscoveryTreeOfferPreflight.Proceeded &&
@@ -163,6 +64,6 @@ internal readonly struct DiscoveryTreeOfferSubmission
     internal static DiscoveryTreeOfferSubmission Reject(
         DiscoveryTreeOfferPreflight preflight,
         string reason) =>
-        new(preflight, DiscoveryTreeOfferNativeStage.None, NativeMutationOutcome.BeforeCaptureFailed,
-            default, default, reason);
+        new(preflight, DiscoveryTreeOfferNativeStage.None,
+            NativeMutationOutcome.BeforeCaptureFailed, default, reason);
 }

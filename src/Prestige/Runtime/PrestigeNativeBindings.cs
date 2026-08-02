@@ -13,25 +13,21 @@ internal sealed class PrestigeNativeBindings
 
     internal static readonly string[] ContractIds =
     {
-        "prestige.reset-manager.type-action", "prestige.int-variable.type-action",
-        "prestige.bool-variable.type-action", "prestige.reset-manager-instance-action",
-        "prestige.reset-cycle-complete-action", "prestige.reset-fetched-action",
-        "prestige.reset-count-action", "prestige.bool-get-action",
-        "prestige.int-as-int-action", "prestige.reset-logic-action",
+        "prestige.reset-manager.type-action", "prestige.bool-variable.type-action",
+        "prestige.reset-manager-instance-action", "prestige.reset-cycle-complete-action",
+        "prestige.reset-fetched-action", "prestige.bool-get-action",
+        "prestige.reset-logic-action",
     };
 
     private PrestigeNativeBindings(Type managerType, Func<object?> manager,
         Func<object, object?> cycleComplete, Func<object, object?> challengesFetched,
-        Func<object, object?> resetCount, Func<object, bool> getBool,
-        Func<object, int> asInt, Action<object> reset)
+        Func<object, bool> getBool, Action<object> reset)
     {
         ManagerType = managerType;
         Manager = manager;
         CycleComplete = cycleComplete;
         ChallengesFetched = challengesFetched;
-        ResetCount = resetCount;
         GetBool = getBool;
-        AsInt = asInt;
         Reset = reset;
     }
 
@@ -39,9 +35,7 @@ internal sealed class PrestigeNativeBindings
     internal Func<object?> Manager { get; }
     internal Func<object, object?> CycleComplete { get; }
     internal Func<object, object?> ChallengesFetched { get; }
-    internal Func<object, object?> ResetCount { get; }
     internal Func<object, bool> GetBool { get; }
-    internal Func<object, int> AsInt { get; }
     internal Action<object> Reset { get; }
 
     internal static bool TryCreate(out PrestigeNativeBindings? bindings, out string reason,
@@ -58,17 +52,14 @@ internal sealed class PrestigeNativeBindings
                 return resolveType(name) ?? throw new InvalidOperationException(name + " was unavailable");
             }
             var manager = T(0, "PersistentResetManager");
-            var integer = T(1, "IntVariable");
-            var boolean = T(2, "BoolVariable");
+            var boolean = T(1, "BoolVariable");
             bindings = new PrestigeNativeBindings(
                 manager,
-                StaticObject(StaticField(3, manager, "instance", manager, includeContract)),
-                ObjectField(Field(4, manager, "hasCompleteWorldCycle", boolean, includeContract)),
-                ObjectField(Field(5, manager, "hasFetchedChallenges", boolean, includeContract)),
-                ObjectField(Field(6, manager, "persistentResetCount", integer, includeContract)),
-                Func<bool>(Method(7, boolean, "GetValue", typeof(bool), includeContract)),
-                Func<int>(Method(8, integer, "AsInt", typeof(int), includeContract)),
-                Action1(Method(9, manager, "PersistentResetLogic", typeof(void), includeContract)));
+                StaticObject(StaticField(2, manager, "instance", manager, includeContract)),
+                ObjectField(Field(3, manager, "hasCompleteWorldCycle", boolean, includeContract)),
+                ObjectField(Field(4, manager, "hasFetchedChallenges", boolean, includeContract)),
+                Func<bool>(Method(5, boolean, "GetValue", typeof(bool), includeContract)),
+                Action1(Method(6, manager, "PersistentResetLogic", typeof(void), includeContract)));
             reason = string.Empty;
             return true;
         }

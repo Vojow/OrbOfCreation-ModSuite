@@ -29,7 +29,6 @@ internal sealed class CraftingPlayerNativeBindings
         "crafting-player.recipe-time-action",
         "crafting-player.queue-get-quantity-action",
         "crafting-player.instance-add-quantity-action",
-        "crafting-player.list-get-max-action",
         "crafting-player.instance-quantity-action",
         "crafting-player.instance-recipe-action",
         "int-variable.as-int",
@@ -70,7 +69,6 @@ internal sealed class CraftingPlayerNativeBindings
     private readonly MethodInfo _intAsInt;
     private readonly MethodInfo _queueGetQuantity;
     private readonly MethodInfo _queueHasRoom;
-    private readonly MethodInfo _queueMaximum;
     private readonly MethodInfo _queueAdd;
     private readonly MethodInfo _instanceRecipe;
     private readonly MethodInfo _instanceQuantity;
@@ -111,7 +109,6 @@ internal sealed class CraftingPlayerNativeBindings
         MethodInfo intAsInt,
         MethodInfo queueGetQuantity,
         MethodInfo queueHasRoom,
-        MethodInfo queueMaximum,
         MethodInfo queueAdd,
         MethodInfo instanceRecipe,
         MethodInfo instanceQuantity,
@@ -151,7 +148,6 @@ internal sealed class CraftingPlayerNativeBindings
         _intAsInt = intAsInt;
         _queueGetQuantity = queueGetQuantity;
         _queueHasRoom = queueHasRoom;
-        _queueMaximum = queueMaximum;
         _queueAdd = queueAdd;
         _instanceRecipe = instanceRecipe;
         _instanceQuantity = instanceQuantity;
@@ -205,7 +201,6 @@ internal sealed class CraftingPlayerNativeBindings
     internal BigDouble QueueQuantity(object queue, object recipe) =>
         Invoke<BigDouble>(_queueGetQuantity, queue, recipe);
     internal bool QueueHasRoom(object queue) => Invoke<bool>(_queueHasRoom, queue);
-    internal int QueueMaximum(object queue) => Invoke<int>(_queueMaximum, queue);
     internal IList QueueValues(object queue) =>
         (IList)(_instanceListValue.GetValue(queue) ??
             throw new InvalidOperationException("Crafting queue value was null."));
@@ -272,7 +267,6 @@ internal sealed class CraftingPlayerNativeBindings
                 Method(intVariable, "AsInt", typeof(int)),
                 Method(instanceList, "GetQuantity", big, recipe),
                 MethodFromHierarchy(instanceList, "HasEmptySpot", typeof(bool)),
-                MethodFromHierarchy(instanceList, "GetMax", typeof(int)),
                 MethodFromHierarchy(instanceList, "Add", typeof(void), instance),
                 MethodFromHierarchy(instance, "GetGuidReference", typeof(Guid)),
                 Method(instance, "GetQuantity", big),

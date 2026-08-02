@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Reflection;
 using OrbModding.Common;
 
@@ -14,7 +13,6 @@ internal sealed class ChallengeGameAction : IDisposable
     private readonly Func<string, Type?>? _resolveType;
     private readonly Func<string, bool>? _includeContract;
     private readonly TypedRegistryResolver _registry;
-    private readonly Func<object, Guid?> _stableId;
     private readonly int _mainThreadId;
     private ChallengeNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
@@ -30,7 +28,6 @@ internal sealed class ChallengeGameAction : IDisposable
         _resolveType = resolveType;
         _includeContract = includeContract;
         var identity = RuntimeIdentityRegistryBinding.Shared;
-        _stableId = identity.ReadStableUuid;
         _registry = registry ?? new TypedRegistryResolver(_readLifecycleEpoch, identity.Read, identity.ReadStableUuid);
         _mainThreadId = Environment.CurrentManagedThreadId;
         BindLifecycle();
@@ -71,7 +68,7 @@ internal sealed class ChallengeGameAction : IDisposable
 
             if (!TryContext(native, out var context, out var contextFailure))
                 return ChallengeSubmission.Reject(ChallengePreflight.ContractUnavailable, contextFailure);
-            var before = Capture(native, in context, target);
+            var before = CaptureAdmission(native, in context, target);
             var preflight = Preflight(action.Kind, native, in context, target, in before, out var reason);
             if (preflight != ChallengePreflight.Proceeded)
                 return ChallengeSubmission.Reject(preflight, reason);
@@ -101,7 +98,7 @@ internal sealed class ChallengeGameAction : IDisposable
     }
 
     private ChallengeSubmission Execute(in ChallengeAction action, ChallengeNativeBindings native,
-        in NativeContext context, object? target, in ChallengeState before)
+        in NativeContext context, object? target, in ChallengeAdmissionState before)
     {
         var stage = ChallengeNativeStage.NativeCallback;
         try
@@ -134,24 +131,18 @@ internal sealed class ChallengeGameAction : IDisposable
                     throw new ArgumentOutOfRangeException(nameof(action.Kind));
             }
             stage = ChallengeNativeStage.Verification;
-            var after = Capture(native, in context, target);
-            var receipt = new ChallengeReceipt(action.Kind, in before, in after);
-            return OutcomeMatches(action.Kind, in before, in after)
-                ? Verified(in receipt)
+            return OutcomeLanded(action.Kind, native, in context, target, in before)
+                ? Verified()
                 : Fault(in action, ChallengePreflight.VerificationFailed, stage,
-                    NativeMutationOutcome.PostconditionFailed, in receipt,
+                    NativeMutationOutcome.PostconditionFailed,
                     "The requested challenge identity/outcome transition was not observable.");
         }
         catch (Exception exception) when (IsExpected(exception))
         {
-            ChallengeState after;
-            try { after = Capture(native, in context, target); }
-            catch (Exception) { after = default; }
-            var receipt = new ChallengeReceipt(action.Kind, in before, in after);
-            if (after.EvidenceAvailable && OutcomeMatches(action.Kind, in before, in after))
-                return Verified(in receipt);
+            if (OutcomeLandedBestEffort(action.Kind, native, in context, target, in before))
+                return Verified();
             return Fault(in action, ChallengePreflight.PostCommitFault, stage,
-                NativeMutationOutcome.ExecutionThrew, in receipt,
+                NativeMutationOutcome.ExecutionThrew,
                 "The native challenge pipeline threw before the requested outcome was observable: " +
                 exception.GetBaseException().Message);
         }
@@ -159,7 +150,7 @@ internal sealed class ChallengeGameAction : IDisposable
 
     private static ChallengePreflight Preflight(ChallengeActionKind kind,
         ChallengeNativeBindings native, in NativeContext context, object? target,
-        in ChallengeState before, out string reason)
+        in ChallengeAdmissionState before, out string reason)
     {
         reason = string.Empty;
         if (kind == ChallengeActionKind.Select)
@@ -193,62 +184,55 @@ internal sealed class ChallengeGameAction : IDisposable
         return ChallengePreflight.Proceeded;
     }
 
-    private ChallengeState Capture(ChallengeNativeBindings native, in NativeContext context, object? target)
+    private static ChallengeAdmissionState CaptureAdmission(
+        ChallengeNativeBindings native, in NativeContext context, object? target)
     {
         var selected = target is not null && native.Contains(context.Preferred, target);
         var time = target is not null && native.Contains(context.TimeOffers, target);
         var prestige = target is not null && native.Contains(context.PrestigeOffers, target);
-        var timeOffers = ReadIds(native, context.TimeOffers, out var timeOffersQueued);
-        var prestigeOffers = ReadIds(native, context.PrestigeOffers, out var prestigeOffersQueued);
-        return new ChallengeState(true, target is null ? -1 : native.State(target), selected, time, prestige,
+        return new ChallengeAdmissionState(target is null ? -1 : native.State(target), selected, time, prestige,
             native.GetBool(context.CycleComplete), native.GetBool(context.Fetched),
-            native.AsInt(context.RerollsLeft), native.AsInt(context.RerollsMaximum),
-            timeOffers, prestigeOffers, timeOffersQueued, prestigeOffersQueued);
+            native.AsInt(context.RerollsLeft));
     }
 
-    private Guid[] ReadIds(ChallengeNativeBindings native, object list, out bool allQueued)
+    private static bool OutcomeLanded(ChallengeActionKind kind,
+        ChallengeNativeBindings native, in NativeContext context, object? target,
+        in ChallengeAdmissionState before) => kind switch
     {
-        var values = native.Values(list) ?? throw new InvalidOperationException("Challenge list values were unavailable.");
-        var ids = new Guid[values.Count];
-        allQueued = ids.Length > 0;
-        for (var index = 0; index < ids.Length; index++)
-        {
-            var value = values[index];
-            if (value is null || value.GetType() != native.ChallengeType)
-                throw new InvalidOperationException("Challenge list entry " + index + " had the wrong identity type.");
-            ids[index] = _stableId(value) ??
-                throw new InvalidOperationException("Challenge list entry " + index + " had no stable UUID.");
-            allQueued &= native.State(value) == 1;
-        }
-        return ids;
-    }
-
-    private static bool OutcomeMatches(ChallengeActionKind kind,
-        in ChallengeState before, in ChallengeState after) => kind switch
-    {
-        ChallengeActionKind.Select => after.Selected == !before.Selected,
+        ChallengeActionKind.Select => native.Contains(context.Preferred, target!) == !before.Selected,
         ChallengeActionKind.Queue => before.TargetState == 0
-            ? after.TargetState == 1
-            : before.TargetState == 1 && after.TargetState == 0,
-        ChallengeActionKind.Abandon => after.TargetState == 4,
-        ChallengeActionKind.FetchTime => after.TimeOffers.Length > 0 && after.TimeOffersQueued,
-        ChallengeActionKind.FetchPrestige => after.PrestigeOffers.Length > 0 && after.PrestigeOffersQueued,
+            ? native.State(target!) == 1
+            : before.TargetState == 1 && native.State(target!) == 0,
+        ChallengeActionKind.Abandon => native.State(target!) == 4,
+        ChallengeActionKind.FetchTime => HasOffers(native, context.TimeOffers),
+        ChallengeActionKind.FetchPrestige => HasOffers(native, context.PrestigeOffers),
         _ => false,
     };
 
-    private static ChallengeSubmission Verified(in ChallengeReceipt receipt) =>
+    private static bool HasOffers(ChallengeNativeBindings native, object list) =>
+        native.Values(list) is { Count: > 0 };
+
+    private static bool OutcomeLandedBestEffort(ChallengeActionKind kind,
+        ChallengeNativeBindings native, in NativeContext context, object? target,
+        in ChallengeAdmissionState before)
+    {
+        try { return OutcomeLanded(kind, native, in context, target, in before); }
+        catch (Exception exception) when (IsExpected(exception)) { return false; }
+    }
+
+    private static ChallengeSubmission Verified() =>
         new(ChallengePreflight.Proceeded, ChallengeNativeStage.Verification,
             NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1),
-            in receipt, "Verified the exact requested challenge identity/outcome transition.");
+            "The requested challenge transition is visible.");
 
     private static ChallengeSubmission Fault(in ChallengeAction action,
         ChallengePreflight preflight, ChallengeNativeStage stage, NativeMutationOutcome outcome,
-        in ChallengeReceipt receipt, string reason)
+        string reason)
     {
         var target = action.HasTarget ? EntityIdentityFormatter.Format(action.TargetId) : action.Kind.ToString();
         var exactReason = "Challenge action " + stage + " failed on " + target + ": " + reason;
         return new ChallengeSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, exactReason);
+            new NativeMutationCallOutcome(1, 1, 0), exactReason);
     }
 
     private static bool TryContext(ChallengeNativeBindings native, out NativeContext context, out string reason)
@@ -262,14 +246,13 @@ internal sealed class ChallengeGameAction : IDisposable
         var time = native.TimeOffers(challengeManager);
         var prestige = native.PrestigeOffers(resetManager);
         var left = native.RerollsLeft(resetManager);
-        var maximum = native.RerollsMaximum(resetManager);
         var complete = native.CycleComplete(resetManager);
         var fetched = native.Fetched(resetManager);
-        if (preferred is null || time is null || prestige is null || left is null || maximum is null ||
+        if (preferred is null || time is null || prestige is null || left is null ||
             complete is null || fetched is null)
         { context = default; reason = "The native challenge decision graph returned a null member."; return false; }
         context = new NativeContext(challengeManager, resetManager, preferred, time, prestige,
-            left, maximum, complete, fetched);
+            left, complete, fetched);
         reason = string.Empty;
         return true;
     }
@@ -285,7 +268,7 @@ internal sealed class ChallengeGameAction : IDisposable
     private readonly struct NativeContext
     {
         internal NativeContext(object challengeManager, object resetManager, object preferred,
-            object timeOffers, object prestigeOffers, object rerollsLeft, object rerollsMaximum,
+            object timeOffers, object prestigeOffers, object rerollsLeft,
             object cycleComplete, object fetched)
         {
             ChallengeManager = challengeManager;
@@ -294,7 +277,6 @@ internal sealed class ChallengeGameAction : IDisposable
             TimeOffers = timeOffers;
             PrestigeOffers = prestigeOffers;
             RerollsLeft = rerollsLeft;
-            RerollsMaximum = rerollsMaximum;
             CycleComplete = cycleComplete;
             Fetched = fetched;
         }
@@ -304,7 +286,6 @@ internal sealed class ChallengeGameAction : IDisposable
         internal object TimeOffers { get; }
         internal object PrestigeOffers { get; }
         internal object RerollsLeft { get; }
-        internal object RerollsMaximum { get; }
         internal object CycleComplete { get; }
         internal object Fetched { get; }
     }

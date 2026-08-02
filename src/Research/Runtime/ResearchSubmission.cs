@@ -13,40 +13,31 @@ internal enum ResearchPreflight
 
 internal enum ResearchNativeStage { None = 0, NativeCallback = 1, Verification = 2 }
 
-internal readonly record struct ResearchState(
-    bool EvidenceAvailable, bool QueueMode, int MultiBuy, int Level, int WaitingLevels,
-    int QueuedLevels, int Stage, int SelfBonusLevels, bool IsActive, bool IsDeveloping,
-    int PurchasedLevels, int BonusLevel, int TotalLevel, int CurrentInvestmentLevel,
-    BigDouble TimeRatio, bool CanDevelop, bool WithinDevelopRange,
+internal readonly record struct ResearchAdmissionState(
+    bool QueueMode, int MultiBuy, int Level, int QueuedLevels, int SelfBonusLevels,
+    bool IsActive, bool IsDeveloping, bool CanDevelop,
     bool CanApplyBonusLevel, int FreeBonusLevels, bool CostAffordable, int MaxLevel,
     int LevelsAvailable);
-
-internal readonly record struct ResearchReceipt(
-    ResearchActionKind Kind, ResearchState Before, ResearchState After)
-{
-    internal bool EvidenceAvailable => Before.EvidenceAvailable && After.EvidenceAvailable;
-}
 
 internal readonly struct ResearchSubmission
 {
     internal ResearchSubmission(ResearchPreflight preflight, ResearchNativeStage stage,
         NativeMutationOutcome outcome, NativeMutationCallOutcome callOutcome,
-        in ResearchReceipt receipt, string reason)
+        string reason)
     {
         Preflight = preflight; Stage = stage; Outcome = outcome; CallOutcome = callOutcome;
-        Receipt = receipt; Reason = reason ?? string.Empty;
+        Reason = reason ?? string.Empty;
     }
 
     internal ResearchPreflight Preflight { get; }
     internal ResearchNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
-    internal ResearchReceipt Receipt { get; }
     internal string Reason { get; }
     internal bool Verified => Preflight == ResearchPreflight.Proceeded &&
         Outcome == NativeMutationOutcome.Verified;
 
     internal static ResearchSubmission Reject(ResearchPreflight preflight, string reason) =>
         new(preflight, ResearchNativeStage.None, NativeMutationOutcome.BeforeCaptureFailed,
-            default, default, reason);
+            default, reason);
 }

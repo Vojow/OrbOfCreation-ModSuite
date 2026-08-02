@@ -90,7 +90,7 @@ internal sealed class PrestigeGameAction : IDisposable
     }
 
     private PrestigeSubmission Execute(PrestigeNativeBindings native, object manager,
-        in PrestigeState before)
+        in PrestigeAdmissionState before)
     {
         var stage = PrestigeNativeStage.NativeTransaction;
         try
@@ -100,55 +100,60 @@ internal sealed class PrestigeGameAction : IDisposable
             native.Reset(manager);
             stage = PrestigeNativeStage.Verification;
             var observedEpoch = _readLifecycleEpoch();
-            var after = new PrestigeState(false, observedEpoch, false, false, 0);
-            var receipt = new PrestigeReceipt(in before, in after);
             if (observedEpoch == checked(before.LifecycleEpoch + 1))
                 return new PrestigeSubmission(PrestigePreflight.Proceeded, stage,
                     NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1),
-                    in receipt, "Verified the exact persistent-reset lifecycle transition.");
+                    "The persistent-reset lifecycle transition is visible.");
             return Fault(PrestigePreflight.VerificationFailed, stage,
-                NativeMutationOutcome.PostconditionFailed, in receipt,
-                "The native reset transaction did not replace the lifecycle exactly once.");
+                NativeMutationOutcome.PostconditionFailed,
+                "Expected lifecycle " + checked(before.LifecycleEpoch + 1) +
+                ", observed " + observedEpoch + ".");
         }
         catch (Exception exception) when (IsExpected(exception))
         {
-            long observedEpoch;
-            try { observedEpoch = _readLifecycleEpoch(); }
-            catch (Exception) { observedEpoch = before.LifecycleEpoch; }
-            var after = new PrestigeState(false, observedEpoch, false, false, 0);
-            var receipt = new PrestigeReceipt(in before, in after);
+            var observedEpoch = ReadEpochBestEffort(before.LifecycleEpoch);
+            if (observedEpoch == checked(before.LifecycleEpoch + 1))
+                return new PrestigeSubmission(PrestigePreflight.Proceeded,
+                    PrestigeNativeStage.Verification, NativeMutationOutcome.Verified,
+                    new NativeMutationCallOutcome(1, 1, 1),
+                    "The lifecycle advanced before the native exception.");
             return Fault(PrestigePreflight.PostCommitFault, stage,
-                NativeMutationOutcome.ExecutionThrew, in receipt,
-                "The native reset transaction threw after invocation; full reset completion is unproven: " +
+                NativeMutationOutcome.ExecutionThrew,
+                "The native reset transaction threw before the lifecycle advanced: " +
                 exception.GetBaseException().Message);
         }
     }
 
     private static bool TryCapture(PrestigeNativeBindings native, object manager, long epoch,
-        out PrestigeState state, out string reason)
+        out PrestigeAdmissionState state, out string reason)
     {
         var complete = native.CycleComplete(manager);
         var fetched = native.ChallengesFetched(manager);
-        var count = native.ResetCount(manager);
-        if (complete is null || fetched is null || count is null)
+        if (complete is null || fetched is null)
         {
             state = default;
             reason = "The native prestige decision graph returned a null member.";
             return false;
         }
-        state = new PrestigeState(true, epoch, native.GetBool(complete),
-            native.GetBool(fetched), native.AsInt(count));
+        state = new PrestigeAdmissionState(epoch, native.GetBool(complete),
+            native.GetBool(fetched));
         reason = string.Empty;
         return true;
     }
 
     private static PrestigeSubmission Fault(PrestigePreflight preflight,
         PrestigeNativeStage stage, NativeMutationOutcome outcome,
-        in PrestigeReceipt receipt, string reason)
+        string reason)
     {
         var exactReason = "Prestige " + stage + " failed: " + reason;
         return new PrestigeSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, exactReason);
+            new NativeMutationCallOutcome(1, 1, 0), exactReason);
+    }
+
+    private long ReadEpochBestEffort(long fallback)
+    {
+        try { return _readLifecycleEpoch(); }
+        catch (Exception exception) when (IsExpected(exception)) { return fallback; }
     }
 
     private void BindLifecycle()

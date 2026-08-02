@@ -1,6 +1,4 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Reflection;
 using OrbModding.Common;
 
@@ -106,7 +104,7 @@ internal sealed class SpellLoadoutGameAction : IDisposable
         SpellLoadoutNativeBindings native)
     {
         if (!TryResolve(native, action.SpellInstanceId, out var manager, out _, out var spell,
-                out var sourceSlot, out var before, out var reason))
+                out var sourceSlot, out _, out var reason))
             return SpellLoadoutSubmission.Reject(SpellLoadoutPreflight.IdentityUnavailable, reason);
         if (!native.CanRemove(spell))
             return SpellLoadoutSubmission.Reject(
@@ -121,36 +119,21 @@ internal sealed class SpellLoadoutGameAction : IDisposable
         try
         {
             native.Remove(manager, spell);
-            var after = Capture(native);
-            return Removed(in before, in after, action.SpellInstanceId)
-                ? Verified(
-                    sourceSlot,
-                    -1,
-                    in before,
-                    in after,
-                    new NativeMutationCallOutcome(1, 1, 1),
-                    "The exact runtime spell is absent and every surviving spell remains in order.")
+            return TargetAbsent(native, action.SpellInstanceId)
+                ? Verified(new NativeMutationCallOutcome(1, 1, 1),
+                    "The exact runtime spell is absent from the loadout.")
                 : Fault(
                     in action,
                     SpellLoadoutPreflight.VerificationFailed,
                     SpellLoadoutNativeStage.Verification,
                     NativeMutationOutcome.PostconditionFailed,
-                    sourceSlot,
-                    -1,
-                    in before,
-                    in after,
                     new NativeMutationCallOutcome(1, 1, 0),
-                    "Removal did not produce exact target absence with survivor-order preservation.");
+                    "The requested runtime spell remains equipped.");
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            var after = CaptureBestEffort(native, in before);
-            if (Removed(in before, in after, action.SpellInstanceId))
+            if (TargetAbsentBestEffort(native, action.SpellInstanceId))
                 return Verified(
-                    sourceSlot,
-                    -1,
-                    in before,
-                    in after,
                     new NativeMutationCallOutcome(1, 1, 1),
                     "SpellManager.RemoveSpell threw after the requested removal became observable.");
             return Fault(
@@ -158,10 +141,6 @@ internal sealed class SpellLoadoutGameAction : IDisposable
                 SpellLoadoutPreflight.PostCommitFault,
                 SpellLoadoutNativeStage.Remove,
                 NativeMutationOutcome.ExecutionThrew,
-                sourceSlot,
-                -1,
-                in before,
-                in after,
                 new NativeMutationCallOutcome(1, 1, 0),
                 "SpellManager.RemoveSpell threw before the requested outcome was observable: " +
                 ex.GetBaseException().Message);
@@ -173,13 +152,13 @@ internal sealed class SpellLoadoutGameAction : IDisposable
         SpellLoadoutNativeBindings native)
     {
         if (!TryResolve(native, action.SpellInstanceId, out _, out var active, out _,
-                out var sourceSlot, out var before, out var reason))
+                out var sourceSlot, out var slotCount, out var reason))
             return SpellLoadoutSubmission.Reject(SpellLoadoutPreflight.IdentityUnavailable, reason);
-        if (action.DestinationSlot >= before.Slots.Length)
+        if (action.DestinationSlot >= slotCount)
             return SpellLoadoutSubmission.Reject(
                 SpellLoadoutPreflight.DestinationOutOfRange,
                 "Destination slot " + action.DestinationSlot +
-                " is outside the live native range 0.." + (before.Slots.Length - 1) + ".");
+                " is outside the live native range 0.." + (slotCount - 1) + ".");
         if (sourceSlot == action.DestinationSlot)
             return SpellLoadoutSubmission.Reject(
                 SpellLoadoutPreflight.AlreadyInRequestedState,
@@ -199,36 +178,22 @@ internal sealed class SpellLoadoutGameAction : IDisposable
             stage = SpellLoadoutNativeStage.Notify;
             nativeCalls = 2;
             native.UpdateObservable(active);
-            var after = Capture(native);
-            return Moved(in before, in after, sourceSlot, action.DestinationSlot)
+            return TargetAtSlot(native, action.SpellInstanceId, action.DestinationSlot)
                 ? Verified(
-                    sourceSlot,
-                    action.DestinationSlot,
-                    in before,
-                    in after,
                     new NativeMutationCallOutcome(2, 1, 1),
-                    "The exact ordered loadout now contains the requested two-position swap.")
+                    "The exact runtime spell is in the requested slot.")
                 : Fault(
                     in action,
                     SpellLoadoutPreflight.VerificationFailed,
                     SpellLoadoutNativeStage.Verification,
                     NativeMutationOutcome.PostconditionFailed,
-                    sourceSlot,
-                    action.DestinationSlot,
-                    in before,
-                    in after,
                     new NativeMutationCallOutcome(2, 1, 0),
-                    "Reordering changed more or less than the exact requested two-position swap.");
+                    "The requested runtime spell is not in the destination slot.");
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            var after = CaptureBestEffort(native, in before);
-            if (Moved(in before, in after, sourceSlot, action.DestinationSlot))
+            if (TargetAtSlotBestEffort(native, action.SpellInstanceId, action.DestinationSlot))
                 return Verified(
-                    sourceSlot,
-                    action.DestinationSlot,
-                    in before,
-                    in after,
                     new NativeMutationCallOutcome(nativeCalls, 1, 1),
                     "The native reorder pipeline threw after the requested slot order became observable.");
             return Fault(
@@ -236,10 +201,6 @@ internal sealed class SpellLoadoutGameAction : IDisposable
                 SpellLoadoutPreflight.PostCommitFault,
                 stage,
                 NativeMutationOutcome.ExecutionThrew,
-                sourceSlot,
-                action.DestinationSlot,
-                in before,
-                in after,
                 new NativeMutationCallOutcome(nativeCalls, 1, 0),
                 "The native reorder pipeline threw before the requested outcome was observable: " +
                 ex.GetBaseException().Message);
@@ -253,14 +214,14 @@ internal sealed class SpellLoadoutGameAction : IDisposable
         out object active,
         out object spell,
         out int slot,
-        out SpellLoadoutState state,
+        out int slotCount,
         out string reason)
     {
         manager = native.ReadManager()!;
         active = null!;
         spell = null!;
         slot = -1;
-        state = default;
+        slotCount = 0;
         if (manager is null)
         {
             reason = "SpellManager.instance is unavailable in this lifecycle.";
@@ -268,8 +229,7 @@ internal sealed class SpellLoadoutGameAction : IDisposable
         }
         active = native.ReadActive(manager);
         var values = native.ReadActiveValues(active);
-        var ids = new Guid[values.Count];
-        var names = new string[values.Count];
+        slotCount = values.Count;
         var matches = 0;
         for (var index = 0; index < values.Count; index++)
         {
@@ -279,14 +239,11 @@ internal sealed class SpellLoadoutGameAction : IDisposable
                 throw new InvalidOperationException("Equipped slot " + index + " did not hold an exact Spell.");
             if (native.IsEmpty(candidate)) continue;
             var id = ReadIdentity(native, candidate, index);
-            ids[index] = id;
-            names[index] = NativeName(native, candidate);
             if (id != targetId) continue;
             spell = candidate;
             slot = index;
             matches++;
         }
-        state = new SpellLoadoutState(ids, names);
         if (matches == 1)
         {
             reason = string.Empty;
@@ -300,31 +257,38 @@ internal sealed class SpellLoadoutGameAction : IDisposable
         return false;
     }
 
-    private static SpellLoadoutState Capture(SpellLoadoutNativeBindings native)
+    private static bool TargetAbsent(SpellLoadoutNativeBindings native, Guid targetId) =>
+        FindTargetSlot(native, targetId) == -1;
+
+    private static bool TargetAtSlot(
+        SpellLoadoutNativeBindings native, Guid targetId, int destination)
     {
         var manager = native.ReadManager() ??
             throw new InvalidOperationException("SpellManager.instance was null during verification.");
         var active = native.ReadActive(manager);
         var values = native.ReadActiveValues(active);
-        var ids = new Guid[values.Count];
-        var names = new string[values.Count];
+        if (destination < 0 || destination >= values.Count) return false;
+        var candidate = values[destination];
+        return candidate is not null && candidate.GetType() == native.SpellType &&
+            !native.IsEmpty(candidate) && ReadIdentity(native, candidate, destination) == targetId;
+    }
+
+    private static int FindTargetSlot(SpellLoadoutNativeBindings native, Guid targetId)
+    {
+        var manager = native.ReadManager() ??
+            throw new InvalidOperationException("SpellManager.instance was null during verification.");
+        var values = native.ReadActiveValues(native.ReadActive(manager));
+        var slot = -1;
         for (var index = 0; index < values.Count; index++)
         {
             var candidate = values[index];
-            if (candidate is null) continue;
-            if (candidate.GetType() != native.SpellType)
-                throw new InvalidOperationException("Equipped slot " + index + " did not hold an exact Spell.");
-            if (native.IsEmpty(candidate)) continue;
-            ids[index] = ReadIdentity(native, candidate, index);
-            names[index] = NativeName(native, candidate);
+            if (candidate is null || candidate.GetType() != native.SpellType || native.IsEmpty(candidate))
+                continue;
+            if (ReadIdentity(native, candidate, index) != targetId) continue;
+            if (slot >= 0) return -2;
+            slot = index;
         }
-        return new SpellLoadoutState(ids, names);
-    }
-
-    private static string NativeName(SpellLoadoutNativeBindings native, object spell)
-    {
-        var name = native.GetName(spell)?.Trim() ?? string.Empty;
-        return name.Length == 0 ? "Equipped spell" : name;
+        return slot;
     }
 
     private static Guid ReadIdentity(
@@ -340,73 +304,29 @@ internal sealed class SpellLoadoutGameAction : IDisposable
         return id;
     }
 
-    private static SpellLoadoutState CaptureBestEffort(
-        SpellLoadoutNativeBindings native,
-        in SpellLoadoutState fallback)
+    private static bool TargetAbsentBestEffort(
+        SpellLoadoutNativeBindings native, Guid targetId)
     {
-        try { return Capture(native); }
-        catch (Exception ex) when (IsExpected(ex)) { return fallback; }
+        try { return TargetAbsent(native, targetId); }
+        catch (Exception ex) when (IsExpected(ex)) { return false; }
     }
 
-    private static bool Removed(
-        in SpellLoadoutState before,
-        in SpellLoadoutState after,
-        Guid target)
+    private static bool TargetAtSlotBestEffort(
+        SpellLoadoutNativeBindings native, Guid targetId, int destination)
     {
-        var expected = new List<Guid>();
-        for (var index = 0; index < before.Slots.Length; index++)
-        {
-            var id = before.Slots[index];
-            if (id != Guid.Empty && id != target) expected.Add(id);
-        }
-        var observed = new List<Guid>();
-        for (var index = 0; index < after.Slots.Length; index++)
-        {
-            var id = after.Slots[index];
-            if (id == target) return false;
-            if (id != Guid.Empty) observed.Add(id);
-        }
-        if (expected.Count != observed.Count) return false;
-        for (var index = 0; index < expected.Count; index++)
-            if (expected[index] != observed[index]) return false;
-        return true;
-    }
-
-    private static bool Moved(
-        in SpellLoadoutState before,
-        in SpellLoadoutState after,
-        int source,
-        int destination)
-    {
-        if (before.Slots.Length != after.Slots.Length) return false;
-        for (var index = 0; index < before.Slots.Length; index++)
-        {
-            var expected = index == source
-                ? before.Slots[destination]
-                : index == destination
-                    ? before.Slots[source]
-                    : before.Slots[index];
-            if (after.Slots[index] != expected) return false;
-        }
-        return true;
+        try { return TargetAtSlot(native, targetId, destination); }
+        catch (Exception ex) when (IsExpected(ex)) { return false; }
     }
 
     private static SpellLoadoutSubmission Verified(
-        int sourceSlot,
-        int destinationSlot,
-        in SpellLoadoutState before,
-        in SpellLoadoutState after,
         NativeMutationCallOutcome callOutcome,
         string reason)
     {
-        var evidence = new SpellLoadoutEvidence(
-            true, sourceSlot, destinationSlot, in before, in after);
         return new SpellLoadoutSubmission(
             SpellLoadoutPreflight.Proceeded,
             SpellLoadoutNativeStage.Verification,
             NativeMutationOutcome.Verified,
             callOutcome,
-            in evidence,
             reason);
     }
 
@@ -415,23 +335,16 @@ internal sealed class SpellLoadoutGameAction : IDisposable
         SpellLoadoutPreflight preflight,
         SpellLoadoutNativeStage stage,
         NativeMutationOutcome outcome,
-        int sourceSlot,
-        int destinationSlot,
-        in SpellLoadoutState before,
-        in SpellLoadoutState after,
         NativeMutationCallOutcome callOutcome,
         string reason)
     {
         var exactReason = "Spell loadout " + stage + " failed on " +
             EntityIdentityFormatter.Format(action.SpellInstanceId) + ": " + reason;
-        var evidence = new SpellLoadoutEvidence(
-            true, sourceSlot, destinationSlot, in before, in after);
         return new SpellLoadoutSubmission(
             preflight,
             stage,
             outcome,
             callOutcome,
-            in evidence,
             exactReason);
     }
 

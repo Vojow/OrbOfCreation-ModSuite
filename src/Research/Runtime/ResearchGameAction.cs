@@ -81,38 +81,32 @@ internal sealed class ResearchGameAction : IDisposable
     { _bindings = null; _bindingFailure = string.Empty; }
 
     private ResearchSubmission Execute(in ResearchAction action, ResearchNativeBindings native,
-        object target, in ResearchState before)
+        object target, in ResearchAdmissionState before)
     {
         var stage = ResearchNativeStage.NativeCallback;
         try
         {
             Invoke(action.Kind, native, target);
             stage = ResearchNativeStage.Verification;
-            var after = Capture(native, target);
-            var receipt = new ResearchReceipt(action.Kind, before, after);
-            return OutcomeMatches(action.Kind, in before, in after)
-                ? Verified(in receipt)
+            return OutcomeLanded(action.Kind, native, target, in before)
+                ? Verified()
                 : Fault(in action, ResearchPreflight.VerificationFailed, stage,
-                    NativeMutationOutcome.PostconditionFailed, in receipt,
+                    NativeMutationOutcome.PostconditionFailed,
                     "The exact research target did not make the requested state transition.");
         }
         catch (Exception exception) when (IsExpected(exception))
         {
-            ResearchState after;
-            try { after = Capture(native, target); }
-            catch (Exception) { after = default; }
-            var receipt = new ResearchReceipt(action.Kind, before, after);
-            if (after.EvidenceAvailable && OutcomeMatches(action.Kind, in before, in after))
-                return Verified(in receipt);
+            if (OutcomeLandedBestEffort(action.Kind, native, target, in before))
+                return Verified();
             return Fault(in action, ResearchPreflight.PostCommitFault, stage,
-                NativeMutationOutcome.ExecutionThrew, in receipt,
+                NativeMutationOutcome.ExecutionThrew,
                 "The native research callback threw before the requested outcome was observable: " +
                 exception.GetBaseException().Message);
         }
     }
 
     private static ResearchPreflight Preflight(ResearchActionKind kind,
-        in ResearchState state, out string reason)
+        in ResearchAdmissionState state, out string reason)
     {
         reason = string.Empty;
         switch (kind)
@@ -166,18 +160,15 @@ internal sealed class ResearchGameAction : IDisposable
         }
     }
 
-    private static ResearchState Capture(ResearchNativeBindings native, object target)
+    private static ResearchAdmissionState Capture(ResearchNativeBindings native, object target)
     {
         var cost = native.DevelopmentCost(target) ??
             throw new InvalidOperationException("ResearchSO.GetDevelopmentCost returned null.");
         var multiBuy = native.MultiBuy() ??
             throw new InvalidOperationException("GlobalVariables.GetMultiBuy returned null.");
-        return new ResearchState(true, native.QueueMode(), native.AsInt(multiBuy),
-            native.Level(target), native.WaitingLevels(target), native.QueuedLevels(target),
-            native.Stage(target), native.SelfBonusLevels(target), native.IsActive(target),
-            native.IsDeveloping(target), native.PurchasedLevels(target), native.BonusLevel(target),
-            native.TotalLevel(target), native.CurrentInvestmentLevel(target), native.TimeRatio(target),
-            native.CanDevelop(target), native.WithinDevelopRange(target),
+        return new ResearchAdmissionState(native.QueueMode(), native.AsInt(multiBuy),
+            native.Level(target), native.QueuedLevels(target), native.SelfBonusLevels(target),
+            native.IsActive(target), native.IsDeveloping(target), native.CanDevelop(target),
             native.CanApplyBonusLevel(target), native.FreeBonusLevels(target),
             native.HasEnough(cost), native.MaxLevel(target), QueueableLevels(native, target));
     }
@@ -212,31 +203,45 @@ internal sealed class ResearchGameAction : IDisposable
         return levels;
     }
 
-    private static bool OutcomeMatches(ResearchActionKind kind,
-        in ResearchState before, in ResearchState after) => kind switch
+    private static bool OutcomeLanded(ResearchActionKind kind,
+        ResearchNativeBindings native, object target,
+        in ResearchAdmissionState before) => kind switch
     {
-        ResearchActionKind.Develop when before.QueueMode => after.QueuedLevels > before.QueuedLevels,
-        ResearchActionKind.Develop => !before.IsDeveloping && after.IsDeveloping && after.IsActive,
-        ResearchActionKind.Pause => after.IsDeveloping && !after.IsActive,
-        ResearchActionKind.Resume => after.IsDeveloping && after.IsActive,
-        ResearchActionKind.Cancel => !after.IsDeveloping && after.QueuedLevels == 0,
-        ResearchActionKind.Bonus => after.SelfBonusLevels == checked(before.SelfBonusLevels + 1),
+        ResearchActionKind.Develop when before.QueueMode =>
+            native.QueuedLevels(target) > before.QueuedLevels,
+        ResearchActionKind.Develop =>
+            !before.IsDeveloping && native.IsDeveloping(target),
+        ResearchActionKind.Pause =>
+            before.IsActive && !native.IsActive(target),
+        ResearchActionKind.Resume =>
+            !before.IsActive && native.IsActive(target),
+        ResearchActionKind.Cancel =>
+            before.IsDeveloping && !native.IsDeveloping(target),
+        ResearchActionKind.Bonus =>
+            native.SelfBonusLevels(target) == checked(before.SelfBonusLevels + 1),
         _ => false,
     };
 
-    private static ResearchSubmission Verified(in ResearchReceipt receipt) =>
+    private static bool OutcomeLandedBestEffort(ResearchActionKind kind,
+        ResearchNativeBindings native, object target, in ResearchAdmissionState before)
+    {
+        try { return OutcomeLanded(kind, native, target, in before); }
+        catch (Exception exception) when (IsExpected(exception)) { return false; }
+    }
+
+    private static ResearchSubmission Verified() =>
         new(ResearchPreflight.Proceeded, ResearchNativeStage.Verification,
             NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1),
-            in receipt, "Verified the exact requested research identity/outcome transition.");
+            "The requested research transition is visible.");
 
     private static ResearchSubmission Fault(in ResearchAction action, ResearchPreflight preflight,
-        ResearchNativeStage stage, NativeMutationOutcome outcome, in ResearchReceipt receipt,
+        ResearchNativeStage stage, NativeMutationOutcome outcome,
         string reason)
     {
         var exactReason = "Research " + stage + " failed on " +
             EntityIdentityFormatter.Format(action.TargetId) + ": " + reason;
         return new ResearchSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, exactReason);
+            new NativeMutationCallOutcome(1, 1, 0), exactReason);
     }
 
     private void BindLifecycle()

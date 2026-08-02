@@ -29,79 +29,6 @@ internal enum GenericDiscoveryNativeStage
     Verification = 3,
 }
 
-internal readonly struct GenericDiscoveryCostReceipt
-{
-    internal GenericDiscoveryCostReceipt(
-        Guid resourceId,
-        BigDouble expected,
-        BigDouble before,
-        BigDouble after)
-    {
-        ResourceId = resourceId;
-        Expected = expected;
-        Before = before;
-        After = after;
-    }
-
-    internal Guid ResourceId { get; }
-    internal BigDouble Expected { get; }
-    internal BigDouble Before { get; }
-    internal BigDouble After { get; }
-    internal BigDouble ObservedDelta => Before - After;
-}
-
-internal readonly struct GenericDiscoveryState
-{
-    internal GenericDiscoveryState(
-        string nativeType,
-        bool visible,
-        bool canDiscover,
-        bool discovered,
-        bool required)
-    {
-        NativeType = nativeType ?? string.Empty;
-        Visible = visible;
-        CanDiscover = canDiscover;
-        Discovered = discovered;
-        Required = required;
-    }
-
-    internal string NativeType { get; }
-    internal bool Visible { get; }
-    internal bool CanDiscover { get; }
-    internal bool Discovered { get; }
-    internal bool Required { get; }
-}
-
-internal readonly struct GenericDiscoveryMutationReceipt
-{
-    internal GenericDiscoveryMutationReceipt(
-        bool evidenceAvailable,
-        bool paymentInvoked,
-        bool resourcesCharged,
-        bool postconditionMatched,
-        in GenericDiscoveryState before,
-        in GenericDiscoveryState after,
-        GenericDiscoveryCostReceipt[] costs)
-    {
-        EvidenceAvailable = evidenceAvailable;
-        PaymentInvoked = paymentInvoked;
-        ResourcesCharged = resourcesCharged;
-        PostconditionMatched = postconditionMatched;
-        Before = before;
-        After = after;
-        Costs = costs ?? Array.Empty<GenericDiscoveryCostReceipt>();
-    }
-
-    internal bool EvidenceAvailable { get; }
-    internal bool PaymentInvoked { get; }
-    internal bool ResourcesCharged { get; }
-    internal bool PostconditionMatched { get; }
-    internal GenericDiscoveryState Before { get; }
-    internal GenericDiscoveryState After { get; }
-    internal GenericDiscoveryCostReceipt[] Costs { get; }
-}
-
 internal readonly struct GenericDiscoverySubmission
 {
     internal GenericDiscoverySubmission(
@@ -109,7 +36,6 @@ internal readonly struct GenericDiscoverySubmission
         GenericDiscoveryNativeStage stage,
         NativeMutationOutcome outcome,
         NativeMutationCallOutcome callOutcome,
-        in GenericDiscoveryMutationReceipt receipt,
         string reason)
     {
         if (preflight != GenericDiscoveryPreflight.Proceeded && string.IsNullOrWhiteSpace(reason))
@@ -118,7 +44,6 @@ internal readonly struct GenericDiscoverySubmission
         Stage = stage;
         Outcome = outcome;
         CallOutcome = callOutcome;
-        Receipt = receipt;
         Reason = reason ?? string.Empty;
     }
 
@@ -126,7 +51,6 @@ internal readonly struct GenericDiscoverySubmission
     internal GenericDiscoveryNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
-    internal GenericDiscoveryMutationReceipt Receipt { get; }
     internal string Reason { get; }
     internal bool Verified =>
         Preflight == GenericDiscoveryPreflight.Proceeded &&
@@ -135,11 +59,6 @@ internal readonly struct GenericDiscoverySubmission
     internal static GenericDiscoverySubmission Reject(
         GenericDiscoveryPreflight preflight,
         string reason) =>
-        new(
-            preflight,
-            GenericDiscoveryNativeStage.None,
-            NativeMutationOutcome.BeforeCaptureFailed,
-            default,
-            default,
-            reason);
+        new(preflight, GenericDiscoveryNativeStage.None,
+            NativeMutationOutcome.BeforeCaptureFailed, default, reason);
 }

@@ -36,9 +36,6 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(2, EquipmentManager.instance.equippedEquipment.GetStacks(target));
-        Assert.Equal(2, result.Receipt.RequestedAmount);
-        Assert.Equal(0, result.Receipt.Before.EquippedStacks);
-        Assert.Equal(2, result.Receipt.After.EquippedStacks);
         Assert.Equal(new NativeMutationCallOutcome(1, 1, 1), result.CallOutcome);
     }
 
@@ -55,8 +52,6 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(1, EquipmentManager.instance.equippedEquipment.GetStacks(target));
-        Assert.Equal(2, result.Receipt.RequestedAmount);
-        Assert.Equal(1, result.Receipt.After.EquippedStacks);
     }
 
     [Fact]
@@ -134,7 +129,7 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Unreadable_post_state_never_commits_from_a_default_zero_stack()
+    public void Exception_after_the_exact_stack_outcome_commits()
     {
         var target = Equipment();
         EquipmentManager.instance.equippedEquipment.Stack(target, 2);
@@ -145,9 +140,7 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
 
         var result = Submit(boundary, target, EquipmentLoadoutActionKind.Unequip);
 
-        Assert.Equal(EquipmentLoadoutPreflight.PostCommitFault, result.Preflight);
-        Assert.False(result.Verified);
-        Assert.False(result.Receipt.EvidenceAvailable);
+        Assert.True(result.Verified, result.Reason);
         Assert.Equal(0, EquipmentManager.instance.equippedEquipment.GetStacks(target));
     }
 

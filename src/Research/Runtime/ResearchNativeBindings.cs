@@ -15,14 +15,10 @@ internal sealed class ResearchNativeBindings
         "research-action.research.type-action", "research-action.cost.type-action",
         "research-action.settings.type-action", "research-action.globals.type-action",
         "research-action.int-variable.type-action", "research-action.level-action",
-        "research-action.waiting-levels-action", "research-action.stage-action",
         "research-action.self-bonus-action", "research-action.active-action",
         "research-action.developing-action", "research-action.max-level-action",
-        "research-action.can-develop-action", "research-action.within-range-action",
-        "research-action.can-bonus-action", "research-action.purchased-levels-action",
-        "research-action.bonus-level-action", "research-action.total-level-action",
-        "research-action.queued-levels-action", "research-action.investment-level-action",
-        "research-action.time-ratio-action", "research-action.free-bonus-action",
+        "research-action.can-develop-action", "research-action.can-bonus-action",
+        "research-action.queued-levels-action", "research-action.free-bonus-action",
         "research-action.development-cost-action", "research-action.cost-enough-action",
         "research-action.queue-mode-action", "research-action.multi-buy-action",
         "research-action.int-as-int-action", "research-action.purchase-action",
@@ -33,12 +29,10 @@ internal sealed class ResearchNativeBindings
     };
 
     private ResearchNativeBindings(Type researchType,
-        Func<object, int> level, Func<object, int> waiting, Func<object, int> stage,
-        Func<object, int> selfBonus, Func<object, bool> active, Func<object, bool> developing,
-        Func<object, int> maximum, Func<object, bool> canDevelop, Func<object, bool> withinRange,
-        Func<object, bool> canBonus, Func<object, int> purchased, Func<object, int> bonus,
-        Func<object, int> total, Func<object, int> queued, Func<object, int> investment,
-        Func<object, BigDouble> timeRatio, Func<object, int> freeBonus,
+        Func<object, int> level, Func<object, int> selfBonus,
+        Func<object, bool> active, Func<object, bool> developing,
+        Func<object, int> maximum, Func<object, bool> canDevelop,
+        Func<object, bool> canBonus, Func<object, int> queued, Func<object, int> freeBonus,
         Func<object, object?> developmentCost, Func<object, bool> enough,
         Func<bool> queueMode, Func<object?> multiBuy, Func<object, int> asInt,
         Action<object> purchase, Action<object> pause, Action<object> resume,
@@ -46,12 +40,11 @@ internal sealed class ResearchNativeBindings
         Func<object, int, object?> developmentCostAtLevel,
         Func<object, int, bool> withinRangeAt, Func<object, object, object?> addCost)
     {
-        ResearchType = researchType; Level = level; WaitingLevels = waiting; Stage = stage;
+        ResearchType = researchType; Level = level;
         SelfBonusLevels = selfBonus; IsActive = active; IsDeveloping = developing;
-        MaxLevel = maximum; CanDevelop = canDevelop; WithinDevelopRange = withinRange;
-        CanApplyBonusLevel = canBonus; PurchasedLevels = purchased; BonusLevel = bonus;
-        TotalLevel = total; QueuedLevels = queued; CurrentInvestmentLevel = investment;
-        TimeRatio = timeRatio; FreeBonusLevels = freeBonus; DevelopmentCost = developmentCost;
+        MaxLevel = maximum; CanDevelop = canDevelop;
+        CanApplyBonusLevel = canBonus; QueuedLevels = queued;
+        FreeBonusLevels = freeBonus; DevelopmentCost = developmentCost;
         HasEnough = enough; QueueMode = queueMode; MultiBuy = multiBuy; AsInt = asInt;
         Purchase = purchase; Pause = pause; Resume = resume; Cancel = cancel;
         SubmitBonus = submitBonus; HasMaxLevel = hasMaxLevel;
@@ -61,21 +54,13 @@ internal sealed class ResearchNativeBindings
 
     internal Type ResearchType { get; }
     internal Func<object, int> Level { get; }
-    internal Func<object, int> WaitingLevels { get; }
-    internal Func<object, int> Stage { get; }
     internal Func<object, int> SelfBonusLevels { get; }
     internal Func<object, bool> IsActive { get; }
     internal Func<object, bool> IsDeveloping { get; }
     internal Func<object, int> MaxLevel { get; }
     internal Func<object, bool> CanDevelop { get; }
-    internal Func<object, bool> WithinDevelopRange { get; }
     internal Func<object, bool> CanApplyBonusLevel { get; }
-    internal Func<object, int> PurchasedLevels { get; }
-    internal Func<object, int> BonusLevel { get; }
-    internal Func<object, int> TotalLevel { get; }
     internal Func<object, int> QueuedLevels { get; }
-    internal Func<object, int> CurrentInvestmentLevel { get; }
-    internal Func<object, BigDouble> TimeRatio { get; }
     internal Func<object, int> FreeBonusLevels { get; }
     internal Func<object, object?> DevelopmentCost { get; }
     internal Func<object, bool> HasEnough { get; }
@@ -112,38 +97,30 @@ internal sealed class ResearchNativeBindings
             var integer = T(4, "IntVariable");
             bindings = new ResearchNativeBindings(research,
                 Func<int>(Field(5, research, "level", typeof(int), includeContract)),
-                Func<int>(Field(6, research, "queuedLevels", typeof(int), includeContract)),
-                Func<int>(Field(7, research, "researchStage", typeof(int), includeContract)),
-                Func<int>(Field(8, research, "selfBonusLevels", typeof(int), includeContract)),
-                Func<bool>(Field(9, research, "isActive", typeof(bool), includeContract)),
-                Func<bool>(Field(10, research, "isDeveloping", typeof(bool), includeContract)),
-                Func<int>(Field(11, research, "maxLevel", typeof(int), includeContract)),
-                Func<bool>(Method(12, research, "CanDevelop", typeof(bool), includeContract)),
-                Func<bool>(Method(13, research, "IsWithinDevelopRange", typeof(bool), includeContract)),
-                Func<bool>(Method(14, research, "CanApplyBonusLevels", typeof(bool), includeContract)),
-                Func<int>(Method(15, research, "GetPurchasedLevels", typeof(int), includeContract)),
-                Func<int>(Method(16, research, "GetBonusLevels", typeof(int), includeContract)),
-                Func<int>(Method(17, research, "GetLevel", typeof(int), includeContract)),
-                Func<int>(Method(18, research, "GetQueuedLevels", typeof(int), includeContract)),
-                Func<int>(Method(19, research, "GetCurrentInvestmentLevel", typeof(int), includeContract)),
-                Func<BigDouble>(Method(20, research, "GetTimeRatio", typeof(BigDouble), includeContract)),
-                Func<int>(Method(21, research, "GetFreeBonusLevelsLeft", typeof(int), includeContract)),
-                ObjectFunc(Method(22, research, "GetDevelopmentCost", cost, includeContract)),
-                Func<bool>(Method(23, cost, "HasEnough", typeof(bool), includeContract)),
-                StaticFunc<bool>(StaticMethod(24, settings, "IsResearchQueueMode", typeof(bool), includeContract)),
-                StaticObject(StaticMethod(25, globals, "GetMultiBuy", integer, includeContract)),
-                Func<int>(Method(26, integer, "AsInt", typeof(int), includeContract)),
-                Action1(Method(27, research, "PurchaseLevel", typeof(void), includeContract)),
-                Action1(Method(28, research, "PauseResearch", typeof(void), includeContract)),
-                Action1(Method(29, research, "ResumeResearch", typeof(void), includeContract)),
-                Action1(Method(30, research, "CancelDevelopment", typeof(void), includeContract)),
-                Action1(Method(31, research, "SubmitBonusLevel", typeof(void), includeContract)),
-                Func<bool>(Method(32, research, "HasMaxLevel", typeof(bool), includeContract)),
-                IntObjectFunc(Method(33, research, "GetDevelopmentCostAtLevel", cost,
+                Func<int>(Field(6, research, "selfBonusLevels", typeof(int), includeContract)),
+                Func<bool>(Field(7, research, "isActive", typeof(bool), includeContract)),
+                Func<bool>(Field(8, research, "isDeveloping", typeof(bool), includeContract)),
+                Func<int>(Field(9, research, "maxLevel", typeof(int), includeContract)),
+                Func<bool>(Method(10, research, "CanDevelop", typeof(bool), includeContract)),
+                Func<bool>(Method(11, research, "CanApplyBonusLevels", typeof(bool), includeContract)),
+                Func<int>(Method(12, research, "GetQueuedLevels", typeof(int), includeContract)),
+                Func<int>(Method(13, research, "GetFreeBonusLevelsLeft", typeof(int), includeContract)),
+                ObjectFunc(Method(14, research, "GetDevelopmentCost", cost, includeContract)),
+                Func<bool>(Method(15, cost, "HasEnough", typeof(bool), includeContract)),
+                StaticFunc<bool>(StaticMethod(16, settings, "IsResearchQueueMode", typeof(bool), includeContract)),
+                StaticObject(StaticMethod(17, globals, "GetMultiBuy", integer, includeContract)),
+                Func<int>(Method(18, integer, "AsInt", typeof(int), includeContract)),
+                Action1(Method(19, research, "PurchaseLevel", typeof(void), includeContract)),
+                Action1(Method(20, research, "PauseResearch", typeof(void), includeContract)),
+                Action1(Method(21, research, "ResumeResearch", typeof(void), includeContract)),
+                Action1(Method(22, research, "CancelDevelopment", typeof(void), includeContract)),
+                Action1(Method(23, research, "SubmitBonusLevel", typeof(void), includeContract)),
+                Func<bool>(Method(24, research, "HasMaxLevel", typeof(bool), includeContract)),
+                IntObjectFunc(Method(25, research, "GetDevelopmentCostAtLevel", cost,
                     includeContract, typeof(int))),
-                IntFunc<bool>(Method(34, research, "IsWithinDevelopRangeAt", typeof(bool),
+                IntFunc<bool>(Method(26, research, "IsWithinDevelopRangeAt", typeof(bool),
                     includeContract, typeof(int))),
-                ObjectObjectFunc(Method(35, cost, "Add", cost, includeContract, cost)));
+                ObjectObjectFunc(Method(27, cost, "Add", cost, includeContract, cost)));
             reason = string.Empty;
             return true;
         }

@@ -20,9 +20,8 @@ internal sealed class ChallengeNativeBindings
         "challenge.manager-instance-action", "challenge.reset-manager-instance-action",
         "challenge.manager-preferred-action", "challenge.manager-active-action",
         "challenge.reset-active-action", "challenge.reset-rerolls-left-action",
-        "challenge.reset-rerolls-maximum-action", "challenge.reset-cycle-complete-action",
-        "challenge.reset-fetched-action", "challenge.list-values-action",
-        "challenge.list-maximum-action", "challenge.list-empty-spot-action",
+        "challenge.reset-cycle-complete-action", "challenge.reset-fetched-action",
+        "challenge.list-values-action", "challenge.list-empty-spot-action",
         "challenge.list-contains-action", "challenge.list-toggle-action",
         "challenge.list-restricted-action", "challenge.challenge-state-action",
         "challenge.challenge-toggle-queue-action", "challenge.challenge-abandon-action",
@@ -35,8 +34,8 @@ internal sealed class ChallengeNativeBindings
         Type resetManagerType, Func<object?> challengeManager, Func<object?> resetManager,
         Func<object, object?> preferred, Func<object, object?> timeOffers,
         Func<object, object?> prestigeOffers, Func<object, object?> rerollsLeft,
-        Func<object, object?> rerollsMaximum, Func<object, object?> cycleComplete,
-        Func<object, object?> fetched, Func<object, IList?> values, Func<object, int> maximum,
+        Func<object, object?> cycleComplete, Func<object, object?> fetched,
+        Func<object, IList?> values,
         Func<object, bool> hasEmptySpot, Func<object, object, bool> contains,
         Action<object, object> toggle, Func<object, object, bool> restricted,
         Func<object, int> state, Action<object> toggleQueue, Action<object> abandon,
@@ -52,11 +51,9 @@ internal sealed class ChallengeNativeBindings
         TimeOffers = timeOffers;
         PrestigeOffers = prestigeOffers;
         RerollsLeft = rerollsLeft;
-        RerollsMaximum = rerollsMaximum;
         CycleComplete = cycleComplete;
         Fetched = fetched;
         Values = values;
-        Maximum = maximum;
         HasEmptySpot = hasEmptySpot;
         Contains = contains;
         Toggle = toggle;
@@ -81,11 +78,9 @@ internal sealed class ChallengeNativeBindings
     internal Func<object, object?> TimeOffers { get; }
     internal Func<object, object?> PrestigeOffers { get; }
     internal Func<object, object?> RerollsLeft { get; }
-    internal Func<object, object?> RerollsMaximum { get; }
     internal Func<object, object?> CycleComplete { get; }
     internal Func<object, object?> Fetched { get; }
     internal Func<object, IList?> Values { get; }
-    internal Func<object, int> Maximum { get; }
     internal Func<object, bool> HasEmptySpot { get; }
     internal Func<object, object, bool> Contains { get; }
     internal Action<object, object> Toggle { get; }
@@ -129,24 +124,22 @@ internal sealed class ChallengeNativeBindings
                 ObjectField(Field(9, manager, "activeChallenges", list, includeContract)),
                 ObjectField(Field(10, reset, "activeChallenges", list, includeContract)),
                 ObjectField(Field(11, reset, "challengeRerollsLeft", integer, includeContract)),
-                ObjectField(Field(12, reset, "challengeRerollsMax", integer, includeContract)),
-                ObjectField(Field(13, reset, "hasCompleteWorldCycle", boolean, includeContract)),
-                ObjectField(Field(14, reset, "hasFetchedChallenges", boolean, includeContract)),
-                ListField(Field(15, list, "value", typeof(System.Collections.Generic.List<>).MakeGenericType(challenge), includeContract)),
-                Func<int>(Method(16, list, "GetMax", typeof(int), includeContract)),
-                Func<bool>(Method(17, list, "HasEmptySpot", typeof(bool), includeContract)),
-                Func2<bool>(Method(18, list, "Contains", typeof(bool), includeContract, challenge)),
-                Action2(Method(19, list, "Toggle", typeof(void), includeContract, challenge)),
-                Func2<bool>(Method(20, list, "IsChallengeRestricted", typeof(bool), includeContract, challenge)),
-                EnumField(Field(21, challenge, "state", challengeState, includeContract)),
-                Action1(Method(22, challenge, "ToggleQueueActivation", typeof(void), includeContract)),
-                Action1(Method(23, challenge, "AbandonChallenge", typeof(void), includeContract)),
-                Func<int>(Method(24, integer, "AsInt", typeof(int), includeContract)),
-                ActionValue<int>(Method(25, integer, "SetValue", typeof(void), includeContract, typeof(int))),
-                Func<bool>(Method(26, boolean, "GetValue", typeof(bool), includeContract)),
-                ActionValue<bool>(Method(27, boolean, "SetValue", typeof(void), includeContract, typeof(bool))),
-                Action1(Method(28, manager, "LoadNewActiveChallenges", typeof(void), includeContract)),
-                Action1(Method(29, reset, "FetchNewChallenges", typeof(void), includeContract)));
+                ObjectField(Field(12, reset, "hasCompleteWorldCycle", boolean, includeContract)),
+                ObjectField(Field(13, reset, "hasFetchedChallenges", boolean, includeContract)),
+                ListField(Field(14, list, "value", typeof(System.Collections.Generic.List<>).MakeGenericType(challenge), includeContract)),
+                Func<bool>(Method(15, list, "HasEmptySpot", typeof(bool), includeContract)),
+                Func2<bool>(Method(16, list, "Contains", typeof(bool), includeContract, challenge)),
+                Action2(Method(17, list, "Toggle", typeof(void), includeContract, challenge)),
+                Func2<bool>(Method(18, list, "IsChallengeRestricted", typeof(bool), includeContract, challenge)),
+                EnumField(Field(19, challenge, "state", challengeState, includeContract)),
+                Action1(Method(20, challenge, "ToggleQueueActivation", typeof(void), includeContract)),
+                Action1(Method(21, challenge, "AbandonChallenge", typeof(void), includeContract)),
+                Func<int>(Method(22, integer, "AsInt", typeof(int), includeContract)),
+                ActionValue<int>(Method(23, integer, "SetValue", typeof(void), includeContract, typeof(int))),
+                Func<bool>(Method(24, boolean, "GetValue", typeof(bool), includeContract)),
+                ActionValue<bool>(Method(25, boolean, "SetValue", typeof(void), includeContract, typeof(bool))),
+                Action1(Method(26, manager, "LoadNewActiveChallenges", typeof(void), includeContract)),
+                Action1(Method(27, reset, "FetchNewChallenges", typeof(void), includeContract)));
             reason = string.Empty;
             return true;
         }

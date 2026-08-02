@@ -71,10 +71,9 @@ public sealed class GameMcpTargetingTests
     [Fact]
     public void CommittedSubmitReturnsNamedTargetAndCompleteNextRequestOnly()
     {
-        var evidence = new TargetingEvidence(true, First, First, true, true);
         var submission = new TargetingSubmission(TargetingPreflight.Proceeded,
             TargetingNativeStage.Verification, NativeMutationOutcome.Verified,
-            new NativeMutationCallOutcome(1, 1, 1), in evidence, "verified");
+            new NativeMutationCallOutcome(1, 1, 1), First, "verified");
         var mapped = TargetingActionResultMapper.Map(in submission);
         var command = Command("submit", First);
         var terminal = GameMcpCommandResult.FromAction(in mapped, command.Kind, 9, 3,
@@ -84,9 +83,10 @@ public sealed class GameMcpTargetingTests
             GameMcpTargetingProjection.SubmittedTarget(terminal.Details)));
 
         var success = GameMcpTestHarness.Json(terminal.Project(command));
-        Assert.Equal(new[] { "status", "submittedTarget", "targeting" },
+        Assert.Equal(new[] { "status", "code", "submittedTarget", "targeting" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
+        Assert.Equal("committed", (string?)success["code"]);
         Assert.Equal("Alchemic Ability", (string?)success["submittedTarget"]!["name"]);
         Assert.NotNull(success["targeting"]!["candidates"]);
         Assert.Null(success["receipt"]);
@@ -95,17 +95,14 @@ public sealed class GameMcpTargetingTests
     }
 
     [Fact]
-    public void FailureKeepsOutcomeEvidenceAndQuarantineState()
+    public void FailureNamesTheMissingSettlementWithoutPersistentState()
     {
-        var evidence = new TargetingEvidence(true, First, First, true, true);
         var submission = new TargetingSubmission(TargetingPreflight.VerificationFailed,
             TargetingNativeStage.Verification, NativeMutationOutcome.PostconditionFailed,
-            new NativeMutationCallOutcome(1, 1, 0), in evidence, "failed");
+            new NativeMutationCallOutcome(1, 1, 0), Guid.Empty, "failed");
         var failure = GameMcpTestHarness.Json(GameMcpTargetingProjection.Project(in submission));
-        Assert.Null(failure["preflight"]);
-        Assert.Equal(First.ToString("D"), (string?)failure["requestedTarget"]!["uuid"]);
-        Assert.True((bool)failure["requestPendingAfter"]!);
-        Assert.Null(failure["quarantined"]);
+        Assert.Equal("target request settlement", (string?)failure["missingOutcome"]);
+        Assert.Single(failure.Properties());
     }
 
     [Fact]

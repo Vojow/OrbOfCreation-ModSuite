@@ -9,20 +9,11 @@ internal static class GameMcpTargetingProjection
     internal static GameMcpValue Project(in TargetingSubmission submission)
     {
         var result = new JObject();
-        if (submission.Verified && submission.Evidence.SubmittedTarget != Guid.Empty)
-            result["submittedTargetUuid"] = submission.Evidence.SubmittedTarget.ToString("D");
+        if (submission.Verified && submission.SubmittedTarget != Guid.Empty)
+            result["submittedTargetUuid"] = submission.SubmittedTarget.ToString("D");
         if (submission.Verified) return result.Freeze();
-        if (submission.Evidence.Available)
-        {
-            result["nativeStage"] = submission.Stage.ToString();
-            result["outcome"] = submission.Outcome.ToString();
-            if (submission.Evidence.RequestedTarget != Guid.Empty)
-                result["requestedTargetUuid"] = submission.Evidence.RequestedTarget.ToString("D");
-            if (submission.Evidence.SubmittedTarget != Guid.Empty)
-                result["submittedTargetUuid"] = submission.Evidence.SubmittedTarget.ToString("D");
-            result["requestPendingBefore"] = submission.Evidence.RequestPendingBefore;
-            result["requestPendingAfter"] = submission.Evidence.RequestPendingAfter;
-        }
+        if (submission.CallOutcome.MutationAttempts > 0)
+            result["missingOutcome"] = "target request settlement";
         return result.Freeze();
     }
 

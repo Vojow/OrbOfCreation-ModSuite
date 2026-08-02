@@ -12,7 +12,6 @@ public sealed class SpellLoadoutContractTests
 
         Assert.Equal(0x06001027, assembly.GetMethodToken("Spell", "IsEmpty"));
         Assert.Equal(0x06001038, assembly.GetMethodToken("Spell", "CanRemove"));
-        Assert.Equal(0x06001087, assembly.GetMethodToken("Spell", "GetName"));
         Assert.Equal(0x0600074C, assembly.GetMethodToken("SpellManager", "RemoveSpell"));
         Assert.Equal(0x060014ED, assembly.GetMethodToken("AbstractListVariable", "UpdateObservable"));
 

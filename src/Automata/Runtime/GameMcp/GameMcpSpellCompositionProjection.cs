@@ -9,24 +9,9 @@ internal static class GameMcpSpellCompositionProjection
     {
         if (submission.Verified) return new JObject().Freeze();
         var result = new JObject();
-        if (submission.Evidence.Available)
-        {
-            result["nativeStage"] = submission.Stage.ToString();
-            result["outcome"] = submission.Outcome.ToString();
-            var before = submission.Evidence.Before;
-            var after = submission.Evidence.After;
-            result["before"] = State(in before);
-            result["after"] = State(in after);
-        }
+        if (submission.CallOutcome.MutationAttempts > 0)
+            result["missingOutcome"] = "requested dial value";
         return result.Freeze();
     }
-
-    private static JObject State(in SpellCompositionState state) =>
-        new JObject
-        {
-            ["dial"] = state.Dial == CastingDial.Output ? "output" : "reserve",
-            ["current"] = state.Current,
-            ["maximum"] = state.Maximum,
-        };
 }
 #endif

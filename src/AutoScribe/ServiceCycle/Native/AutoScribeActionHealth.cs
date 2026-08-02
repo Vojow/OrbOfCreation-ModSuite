@@ -6,7 +6,6 @@ internal sealed class AutoScribeActionHealth
     internal AutoScribePreflight Preflight { get; private set; }
     internal AutoScribeNativeStage Stage { get; private set; }
     internal string Reason { get; private set; } = string.Empty;
-    internal AutoScribeMutationReceipt Receipt { get; private set; }
     internal long Revision { get; private set; }
 
     internal void Observe(in AutoScribeSubmission submission)
@@ -20,7 +19,6 @@ internal sealed class AutoScribeActionHealth
         Preflight = submission.Preflight;
         Stage = submission.Stage;
         Reason = submission.Reason;
-        Receipt = submission.Receipt;
         Revision = checked(Revision + 1);
     }
 
@@ -31,7 +29,6 @@ internal sealed class AutoScribeActionHealth
         Preflight = AutoScribePreflight.Proceeded;
         Stage = AutoScribeNativeStage.None;
         Reason = string.Empty;
-        Receipt = default;
         Revision = checked(Revision + 1);
     }
 
