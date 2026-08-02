@@ -25,6 +25,27 @@ can be acted on, and a node's absence is a data question, not an interface bug.
 Requirements can also be **per level**: the same node can demand different things at level 3 than it
 did at level 1.
 
+## Containers and reusable link tiers
+
+An authored `Prerequisites.Container` combines its top-level conditions with **AND**. Nested
+`OrRequirement` and `AndRequirement` records introduce explicit grouping; flattening the container
+into an ungrouped edge list changes its meaning.
+
+`PrerequisiteLinkSO` reuses one gate across several consumers. Each link contains ordered tiers.
+A tier becomes active only when every owner bound to that link and tier has at least one purchased
+level and every intrinsic condition on the tier passes. Most tiers have no bound owner and depend
+only on their intrinsic conditions. `ScribeTiers/Base` is the exceptional multi-owner case: Echoing
+Scroll and Scribism Scrolls II through V are all owners, so all five participate in the AND gate in
+addition to the tier's intrinsic Scribism condition.
+
+The serialized `available` and `gameId` fields inside prerequisite containers are runtime cache
+state, not authored conditions. Static analysis reads `prerequisites`; a running-game probe owns any
+claim about the current cache value.
+
+The committed progression graph preserves exact operators, grouping, link tiers, owners, and
+consumers. Query it with `cd tools && uv run orb-gamedata query`, or regenerate the exhaustive local
+atlas with `uv run orb-gamedata report atlas`.
+
 ## Requirements reach across systems
 
 A requirement is not restricted to the system its node lives in. E.g., *Arcanism II* costs only

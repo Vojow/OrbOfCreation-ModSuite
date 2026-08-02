@@ -1,0 +1,47 @@
+{
+  "build": {
+    "assetFiles": [
+      "resources.assets",
+      "sharedassets0.assets",
+      "sharedassets1.assets",
+      "globalgamemanagers.assets",
+      "level0",
+      "level1"
+    ],
+    "classCount": 142,
+    "gameVersion": "1.0.5-2",
+    "objectCount": 2894,
+    "unityVersion": "6000.0.70f1"
+  },
+  "files": {
+    "entity-display-names.tsv": {
+      "bytes": 221387,
+      "sha256": "88146DFD8941FADF510F45858A5B3D6102DD59F724B718BBAABD5DE97B2F6873"
+    },
+    "entity-mappings.tsv": {
+      "bytes": 189202,
+      "sha256": "B9F703C5D29A3A0B0C1644D6DA22A0D01824742090ECF86D6F4EB88D9A419CD3"
+    },
+    "entity-types.tsv": {
+      "bytes": 3064,
+      "sha256": "EFE442AEEB7FE878B2E91C6A9AB2ECE1FE498F6C4AFF32B8B15D5FD1D5EA4922"
+    },
+    "game-data-census.json": {
+      "bytes": 9177,
+      "sha256": "9B9ED451DCA10A5A184CCB0CD0221ACA1B27AA62A90BF86DB4B473EFD4E85470"
+    },
+    "game-data.json": {
+      "bytes": 11186375,
+      "sha256": "1E40C0EDFC51E78E2E25F29A85761E4EFC9244682188CBB4699F05F6BFD07860"
+    },
+    "progression-graph.json": {
+      "bytes": 6395393,
+      "sha256": "5C5457E0118DF4436F08D0A962B60D744148BEBFC7AA4B886933FEDA257DB11A"
+    },
+    "source/message.txt": {
+      "bytes": 211733,
+      "sha256": "1D88A7A81C04B3812A337825EE0EF5209EFFB2236D86B085144030547BF6F021"
+    }
+  },
+  "formatVersion": 1
+}
