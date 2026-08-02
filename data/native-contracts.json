@@ -15772,16 +15772,15 @@
       "place": "action"
     },
     {
-      "id": "auto-buy.owning-view.structure-list-capture",
+      "id": "auto-buy.owning-view.list-membership-capture",
       "assembly": "assembly-csharp",
-      "type": "StructureListVariable",
+      "type": "AbstractListVariable`1",
       "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetAll",
+      "kind": "field",
+      "member": "value",
       "visibility": "public",
       "static": false,
-      "returnType": "System.Collections.Generic.List`1<StructureSO>",
-      "parameters": [],
+      "valueType": "System.Collections.Generic.List`1<!0>",
       "owners": [
         "Automata Auto Buy owning-view world publication"
       ],
@@ -15791,54 +15790,15 @@
       "place": "capture"
     },
     {
-      "id": "auto-buy.owning-view.structure-list-action",
+      "id": "auto-buy.owning-view.list-membership-action",
       "assembly": "assembly-csharp",
-      "type": "StructureListVariable",
+      "type": "AbstractListVariable`1",
       "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetAll",
+      "kind": "field",
+      "member": "value",
       "visibility": "public",
       "static": false,
-      "returnType": "System.Collections.Generic.List`1<StructureSO>",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Buy owning-view action admission"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "auto-buy.owning-view.upgrade-list-capture",
-      "assembly": "assembly-csharp",
-      "type": "UpgradeListVariable",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetAll",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Collections.Generic.List`1<UpgradeSO>",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Buy owning-view world publication"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "auto-buy.owning-view.upgrade-list-action",
-      "assembly": "assembly-csharp",
-      "type": "UpgradeListVariable",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetAll",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Collections.Generic.List`1<UpgradeSO>",
-      "parameters": [],
+      "valueType": "System.Collections.Generic.List`1<!0>",
       "owners": [
         "Automata Auto Buy owning-view action admission"
       ],

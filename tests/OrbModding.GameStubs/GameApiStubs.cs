@@ -507,12 +507,12 @@ public sealed class AlchemyRecipeListVariable : AbstractListVariable<AlchemyReci
 
 public sealed class StructureListVariable : GenericListVariable<StructureSO>
 {
-    public List<StructureSO> GetAll() => value;
+    public List<StructureSO> GetAll() => StructureSO.All;
 }
 
 public sealed class UpgradeListVariable : GenericListVariable<UpgradeSO>
 {
-    public List<UpgradeSO> GetAll() => value;
+    public List<UpgradeSO> GetAll() => UpgradeSO.All;
 }
 
 public sealed class ViewListVariable : GenericListVariable<ViewSO>

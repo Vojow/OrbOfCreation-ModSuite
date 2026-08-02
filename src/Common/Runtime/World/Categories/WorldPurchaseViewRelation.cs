@@ -383,8 +383,8 @@ internal sealed class NativePurchaseViewAdmissionResolver
             if (listId == Guid.Empty)
                 throw new RelationFailure(WorldPurchaseViewRelationStatus.Contradictory);
             var members = List(
-                Invoke(CandidateListMembers(kind), value, ref reads),
-                runtimeType.Name + ".GetAll()");
+                ReadField(CandidateListMembers(kind), value, ref reads),
+                runtimeType.Name + ".value");
             var matches = CountExactMembership(
                 members,
                 CandidateType(kind),
@@ -464,7 +464,7 @@ internal sealed class NativePurchaseViewAdmissionResolver
             ? _native.StructureIdentity
             : _native.UpgradeIdentity;
 
-    private MethodInfo CandidateListMembers(WorldPurchaseCandidateKind kind) =>
+    private FieldInfo CandidateListMembers(WorldPurchaseCandidateKind kind) =>
         kind == WorldPurchaseCandidateKind.Structure
             ? _native.StructureListMembers
             : _native.UpgradeListMembers;
@@ -486,15 +486,6 @@ internal sealed class NativePurchaseViewAdmissionResolver
     {
         reads.AddFieldRead();
         return field.GetValue(target);
-    }
-
-    private static object? Invoke(
-        MethodInfo method,
-        object target,
-        ref NativePurchaseViewAdmissionReadCounts reads)
-    {
-        reads.AddMethodCall();
-        return method.Invoke(target, Array.Empty<object>());
     }
 
     private static object Exact(object? value, Type expected, string contract) =>
@@ -551,8 +542,8 @@ internal sealed class NativePurchaseViewAdmissionResolver
             MethodInfo structureCategoryIdentity,
             MethodInfo listIdentity,
             MethodInfo viewAvailable,
-            MethodInfo structureListMembers,
-            MethodInfo upgradeListMembers)
+            FieldInfo structureListMembers,
+            FieldInfo upgradeListMembers)
         {
             ViewType = viewType;
             StructureType = structureType;
@@ -596,8 +587,8 @@ internal sealed class NativePurchaseViewAdmissionResolver
         internal MethodInfo StructureCategoryIdentity { get; }
         internal MethodInfo ListIdentity { get; }
         internal MethodInfo ViewAvailable { get; }
-        internal MethodInfo StructureListMembers { get; }
-        internal MethodInfo UpgradeListMembers { get; }
+        internal FieldInfo StructureListMembers { get; }
+        internal FieldInfo UpgradeListMembers { get; }
 
         internal static bool TryCreate(
             Func<string, Type?> resolve,
@@ -637,8 +628,14 @@ internal sealed class NativePurchaseViewAdmissionResolver
                     MethodFromHierarchy(structureCategory, id, "GetGuid", typeof(Guid)),
                     MethodFromHierarchy(structureList, id, "GetGuid", typeof(Guid)),
                     Method(view, "IsAvailable", typeof(bool)),
-                    Method(structureList, "GetAll", typeof(List<>).MakeGenericType(structure)),
-                    Method(upgradeList, "GetAll", typeof(List<>).MakeGenericType(upgrade)));
+                    FieldFromHierarchy(
+                        structureList,
+                        "value",
+                        typeof(List<>).MakeGenericType(structure)),
+                    FieldFromHierarchy(
+                        upgradeList,
+                        "value",
+                        typeof(List<>).MakeGenericType(upgrade)));
                 reason = string.Empty;
                 return true;
             }
@@ -666,6 +663,18 @@ internal sealed class NativePurchaseViewAdmissionResolver
                 ? field
                 : throw new InvalidOperationException(
                     $"{owner.Name}.{name} : {fieldType.Name} was unavailable.");
+        }
+
+        private static FieldInfo FieldFromHierarchy(Type owner, string name, Type fieldType)
+        {
+            var field = owner.GetField(name, Instance);
+            var declaring = field?.DeclaringType;
+            return field is not null && field.FieldType == fieldType && declaring is not null &&
+                   declaring.IsGenericType &&
+                   declaring.GetGenericTypeDefinition().Name == "AbstractListVariable`1"
+                ? field
+                : throw new InvalidOperationException(
+                    $"{owner.Name}.{name} inherited from AbstractListVariable`1 was unavailable.");
         }
 
         private static MethodInfo Method(Type owner, string name, Type returnType)

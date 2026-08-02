@@ -96,6 +96,38 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
     }
 
     [Fact]
+    public void Project_ReadsAuthoredListMembershipInsteadOfTheGlobalTypeRegistry()
+    {
+        global::ViewSO.All.Clear();
+        var resource = Resource();
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        PriceStructure(structure, resource, new BigDouble(1.0, 0));
+        global::StructureSO.All.Add(structure);
+
+        var containingList = new global::StructureListVariable();
+        containingList.value.Add(structure);
+        var unrelatedList = new global::StructureListVariable();
+        var containingView = new global::ViewSO { available = true };
+        containingView.relevantLists.Add(containingList);
+        var unrelatedView = new global::ViewSO { available = true };
+        unrelatedView.relevantLists.Add(unrelatedList);
+        global::ViewSO.All.Add(containingView);
+        global::ViewSO.All.Add(unrelatedView);
+
+        Assert.Same(global::StructureSO.All, unrelatedList.GetAll());
+        Assert.Empty(unrelatedList.value);
+        var candidate = Assert.Single(
+            Project(Config(structures: true, upgrades: false)).Candidates.ToArray());
+
+        Assert.Equal(AutoBuyOwningViewStatus.Available, candidate.OwningView);
+    }
+
+    [Fact]
     public void Project_UpgradeQueuedLevelsAreQueuedMinusCurrent()
     {
         var upgrade = new global::UpgradeSO

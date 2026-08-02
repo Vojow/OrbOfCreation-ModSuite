@@ -1053,11 +1053,13 @@ public sealed class GameWorldCollectorTests : IDisposable
 
     private sealed class FakeStructureListVariable : FakeAbstractListVariable
     {
+        public List<FakeStructure> value = new();
         public List<FakeStructure> GetAll() => FakeStructure.All;
     }
 
     private sealed class FakeUpgradeListVariable : FakeAbstractListVariable
     {
+        public List<FakeUpgrade> value = new();
         public List<FakeUpgrade> GetAll() => FakeUpgrade.All;
     }
 
