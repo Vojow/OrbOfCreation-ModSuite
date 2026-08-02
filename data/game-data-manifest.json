@@ -8,9 +8,9 @@
       "level0",
       "level1"
     ],
-    "classCount": 141,
+    "classCount": 142,
     "gameVersion": "1.0.5-2",
-    "objectCount": 2818,
+    "objectCount": 2894,
     "unityVersion": "6000.0.70f1"
   },
   "files": {
@@ -27,12 +27,12 @@
       "sha256": "EFE442AEEB7FE878B2E91C6A9AB2ECE1FE498F6C4AFF32B8B15D5FD1D5EA4922"
     },
     "game-data-census.json": {
-      "bytes": 4892,
-      "sha256": "768D16B747456610687F0BF385408B57B4BD1ECBF196BE339A562A9A8FECECCD"
+      "bytes": 9177,
+      "sha256": "9B9ED451DCA10A5A184CCB0CD0221ACA1B27AA62A90BF86DB4B473EFD4E85470"
     },
     "game-data.json": {
-      "bytes": 11162676,
-      "sha256": "1D189D5BE374DA973EEF78851DADD3CF3706E941C7EF38892F89C4506567FFE5"
+      "bytes": 11186375,
+      "sha256": "1E40C0EDFC51E78E2E25F29A85761E4EFC9244682188CBB4699F05F6BFD07860"
     },
     "progression-graph.json": {
       "bytes": 6395393,

@@ -16,8 +16,9 @@ path IDs. Equivalent installs of the same product version are expected to produc
 
 The generated set is:
 
-- `game-data.json` — full UUID-backed serialized model, grouped by managed type and internal name,
-  with managed references expanded and game-entity pointers resolved.
+- `game-data.json` — every serialized content ScriptableObject and stat Variable, grouped by managed
+  type and internal name, with managed references expanded and game-entity pointers resolved.
+  UUID-less records remain present with `id: null` and stable content-derived keys.
 - `progression-graph.json` — stable entity references, requirement groups and operators,
   `PrerequisiteLinkSO` tiers, bound owners, and consumers.
 - `game-data-census.json` — version-pinned totals and per-type populations cited by tests and docs.
@@ -34,9 +35,12 @@ It is not extractor admission or dataset provenance; maintain it through the
 
 ## Census and identity rules
 
-The committed scan contains 2,818 rows, 2,818 unique UUIDs, and 141 managed types. It contains
-2,777 unique internal names: 39 names are duplicated across 80 rows. Identity therefore has three
-separate roles:
+The committed full model contains 2,894 serialized content objects across 142 managed classes. The
+identity catalog and progression graph contain 2,818 UUID-backed entities across 141 managed types.
+The difference is deliberate: the full model preserves 78 UUID-less sound/UI objects, while the
+catalog also includes two UUID-backed non-content classes. The identity rows contain 2,818 unique
+UUIDs and 2,777 unique internal names: 39 names are duplicated across 80 rows. Identity therefore
+has three separate roles:
 
 1. UUID is the stable key.
 2. Managed type is the validation boundary.
