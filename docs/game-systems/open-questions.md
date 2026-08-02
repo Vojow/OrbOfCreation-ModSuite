@@ -149,35 +149,38 @@ The real counts are higher and unknown.
 
 ### Offer tables, rarities and multi-resource roll prices
 
-**Known.** Rolls are priced per discovery tree on a ×10 ladder counted only on non-required
-picks; rerolls and required picks do not advance the counter; required rolls cost mana; the
-number of choices offered and the number of rerolls are themselves stats.
+**Known.** Rolls are priced per discovery tree on a ladder counted only on non-required picks
+(×10 steps across the authored opening, then a growing per-step factor); rerolls and required
+picks do not advance the counter; required rolls cost mana; the number of choices offered and
+the number of rerolls are themselves stats.
 
 **Missing.** What is actually in each tree, the rarity levels attached to offers, and how
 multi-resource roll prices are composed. These were named as follow-up tables and never
-produced.
+produced. Also the deep-ladder scaling law: beyond the authored opening the per-step factor
+itself grows (adjacent rungs observed at ≈×93 on Spellcraft mid-run and ≈×64,000 on Glyphcraft
+later), and the formula has not been extracted.
 
 **How to settle.** Read the data — the trees and their contents are authored, which is exactly
 why a well-informed player can know what a roll can produce before paying for it. See
 [discovery.md](discovery.md).
 
-## Concepts
+## World
 
-### The invented-slot quirk
+### The aspect zero-slot behaviour
 
-**Known.** In at least one place, buying something when you have zero free slots causes the game
-to invent a slot in the UI rather than refuse the purchase — and a later upgrade that grants a
-slot then leaves one permanently empty. There are said to be exactly three such places in the
-game, and crafting is remembered as one of them. Separately, empty capacity slots are a real,
-intentional thing that the game preserves in saves, so an empty row is not evidence of a lost
-item.
+**Known.** Aspects are how major systems arrive (Workshop, Alchemy Lab, Rituals), placed into
+three pedestal slots — and buying at zero free slots is the **only** place in the game with the
+invented-slot behaviour. Two accounts of that case exist: the code reads as silently never
+placing the aspect, while play memory has the interface inventing an extra slot to hold the
+purchase, with a later slot-granting upgrade then leaving one forever empty. Separately, empty
+capacity slots elsewhere are real and intentional — the game preserves them in saves, so an
+empty row is never evidence of a lost item.
 
-**Missing.** Which three places. Whether concepts is one of them. Whether the behaviour is the
-same quirk in all three or three different ones.
+**Missing.** Which account is right, or whether both happen on different paths through the
+same system.
 
-**How to settle.** Play — reproduce it once on crafting and watch the slot count, then check
-concepts and the loadouts. Reading the code would identify the capacity-handling paths that can
-do this.
+**How to settle.** Read the code for the aspect placement path; confirming in play costs a
+real purchase either way, so prefer the code.
 
 ## Progression, research and requirements
 
@@ -245,7 +248,7 @@ anywhere. There is nothing to hedge here: they are simply unknown.
 | Alchemy (the feature) | The screen exists with a six-pool loadout, a Materials page and an Alchemy Level dial. What alchemy produces and what the six pools are is unknown. Not to be confused with concepts, which are internally alchemy-named. |
 | Artificer, Construction, Mystic, Shaper | Named disciplines with their own progression tracks and advancement grants. Never played. |
 | Dimensional | A World subtab. Never opened. |
-| Aspects | Three pedestal slots holding placed aspects. What an aspect does, where they come from, and what the slots gate is unknown. |
+| Aspects | Three pedestal slots that unlock major systems (Workshop, Alchemy Lab, Rituals) when their aspect is placed. Whether aspects do anything beyond the unlock, and the zero-slot behaviour above, remain open. |
 | Plots | Underlying the harvest domain, with node-level harvest rates and prerequisites. Only the surface behaviour (nodes fill, you harvest them, the page must be open for the data to refresh) is known. |
 | Equipment and artifact stats | The loadout binds weight and slots, and upgrading costs two gear currencies. What artifacts actually do is unknown. |
 | Consumables | An Inventory panel exists on every screen and carries items with durations and types. Carry limits, use effects and what happens at capacity are undocumented. |

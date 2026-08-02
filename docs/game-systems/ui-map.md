@@ -66,7 +66,7 @@ untangles it, and [casting-and-spells.md](casting-and-spells.md) covers the dial
 
 | Page | What lives there |
 |---|---|
-| Aspects | Three pedestal slots holding placed aspects. Discovery *offers* are not a standing page here — they arrive as events. |
+| Aspects | Three pedestal slots holding placed aspects — the world slots through which Workshop, Alchemy and Rituals are unlocked. Discovery *offers* are not a standing page here — they arrive as events. |
 | Dimensional | A discipline page. Never walked; see [open-questions.md](open-questions.md). |
 | Agromancy | Harvesting. Nodes fill over time and are then harvested, with minutes between actions. Note the game only refreshes harvest data **while this page is open** — leaving it closed does not stop the world, but the numbers you last saw are stale. |
 | Druidry | A discipline page with its own attributes. |

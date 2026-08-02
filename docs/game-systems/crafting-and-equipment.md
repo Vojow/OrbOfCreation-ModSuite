@@ -35,7 +35,9 @@ the relevant recipe is what raises that maximum.
 
 Marked as **read out of the game's data, not observed in play**: the Scribe registry holds `6`
 recipes while `8` scribe roles are authored; the Investment and Speed roles have no recipe of
-their own in that data.
+their own in that data. A live inventory meanwhile held six scroll *types* **including**
+Investment and Speed scrolls — so either those two arrive from a non-Scribe source or the
+registry reading is incomplete. Unresolved; the Scribe has simply not been played with much.
 
 ### Paying and queueing
 

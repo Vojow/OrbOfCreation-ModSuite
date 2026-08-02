@@ -88,18 +88,6 @@ empty. During a swap you will briefly see a blank row between filled ones, and t
 is saved to disk as-is. It is a placeholder, not lost progress; the next concept you add
 reuses it.
 
-## The invented-slot quirk
-
-There is a known oddity in how this game handles buying into a full set of slots: if you buy
-when **zero** slots are free, the game invents an extra slot in the interface to hold the
-purchase. A later upgrade that adds a slot then adds one on top of that, and the extra one
-stays forever empty.
-
-Marked as **recalled from play, not re-observed**: only around three places in the game are
-believed to behave this way, and the one clearly remembered is a crafting screen. Whether
-Concepts is one of the three is **unconfirmed** — see
-[open-questions.md](open-questions.md).
-
 ## Related pages
 
 - [resources.md](resources.md) — Psi, and what a permanent per-second drain does to a resource's

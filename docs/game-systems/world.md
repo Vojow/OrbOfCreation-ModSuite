@@ -52,16 +52,22 @@ game leaves it negative rather than clamping it.
 
 ## Aspects
 
-**World > Aspects** is a set of **three pedestal slots** holding placed aspects.
+**World > Aspects** is a set of **three pedestal slots** holding placed aspects, and it is how
+the game's major late systems arrive: the known aspects — **Aspect: Workshop**, **Aspect:
+Alchemy Lab** and **Aspect: Rituals**, each granted by its upgrade — unlock their system
+through these world slots.
 
 New aspects arrive through **discovery events** — there is no standing "aspect offers" page,
 so the offer appears when the game decides to present it rather than somewhere you can go and
-check. Aspects are also granted by specific upgrades (Aspect: Alchemy Lab, Aspect: Rituals,
-Aspect: Workshop are the known ones).
+check.
 
-Marked as **read out of the game's code, not observed in play**: an aspect-granting upgrade
-can be paid for and completed while there is no free pedestal slot, in which case the aspect
-is simply never placed. The purchase does not refuse and does not refund.
+The zero-free-slot case has **two conflicting accounts**, and which is right is unresolved.
+Read out of the game's code: an aspect-granting upgrade can be paid for and completed while no
+pedestal is free, and the aspect is then simply never placed — no refusal, no refund. Recalled
+from play: buying with zero free slots made the interface **invent an extra slot** to hold the
+purchase, and a later slot-granting upgrade then left one slot permanently empty. These may be
+two different paths through the same system; treat both with care until one is confirmed. See
+[open-questions.md](open-questions.md).
 
 ## Druidry
 

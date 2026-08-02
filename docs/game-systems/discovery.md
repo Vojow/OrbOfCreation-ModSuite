@@ -125,11 +125,20 @@ by a factor of `10` per step:
 | 3rd | `9,000` Knowledge |
 | 4th | `90,000` Knowledge |
 | 5th | `900,000` Knowledge |
-| 6th and onward (infinite tier) | `1,000,000` Knowledge + `500` Thaumic Scrolls |
+| 6th and onward (infinite tier) | from `1,000,000` Knowledge + `500` Thaumic Scrolls, still climbing |
+
+That table is the authored **opening** of the ladder, not its whole shape. Deep in the infinite
+tier the price keeps climbing, and **faster than any constant factor**. Adjacent rungs read live:
+Spellcraft `3.40e6` + `5.83e3`, then `3.16e8` + `5.33e5` — a step of roughly **×93** on both
+currencies at once. Later, Glyphcraft read `9.91e11` + `7.36e11`, then `6.29e16` + `4.71e16` — a
+step of roughly **×64,000**. The two currencies of a price always scale in lockstep, and the
+per-step factor itself grows as the count rises. The formula has not been extracted — treat any
+constant-factor extrapolation as wrong beyond the authored opening, and see
+[open-questions.md](open-questions.md).
 
 **Glyph Discoveries is a separate tree with a separate ladder**: base `200` Knowledge +
-`50` Thaumaturgy, with its own scaling. Its scaling is evaluated through its own modifier list and
-must **not** be assumed to be the same ×10 rule — the two trees genuinely differ.
+`50` Thaumaturgy, with its own scaling evaluated through its own modifier list — as the readings
+above show, the two trees genuinely differ.
 
 Two further pricing facts:
 
