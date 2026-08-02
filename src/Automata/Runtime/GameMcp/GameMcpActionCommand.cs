@@ -28,6 +28,7 @@ internal enum GameMcpCommandKind
     SpellComposition = 17,
     SpellLoadout = 18,
     Targeting = 19,
+    Consumable = 20,
 }
 
 internal static class GameMcpCommandKinds
@@ -36,7 +37,7 @@ internal static class GameMcpCommandKinds
         kind is >= GameMcpCommandKind.Purchase and <= GameMcpCommandKind.SpellLevel or
             GameMcpCommandKind.DiscoveryTreeOffer or GameMcpCommandKind.SpellWorkbench or
             GameMcpCommandKind.SpellComposition or GameMcpCommandKind.SpellLoadout or
-            GameMcpCommandKind.Targeting;
+            GameMcpCommandKind.Targeting or GameMcpCommandKind.Consumable;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -50,6 +51,7 @@ internal static class GameMcpCommandKinds
         "game_spell_composition" => GameMcpCommandKind.SpellComposition,
         "game_spell_loadout" => GameMcpCommandKind.SpellLoadout,
         "game_targeting" => GameMcpCommandKind.Targeting,
+        "game_consumable" => GameMcpCommandKind.Consumable,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -420,6 +422,9 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.Targeting)
             return "the targeting boundary returned " + disposition +
                 " with exact preflight code " + exact;
+        if (commandKind == GameMcpCommandKind.Consumable)
+            return "the consumable boundary returned " + disposition +
+                " with exact preflight code " + exact;
         return "the native action boundary returned " + disposition +
             " with exact result code " + exact;
     }
@@ -547,6 +552,28 @@ internal static class GameMcpActionResultCodeNames
             if (code == TargetingActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == TargetingActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == TargetingActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.Consumable)
+        {
+            if (code == ConsumablePlayerActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == ConsumablePlayerActionResultCodes.Quarantined) return "quarantined";
+            if (code == ConsumablePlayerActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == ConsumablePlayerActionResultCodes.ItemUnavailable) return "item_unavailable";
+            if (code == ConsumablePlayerActionResultCodes.NotVisible) return "not_visible";
+            if (code == ConsumablePlayerActionResultCodes.TargetingInProgress) return "targeting_in_progress";
+            if (code == ConsumablePlayerActionResultCodes.InventoryBusy) return "inventory_busy";
+            if (code == ConsumablePlayerActionResultCodes.CanFireRefused) return "can_fire_refused";
+            if (code == ConsumablePlayerActionResultCodes.NoCancellableUsage) return "no_cancellable_usage";
+            if (code == ConsumablePlayerActionResultCodes.NothingToDiscard) return "nothing_to_discard";
+            if (code == ConsumablePlayerActionResultCodes.RandomizationUnavailable) return "randomization_unavailable";
+            if (code == ConsumablePlayerActionResultCodes.AlreadyInRequestedState) return "already_in_requested_state";
+            if (code == ConsumablePlayerActionResultCodes.ListUnavailable) return "list_unavailable";
+            if (code == ConsumablePlayerActionResultCodes.SourceUnavailable) return "source_unavailable";
+            if (code == ConsumablePlayerActionResultCodes.DestinationOutOfRange) return "destination_out_of_range";
+            if (code == ConsumablePlayerActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == ConsumablePlayerActionResultCodes.MultiBuyUnavailable) return "multi_buy_unavailable";
+            if (code == ConsumablePlayerActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == ConsumablePlayerActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

@@ -1034,6 +1034,7 @@ public sealed class GameMcpWorldEnvelopeTests
                 "upgrade-costs",
                 "crafting-recipe-state",
                 "concept-instances",
+                "consumable-inventory",
             })
             .Distinct(StringComparer.Ordinal)
             .Select(category => string.Equals(
@@ -1164,6 +1165,7 @@ public sealed class GameMcpWorldEnvelopeTests
                 "upgrade-costs",
                 "crafting-recipe-state",
                 "concept-instances",
+                "consumable-inventory",
             })
             .Distinct(StringComparer.Ordinal)
             .Select(category => string.Equals(

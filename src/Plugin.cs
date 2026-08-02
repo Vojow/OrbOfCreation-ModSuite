@@ -1511,6 +1511,8 @@ public sealed class Plugin : BaseUnityPlugin
                     GameMcpWorldQuery.ProjectTargetingPostState(
                         latest,
                         GameMcpTargetingProjection.SubmittedTarget(committed.Details)),
+                GameMcpCommandKind.Consumable =>
+                    GameMcpWorldQuery.ProjectConsumablePostState(latest, command.TargetId),
                 _ => GameMcpWorldQuery.ProjectPostState(latest, category, command.TargetId),
             };
         }
@@ -1540,6 +1542,7 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandKind.SpellComposition => "spell-recipes",
         GameMcpCommandKind.SpellLoadout => "spell-slots",
         GameMcpCommandKind.Targeting => "targeting",
+        GameMcpCommandKind.Consumable => "consumables",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 
@@ -1742,6 +1745,13 @@ public sealed class Plugin : BaseUnityPlugin
         }
         else if (kind == GameMcpCommandKind.Targeting)
             nativeType = request.Mode == "submit" ? "StructureSO" : "TargetingManager+TargetLink";
+        else if (kind == GameMcpCommandKind.Consumable)
+        {
+            nativeType = "ConsumableSO";
+            payloadKey = request.Key;
+            payloadValue = request.SerializedValue;
+            if (request.Mode == "move") amount = checked(request.SlotIndex + 1);
+        }
         else if (kind == GameMcpCommandKind.ConfigurationSet)
         {
             mode = request.Section;

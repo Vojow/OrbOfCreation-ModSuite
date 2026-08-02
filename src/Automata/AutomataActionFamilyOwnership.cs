@@ -27,6 +27,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.HarvestAction };
     private static readonly AutomationActionFamily[] ItemFamilies =
         { AutomationActionFamily.ConsumableUse };
+    private static readonly AutomationActionFamily[] ConsumableFamilies =
+        { AutomationActionFamily.ConsumableUse, AutomationActionFamily.NativeMultiBuyOverride };
     private static readonly AutomationActionFamily[] ScribeFamilies =
         { AutomationActionFamily.CraftingQueueSubmission };
     private static readonly AutomationActionFamily[] DiscoveryTreeOfferFamilies =
@@ -107,7 +109,11 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         OwnsGameMcpOperationFamily(AutomationActionFamily.SpellLevelPurchase);
     public bool OwnsHarvest => _harvest?.IsHeld == true ||
         OwnsGameMcpOperationFamily(AutomationActionFamily.HarvestAction);
-    public bool OwnsItems => _items?.IsHeld == true && _multiBuy?.IsHeld == true;
+    public bool OwnsItems =>
+        (_items?.IsHeld == true ||
+         OwnsGameMcpOperationFamily(AutomationActionFamily.ConsumableUse)) &&
+        (_multiBuy?.IsHeld == true ||
+         OwnsGameMcpOperationFamily(AutomationActionFamily.NativeMultiBuyOverride));
     public bool OwnsScribe => _scribe?.IsHeld == true;
     public bool OwnsDiscoveryTreeOffers =>
         OwnsGameMcpOperationFamily(AutomationActionFamily.DiscoveryTreeOfferLifecycle);
@@ -115,8 +121,15 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         _harvest?.TryCaptureMutationPermit() == true ||
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.HarvestAction);
     public bool TryCaptureItemMutationPermit() =>
-        _items?.TryCaptureMutationPermit() == true &&
-        _multiBuy?.TryCaptureMutationPermit() == true;
+        TryCaptureFamilyPermit(AutomationActionFamily.ConsumableUse, _items) &&
+        TryCaptureFamilyPermit(AutomationActionFamily.NativeMultiBuyOverride, _multiBuy);
+    private bool TryCaptureFamilyPermit(
+        AutomationActionFamily family,
+        ActionFamilyLeaseSet? permanent)
+    {
+        if (permanent?.TryCaptureMutationPermit() == true) return true;
+        return TryCaptureGameMcpOperationPermit(family);
+    }
     public bool TryCaptureScribeMutationPermit() =>
         _scribe?.TryCaptureMutationPermit() == true;
     public bool TryCaptureDiscoveryTreeOfferMutationPermit() =>
@@ -435,6 +448,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.SpellComposition => SpellCompositionFamilies,
         GameMcpCommandKind.SpellLoadout => SpellLoadoutFamilies,
         GameMcpCommandKind.Targeting => TargetingFamilies,
+        GameMcpCommandKind.Consumable => ConsumableFamilies,
         _ => Array.Empty<AutomationActionFamily>(),
     };
 
@@ -465,6 +479,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         AutomationActionFamily.ConceptAssignment => _concept?.IsHeld == true,
         AutomationActionFamily.SpellLevelPurchase => _spellLevel?.IsHeld == true,
         AutomationActionFamily.HarvestAction => _harvest?.IsHeld == true,
+        AutomationActionFamily.ConsumableUse => _items?.IsHeld == true,
         AutomationActionFamily.DiscoveryTreeOfferLifecycle => false,
         AutomationActionFamily.SpellWorkbenchLifecycle => false,
         AutomationActionFamily.SpellComposition => false,

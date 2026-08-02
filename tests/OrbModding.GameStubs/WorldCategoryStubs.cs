@@ -403,6 +403,7 @@ public sealed partial class ConsumableSO : IdScriptableObject
     private int quantity;
     private int queuedQuantity;
     private int gainedSince;
+    private ConsumableUsage? nextUsage;
     public bool FireAllowed = true;
     public bool SelectionNoOp;
     public int MaximumCarryLoad;
@@ -439,18 +440,36 @@ public sealed partial class ConsumableSO : IdScriptableObject
             consumeCost.PerformCost();
             if (hasDuration)
             {
-                consumableUsages.Add(new ConsumableUsage
+                nextUsage = new ConsumableUsage
                 {
                     en = false,
                     dr = new BigDouble(durationBase),
                     maxDr = new BigDouble(durationBase),
-                });
+                };
+                consumableUsages.Add(nextUsage);
             }
         }
         Inventory.BeginPreparing();
     }
 
     public void SetRandomization(bool randomizationN) => randomized = randomizationN;
+
+    public void CancelUsage()
+    {
+        var usage = nextUsage ?? consumableUsages.Find(candidate => !candidate.en);
+        if (usage is null) return;
+        queuedQuantity = Math.Max(0, queuedQuantity - 1);
+        usage.GetResultInfo().Cancel();
+        consumableUsages.Remove(usage);
+        if (ReferenceEquals(nextUsage, usage)) nextUsage = null;
+        Inventory.Preparing = false;
+    }
+
+    public void Discard(int amount)
+    {
+        var actual = Math.Min(Math.Max(0, amount), quantity);
+        quantity -= actual;
+    }
 
     public bool IsRandomized() => canBeRandomized && randomized;
 
@@ -498,8 +517,10 @@ public sealed class ConsumableUsage
     public bool en;
     public BigDouble dr;
     public BigDouble maxDr;
+    private readonly EffectResultInfo resultInfo = new EffectResultInfo();
 
     public Guid GetGuid() => Identity;
+    public EffectResultInfo GetResultInfo() => resultInfo;
 }
 
 public sealed class ScalingInfo
@@ -563,11 +584,25 @@ namespace Targeting
 
 public sealed class Inventory
 {
+    private static Inventory _instance = new Inventory();
+    public ConsumableRefListVariable hotBar = new ConsumableRefListVariable();
+    public ConsumableRefListVariable allConsumables = new ConsumableRefListVariable();
     public static bool Preparing { get; set; }
 
     public static bool CanUseConsumable() => !Preparing;
 
     public static void BeginPreparing() => Preparing = true;
+
+    public static Inventory Current => _instance;
+
+    public static void ResetLists()
+    {
+        _instance = new Inventory();
+    }
+}
+
+public sealed class ConsumableRefListVariable : GenericListVariable<ConsumableSO>
+{
 }
 
 public sealed class RitualSO : IdScriptableObject

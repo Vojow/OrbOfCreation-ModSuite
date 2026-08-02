@@ -45,6 +45,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         FakeFlag.All.Clear();
         FakePlayerGlobals.Reset();
         FakeTargetingManager.Reset();
+        FakeConsumableInventory.Reset();
         WorldCategoryFakes.Clear();
     }
 
@@ -81,6 +82,8 @@ public sealed class GameWorldCollectorTests : IDisposable
             ["TargetingManager+TargetLink"] = typeof(FakeTargetingManager.TargetLink),
             ["ITooltipable"] = typeof(IFakeTooltipable),
             ["EffectResultInfo"] = typeof(FakeTargetingResultInfo),
+            ["Inventory"] = typeof(FakeConsumableInventory),
+            ["ConsumableRefListVariable"] = typeof(FakeConsumableRefListVariable),
         };
 
         foreach (var pair in WorldCategoryFakes.ByTypeName) byName[pair.Key] = pair.Value;
@@ -332,7 +335,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Fifty-two passes: the four categories
+        // The scope claim, asserted rather than described. Fifty-three passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -344,17 +347,18 @@ public sealed class GameWorldCollectorTests : IDisposable
         // plot-and-action pairs, which belong to neither side, and
         // the two that belong to no per-type registry at all and are reached by uuid: the action
         // queues, the equipped spell loadout, the paired Concept registries, and the current
-        // targeting request. A pass that quietly stopped covering one would show
+        // targeting request, plus the two ordered consumable lists and their frame-local use gate.
+        // A pass that quietly stopped covering one would show
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(52, report.Categories.Length);
+        Assert.Equal(53, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "concept instances", "targeting", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "concept instances", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -1328,6 +1332,28 @@ public sealed class GameWorldCollectorTests : IDisposable
         public List<FakeUpgrade> GetAll() => FakeUpgrade.All;
     }
 
+    private sealed class FakeConsumableRefListVariable
+    {
+        public List<FakeConsumable?> value = new();
+        public int Maximum = 4;
+        public int GetMax() => Maximum;
+    }
+
+    private sealed class FakeConsumableInventory
+    {
+        internal static FakeConsumableInventory _instance = new();
+        internal static bool CanUse = true;
+        public FakeConsumableRefListVariable allConsumables = new();
+        public FakeConsumableRefListVariable hotBar = new();
+        public static bool CanUseConsumable() => CanUse;
+
+        internal static void Reset()
+        {
+            _instance = new FakeConsumableInventory();
+            CanUse = true;
+        }
+    }
+
     private interface IFakeTooltipable { string GetName(); }
 
     private sealed class FakeTargetingResultInfo { }
@@ -1982,6 +2008,46 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(4, row.MaxCreatedLevel);
         Assert.Equal(12, row.MaximumCarryLoad);
         Assert.Equal(150d, row.Modifiers.PrepSpeed.ToDouble());
+    }
+
+    [Fact]
+    public void ConsumableInventoryPublishesBothOrderedListsAndFrameLocalUseAdmission()
+    {
+        var first = new FakeConsumable { Identity = Guid.NewGuid(), visible = true, quantity = 2 };
+        var second = new FakeConsumable { Identity = Guid.NewGuid(), visible = true, quantity = 1 };
+        FakeConsumable.All.Add(first);
+        FakeConsumable.All.Add(second);
+        FakeConsumableInventory._instance.allConsumables.value.Add(first);
+        FakeConsumableInventory._instance.allConsumables.value.Add(null);
+        FakeConsumableInventory._instance.allConsumables.value.Add(second);
+        FakeConsumableInventory._instance.allConsumables.Maximum = 12;
+        FakeConsumableInventory._instance.hotBar.value.Add(second);
+        FakeConsumableInventory._instance.hotBar.Maximum = 4;
+        FakeConsumableInventory.CanUse = false;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.False(world.ConsumableInventory.CanUse);
+        Assert.Equal(12, world.ConsumableInventory.InventoryMaximum);
+        Assert.Equal(4, world.ConsumableInventory.HotbarMaximum);
+        var slots = world.ConsumableInventory.Slots.AsSpan().ToArray();
+        Assert.Equal(4, slots.Length);
+        Assert.Equal(
+            new[] { first.Identity, Guid.Empty, second.Identity, second.Identity },
+            slots.Select(slot => slot.ConsumableId));
+        Assert.Equal(
+            new[]
+            {
+                WorldConsumableListKind.Inventory,
+                WorldConsumableListKind.Inventory,
+                WorldConsumableListKind.Inventory,
+                WorldConsumableListKind.Hotbar,
+            },
+            slots.Select(slot => slot.List));
+        Assert.Equal(4, report.For("consumable inventory").Sampled);
     }
 
     [Fact]

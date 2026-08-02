@@ -429,7 +429,10 @@ public class AbstractListVariable<T> : AbstractListVariable
     public bool SuppressSwap { get; set; }
     public bool ThrowBeforeSwap { get; set; }
     public bool ThrowAfterSwap { get; set; }
+    public bool SuppressSetAt { get; set; }
+    public bool ThrowAfterSetAt { get; set; }
     public int SwapCalls { get; private set; }
+    public int SetAtCalls { get; private set; }
     public int UpdateObservableCalls { get; private set; }
 
     public void SwapPositions(int first, int second)
@@ -439,6 +442,13 @@ public class AbstractListVariable<T> : AbstractListVariable
         if (!SuppressSwap)
             (value[first], value[second]) = (value[second], value[first]);
         if (ThrowAfterSwap) throw new InvalidOperationException("injected failure after slot swap");
+    }
+
+    public void SetAt(int index, T valueN)
+    {
+        SetAtCalls++;
+        if (!SuppressSetAt) value[index] = valueN;
+        if (ThrowAfterSetAt) throw new InvalidOperationException("injected failure after list set");
     }
 
     public void UpdateObservable() => UpdateObservableCalls++;

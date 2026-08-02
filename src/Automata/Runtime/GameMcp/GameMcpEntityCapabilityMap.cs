@@ -89,6 +89,14 @@ internal static class GameMcpEntityCapabilityMap
             GameMcpCommandKind.SpellComposition => SpellCompositionTarget(world, target, out reason),
             GameMcpCommandKind.SpellLoadout => SpellLoadoutTarget(world, target, out reason),
             GameMcpCommandKind.Targeting => TargetingTarget(world, target, out reason),
+            GameMcpCommandKind.Consumable =>
+                Entity(
+                    world.EntityIdentities,
+                    world.Consumables,
+                    target,
+                    "consumables",
+                    capability,
+                    out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -287,7 +295,7 @@ internal static class GameMcpEntityCapabilityMap
         D("harvest-resources", "HarvestElementSO"),
         D("time-runes", "TimeRuneSO"),
         D("glyphs", "GlyphSO"),
-        D("consumables", "ConsumableSO"),
+        D("consumables", "ConsumableSO", GameMcpCommandKind.Consumable),
         D("rituals", "RitualSO"),
         D("achievements", "AchievementSO"),
         D("advancements", "AdvancementSO"),

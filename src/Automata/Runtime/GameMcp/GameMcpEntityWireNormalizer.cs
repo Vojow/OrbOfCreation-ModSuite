@@ -309,7 +309,8 @@ internal static class GameMcpEntityWireNormalizer
         "maxLevel" or "remainingLevels" or "baseLevel" or "bonusLevel" or
         "totalLevel" or "purchasedLevel" or "purchasedLevels" or "freeLevels" or
         "baseLevelExcludingBonus" or "effectiveCap" or "artificialCap" or
-        "startingAmount" or "currentCharges" or "maximumCharges" or
+        "startingAmount" or "queued" or "maximumAmount" or "maximumCarry" or
+        "currentCharges" or "maximumCharges" or
         "developmentProgress" => true,
         _ => false,
     };

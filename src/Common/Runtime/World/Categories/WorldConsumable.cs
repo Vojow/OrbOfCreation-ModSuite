@@ -25,7 +25,10 @@ internal readonly struct WorldConsumable : IWorldEntity
         bool canBeRandomized,
         bool hasDuration,
         double durationBase,
-        bool queueOnStart)
+        bool queueOnStart,
+        bool canFire = false,
+        bool immediateCostsAffordable = false,
+        bool usageCostsAffordable = false)
     {
         ConsumableId = consumableId;
         Visible = visible;
@@ -44,6 +47,9 @@ internal readonly struct WorldConsumable : IWorldEntity
         HasDuration = hasDuration;
         DurationBase = durationBase;
         QueueOnStart = queueOnStart;
+        CanFire = canFire;
+        ImmediateCostsAffordable = immediateCostsAffordable;
+        UsageCostsAffordable = usageCostsAffordable;
     }
 
     internal Guid ConsumableId { get; }
@@ -95,6 +101,13 @@ internal readonly struct WorldConsumable : IWorldEntity
     internal double DurationBase { get; }
 
     internal bool QueueOnStart { get; }
+
+    /// <summary>The game's complete immediate-use verdict at capture time.</summary>
+    internal bool CanFire { get; }
+
+    internal bool ImmediateCostsAffordable { get; }
+
+    internal bool UsageCostsAffordable { get; }
 }
 
 /// <summary>A consumable's cached modifier records — what using one is currently worth.</summary>
@@ -150,6 +163,9 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
     private Func<object, bool>? _hasDuration;
     private Func<object, double>? _durationBase;
     private Func<object, bool>? _queueOnStart;
+    private Func<object, bool>? _canFire;
+    private Func<object, bool>? _immediateCostsAffordable;
+    private Func<object, bool>? _usageCostsAffordable;
 
     internal override string Category => "consumables";
 
@@ -179,6 +195,9 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
         _hasDuration = bind.Field<bool>("hasDuration");
         _durationBase = bind.Field<double>("durationBase");
         _queueOnStart = bind.Field<bool>("queueOnStart");
+        _canFire = bind.Call<bool>("CanFire");
+        _immediateCostsAffordable = bind.Through("consumeCost").Call<bool>("HasEnough");
+        _usageCostsAffordable = bind.Through("usageCost").Call<bool>("HasEnough");
         return bind.Failure;
     }
 
@@ -205,5 +224,8 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
             _canBeRandomized!(entity),
             _hasDuration!(entity),
             _durationBase!(entity),
-            _queueOnStart!(entity));
+            _queueOnStart!(entity),
+            _canFire!(entity),
+            _immediateCostsAffordable!(entity),
+            _usageCostsAffordable!(entity));
 }

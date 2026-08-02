@@ -855,6 +855,8 @@ internal static class GameMcpWorldQuery
             ? ProjectSpellSlot(world, in spellSlot)
             : row is WorldTargetingRequest targeting
             ? ProjectTargeting(world, in targeting)
+            : row is WorldConsumable consumable
+            ? ProjectConsumable(world, in consumable)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -950,6 +952,286 @@ internal static class GameMcpWorldQuery
                 !tree.UsedRerollsLastDiscover;
         return result.Freeze();
     }
+
+    private static GameMcpValue ProjectConsumable(
+        GameWorldState world,
+        in WorldConsumable consumable)
+    {
+        var result = new JObject
+        {
+            ["entityId"] = consumable.EntityId.ToString("D"),
+            ["category"] = "consumables",
+            ["nativeType"] = "ConsumableSO",
+            ["visible"] = consumable.Visible,
+            ["amount"] = consumable.Quantity,
+            ["queued"] = consumable.QueuedQuantity,
+            ["maximumCarry"] = consumable.MaximumCarryLoad,
+        };
+        if (consumable.CurrentPrepTime > BigDouble.Zero)
+            result["preparationRemaining"] = new GameMcpDomainValue(consumable.CurrentPrepTime);
+        if (consumable.CurrentCooldownTime > BigDouble.Zero)
+            result["cooldownRemaining"] = new GameMcpDomainValue(consumable.CurrentCooldownTime);
+
+        var types = new JArray();
+        if (WorldConsumableTypeLookup.TryFindRange(
+                world.ConsumableTypes,
+                consumable.EntityId,
+                out var typeStart,
+                out var typeCount))
+        {
+            for (var index = typeStart; index < typeStart + typeCount; index++)
+                types.Add(new JObject
+                {
+                    ["typeId"] = world.ConsumableTypes[index].TypeId.ToString("D"),
+                });
+        }
+        if (types.Count > 0) result["types"] = types;
+
+        var levels = new JArray();
+        if (WorldConsumableCountLookup.TryFindRange(
+                world.ConsumableCounts,
+                consumable.EntityId,
+                out var countStart,
+                out var countCount))
+        {
+            for (var index = countStart; index < countStart + countCount; index++)
+            {
+                var value = world.ConsumableCounts[index];
+                levels.Add(new JObject
+                {
+                    ["level"] = value.Level,
+                    ["amount"] = value.Quantity,
+                    ["freeAmount"] = value.FreeQuantity,
+                });
+            }
+        }
+        if (levels.Count > 0) result["levels"] = levels;
+
+        var immediate = ProjectConsumableCosts(
+            world,
+            consumable.EntityId,
+            WorldConsumableCostKind.Consume);
+        var held = ProjectConsumableCosts(
+            world,
+            consumable.EntityId,
+            WorldConsumableCostKind.Usage);
+        if (immediate.Count > 0) result["useCosts"] = immediate;
+        if (held.Count > 0) result["heldCostsPerSecond"] = held;
+
+        var useAvailable = consumable.Visible && consumable.CanFire &&
+            world.ConsumableInventory.CanUse;
+        var use = new JObject { ["available"] = useAvailable };
+        if (!useAvailable)
+        {
+            use["reasonCode"] = !consumable.Visible
+                ? "not_visible"
+                : consumable.Quantity <= 0
+                    ? "none_owned"
+                    : !world.ConsumableInventory.CanUse
+                        ? "inventory_busy"
+                        : !consumable.ImmediateCostsAffordable
+                            ? "unaffordable"
+                            : consumable.CurrentCooldownTime > BigDouble.Zero
+                                ? "cooldown_active"
+                                : "native_use_refused";
+        }
+        result["use"] = use;
+
+        var usages = ProjectConsumableUsages(world, consumable.EntityId);
+        if (usages.Count > 0) result["usages"] = usages;
+        result["cancel"] = consumable.QueuedQuantity > 0 && usages.Count > 0
+            ? new JObject { ["available"] = true }
+            : new JObject
+            {
+                ["available"] = false,
+                ["reasonCode"] = "no_cancellable_usage",
+            };
+        result["discard"] = consumable.Quantity > 0
+            ? new JObject
+            {
+                ["available"] = true,
+                ["maximumAmount"] = consumable.Quantity,
+            }
+            : new JObject
+            {
+                ["available"] = false,
+                ["reasonCode"] = "none_owned",
+            };
+        if (consumable.CanBeRandomized)
+        {
+            result["randomization"] = new JObject
+            {
+                ["available"] = true,
+                ["enabled"] = consumable.Randomized,
+            };
+        }
+
+        var placements = ProjectConsumablePlacements(world, consumable.EntityId);
+        if (placements.Count > 0) result["placements"] = placements;
+        return result.Freeze();
+    }
+
+    private static JArray ProjectConsumableCosts(
+        GameWorldState world,
+        Guid consumableId,
+        WorldConsumableCostKind kind)
+    {
+        var result = new JArray();
+        if (!WorldConsumableCostLookup.TryFindRange(
+                world.ConsumableCosts,
+                consumableId,
+                kind,
+                out var start,
+                out var count))
+            return result;
+        for (var index = start; index < start + count; index++)
+        {
+            var value = world.ConsumableCosts[index];
+            var cost = new JObject
+            {
+                ["resourceId"] = value.ResourceId.ToString("D"),
+                ["cost"] = new GameMcpDomainValue(value.Amount),
+            };
+            if (WorldLookup.TryFind(world.Resources, value.ResourceId, out var resource))
+                cost["amount"] = new GameMcpDomainValue(resource.TrueQuantity);
+            result.Add(cost);
+        }
+        return result;
+    }
+
+    private static JArray ProjectConsumableUsages(GameWorldState world, Guid consumableId)
+    {
+        var result = new JArray();
+        if (!WorldConsumableUsageLookup.TryFindRange(
+                world.ConsumableUsages,
+                consumableId,
+                out var start,
+                out var count))
+            return result;
+        for (var index = start; index < start + count; index++)
+        {
+            var usage = world.ConsumableUsages[index];
+            var value = new JObject
+            {
+                ["usageId"] = usage.UsageId.ToString("D"),
+                ["level"] = usage.Level,
+                ["state"] = usage.Engaged ? "active" : "pending",
+            };
+            if (usage.Engaged)
+            {
+                value["remainingDuration"] = new GameMcpDomainValue(usage.RemainingDuration);
+                value["maximumDuration"] = new GameMcpDomainValue(usage.MaximumDuration);
+            }
+            result.Add(value);
+        }
+        return result;
+    }
+
+    private static JArray ProjectConsumablePlacements(GameWorldState world, Guid consumableId)
+    {
+        var result = new JArray();
+        var slots = world.ConsumableInventory.Slots;
+        for (var index = 0; index < slots.Count; index++)
+        {
+            var slot = slots[index];
+            if (slot.ConsumableId != consumableId) continue;
+            var placement = new JObject
+            {
+                ["list"] = ConsumableListName(slot.List),
+                ["position"] = slot.Position,
+            };
+            var destinations = new JArray();
+            for (var destinationIndex = 0; destinationIndex < slots.Count; destinationIndex++)
+            {
+                var destination = slots[destinationIndex];
+                if (destination.List != slot.List || destination.Position == slot.Position) continue;
+                var option = new JObject { ["position"] = destination.Position };
+                if (destination.Occupied)
+                    option["occupantId"] = destination.ConsumableId.ToString("D");
+                else option["empty"] = true;
+                destinations.Add(option);
+            }
+            if (destinations.Count > 0) placement["moveDestinations"] = destinations;
+            result.Add(placement);
+        }
+        return result;
+    }
+
+    internal static GameMcpValue ProjectConsumablePostState(
+        GameMcpFrameContext state,
+        Guid consumableId)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        if (!WorldLookup.TryFind(world.Consumables, consumableId, out var consumable))
+            return PostStateUnavailable(
+                "post_state_not_published",
+                "the newer world has no consumable row for the committed target");
+        var result = new JObject
+        {
+            ["consumable"] = ProjectConsumable(world, in consumable),
+            ["inventory"] = ProjectConsumableInventory(world),
+        };
+        if (world.Targeting.Count > 0)
+        {
+            var targeting = world.Targeting[0];
+            result["targeting"] = ProjectTargeting(world, in targeting);
+        }
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectConsumableInventory(GameWorldState world)
+    {
+        var lists = new JArray();
+        AddConsumableList(
+            world,
+            lists,
+            WorldConsumableListKind.Inventory,
+            world.ConsumableInventory.InventoryMaximum);
+        AddConsumableList(
+            world,
+            lists,
+            WorldConsumableListKind.Hotbar,
+            world.ConsumableInventory.HotbarMaximum);
+        return new JObject
+        {
+            ["canUse"] = world.ConsumableInventory.CanUse,
+            ["lists"] = lists,
+        }.Freeze();
+    }
+
+    private static void AddConsumableList(
+        GameWorldState world,
+        JArray lists,
+        WorldConsumableListKind kind,
+        int maximum)
+    {
+        var slots = new JArray();
+        var source = world.ConsumableInventory.Slots;
+        for (var index = 0; index < source.Count; index++)
+        {
+            var slot = source[index];
+            if (slot.List != kind) continue;
+            var value = new JObject { ["position"] = slot.Position };
+            if (slot.Occupied) value["consumableId"] = slot.ConsumableId.ToString("D");
+            else value["empty"] = true;
+            slots.Add(value);
+        }
+        lists.Add(new JObject
+        {
+            ["list"] = ConsumableListName(kind),
+            ["maximum"] = maximum,
+            ["slots"] = slots,
+        });
+    }
+
+    private static string ConsumableListName(WorldConsumableListKind kind) => kind switch
+    {
+        WorldConsumableListKind.Inventory => "inventory",
+        WorldConsumableListKind.Hotbar => "hotbar",
+        _ => "unknown",
+    };
 
     private static GameMcpValue ProjectSpellRecipe(
         GameWorldState world,
@@ -1667,6 +1949,8 @@ internal static class GameMcpWorldQuery
             ? ProjectSpellSlot(world, in spellSlot)
             : row is WorldTargetingRequest targeting
             ? ProjectTargeting(world, in targeting)
+            : row is WorldConsumable consumable
+            ? ProjectConsumable(world, in consumable)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -1867,6 +2151,7 @@ internal static class GameMcpWorldQuery
             "resources",
         },
         "requirement-native-verdicts" => new[] { "requirement-native-verdicts" },
+        "consumables" => new[] { "consumables", "consumable-inventory" },
         _ => new[] { category },
     };
 
@@ -1990,8 +2275,8 @@ internal static class GameMcpWorldQuery
         },
         "consumables" => new[]
         {
-            "entityId", "visible", "quantity", "queuedQuantity", "currentPrepTime",
-            "currentCooldownTime",
+            "entityId", "visible", "quantity", "queuedQuantity", "maximumCarryLoad",
+            "currentPrepTime", "currentCooldownTime", "canFire",
         },
         "rituals" => new[]
         {

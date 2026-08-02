@@ -121,6 +121,7 @@ does not refresh it by hidden navigation.
 | `game_spell_composition` | Set the global spell output level or replace one equipped spell's augment stack |
 | `game_spell_loadout` | Remove one exact equipped runtime spell or move it to another loadout slot |
 | `game_targeting` | Submit a specific eligible target, submit a native random target, or cancel the current request |
+| `game_consumable` | Use, cancel, discard, randomize, or reorder one published consumable |
 | `suite_config_set` | Commit one allowlisted setting through the configuration store |
 | `suite_emergency_stop` | Engage or resume the suite's shared emergency stop |
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
@@ -340,6 +341,29 @@ Submit and randomize success return the named submitted structure plus the compl
 state. Cancel returns the complete newer state. In every mode that means the next named request and
 candidates, or `pending:false`; no follow-up read is needed.
 
+### Consumable decision loop
+
+`consumables` is the pre-decision surface for `game_consumable`. Each row contains its named
+identity, amount and queued amount, level holdings, family types, immediate and held costs with
+current resource amounts, native affordability/use admission, pending usages, current inventory and
+hotbar placements, and every same-list destination. The row's `use`, `cancel`, `discard`, and
+optional `randomization` objects are the next decisions; no trial action is needed to learn them.
+
+The MCP-only consumable sequence is:
+
+1. Read `world_list(category="consumables")` and choose from named costs, holdings, usages, and
+   action verdicts.
+2. Call `game_consumable(mode="use", consumableUuid=...)` or
+   `game_consumable(mode="cancel", consumableUuid=...)`.
+3. Call `game_consumable(mode="discard", consumableUuid=..., amount=...)` for a positive amount,
+   `game_consumable(mode="set_randomization", consumableUuid=..., enabled=...)`, or
+   `game_consumable(mode="move", consumableUuid=..., list="inventory|hotbar",
+   destination=...)` for a zero-based same-list position.
+
+Every committed mode returns the newer named target row, the complete newer named inventory and
+hotbar, and all next decisions. Use also returns targeting state if it opened a request. There is no
+payment stanza, receipt, world-generation argument, catalog join, or post-mutation read-back.
+
 ### Entity explanation
 
 `explain_entity` accepts one canonical `uuid` and pins the latest immutable world publication before
@@ -517,6 +541,15 @@ the current link's owning `EffectResultInfo`, because closing the targeting UI d
 gameplay. Success is exact submitted-object identity plus retirement of the original request, or
 the exact result becoming cancelled plus request retirement. A committed result includes the
 complete newer target state; failures retain native outcome evidence only after mutation began.
+
+`game_consumable` has five conditional shapes. `use` and `cancel` require only a
+`consumableUuid`; `discard` also requires positive `amount`; `set_randomization` requires
+`enabled`; and `move` requires `list` plus zero-based `destination`. Fields belonging to another
+mode are rejected. The boundary re-resolves the exact `ConsumableSO`, all live verb predicates,
+and the current list/source/destination on the Unity main thread, then captures the shared
+ConsumableUse/MultiBuy permit last. Success is the requested queue, exact usage cancellation,
+clamped holding removal, randomization flag, or complete same-list order. Payment and downstream
+effect accounting do not gate success; a committed result is the full newer decision state.
 
 CLI play commands therefore need no generation option:
 

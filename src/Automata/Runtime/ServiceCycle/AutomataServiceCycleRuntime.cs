@@ -166,6 +166,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteSpellLoadout(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Targeting)
                 return ExecuteTargeting(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.Consumable)
+                return ExecuteConsumable(command, lifecycle, configuration.Generation.Value);
             var service = ServiceForGameMcp(command.Kind);
             var context = CreateGameMcpContext(
                 registry,
@@ -305,6 +307,51 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         return GameMcpCommandResult.FromAction(
             in result, command.Kind, lifecycle, configurationGeneration,
             submission.Reason, GameMcpTargetingProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecuteConsumable(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        GameMcpNativeActionAdmission.AssertNativeType(command, "ConsumableSO");
+        var feature = FindFeature(command.Kind);
+        var kind = command.Mode switch
+        {
+            "use" => ConsumablePlayerActionKind.Use,
+            "cancel" => ConsumablePlayerActionKind.Cancel,
+            "discard" => ConsumablePlayerActionKind.Discard,
+            "set_randomization" => ConsumablePlayerActionKind.SetRandomization,
+            "move" => ConsumablePlayerActionKind.Move,
+            _ => throw new ArgumentException("unsupported consumable mode " + command.Mode),
+        };
+        var list = command.PayloadKey switch
+        {
+            "inventory" => ConsumablePlayerListKind.Inventory,
+            "hotbar" => ConsumablePlayerListKind.Hotbar,
+            _ => ConsumablePlayerListKind.None,
+        };
+        var randomized = string.Equals(
+            command.PayloadValue,
+            "true",
+            StringComparison.Ordinal);
+        var action = new ConsumablePlayerAction(
+            kind,
+            command.TargetId,
+            command.ExpectedLifecycleGeneration,
+            command.Amount,
+            randomized,
+            list,
+            kind == ConsumablePlayerActionKind.Move ? command.Amount - 1 : -1);
+        var submission = ((AutoItemsFeatureRuntime)feature).TryExecuteGameMcp(in action);
+        var result = ConsumablePlayerActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(
+            in result,
+            command.Kind,
+            lifecycle,
+            configurationGeneration,
+            submission.Reason,
+            GameMcpConsumableProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteSpellWorkbench(
@@ -564,11 +611,12 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         for (var index = 0; index < _features.Length; index++)
         {
             var feature = _features[index];
-            if (kind == GameMcpCommandKind.Purchase && feature is AutoBuyFeatureRuntime ||
+            if ((kind == GameMcpCommandKind.Purchase && feature is AutoBuyFeatureRuntime ||
                 kind == GameMcpCommandKind.Cast && feature is AutoCastFeatureRuntime ||
                 kind == GameMcpCommandKind.Concept && feature is AutoConceptFeatureRuntime ||
                 kind == GameMcpCommandKind.Harvest && feature is AutoHarvestFeatureRuntime ||
-                kind == GameMcpCommandKind.SpellLevel && feature is SpellLevelFeatureRuntime)
+                kind == GameMcpCommandKind.SpellLevel && feature is SpellLevelFeatureRuntime) ||
+                kind == GameMcpCommandKind.Consumable && feature is AutoItemsFeatureRuntime)
                 return feature;
         }
         throw new InvalidOperationException(

@@ -1277,6 +1277,7 @@ internal sealed class FakeConsumable
     public bool hasDuration;
     public double durationBase;
     public bool queueOnStart;
+    public bool CanFire() => visible && quantity > 0 && consumeCost.HasEnough();
 }
 
 internal sealed class FakeConsumableType
@@ -1288,6 +1289,8 @@ internal sealed class FakeConsumableType
 internal sealed class FakeConsumableCostList
 {
     public List<FakeConsumableCost> costs = new();
+    public bool Affordable = true;
+    public bool HasEnough() => Affordable;
 }
 
 internal sealed class FakeConsumableCost
@@ -1300,6 +1303,7 @@ internal sealed class FakeConsumableCost
 
     public FakeConsumableResource resource;
     public BigDouble valueBig;
+    public BigDouble GetValue() => valueBig;
 }
 
 internal sealed class FakeConsumableResource

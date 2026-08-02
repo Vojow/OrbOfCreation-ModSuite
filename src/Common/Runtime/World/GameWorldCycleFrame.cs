@@ -134,6 +134,7 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<WorldTimeRune, WorldTimeRune> TimeRunes { get; } = new();
     internal WorldSampleBuffer<WorldGlyph, WorldGlyph> Glyphs { get; } = new();
     internal WorldSampleBuffer<WorldConsumable, WorldConsumable> Consumables { get; } = new();
+    internal WorldConsumableInventoryBuffer ConsumableInventory { get; } = new();
     internal WorldConsumableTypeBuffer ConsumableTypes { get; } = new();
     internal WorldConsumableCostBuffer ConsumableCosts { get; } = new();
     internal WorldConsumableUsageBuffer ConsumableUsages { get; } = new();
@@ -306,6 +307,7 @@ internal static class GameWorldFrameDeriver
             ConsumableCosts = WorldConsumableRelationDeriver.Build(frame.ConsumableCosts),
             ConsumableUsages = WorldConsumableRelationDeriver.Build(frame.ConsumableUsages),
             ConsumableCounts = WorldConsumableRelationDeriver.Build(frame.ConsumableCounts),
+            ConsumableInventory = frame.ConsumableInventory.Build(),
             ScribeRecipes = WorldScribeRelationDeriver.Build(
                 frame.ScribeRecipes,
                 static (left, right) => left.RecipeId.CompareTo(right.RecipeId)),

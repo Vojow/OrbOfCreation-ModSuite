@@ -321,6 +321,29 @@ internal sealed class GameMcpProtocolRouter
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode == "submit") builder.Uuid = RequireUuid(arguments, "targetUuid");
                 break;
+            case "game_consumable":
+                builder.Mode = RequireOneOf(
+                    arguments,
+                    "mode",
+                    "use",
+                    "cancel",
+                    "discard",
+                    "set_randomization",
+                    "move");
+                builder.Uuid = RequireUuid(arguments, "consumableUuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                if (builder.Mode == "discard")
+                    builder.Amount = RequiredInt(arguments, "amount", 1, int.MaxValue);
+                if (builder.Mode == "set_randomization")
+                    builder.SerializedValue = OptionalBool(arguments, "enabled", false)
+                        ? "true"
+                        : "false";
+                if (builder.Mode == "move")
+                {
+                    builder.Key = RequireOneOf(arguments, "list", "inventory", "hotbar");
+                    builder.SlotIndex = RequiredInt(arguments, "destination", 0, int.MaxValue);
+                }
+                break;
             case "suite_config_set":
                 builder.ConfigurationGeneration = RequiredUlong(
                     arguments, "configurationGeneration");
@@ -389,7 +412,8 @@ internal sealed class GameMcpProtocolRouter
     {
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
-            "game_spell_composition" or "game_spell_loadout" or "game_targeting" =>
+            "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
+            "game_consumable" =>
                 GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
@@ -415,7 +439,8 @@ internal sealed class GameMcpProtocolRouter
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
-            "game_spell_composition" or "game_spell_loadout" or "game_targeting" =>
+            "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
+            "game_consumable" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
@@ -632,6 +657,24 @@ internal sealed class GameMcpProtocolRouter
                         ["targetUuid"] = StringSchema("Required only for submit; use an eligible named targeting candidate UUID."),
                     },
                     "mode"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_consumable",
+                "Use or organize consumables",
+                "Use, cancel, discard, randomize, or reorder one published consumable. Success returns the newer named holding, ordered inventory and hotbar, and next decisions inline.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema(
+                            "use", "cancel", "discard", "set_randomization", "move"),
+                        ["consumableUuid"] = StringSchema("Published ConsumableSO UUID."),
+                        ["amount"] = IntegerSchema(1, int.MaxValue),
+                        ["enabled"] = BooleanSchema("Requested randomization state."),
+                        ["list"] = EnumSchema("inventory", "hotbar"),
+                        ["destination"] = IntegerSchema(0, int.MaxValue),
+                    },
+                    "mode", "consumableUuid"),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -863,6 +906,56 @@ internal sealed class GameMcpProtocolRouter
             else if (mode is "randomize" or "cancel" && target)
                 errors.Add(ValidationError("unexpected_for_mode", "targetUuid",
                     "field 'targetUuid' is not accepted for mode '" + mode + "'"));
+        }
+
+        if (string.Equals(name, "game_consumable", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var amount = arguments.ContainsKey("amount");
+            var enabled = arguments.ContainsKey("enabled");
+            var list = arguments.ContainsKey("list");
+            var destination = arguments.ContainsKey("destination");
+            if (mode == "discard" && !amount)
+                errors.Add(ValidationError(
+                    "missing_required",
+                    "amount",
+                    "required field 'amount' is missing for mode 'discard'"));
+            if (mode == "set_randomization" && !enabled)
+                errors.Add(ValidationError(
+                    "missing_required",
+                    "enabled",
+                    "required field 'enabled' is missing for mode 'set_randomization'"));
+            if (mode == "move" && !list)
+                errors.Add(ValidationError(
+                    "missing_required",
+                    "list",
+                    "required field 'list' is missing for mode 'move'"));
+            if (mode == "move" && !destination)
+                errors.Add(ValidationError(
+                    "missing_required",
+                    "destination",
+                    "required field 'destination' is missing for mode 'move'"));
+            if (mode != "discard" && amount)
+                errors.Add(ValidationError(
+                    "unexpected_for_mode",
+                    "amount",
+                    "field 'amount' is accepted only for mode 'discard'"));
+            if (mode != "set_randomization" && enabled)
+                errors.Add(ValidationError(
+                    "unexpected_for_mode",
+                    "enabled",
+                    "field 'enabled' is accepted only for mode 'set_randomization'"));
+            if (mode != "move" && list)
+                errors.Add(ValidationError(
+                    "unexpected_for_mode",
+                    "list",
+                    "field 'list' is accepted only for mode 'move'"));
+            if (mode != "move" && destination)
+                errors.Add(ValidationError(
+                    "unexpected_for_mode",
+                    "destination",
+                    "field 'destination' is accepted only for mode 'move'"));
         }
 
         if (errors.Count > 0) throw GameMcpInvalidParamsException.Validation(errors);

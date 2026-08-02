@@ -172,6 +172,10 @@ public sealed record GameWorldState
     internal PublicationTable<WorldConsumableCount> ConsumableCounts { get; init; } =
         PublicationTable<WorldConsumableCount>.Empty;
 
+    /// <summary>The player's ordered consumable inventory and hotbar plus live use admission.</summary>
+    internal WorldConsumableInventory ConsumableInventory { get; init; } =
+        WorldConsumableInventory.Empty;
+
     /// <summary>The complete contents of the audited Scribe recipe registry.</summary>
     internal PublicationTable<WorldScribeRecipe> ScribeRecipes { get; init; } =
         PublicationTable<WorldScribeRecipe>.Empty;

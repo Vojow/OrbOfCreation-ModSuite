@@ -10,22 +10,31 @@ namespace OrbAutomata;
 /// The single consumable-use GameAction: lifecycle-scoped complete bindings, live preflights,
 /// one native transaction, and exact before/after evidence.
 /// </summary>
-internal sealed class AutoItemsConsumableUseGameAction : IDisposable
+internal sealed partial class AutoItemsConsumableUseGameAction : IDisposable
 {
     private static readonly object[] EnableRandomizationArguments = { true };
 
     private readonly TypedRegistryResolver _registryResolver;
     private readonly Func<bool> _tryCaptureMutationPermit;
     private readonly Func<string> _readMutationPermitFailure;
+    private readonly Func<long> _readLifecycleEpoch;
+    private readonly Func<string, Type?>? _resolvePlayerType;
+    private readonly Func<string, bool>? _includePlayerContract;
+    private readonly int _mainThreadId;
     private readonly Dictionary<Guid, string> _temporaryQuarantine = new();
     private AutoItemsNativeBindings? _bindings;
+    private ConsumablePlayerNativeBindings? _playerBindings;
     private string _bindingFailure = string.Empty;
+    private string _playerBindingFailure = string.Empty;
     private string _quarantineReason = string.Empty;
 
     internal AutoItemsConsumableUseGameAction(
         TypedRegistryResolver registryResolver,
         Func<bool> tryCaptureMutationPermit,
-        Func<string> readMutationPermitFailure)
+        Func<string> readMutationPermitFailure,
+        Func<long>? readLifecycleEpoch = null,
+        Func<string, Type?>? resolvePlayerType = null,
+        Func<string, bool>? includePlayerContract = null)
     {
         _registryResolver = registryResolver ??
             throw new ArgumentNullException(nameof(registryResolver));
@@ -33,11 +42,17 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
             throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
         _readMutationPermitFailure = readMutationPermitFailure ??
             throw new ArgumentNullException(nameof(readMutationPermitFailure));
+        _readLifecycleEpoch = readLifecycleEpoch ?? (static () => 1);
+        _resolvePlayerType = resolvePlayerType;
+        _includePlayerContract = includePlayerContract;
+        _mainThreadId = Environment.CurrentManagedThreadId;
         BindLifecycle();
     }
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
+    internal bool PlayerBindingsAvailable => _playerBindings is not null;
+    internal string PlayerBindingFailure => _playerBindingFailure;
     internal string QuarantineReason => _quarantineReason;
 
     internal AutoItemsSubmission Submit(in AutoItemsCycleAction action)
@@ -194,7 +209,9 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
     internal void InvalidateLifecycle()
     {
         _bindings = null;
+        _playerBindings = null;
         _bindingFailure = string.Empty;
+        _playerBindingFailure = string.Empty;
         _quarantineReason = string.Empty;
         _temporaryQuarantine.Clear();
         BindLifecycle();
@@ -203,7 +220,9 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
     public void Dispose()
     {
         _bindings = null;
+        _playerBindings = null;
         _bindingFailure = string.Empty;
+        _playerBindingFailure = string.Empty;
         _quarantineReason = string.Empty;
         _temporaryQuarantine.Clear();
     }
@@ -214,10 +233,30 @@ internal sealed class AutoItemsConsumableUseGameAction : IDisposable
         {
             _bindings = bindings;
             _bindingFailure = string.Empty;
+            BindPlayerLifecycle();
             return;
         }
         _bindings = null;
         _bindingFailure = reason;
+        BindPlayerLifecycle();
+    }
+
+    private void BindPlayerLifecycle()
+    {
+        var resolve = _resolvePlayerType ?? ReflectionUtil.FindLoadedType;
+        var include = _includePlayerContract ?? (_ => true);
+        if (ConsumablePlayerNativeBindings.TryCreate(
+                resolve,
+                include,
+                out var player,
+                out var reason))
+        {
+            _playerBindings = player;
+            _playerBindingFailure = string.Empty;
+            return;
+        }
+        _playerBindings = null;
+        _playerBindingFailure = reason;
     }
 
     private bool TryCaptureMutationPermit(out string reason)
