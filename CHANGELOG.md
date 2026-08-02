@@ -1,5 +1,13 @@
 # Changelog
 
+## Orb Of Creation ModSuite 0.5.3 — 2026-08-02
+
+### Fixed
+
+- Auto Buy bought Artificer structures while the Workshop tab was still locked. It now
+  only buys from lists whose every tab is actually open, so nothing unlocks ahead of
+  your own progression.
+
 ## Orb Of Creation ModSuite 0.5.2 — 2026-08-02
 
 ### Fixed
