@@ -423,9 +423,16 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 lifecycle,
                 configurationGeneration);
         GameMcpNativeActionAdmission.AssertNativeType(command, command.DerivedNativeType);
+        var components = new GenericDiscoveryComponent[command.UuidCounts.Length];
+        for (var index = 0; index < components.Length; index++)
+            components[index] = new GenericDiscoveryComponent(
+                command.UuidCounts[index].Uuid,
+                command.UuidCounts[index].Count);
         var action = new GenericDiscoveryAction(
             command.TargetId,
             command.DerivedNativeType,
+            command.PayloadKey,
+            components,
             command.ExpectedLifecycleGeneration);
         var submission = _genericDiscovery.Submit(in action);
         var result = GenericDiscoveryActionResultMapper.Map(in submission);

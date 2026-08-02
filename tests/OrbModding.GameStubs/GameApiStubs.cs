@@ -207,6 +207,7 @@ public class SpellRecipeSO : IdScriptableObject, IDiscoverable
     public bool IsDiscoverRequired() => NativeDiscoveryRequired;
     public bool IsCreatable() => NativeIsCreatable;
     public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(coreRecipe);
+    public List<ResourceSO> GetResourceRecipe() => new List<ResourceSO>();
     public ResourceCostList GetDiscoverCost() => baseDiscoveryCost;
     public ResourceCostList GetUsageCost() => baseUsageCost;
     public Spell CreateEmpty(int _) => new Spell(this)
@@ -393,6 +394,8 @@ public sealed class AlchemyRecipeSO : IdScriptableObject, IDiscoverable
     public readonly List<AlchemyTypeSO> alchemyTypes = new List<AlchemyTypeSO>();
     public ConceptCostVector drainCost = new ConceptCostVector();
     public ResourceCostList baseDiscoveryCost = new ResourceCostList();
+    public List<GlyphSO> glyphRecipe = new List<GlyphSO>();
+    public List<ResourceSO> resourceRecipe = new List<ResourceSO>();
     public bool NativeDiscoverVisible { get; set; } = true;
     public bool NativeCanDiscover { get; set; } = true;
     public bool NativeDiscoveryRequired { get; set; }
@@ -412,6 +415,8 @@ public sealed class AlchemyRecipeSO : IdScriptableObject, IDiscoverable
     }
     public bool IsDiscovered() => discovered;
     public ResourceCostList GetDiscoverCost() => baseDiscoveryCost;
+    public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(glyphRecipe);
+    public List<ResourceSO> GetResourceRecipe() => new List<ResourceSO>(resourceRecipe);
     public bool IsDiscoverVisible() => NativeDiscoverVisible;
     public bool CanDiscover() => NativeCanDiscover;
     public bool IsDiscoverRequired() => NativeDiscoveryRequired;
@@ -2131,6 +2136,8 @@ public sealed class EquipmentSO : IdScriptableObject, IDiscoverable
     public bool isCreated = true;
     public EquipmentTypeSO equipmentType = new EquipmentTypeSO();
     public ResourceCostList createCost = new ResourceCostList();
+    public List<GlyphSO> glyphRecipe = new List<GlyphSO>();
+    public List<ResourceSO> resourceRecipe = new List<ResourceSO>();
     public ResourceCostList usageCost = new ResourceCostList();
     public int NativeMaximumStacks { get; set; } = 4;
     public bool NativeDiscoverVisible { get; set; } = true;
@@ -2167,6 +2174,8 @@ public sealed class EquipmentSO : IdScriptableObject, IDiscoverable
         }
     }
     public ResourceCostList GetDiscoverCost() => createCost;
+    public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(glyphRecipe);
+    public List<ResourceSO> GetResourceRecipe() => new List<ResourceSO>(resourceRecipe);
     public bool IsDiscoverVisible() => NativeDiscoverVisible;
     public bool CanDiscover() => NativeCanDiscover;
     public bool IsDiscovered() => isCreated;

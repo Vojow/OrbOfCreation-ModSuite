@@ -703,6 +703,8 @@ internal sealed class FakeAlchemyRecipe : global::IDiscoverable
     public FakeExperienceContainer experienceContainer = new();
     public FakeSpellCostList drainCost = new();
     public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::GlyphSO> genericDiscoveryGlyphs = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
     public bool NativeDiscoverVisible = true;
     public bool NativeCanDiscover = true;
     public FakeAlchemyType coreType = new();
@@ -713,6 +715,8 @@ internal sealed class FakeAlchemyRecipe : global::IDiscoverable
         experienceContainer.GetRequiredExperience();
 
     global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
     bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
     bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
     bool global::IDiscoverable.IsDiscovered() => discovered;
@@ -970,6 +974,7 @@ internal sealed class FakeSpellRecipe : global::IDiscoverable
     public List<FakeGlyph> coreRecipe = new();
     public FakeSpellWorkbenchCostList discoveryCost = new();
     public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
     public bool NativeDiscoverVisible = true;
     public bool NativeCanDiscover = true;
 
@@ -977,6 +982,19 @@ internal sealed class FakeSpellRecipe : global::IDiscoverable
 
     public bool IsReadyToLevelMastery() => readyToLevel;
     public List<FakeGlyph> GetGlyphRecipe() => new(coreRecipe);
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe()
+    {
+        var result = new List<global::GlyphSO>();
+        foreach (var component in coreRecipe)
+        {
+            var glyph = new global::GlyphSO();
+            glyph.SetGuid(component.Identity);
+            result.Add(glyph);
+        }
+        return result;
+    }
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() =>
+        new(genericDiscoveryResources);
     public FakeSpellWorkbenchCostList GetDiscoverCost() => discoveryCost;
     global::ResourceCostList global::IDiscoverable.GetDiscoverCost()
     {
@@ -1103,6 +1121,8 @@ internal sealed class FakeEquipment : global::IDiscoverable
     public double attunementTimeLeft;
     public BigDouble baseXpRate;
     public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::GlyphSO> genericDiscoveryGlyphs = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
     public FakeCraftingResourceCostList usageCost = new();
     public int maximumStacks = 4;
     public bool NativeDiscoverVisible = true;
@@ -1112,6 +1132,8 @@ internal sealed class FakeEquipment : global::IDiscoverable
     public int GetMaxLevel() => maximumStacks;
     public FakeCraftingResourceCostList GetUsageCost() => usageCost;
     global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
     bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
     bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
     bool global::IDiscoverable.IsDiscovered() => isCreated;
@@ -1367,11 +1389,15 @@ internal sealed class FakeTimeRune : global::IDiscoverable
     public FakeModifierRecord powerScalingMod = new(0d);
     public FakeModifierRecord masteryXpMod = new(0d);
     public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::GlyphSO> genericDiscoveryGlyphs = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
     public bool NativeDiscoverVisible = true;
     public bool NativeCanDiscover = true;
 
     public Guid GetGuid() => Identity;
     global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
     bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
     bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
     bool global::IDiscoverable.IsDiscovered() => discovered;
@@ -1401,6 +1427,8 @@ internal sealed class FakeGlyph : global::IDiscoverable
     public FakeModifierRecord freeLoadoutUsages = new(0d);
     public FakeModifierRecord maxUsages = new(0d);
     public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::GlyphSO> genericDiscoveryGlyphs = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
     public bool NativeDiscoverVisible = true;
     public bool NativeCanDiscover = true;
 
@@ -1408,6 +1436,8 @@ internal sealed class FakeGlyph : global::IDiscoverable
     public bool IsAvailable() => NativeAvailable;
     public int GetMaxUsages() => (int)maxUsages.GetValue().ToDouble();
     global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
     bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
     bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
     bool global::IDiscoverable.IsDiscovered() => discovered;
@@ -1526,6 +1556,8 @@ internal sealed class FakeRitual : global::IDiscoverable
     public int echoLevel;
     public int chainLevel;
     public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::GlyphSO> genericDiscoveryGlyphs = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
     public bool NativeDiscoverVisible = true;
     public bool NativeCanDiscover = true;
 
@@ -1550,6 +1582,8 @@ internal sealed class FakeRitual : global::IDiscoverable
 
     public Guid GetGuid() => Identity;
     global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
     bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
     bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
     bool global::IDiscoverable.IsDiscovered() => discovered;

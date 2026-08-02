@@ -15,4 +15,5 @@ internal static class GenericDiscoveryActionResultCodes
     internal static ServiceActionResultCode MutationPermitUnavailable => new(5009);
     internal static ServiceActionResultCode PostCommitFault => new(5010);
     internal static ServiceActionResultCode VerificationFailed => new(5011);
+    internal static ServiceActionResultCode CompositionChanged => new(5012);
 }

@@ -101,6 +101,19 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
                     GenericDiscoveryPreflight.IdentityUnavailable,
                     "The exact registered " + action.ExpectedNativeType +
                     " does not implement IDiscoverable at the action boundary.");
+            if (!GenericDiscoverySurfaces.Owns(action.Surface, action.ExpectedNativeType))
+                return GenericDiscoverySubmission.Reject(
+                    GenericDiscoveryPreflight.UnsupportedType,
+                    "Discovery surface " + action.Surface + " does not own native type " +
+                    action.ExpectedNativeType + ".");
+            if (!RecipeStillMatches(
+                    in action,
+                    native,
+                    target,
+                    out var compositionReason))
+                return GenericDiscoverySubmission.Reject(
+                    GenericDiscoveryPreflight.CompositionChanged,
+                    compositionReason);
 
             var before = CaptureState(native, target, action.ExpectedNativeType);
             if (before.Discovered)
@@ -354,6 +367,74 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
         }
     }
 
+    private bool RecipeStillMatches(
+        in GenericDiscoveryAction action,
+        GenericDiscoveryNativeBindings native,
+        object target,
+        out string reason)
+    {
+        var nativeGlyphs = native.GetGlyphRecipe(target);
+        var nativeResources = native.GetResourceRecipe(target);
+        var glyphs = new List<ResolvedComponent>();
+        var resources = new List<ResolvedComponent>();
+        var glyphCount = 0;
+        var resourceCount = 0;
+        try
+        {
+            for (var index = 0; index < action.Components.Count; index++)
+            {
+                var component = action.Components[index];
+                var glyph = _registry.Resolve(component.ComponentId, native.GlyphType);
+                var resource = _registry.Resolve(component.ComponentId, native.ResourceType);
+                var isGlyph = glyph.IsResolved && _registry.IsCurrent(glyph);
+                var isResource = resource.IsResolved && _registry.IsCurrent(resource);
+                if (isGlyph == isResource)
+                {
+                    reason = isGlyph
+                        ? "Component " + EntityIdentityFormatter.Format(component.ComponentId) +
+                          " resolved as both GlyphSO and ResourceSO."
+                        : "Component " + EntityIdentityFormatter.Format(component.ComponentId) +
+                          " is no longer a live GlyphSO or ResourceSO.";
+                    return false;
+                }
+                var destination = isGlyph ? glyphs : resources;
+                var value = isGlyph ? glyph.Value! : resource.Value!;
+                destination.Add(new ResolvedComponent(component.ComponentId, value));
+                if (isGlyph) glyphCount = checked(glyphCount + component.Count);
+                else resourceCount = checked(resourceCount + component.Count);
+            }
+        }
+        catch (OverflowException)
+        {
+            reason = "The submitted discovery component counts exceed the action boundary.";
+            return false;
+        }
+
+        if (nativeGlyphs.Count != glyphCount || nativeResources.Count != resourceCount)
+        {
+            reason = "The live native recipe now requires " + nativeGlyphs.Count +
+                " glyph components and " + nativeResources.Count +
+                " resource components, not " + glyphCount + " and " + resourceCount + ".";
+            return false;
+        }
+        for (var index = 0; index < glyphs.Count; index++)
+            if (!nativeGlyphs.Contains(glyphs[index].Value))
+            {
+                reason = "The live native glyph recipe no longer contains " +
+                    EntityIdentityFormatter.Format(glyphs[index].Identity) + ".";
+                return false;
+            }
+        for (var index = 0; index < resources.Count; index++)
+            if (!nativeResources.Contains(resources[index].Value))
+            {
+                reason = "The live native resource recipe no longer contains " +
+                    EntityIdentityFormatter.Format(resources[index].Identity) + ".";
+                return false;
+            }
+        reason = string.Empty;
+        return true;
+    }
+
     private void BindLifecycle()
     {
         if (GenericDiscoveryNativeBindings.TryCreate(
@@ -393,5 +474,17 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
         internal BigDouble Expected { get; }
         internal BigDouble Amount { get; }
         internal object Resource { get; }
+    }
+
+    private readonly struct ResolvedComponent
+    {
+        internal ResolvedComponent(Guid identity, object value)
+        {
+            Identity = identity;
+            Value = value;
+        }
+
+        internal Guid Identity { get; }
+        internal object Value { get; }
     }
 }

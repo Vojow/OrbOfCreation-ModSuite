@@ -256,6 +256,16 @@ and exact baked glyph multiset is observable. Duplicate request rows count cumul
 glyph's native usable maximum. Core-component spell discovery remains independently bound, but both
 verbs use the same complete lifecycle binding set and native recipe resolver.
 
+Generic compose discovery uses the same component-first rule without retaining a rendered UI page.
+The existing category traversal publishes each `IDiscoverable.GetGlyphRecipe()` and
+`GetResourceRecipe()` beside its native discovery decision. Preview resolves only among the authored
+outputs for the requested player surface and reproduces the UI resolver's count-plus-membership
+comparison; zero matches or multiple matches refuse rather than guessing. Confirm carries that
+server-derived output and the submitted composition into the canonical GameAction. On the Unity main
+thread, before its mutation permit or payment, the action resolves every component by UUID and exact
+`GlyphSO`/`ResourceSO` type and rereads both recipe lists from the exact output. A changed or partial
+composition refuses. The caller never supplies or selects an output UUID the UI did not expose.
+
 Every MCP gameplay action still uses its capability's canonical GameAction and live Unity-main-thread
 revalidation. A failed player-driven attempt returns its exact failure and leaves no MCP-owned
 lifecycle quarantine; the next request revalidates live again. This does not relax automation safety

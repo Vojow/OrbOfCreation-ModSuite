@@ -18,6 +18,10 @@ public sealed class GameMcpGenericDiscoveryTests
         Guid.Parse("f3000000-0000-0000-0000-000000000001");
     private static readonly Guid ResourceId =
         Guid.Parse("f3000000-0000-0000-0000-000000000002");
+    private static readonly Guid ComponentId =
+        Guid.Parse("f3000000-0000-0000-0000-000000000003");
+    private static readonly Guid AmbiguousOutputId =
+        Guid.Parse("f3000000-0000-0000-0000-000000000004");
 
     [Fact]
     public void ToolAdvertisesOneComponentFirstAndEventOfferDiscoveryNamespace()
@@ -97,6 +101,22 @@ public sealed class GameMcpGenericDiscoveryTests
         Assert.Single(operation.UuidCounts);
     }
 
+    [Theory]
+    [InlineData("spellcraft", 16)]
+    [InlineData("glyphcraft", 22)]
+    [InlineData("devote", 22)]
+    [InlineData("runecraft", 22)]
+    [InlineData("alchemy", 22)]
+    [InlineData("artifacts", 22)]
+    public void Confirm_routes_only_spellcraft_to_the_spell_resolver(
+        string surface,
+        int expected)
+    {
+        Assert.Equal(
+            expected,
+            (int)GameMcpCommandKinds.FromRequest("game_discover", "confirm", surface));
+    }
+
     [Fact]
     public void Predecision_and_poststate_are_named_and_carry_the_exact_next_cost()
     {
@@ -124,6 +144,46 @@ public sealed class GameMcpGenericDiscoveryTests
         Assert.Null(postState["receipt"]);
         Assert.Null(postState["payment"]);
         Assert.Null(postState["worldGeneration"]);
+    }
+
+    [Fact]
+    public void Generic_preview_resolves_the_UI_surface_recipe_without_echoing_the_request()
+    {
+        var preview = Json(GameMcpWorldQuery.ProjectDiscoveryPreview(
+            Context(),
+            "glyphcraft",
+            new[]
+            {
+                new GameMcpUuidCount(ComponentId, 1),
+                new GameMcpUuidCount(ResourceId, 1),
+            }));
+
+        Assert.Equal("available", (string?)preview["status"]);
+        Assert.Null(preview["surface"]);
+        Assert.Null(preview["components"]);
+        var output = preview["output"]!;
+        Assert.Equal(GlyphId.ToString("D"), (string?)output["uuid"]);
+        Assert.Equal("Amplify", (string?)output["name"]);
+        Assert.True((bool)output["discover"]!["available"]!);
+        Assert.NotNull(output["discover"]!["costs"]);
+    }
+
+    [Fact]
+    public void Generic_preview_refuses_ambiguous_authored_recipes_instead_of_guessing()
+    {
+        var preview = Json(GameMcpWorldQuery.ProjectDiscoveryPreview(
+            Context(ambiguous: true),
+            "glyphcraft",
+            new[]
+            {
+                new GameMcpUuidCount(ComponentId, 1),
+                new GameMcpUuidCount(ResourceId, 1),
+            }));
+
+        Assert.Equal("unavailable", (string?)preview["status"]);
+        Assert.Equal("discovery_recipe_ambiguous", (string?)preview["reasonCode"]);
+        Assert.Contains("2 published glyphs", (string?)preview["reason"]);
+        Assert.Null(preview["output"]);
     }
 
     [Fact]
@@ -174,16 +234,16 @@ public sealed class GameMcpGenericDiscoveryTests
         Assert.Empty(committed.Properties());
     }
 
-    private static GameMcpFrameContext Context()
+    private static GameMcpFrameContext Context(bool ambiguous = false)
     {
         using var publisher =
             new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
-        publisher.Publish(World(), new WorldGeneration(2301));
+        publisher.Publish(World(ambiguous), new WorldGeneration(2301));
         return GameMcpTestHarness.Context(
             publisher.ReadLatest(), configurationGeneration: 8, lifecycleGeneration: 15);
     }
 
-    private static GameWorldState World()
+    private static GameWorldState World(bool ambiguous = false)
     {
         var costs = PublicationTable<WorldDiscoverableCost>.Create(new[]
         {
@@ -195,9 +255,70 @@ public sealed class GameMcpGenericDiscoveryTests
             discovered: false,
             required: true,
             affordable: true,
-            costs);
-        var glyph = new WorldGlyph(
-            GlyphId,
+            costs,
+            PublicationTable<Guid>.Create(new[] { ComponentId }),
+            PublicationTable<Guid>.Create(new[] { ResourceId }));
+        var glyph = Glyph(GlyphId, decision, maximumUsages: 1);
+        var component = Glyph(ComponentId, default, maximumUsages: 2);
+        var glyphs = ambiguous
+            ? new[] { glyph, component, Glyph(AmbiguousOutputId, decision, maximumUsages: 1) }
+            : new[] { glyph, component };
+        return new GameWorldState
+        {
+            CollectedAtEpoch = 15,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+            EntityIdentities = Identities(),
+            Glyphs = PublicationTable<WorldGlyph>.Create(glyphs),
+            Resources = PublicationTable<WorldResource>.Create(new[] { Resource() }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus(
+                    "glyphs", WorldCategoryOutcome.Collected, glyphs.Length, 0, string.Empty),
+            }),
+        };
+    }
+
+    private static WorldResource Resource()
+    {
+        var rateInputs = default(RawResourceRateInputs);
+        var traits = default(RawResourceTraits);
+        var modifiers = default(RawResourceModifiers);
+        var reading = new RawResourceSample(
+            ResourceId,
+            new BigDouble(8),
+            new BigDouble(100),
+            BigDouble.Zero,
+            visible: true,
+            lifetimeQuantity: new BigDouble(8),
+            discoveryTime: BigDouble.Zero,
+            quality: new BigDouble(100),
+            gainRate: BigDouble.Zero,
+            drain: BigDouble.Zero,
+            reservation: BigDouble.Zero,
+            usage: BigDouble.Zero,
+            inLossMode: false,
+            inRestMode: true,
+            inRallyMode: false,
+            appliedLevels: 0,
+            levelVariableId: Guid.Empty,
+            in rateInputs,
+            in traits,
+            in modifiers);
+        return new WorldResource(
+            in reading,
+            isCapped: true,
+            headroom: new BigDouble(92),
+            fillFraction: 0.08,
+            isAtCapacity: false,
+            trueQuantity: new BigDouble(8),
+            trueRate: BigDouble.Zero);
+    }
+
+    private static WorldGlyph Glyph(
+        Guid id,
+        WorldDiscoverableDecision decision,
+        int maximumUsages) => new(
+            id,
             level: 0,
             freeLevels: 0,
             discoveryRarityLevel: 1,
@@ -212,21 +333,8 @@ public sealed class GameMcpGenericDiscoveryTests
             BigDouble.Zero,
             BigDouble.One,
             available: true,
-            maximumUsages: 1,
+            maximumUsages: maximumUsages,
             discovery: decision);
-        return new GameWorldState
-        {
-            CollectedAtEpoch = 15,
-            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
-            EntityIdentities = Identities(),
-            Glyphs = PublicationTable<WorldGlyph>.Create(new[] { glyph }),
-            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
-            {
-                new WorldCollectionCategoryStatus(
-                    "glyphs", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
-            }),
-        };
-    }
 
     private static EntityIdentityCatalogSnapshot Identities()
     {
@@ -234,6 +342,8 @@ public sealed class GameMcpGenericDiscoveryTests
         {
             new EntityIdentityName(GlyphId, "GlyphSO", "Amplify", "amplify"),
             new EntityIdentityName(ResourceId, "ResourceSO", "Arcane Dust", "arcaneDust"),
+            new EntityIdentityName(ComponentId, "GlyphSO", "Focus", "focus"),
+            new EntityIdentityName(AmbiguousOutputId, "GlyphSO", "Echo", "echo"),
         }).OrderBy(row => row.EntityId).ToArray();
         return EntityIdentityCatalogSnapshot.Bound(15, rows);
     }

@@ -29,6 +29,8 @@ internal readonly struct WorldDiscoverableCost
 internal readonly struct WorldDiscoverableDecision
 {
     private readonly PublicationTable<WorldDiscoverableCost>? _costs;
+    private readonly PublicationTable<Guid>? _glyphRecipe;
+    private readonly PublicationTable<Guid>? _resourceRecipe;
 
     internal WorldDiscoverableDecision(
         bool visible,
@@ -36,7 +38,9 @@ internal readonly struct WorldDiscoverableDecision
         bool discovered,
         bool required,
         bool affordable,
-        PublicationTable<WorldDiscoverableCost> costs)
+        PublicationTable<WorldDiscoverableCost> costs,
+        PublicationTable<Guid>? glyphRecipe = null,
+        PublicationTable<Guid>? resourceRecipe = null)
     {
         Visible = visible;
         CanDiscover = canDiscover;
@@ -44,6 +48,8 @@ internal readonly struct WorldDiscoverableDecision
         Required = required;
         Affordable = affordable;
         _costs = costs ?? throw new ArgumentNullException(nameof(costs));
+        _glyphRecipe = glyphRecipe ?? PublicationTable<Guid>.Empty;
+        _resourceRecipe = resourceRecipe ?? PublicationTable<Guid>.Empty;
     }
 
     internal bool Visible { get; }
@@ -53,6 +59,12 @@ internal readonly struct WorldDiscoverableDecision
     internal bool Affordable { get; }
     internal PublicationTable<WorldDiscoverableCost> Costs =>
         _costs ?? PublicationTable<WorldDiscoverableCost>.Empty;
+    /// <summary>The exact authored glyph identities used by the native compose resolver.</summary>
+    internal PublicationTable<Guid> GlyphRecipe =>
+        _glyphRecipe ?? PublicationTable<Guid>.Empty;
+    /// <summary>The exact authored resource identities used by the native compose resolver.</summary>
+    internal PublicationTable<Guid> ResourceRecipe =>
+        _resourceRecipe ?? PublicationTable<Guid>.Empty;
 }
 
 /// <summary>
@@ -72,6 +84,9 @@ internal sealed class WorldDiscoverableBinding
     private readonly Func<object, BigDouble>? _value;
     private readonly Func<object, Guid>? _resourceIdentity;
     private readonly Func<object, BigDouble>? _resourceAmount;
+    private readonly Func<object, IList?>? _glyphRecipe;
+    private readonly Func<object, IList?>? _resourceRecipe;
+    private readonly Func<object, Guid>? _glyphIdentity;
 
     internal WorldDiscoverableBinding(Type concreteType, string concreteTypeName)
     {
@@ -88,6 +103,16 @@ internal sealed class WorldDiscoverableBinding
         _canDiscover = item.Call<bool>("CanDiscover");
         _discovered = item.Call<bool>("IsDiscovered");
         _required = item.Call<bool>("IsDiscoverRequired");
+        var glyphRecipeMethod = discoverable.GetMethod("GetGlyphRecipe");
+        var glyphRecipeType = glyphRecipeMethod?.ReturnType is { IsGenericType: true } glyphList
+            ? glyphList.GetGenericArguments()[0]
+            : null;
+        _glyphRecipe = item.CallList("GetGlyphRecipe", glyphRecipeType);
+        var resourceRecipeMethod = discoverable.GetMethod("GetResourceRecipe");
+        var resourceRecipeType = resourceRecipeMethod?.ReturnType is { IsGenericType: true } resourceList
+            ? resourceList.GetGenericArguments()[0]
+            : null;
+        _resourceRecipe = item.CallList("GetResourceRecipe", resourceRecipeType);
         var costMethod = discoverable.GetMethod("GetDiscoverCost");
         var costType = costMethod?.ReturnType;
         _cost = item.CallObject("GetDiscoverCost", costType);
@@ -110,12 +135,15 @@ internal sealed class WorldDiscoverableBinding
         var resource = new WorldMemberBinding(resourceType!, "ResourceSO");
         _resourceIdentity = resource.Call<Guid>("GetGuid");
         _resourceAmount = resource.Call<BigDouble>("GetQuantity");
+        var glyph = new WorldMemberBinding(glyphRecipeType!, "GlyphSO");
+        _glyphIdentity = glyph.Call<Guid>("GetGuid");
 
         Failure = Join(
             item.Failure,
             cost.Failure,
             tuple.Failure,
-            resource.Failure);
+            resource.Failure,
+            glyph.Failure);
     }
 
     internal string Failure { get; }
@@ -126,6 +154,12 @@ internal sealed class WorldDiscoverableBinding
             throw new InvalidOperationException("IDiscoverable.GetDiscoverCost() returned null");
         var entries = _entries!(cost) ??
             throw new InvalidOperationException("ResourceCostList.GetEntries() returned null");
+        var glyphValues = _glyphRecipe!(entity) ??
+            throw new InvalidOperationException("IDiscoverable.GetGlyphRecipe() returned null");
+        var resourceValues = _resourceRecipe!(entity) ??
+            throw new InvalidOperationException("IDiscoverable.GetResourceRecipe() returned null");
+        var glyphRecipe = ReadRecipe(glyphValues, "glyph", _glyphIdentity!);
+        var resourceRecipe = ReadRecipe(resourceValues, "resource", _resourceIdentity!);
         var costs = new WorldDiscoverableCost[entries.Count];
         for (var index = 0; index < entries.Count; index++)
         {
@@ -144,7 +178,28 @@ internal sealed class WorldDiscoverableBinding
             _discovered!(entity),
             _required!(entity),
             _affordable!(cost),
-            PublicationTable<WorldDiscoverableCost>.Create(costs));
+            PublicationTable<WorldDiscoverableCost>.Create(costs),
+            glyphRecipe,
+            resourceRecipe);
+    }
+
+    private static PublicationTable<Guid> ReadRecipe(
+        IList values,
+        string kind,
+        Func<object, Guid> readIdentity)
+    {
+        var result = new Guid[values.Count];
+        for (var index = 0; index < result.Length; index++)
+        {
+            var component = values[index] ??
+                throw new InvalidOperationException(
+                    "IDiscoverable " + kind + " recipe entry " + index + " was null");
+            result[index] = readIdentity(component);
+            if (result[index] == Guid.Empty)
+                throw new InvalidOperationException(
+                    "IDiscoverable " + kind + " recipe entry " + index + " had no identity");
+        }
+        return PublicationTable<Guid>.Create(result);
     }
 
     private static Type? ExactInterface(Type concrete, string name)

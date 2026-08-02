@@ -41,11 +41,14 @@ internal sealed class GenericDiscoveryNativeBindings
         "generic-discovery.entry-value-action",
         "generic-discovery.resource-identity-action",
         "generic-discovery.resource-amount-action",
+        "generic-discovery.get-glyph-recipe-action",
+        "generic-discovery.get-resource-recipe-action",
     };
 
     private GenericDiscoveryNativeBindings(
         Type discoverableType,
         Type costType,
+        Type resourceType,
         IReadOnlyDictionary<string, Type> supportedTypes,
         Func<object, object> getCost,
         Func<object, bool> isVisible,
@@ -59,10 +62,13 @@ internal sealed class GenericDiscoveryNativeBindings
         Func<object, object> readResource,
         Func<object, BigDouble> readCost,
         Func<object, Guid> readResourceIdentity,
-        Func<object, BigDouble> readResourceAmount)
+        Func<object, BigDouble> readResourceAmount,
+        Func<object, IList> getGlyphRecipe,
+        Func<object, IList> getResourceRecipe)
     {
         DiscoverableType = discoverableType;
         CostType = costType;
+        ResourceType = resourceType;
         SupportedTypes = supportedTypes;
         GetCost = getCost;
         IsVisible = isVisible;
@@ -77,10 +83,14 @@ internal sealed class GenericDiscoveryNativeBindings
         ReadCost = readCost;
         ReadResourceIdentity = readResourceIdentity;
         ReadResourceAmount = readResourceAmount;
+        GetGlyphRecipe = getGlyphRecipe;
+        GetResourceRecipe = getResourceRecipe;
     }
 
     internal Type DiscoverableType { get; }
     internal Type CostType { get; }
+    internal Type GlyphType => SupportedTypes["GlyphSO"];
+    internal Type ResourceType { get; }
     internal IReadOnlyDictionary<string, Type> SupportedTypes { get; }
     internal Func<object, object> GetCost { get; }
     internal Func<object, bool> IsVisible { get; }
@@ -95,6 +105,8 @@ internal sealed class GenericDiscoveryNativeBindings
     internal Func<object, BigDouble> ReadCost { get; }
     internal Func<object, Guid> ReadResourceIdentity { get; }
     internal Func<object, BigDouble> ReadResourceAmount { get; }
+    internal Func<object, IList> GetGlyphRecipe { get; }
+    internal Func<object, IList> GetResourceRecipe { get; }
 
     internal static bool TryCreate(
         out GenericDiscoveryNativeBindings? bindings,
@@ -189,10 +201,21 @@ internal sealed class GenericDiscoveryNativeBindings
             var entryValue = M(ContractIds[19], entry, "GetValue", big);
             var resourceIdentity = MH(ContractIds[20], resource, "GetGuid", typeof(Guid));
             var resourceAmount = M(ContractIds[21], resource, "GetTrueQuantity", big);
+            var glyphRecipe = M(
+                ContractIds[22],
+                discoverable,
+                "GetGlyphRecipe",
+                typeof(List<>).MakeGenericType(supported["GlyphSO"]));
+            var resourceRecipe = M(
+                ContractIds[23],
+                discoverable,
+                "GetResourceRecipe",
+                typeof(List<>).MakeGenericType(resource));
 
             bindings = new GenericDiscoveryNativeBindings(
                 discoverable,
                 cost,
+                resource,
                 supported,
                 InstanceObjectFunc(getCost),
                 InstanceFunc<bool>(visible),
@@ -206,7 +229,9 @@ internal sealed class GenericDiscoveryNativeBindings
                 ObjectFieldGetter(entryResource),
                 InstanceFunc<BigDouble>(entryValue),
                 InstanceFunc<Guid>(resourceIdentity),
-                InstanceFunc<BigDouble>(resourceAmount));
+                InstanceFunc<BigDouble>(resourceAmount),
+                InstanceListFunc(glyphRecipe),
+                InstanceListFunc(resourceRecipe));
             reason = string.Empty;
             return true;
         }

@@ -1744,14 +1744,10 @@ public sealed class Plugin : BaseUnityPlugin
         out GameMcpCommandResult failure)
     {
         var request = operation.Request;
-        var kind = GameMcpCommandKinds.FromToolName(request.ToolName);
-        if (request.ToolName == "game_discover" &&
-            request.Mode.StartsWith("offer_", StringComparison.Ordinal))
-            kind = GameMcpCommandKind.DiscoveryTreeOffer;
-        else if (request.ToolName == "game_discover" && request.Mode == "confirm")
-            kind = GameMcpCommandKind.SpellWorkbench;
-        else if (request.ToolName == "game_spell_loadout" && request.Mode == "add")
-            kind = GameMcpCommandKind.SpellWorkbench;
+        var kind = GameMcpCommandKinds.FromRequest(
+            request.ToolName,
+            request.Mode,
+            request.Key);
 
         var mode = request.Mode;
         var targetId = request.Uuid;
@@ -1830,13 +1826,25 @@ public sealed class Plugin : BaseUnityPlugin
             payloadValue = request.SerializedValue;
             if (request.Mode == "move") amount = checked(request.SlotIndex + 1);
         }
-        else if (kind == GameMcpCommandKind.GenericDiscovery && context.World is not null)
+        else if (kind == GameMcpCommandKind.GenericDiscovery)
         {
-            GameMcpEntityCapabilityMap.TryResolveGenericDiscoveryType(
-                context.World.Snapshot,
-                request.Uuid,
-                out nativeType,
-                out _);
+            payloadKey = request.Key;
+            if (context.World is null)
+                preparationFailure = GameMcpCommandResult.Rejected(
+                    "world_not_published",
+                    context.RuntimeNotAvailableReason);
+            else if (!GameMcpWorldQuery.TryResolveGenericDiscovery(
+                         context.World.Snapshot,
+                         request.Key,
+                         request.UuidCounts,
+                         out targetId,
+                         out nativeType,
+                         out _,
+                         out var resolutionCode,
+                         out var resolutionReason))
+                preparationFailure = GameMcpCommandResult.Rejected(
+                    resolutionCode,
+                    resolutionReason);
         }
         else if (kind == GameMcpCommandKind.EquipmentLoadout)
             nativeType = "EquipmentSO";

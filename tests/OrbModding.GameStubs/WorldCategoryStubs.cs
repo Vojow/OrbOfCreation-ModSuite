@@ -355,6 +355,8 @@ public sealed class TimeRuneSO : IdScriptableObject, IDiscoverable
     public bool isDiscoverRequired;
     public bool seen;
     public ResourceCostList discoveryCost = new ResourceCostList();
+    public List<GlyphSO> glyphRecipe = new List<GlyphSO>();
+    public List<ResourceSO> resourceRecipe = new List<ResourceSO>();
     public bool NativeDiscoverVisible { get; set; } = true;
     public bool NativeCanDiscover { get; set; } = true;
     public bool SuppressDiscovery { get; set; }
@@ -367,6 +369,8 @@ public sealed class TimeRuneSO : IdScriptableObject, IDiscoverable
     public ValueModifierRecord masteryXpMod = new ValueModifierRecord(new BigDouble(0.0, 0));
 
     public ResourceCostList GetDiscoverCost() => discoveryCost;
+    public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(glyphRecipe);
+    public List<ResourceSO> GetResourceRecipe() => new List<ResourceSO>(resourceRecipe);
     public bool IsDiscoverVisible() => NativeDiscoverVisible;
     public bool CanDiscover() => NativeCanDiscover;
     public bool IsDiscovered() => discovered;
@@ -399,6 +403,8 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable
     public bool requiresToggleable;
     public bool NativeAvailable { get; set; } = true;
     public ResourceCostList discoveryCost = new ResourceCostList();
+    public List<GlyphSO> glyphRecipe = new List<GlyphSO>();
+    public List<ResourceSO> resourceRecipe = new List<ResourceSO>();
     public bool NativeDiscoverVisible { get; set; } = true;
     public bool NativeCanDiscover { get; set; } = true;
     public bool SuppressDiscovery { get; set; }
@@ -413,6 +419,8 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable
     public string GetName() => DisplayName;
     public bool IsAvailable() => NativeAvailable;
     public ResourceCostList GetDiscoverCost() => discoveryCost;
+    public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(glyphRecipe);
+    public List<ResourceSO> GetResourceRecipe() => new List<ResourceSO>(resourceRecipe);
     public bool IsDiscoverVisible() => NativeDiscoverVisible;
     public bool CanDiscover() => NativeCanDiscover;
     public bool IsDiscovered() => discovered;
@@ -699,6 +707,8 @@ public sealed class RitualSO : IdScriptableObject, IDiscoverable
     public int selectedLevel;
     public int discRarityLevel;
     public ResourceCostList discoveryCost = new ResourceCostList();
+    public List<GlyphSO> glyphRecipe = new List<GlyphSO>();
+    public List<ResourceSO> resourceRecipe = new List<ResourceSO>();
     public bool NativeDiscoverVisible { get; set; } = true;
     public bool NativeCanDiscover { get; set; } = true;
     public bool SuppressDiscovery { get; set; }
@@ -734,6 +744,8 @@ public sealed class RitualSO : IdScriptableObject, IDiscoverable
     private int chainLevel;
 
     public ResourceCostList GetDiscoverCost() => discoveryCost;
+    public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(glyphRecipe);
+    public List<ResourceSO> GetResourceRecipe() => new List<ResourceSO>(resourceRecipe);
     public bool IsDiscoverVisible() => NativeDiscoverVisible;
     public bool CanDiscover() => NativeCanDiscover;
     public bool IsDiscovered() => discovered;
@@ -1051,6 +1063,8 @@ public interface IHasGuid
 
 public interface IDiscoverable : IHasGuid
 {
+    List<GlyphSO> GetGlyphRecipe();
+    List<ResourceSO> GetResourceRecipe();
     ResourceCostList GetDiscoverCost();
     bool IsDiscoverVisible();
     bool CanDiscover();
@@ -1070,7 +1084,11 @@ public sealed class DiscoveryTestItemSO : IdScriptableObject, IDiscoverable
     public bool throwBeforeDiscover;
     public bool throwAfterDiscover;
     public int discoverCalls;
+    public List<GlyphSO> glyphRecipe = new List<GlyphSO>();
+    public List<ResourceSO> resourceRecipe = new List<ResourceSO>();
 
+    List<GlyphSO> IDiscoverable.GetGlyphRecipe() => new List<GlyphSO>(glyphRecipe);
+    List<ResourceSO> IDiscoverable.GetResourceRecipe() => new List<ResourceSO>(resourceRecipe);
     ResourceCostList IDiscoverable.GetDiscoverCost() => discoverCost;
     bool IDiscoverable.IsDiscoverVisible() => discoverVisible;
     bool IDiscoverable.CanDiscover() => canDiscover;

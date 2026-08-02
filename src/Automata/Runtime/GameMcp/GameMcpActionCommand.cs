@@ -79,6 +79,22 @@ internal static class GameMcpCommandKinds
             nameof(toolName)),
     };
 
+    internal static GameMcpCommandKind FromRequest(
+        string toolName,
+        string mode,
+        string surface)
+    {
+        var kind = FromToolName(toolName);
+        if (toolName == "game_discover" &&
+            mode.StartsWith("offer_", StringComparison.Ordinal))
+            return GameMcpCommandKind.DiscoveryTreeOffer;
+        if (toolName == "game_discover" && mode == "confirm" && surface == "spellcraft")
+            return GameMcpCommandKind.SpellWorkbench;
+        if (toolName == "game_spell_loadout" && mode == "add")
+            return GameMcpCommandKind.SpellWorkbench;
+        return kind;
+    }
+
     internal static string ToolName(GameMcpCommandKind kind) => kind switch
     {
         GameMcpCommandKind.Purchase => "game_purchase",
@@ -719,6 +735,7 @@ internal static class GameMcpActionResultCodeNames
             if (code == GenericDiscoveryActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == GenericDiscoveryActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == GenericDiscoveryActionResultCodes.VerificationFailed) return "verification_failed";
+            if (code == GenericDiscoveryActionResultCodes.CompositionChanged) return "composition_changed";
         }
         if (commandKind == GameMcpCommandKind.EquipmentLoadout)
         {

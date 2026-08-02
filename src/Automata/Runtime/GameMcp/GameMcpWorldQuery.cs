@@ -1671,57 +1671,219 @@ internal static class GameMcpWorldQuery
         if (state.World is null)
             return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
         var world = state.World.Snapshot;
-        if (!TryResolveSpellDiscovery(
-                world, surface, components, out var recipeId, out var reason))
+        Guid outputId;
+        string category;
+        string reasonCode;
+        string reason;
+        if (string.Equals(surface, "spellcraft", StringComparison.Ordinal))
+        {
+            category = "spell-recipes";
+            reasonCode = "discovery_recipe_unresolved";
+            if (!TryResolveSpellDiscovery(
+                    world, surface, components, out outputId, out reason))
+                return new JObject
+                {
+                    ["status"] = "unavailable",
+                    ["reasonCode"] = reasonCode,
+                    ["reason"] = reason,
+                }.Freeze();
+        }
+        else if (!TryResolveGenericDiscovery(
+                     world,
+                     surface,
+                     components,
+                     out outputId,
+                     out _,
+                     out category,
+                     out reasonCode,
+                     out reason))
             return new JObject
             {
                 ["status"] = "unavailable",
-                ["reasonCode"] = surface == "spellcraft"
-                    ? "discovery_recipe_unresolved"
-                    : "native_compose_resolver_not_bound",
+                ["reasonCode"] = reasonCode,
                 ["reason"] = reason,
-                ["surface"] = surface,
-                ["components"] = ProjectComponentReferences(components),
             }.Freeze();
-        if (!WorldLookup.TryFind(world.SpellRecipes, recipeId, out var recipe))
-            return PostStateUnavailable(
-                "discovery_recipe_unresolved",
-                "the component resolver produced a spell recipe absent from the same world");
-
-        var decision = recipe.Discovery;
-        var available = !recipe.Discovered && decision.Visible &&
-            decision.CanDiscover && decision.Affordable;
-        var confirm = new JObject
-        {
-            ["available"] = available,
-            ["affordable"] = decision.Affordable,
-        };
-        if (!available)
-            confirm["reasonCode"] = recipe.Discovered
-                ? "already_discovered"
-                : !decision.Visible
-                    ? "not_visible"
-                    : !decision.CanDiscover
-                        ? "discovery_unavailable"
-                        : "unaffordable";
-        var output = new JObject
-        {
-            ["entityId"] = recipe.EntityId.ToString("D"),
-            ["category"] = "spell-recipes",
-            ["nativeType"] = "SpellRecipeSO",
-            ["discovered"] = recipe.Discovered,
-            ["masteryLevel"] = recipe.MasteryLevel,
-            ["confirm"] = confirm,
-        };
-        var costs = ProjectSpellCosts(world, recipe.DiscoveryCosts);
-        if (costs.Count > 0) output["costs"] = costs;
         return new JObject
         {
             ["status"] = "available",
-            ["surface"] = surface,
-            ["components"] = ProjectComponentReferences(components),
-            ["output"] = output,
+            ["output"] = ProjectPostState(state, category, outputId),
         }.Freeze();
+    }
+
+    internal static bool TryResolveGenericDiscovery(
+        GameWorldState world,
+        string surface,
+        GameMcpUuidCount[] components,
+        out Guid outputId,
+        out string nativeType,
+        out string category,
+        out string reasonCode,
+        out string reason)
+    {
+        outputId = Guid.Empty;
+        if (!GenericDiscoverySurfaces.TryResolve(surface, out nativeType, out category))
+        {
+            reasonCode = "unknown_discovery_surface";
+            reason = "No generic compose resolver owns discovery surface " + surface + ".";
+            return false;
+        }
+
+        var glyphs = new List<Guid>();
+        var resources = new List<Guid>();
+        var glyphCount = 0;
+        var resourceCount = 0;
+        try
+        {
+            for (var index = 0; index < components.Length; index++)
+            {
+                var component = components[index];
+                var isGlyph = WorldLookup.TryFind(world.Glyphs, component.Uuid, out var glyph);
+                var isResource = WorldLookup.TryFind(world.Resources, component.Uuid, out _);
+                if (isGlyph == isResource)
+                {
+                    reasonCode = "component_unavailable";
+                    reason = "Component " +
+                        EntityIdentityFormatter.Format(component.Uuid, world.EntityIdentities) +
+                        (isGlyph
+                            ? " is ambiguous between glyph and resource categories."
+                            : " is not a published glyph or resource in this world.");
+                    return false;
+                }
+                if (isGlyph)
+                {
+                    if (!glyph.Available || component.Count > glyph.MaximumUsages)
+                    {
+                        reasonCode = "component_unavailable";
+                        reason = "Glyph " +
+                            EntityIdentityFormatter.Format(component.Uuid, world.EntityIdentities) +
+                            " permits " + glyph.MaximumUsages + " usable selections, not " +
+                            component.Count + ".";
+                        return false;
+                    }
+                    glyphs.Add(component.Uuid);
+                    glyphCount = checked(glyphCount + component.Count);
+                }
+                else
+                {
+                    resources.Add(component.Uuid);
+                    resourceCount = checked(resourceCount + component.Count);
+                }
+            }
+        }
+        catch (OverflowException)
+        {
+            reasonCode = "component_count_too_large";
+            reason = "The submitted discovery component counts exceed the resolver boundary.";
+            return false;
+        }
+
+        var matches = 0;
+        var candidates = GenericDiscoveryCandidateCount(world, surface);
+        for (var index = 0; index < candidates; index++)
+        {
+            GenericDiscoveryCandidate(
+                world, surface, index, out var candidateId, out var discovery);
+            if (!GenericDiscoveryRecipeMatches(
+                    discovery.GlyphRecipe,
+                    glyphs,
+                    glyphCount,
+                    discovery.ResourceRecipe,
+                    resources,
+                    resourceCount))
+                continue;
+            outputId = candidateId;
+            matches++;
+        }
+        reasonCode = matches == 0
+            ? "discovery_recipe_unresolved"
+            : matches == 1
+                ? string.Empty
+                : "discovery_recipe_ambiguous";
+        reason = matches switch
+        {
+            0 => "The component composition resolves to no published " + category + " output.",
+            1 => string.Empty,
+            _ => "The component composition resolves to " + matches + " published " +
+                 category + " outputs; the action refuses to guess.",
+        };
+        if (matches != 1) outputId = Guid.Empty;
+        return matches == 1;
+    }
+
+    private static int GenericDiscoveryCandidateCount(
+        GameWorldState world,
+        string surface) => surface switch
+    {
+        "glyphcraft" => world.Glyphs.Count,
+        "devote" => world.Rituals.Count,
+        "runecraft" => world.TimeRunes.Count,
+        "alchemy" => world.AlchemyRecipes.Count,
+        "artifacts" => world.Equipment.Count,
+        _ => 0,
+    };
+
+    private static void GenericDiscoveryCandidate(
+        GameWorldState world,
+        string surface,
+        int index,
+        out Guid entityId,
+        out WorldDiscoverableDecision discovery)
+    {
+        switch (surface)
+        {
+            case "glyphcraft":
+                var glyph = world.Glyphs[index];
+                entityId = glyph.EntityId;
+                discovery = glyph.Discovery;
+                return;
+            case "devote":
+                var ritual = world.Rituals[index];
+                entityId = ritual.EntityId;
+                discovery = ritual.Discovery;
+                return;
+            case "runecraft":
+                var rune = world.TimeRunes[index];
+                entityId = rune.EntityId;
+                discovery = rune.Discovery;
+                return;
+            case "alchemy":
+                var recipe = world.AlchemyRecipes[index];
+                entityId = recipe.EntityId;
+                discovery = recipe.Discovery;
+                return;
+            case "artifacts":
+                var equipment = world.Equipment[index];
+                entityId = equipment.EntityId;
+                discovery = equipment.Discovery;
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(surface));
+        }
+    }
+
+    private static bool GenericDiscoveryRecipeMatches(
+        PublicationTable<Guid> nativeGlyphs,
+        List<Guid> submittedGlyphs,
+        int submittedGlyphCount,
+        PublicationTable<Guid> nativeResources,
+        List<Guid> submittedResources,
+        int submittedResourceCount)
+    {
+        if (nativeGlyphs.Count != submittedGlyphCount ||
+            nativeResources.Count != submittedResourceCount)
+            return false;
+        for (var index = 0; index < submittedGlyphs.Count; index++)
+            if (!Contains(nativeGlyphs, submittedGlyphs[index])) return false;
+        for (var index = 0; index < submittedResources.Count; index++)
+            if (!Contains(nativeResources, submittedResources[index])) return false;
+        return true;
+    }
+
+    private static bool Contains(PublicationTable<Guid> values, Guid target)
+    {
+        for (var index = 0; index < values.Count; index++)
+            if (values[index] == target) return true;
+        return false;
     }
 
     internal static bool TryResolveSpellDiscovery(

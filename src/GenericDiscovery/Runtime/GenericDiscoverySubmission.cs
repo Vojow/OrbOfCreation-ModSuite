@@ -18,6 +18,7 @@ internal enum GenericDiscoveryPreflight
     MutationPermitUnavailable = 11,
     PostCommitFault = 12,
     VerificationFailed = 13,
+    CompositionChanged = 14,
 }
 
 internal enum GenericDiscoveryNativeStage

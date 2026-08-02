@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using OrbAutomata;
 using OrbModding.Common;
@@ -80,6 +81,54 @@ public sealed class GenericDiscoveryGameActionTests
         Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
         Assert.Equal(0, Discoverable(target).GetDiscoverCost().PerformCalls);
         Assert.False(Discoverable(target).IsDiscovered());
+    }
+
+    [Fact]
+    public void Partial_component_write_refuses_before_payment_instead_of_discovering_another_output()
+    {
+        var target = Target("GlyphSO");
+        var first = Component();
+        var second = Component();
+        GlyphRecipe(target).Add(first);
+        GlyphRecipe(target).Add(second);
+        Register(target);
+        Register(first);
+        Register(second);
+        using var boundary = Boundary();
+        var action = new GenericDiscoveryAction(
+            Discoverable(target).GetGuid(),
+            "GlyphSO",
+            "glyphcraft",
+            new[] { new GenericDiscoveryComponent(first.GetGuid(), 1) },
+            Epoch);
+
+        var result = boundary.Submit(in action);
+
+        Assert.Equal(GenericDiscoveryPreflight.CompositionChanged, result.Preflight);
+        Assert.Equal(0, Discoverable(target).GetDiscoverCost().PerformCalls);
+        Assert.False(Discoverable(target).IsDiscovered());
+    }
+
+    [Fact]
+    public void Resource_composition_is_resolved_and_revalidated_by_exact_live_identity()
+    {
+        var target = Target("RitualSO");
+        var component = Resource(1);
+        ResourceRecipe(target).Add(component);
+        Register(target);
+        Register(component);
+        using var boundary = Boundary();
+        var action = new GenericDiscoveryAction(
+            Discoverable(target).GetGuid(),
+            "RitualSO",
+            "devote",
+            new[] { new GenericDiscoveryComponent(component.GetGuid(), 1) },
+            Epoch);
+
+        var result = boundary.Submit(in action);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.True(Discoverable(target).IsDiscovered());
     }
 
     [Fact]
@@ -192,7 +241,12 @@ public sealed class GenericDiscoveryGameActionTests
         var resolver = new TypedRegistryResolver(
             readEpoch,
             () => TypedRegistrySourceSnapshot.Ready(_registry),
-            value => value is IHasGuid item ? item.GetGuid() : null);
+            value => value switch
+            {
+                IHasGuid item => item.GetGuid(),
+                IdScriptableObject item => item.GetGuid(),
+                _ => null,
+            });
         return new GenericDiscoveryGameAction(
             readEpoch,
             permit ?? (() => true),
@@ -201,19 +255,38 @@ public sealed class GenericDiscoveryGameActionTests
             registry: resolver);
     }
 
-    private static GenericDiscoverySubmission Submit(
+    private GenericDiscoverySubmission Submit(
         GenericDiscoveryGameAction boundary,
         object target,
         string nativeType,
         long lifecycle = Epoch)
     {
+        var recipe = GlyphRecipe(target);
+        if (recipe.Count == 0)
+        {
+            var component = Component();
+            recipe.Add(component);
+            Register(component);
+        }
         var action = new GenericDiscoveryAction(
-            Discoverable(target).GetGuid(), nativeType, lifecycle);
+            Discoverable(target).GetGuid(),
+            nativeType,
+            Surface(nativeType),
+            new[] { new GenericDiscoveryComponent(recipe[0].GetGuid(), recipe.Count) },
+            lifecycle);
         return boundary.Submit(in action);
     }
 
-    private void Register(object target) =>
-        _registry.Add(Discoverable(target).GetGuid(), target);
+    private void Register(object target)
+    {
+        var guid = target switch
+        {
+            IHasGuid item => item.GetGuid(),
+            IdScriptableObject item => item.GetGuid(),
+            _ => throw new InvalidOperationException($"{target.GetType().Name} has no runtime identity."),
+        };
+        _registry.Add(guid, target);
+    }
 
     private static object Target(string nativeType)
     {
@@ -239,6 +312,43 @@ public sealed class GenericDiscoveryGameActionTests
         resource.SetGuid(Guid.NewGuid());
         return resource;
     }
+
+    private static GlyphSO Component()
+    {
+        var glyph = new GlyphSO { NativeAvailable = true };
+        glyph.SetGuid(Guid.NewGuid());
+        return glyph;
+    }
+
+    private static List<GlyphSO> GlyphRecipe(object target) => target switch
+    {
+        AlchemyRecipeSO item => item.glyphRecipe,
+        EquipmentSO item => item.glyphRecipe,
+        GlyphSO item => item.glyphRecipe,
+        RitualSO item => item.glyphRecipe,
+        TimeRuneSO item => item.glyphRecipe,
+        _ => throw new ArgumentOutOfRangeException(nameof(target)),
+    };
+
+    private static List<ResourceSO> ResourceRecipe(object target) => target switch
+    {
+        AlchemyRecipeSO item => item.resourceRecipe,
+        EquipmentSO item => item.resourceRecipe,
+        GlyphSO item => item.resourceRecipe,
+        RitualSO item => item.resourceRecipe,
+        TimeRuneSO item => item.resourceRecipe,
+        _ => throw new ArgumentOutOfRangeException(nameof(target)),
+    };
+
+    private static string Surface(string nativeType) => nativeType switch
+    {
+        "AlchemyRecipeSO" => "alchemy",
+        "EquipmentSO" => "artifacts",
+        "GlyphSO" => "glyphcraft",
+        "RitualSO" => "devote",
+        "TimeRuneSO" => "runecraft",
+        _ => throw new ArgumentOutOfRangeException(nameof(nativeType)),
+    };
 
     private static void SetVisible(object target, bool value)
     {

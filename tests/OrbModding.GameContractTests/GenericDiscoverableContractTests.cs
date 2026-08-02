@@ -22,6 +22,8 @@ public sealed class GenericDiscoverableContractTests
                 "TimeRuneSO",
             },
             assembly.GetTypesImplementing("IDiscoverable"));
+        Assert.Equal(0x06001C8F, assembly.GetMethodToken("IDiscoverable", "GetGlyphRecipe"));
+        Assert.Equal(0x06001C90, assembly.GetMethodToken("IDiscoverable", "GetResourceRecipe"));
         Assert.Equal(0x06001C92, assembly.GetMethodToken("IDiscoverable", "GetDiscoverCost"));
         Assert.Equal(0x06001C93, assembly.GetMethodToken("IDiscoverable", "IsDiscoverVisible"));
         Assert.Equal(0x06001C94, assembly.GetMethodToken("IDiscoverable", "CanDiscover"));
@@ -67,6 +69,49 @@ public sealed class GenericDiscoverableContractTests
             callback > payment,
             "UICostButton.OnClick must invoke the page callback only after payment. Native refs: " +
             string.Join("; ", References(assembly, "UICostButton", "OnClick")));
+    }
+
+    [GameAssemblyFact]
+    public void GenericDiscoverableUi_ResolvesConfiguredCandidatesByRecipeCountsAndMembership()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal(
+            0x06002321,
+            assembly.GetMethodToken("UIDiscoverablePage", "GetDiscoverableFromRecipe"));
+        Assert.True(assembly.MethodReferencesField(
+            "UIDiscoverablePage",
+            "GetDiscoverableFromRecipe",
+            "UIDiscoverablePage",
+            "availableItems"));
+        var predicateTypes = new[]
+        {
+            "UIDiscoverablePage+<>c__DisplayClass31_0",
+            "UIDiscoverablePage+<>c__DisplayClass31_1",
+            "UIDiscoverablePage+<>c__DisplayClass31_2",
+        };
+        var references = predicateTypes
+            .SelectMany(predicateType => assembly.GetMethods(predicateType)
+                .Where(method => method.Name.StartsWith(
+                    "<GetDiscoverableFromRecipe>", StringComparison.Ordinal))
+                .SelectMany(method => assembly.GetMethodBodyDefinitionReferences(
+                        predicateType, method.Name)
+                    .Concat(assembly.GetMethodBodyMemberReferences(predicateType, method.Name))))
+            .ToArray();
+        Assert.Contains(
+            references,
+            reference => reference.DeclaringType == "IDiscoverable" &&
+                         reference.MemberName == "GetGlyphRecipe");
+        Assert.Contains(
+            references,
+            reference => reference.DeclaringType == "IDiscoverable" &&
+                         reference.MemberName == "GetResourceRecipe");
+        Assert.True(
+            references.Count(reference => reference.MemberName == "get_Count") >= 2,
+            "The UI resolver must compare authored and submitted recipe counts.");
+        Assert.True(
+            references.Count(reference => reference.MemberName == "Contains") >= 2,
+            "The UI resolver must test every submitted glyph and resource for membership.");
     }
 
     [GameAssemblyFact]

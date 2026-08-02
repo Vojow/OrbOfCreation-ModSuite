@@ -675,6 +675,33 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    public void GenericDiscoveryPublishesTheAuthoredGlyphAndResourceRecipeOnceWithItsDecision()
+    {
+        var glyphComponent = new global::GlyphSO();
+        glyphComponent.SetGuid(Guid.NewGuid());
+        var resourceComponent = new global::ResourceSO();
+        resourceComponent.SetGuid(Guid.NewGuid());
+        var output = new FakeGlyph
+        {
+            Identity = Guid.NewGuid(),
+            NativeAvailable = true,
+            NativeDiscoverVisible = true,
+            NativeCanDiscover = true,
+        };
+        output.genericDiscoveryGlyphs.Add(glyphComponent);
+        output.genericDiscoveryResources.Add(resourceComponent);
+        FakeGlyph.All.Add(output);
+
+        var collector = Collector();
+        collector.Collect();
+        var world = collector.Build();
+
+        var row = Assert.Single(world.Glyphs.AsSpan().ToArray());
+        Assert.Equal(glyphComponent.GetGuid(), Assert.Single(row.Discovery.GlyphRecipe.AsSpan().ToArray()));
+        Assert.Equal(resourceComponent.GetGuid(), Assert.Single(row.Discovery.ResourceRecipe.AsSpan().ToArray()));
+    }
+
+    [Fact]
     [Trait("Category", "AutoConceptReliability")]
     public void ConceptRecipesInstancesAndDrainVectorsArePublishedTogether()
     {
