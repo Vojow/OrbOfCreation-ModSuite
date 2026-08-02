@@ -34,6 +34,21 @@ def records_from_source(source: Path) -> list[tuple[str, str, str, str]]:
             if entity_id in records and records[entity_id] != row:
                 conflicts.append(f"{entity_id}: {records[entity_id]} vs {row}")
             records[entity_id] = row
+    graph_path = source.parent / "progression-graph.json"
+    if graph_path.is_file():
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+        for entity in graph.get("entities", []):
+            row = (
+                clean_text(entity.get("id")).lower(),
+                clean_text(entity.get("type")),
+                clean_text(entity.get("name")),
+                clean_text(entity.get("displayName")),
+            )
+            if not row[0]:
+                continue
+            if row[0] in records and records[row[0]] != row:
+                conflicts.append(f"{row[0]}: {records[row[0]]} vs {row}")
+            records[row[0]] = row
     if conflicts:
         raise ValueError("Conflicting UUIDs:\n  " + "\n  ".join(conflicts[:10]))
     return [records[key] for key in sorted(records)]
