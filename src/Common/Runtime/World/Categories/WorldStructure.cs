@@ -4,7 +4,7 @@ namespace OrbModding.Common.Runtime.World;
 
 /// <summary>
 /// One structure reading — a levelled thing the player develops. Shown in game as an
-/// <em>Attribute</em>; see <c>docs/reverse-engineering/in-game-vocabulary.md</c>.
+/// <em>Attribute</em>; see <c>docs/reverse-engineering/naming-traps.md</c>.
 /// </summary>
 internal readonly struct RawStructureSample : IWorldEntity
 {

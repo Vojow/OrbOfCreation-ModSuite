@@ -58,8 +58,8 @@ as `game_craft`. Its player overload leaves the Auto Scribe planner and receipts
 widens exact live revalidation to every concrete `CraftingRecipeSO`: native direct `Execute`, or the
 authored page's stack/new/instant queue route. MCP success returns the newer named recipe decision
 with next costs, holdings, affordability, and queue state; payment accounting is not a player-action
-success gate. The installed mechanism and live checklist are documented in the
-[one-shot crafting native pipeline](../../docs/reverse-engineering/one-shot-crafting-native-pipeline.md).
+success gate. The installed mechanism and live checklist are documented in
+[native action surfaces](../../docs/reverse-engineering/native-action-surfaces.md).
 
 Configuration is additive:
 
@@ -75,4 +75,4 @@ lane adds no evaluation interval, timer, per-role control, temporary-item allowl
 behavior, or persistent Scribe automation.
 
 The installed evidence and remaining live-validation limits are documented in the
-[Auto Scribe native pipeline](../../docs/reverse-engineering/auto-scribe-native-pipeline.md).
+[native action surfaces](../../docs/reverse-engineering/native-action-surfaces.md).

@@ -238,7 +238,6 @@ internal static class AutoBuyCycleEvaluator
             excluded[(int)AutoBuyExclusion.OwningViewUnavailable],
             excluded[(int)AutoBuyExclusion.OwningViewRelationMissing],
             excluded[(int)AutoBuyExclusion.OwningViewRelationUnreadable],
-            excluded[(int)AutoBuyExclusion.OwningViewRelationAmbiguous],
             excluded[(int)AutoBuyExclusion.OwningViewRelationContradictory]);
 
     /// <summary>
@@ -268,8 +267,6 @@ internal static class AutoBuyCycleEvaluator
                 return AutoBuyExclusion.OwningViewRelationMissing;
             case AutoBuyOwningViewStatus.RelationUnreadable:
                 return AutoBuyExclusion.OwningViewRelationUnreadable;
-            case AutoBuyOwningViewStatus.RelationAmbiguous:
-                return AutoBuyExclusion.OwningViewRelationAmbiguous;
             case AutoBuyOwningViewStatus.RelationContradictory:
                 return AutoBuyExclusion.OwningViewRelationContradictory;
             case AutoBuyOwningViewStatus.Available:

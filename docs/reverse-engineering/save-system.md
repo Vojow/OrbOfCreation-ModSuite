@@ -4,45 +4,70 @@
 
 ## Format
 
-The save is Base64-encoded UTF-8 JSON. Its top-level `SaveInfo` model contains:
+A save file is Base64 text. Decoded and decompressed it is UTF-8 JSON whose top level is
+`SaveInfo`:
 
 ```csharp
-int v;
-List<List<JToken>> dataArray;
-List<JsonSaveData> savedData;
+int v;                          // format version; 6 on the audited build
+List<List<JToken>> dataArray;   // the packed per-object payloads
+List<JsonSaveData> savedData;   // GuidContainer → serialized object data
 double timePlayed;
 string saveDate;
 ```
 
-The observed save uses version `6`.
+`JsonSaveData` associates a `GuidContainer` with one object's serialized data, which is what makes
+the file readable at all: every row is addressed by the same persistent UUID the runtime registry
+uses.
 
 ## Collection pipeline
 
-The compiler-generated delegates in `SaveStateManager.CollectJsonData()` show this sequence:
+`SaveStateManager.CollectJsonData()`:
 
-```mermaid
-flowchart TD
-    Registry["Registered IdScriptableObjects"] --> Filter["Filter saveable objects"]
-    Filter --> Cast["Cast to ISaveable"]
-    Cast --> Collect["CollectSaveData()"]
-    Collect --> RemoveEmpty["Remove empty JsonSaveData"]
-    RemoveEmpty --> SaveInfo["SaveInfo / dataArray"]
-    SaveInfo --> JSON["JSON serialization"]
-    JSON --> Base64["Base64 text"]
-    Base64 --> File["ooc_save_N.sav"]
+```text
+registered IdScriptableObjects
+  → keep the saveable ones
+  → cast to ISaveable
+  → CollectSaveData()
+  → drop empty JsonSaveData
+  → build SaveInfo / dataArray
+  → serialize to JSON
+  → compress
+  → Base64
+  → ooc_save_N.sav
 ```
 
-`JsonSaveData` associates a `GuidContainer` with serialized object data. During load, `SaveStateManager.ImplementLoadedJson()` calls `IdScriptableObject.GetInstance(Guid)` and applies data to the registered runtime object.
+Loading runs it backwards: `SaveStateManager.ImplementLoadedJson()` resolves each saved UUID
+through `IdScriptableObject.GetInstance(Guid)` and calls `ISaveable.LoadSaveData()` on the
+registered runtime object. A UUID with no registered object has nowhere to land — this is why the
+registry must be populated before a load boundary, and why that boundary invalidates cached
+references (see [architecture.md](architecture.md)).
 
-## Resource persistence
+Resources are typical: `ResourceSO.CollectSaveData()` produces a `ResourceSO.ResourceSaveData`
+whose fields are the saved state listed in
+[resources-and-bigdouble.md](resources-and-bigdouble.md); both load overloads deserialize it,
+apply it, then call `ClearNans()`.
 
-`ResourceSO.CollectSaveData()` creates `ResourceSO.ResourceSaveData`. Its exact fields are documented in [Resources and BigDouble](resources-and-bigdouble.md).
+## Reading one by hand
 
-Both resource load overloads deserialize `ResourceSaveData`, apply it to the `ResourceSO`, then call `ClearNans()`.
+1. Copy the `.sav` out of the save directory. Never work on the live file.
+2. Base64-decode it, then decompress; the result is plain JSON and is recognizable immediately if
+   you got both steps right.
+3. Pretty-print it and look at `savedData`: each entry's `GuidContainer` gives you a UUID.
+4. Resolve those UUIDs against [`data/entity-mappings.tsv`](../../data/entity-mappings.tsv) —
+   `tools/find-entity.py` takes UUIDs as well as names — to learn which asset and managed type each
+   row belongs to. The save itself carries no type information.
+5. Read the row's fields against that type's `*SaveData` shape in IL. Quantities are `BigDouble`
+   pairs, so a value that looks like two unrelated numbers is one number.
 
-## File safety
+Diffing two saves taken either side of an in-game action is the cheapest way to find which asset
+owns a piece of state you cannot locate in IL.
 
-`SaveStateManager` has explicit file and backup paths and an asynchronous `WriteFileAndBackupAsync` operation. Mods should prefer the game’s normal save pipeline rather than writing save files concurrently.
+## Never write saves yourself
 
-Practical rule: mutate runtime objects on the Unity/game thread and allow the game to save them normally.
+`SaveStateManager` owns explicit file and backup paths and an asynchronous
+`WriteFileAndBackupAsync`. A mod that writes a save file concurrently races that operation and can
+lose or corrupt the player's progress.
 
+The rule is: mutate runtime objects on the Unity thread and let the game save them normally. If a
+mod owns state that must ride along with a save, hook the boundaries in
+[architecture.md](architecture.md) rather than touching the file.

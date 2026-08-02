@@ -46,7 +46,7 @@ internal static class GameMcpWorldQuery
         result["running"] = new JObject
         {
             ["actionQueues"] = world.ActionQueues.Count,
-            ["occupiedActionQueueSlots"] = world.ActionQueueSlots.Count,
+            ["occupiedActionQueueSlots"] = CountOccupiedActionQueueSlots(world),
             ["equippedSpellSlots"] = world.SpellSlots.Count,
             ["activeConceptAssignments"] = world.AlchemyInstances.Count,
         };
@@ -65,6 +65,16 @@ internal static class GameMcpWorldQuery
                 },
             };
         return result;
+    }
+
+    private static int CountOccupiedActionQueueSlots(GameWorldState world)
+    {
+        var occupied = 0;
+        for (var index = 0; index < world.ActionQueueSlots.Count; index++)
+        {
+            if (!world.ActionQueueSlots[index].Empty) occupied++;
+        }
+        return occupied;
     }
 
     internal static JObject ListCategories(GameMcpFrameContext state)

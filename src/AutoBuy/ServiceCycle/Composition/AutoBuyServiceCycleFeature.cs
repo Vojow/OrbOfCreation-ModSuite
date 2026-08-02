@@ -41,22 +41,19 @@ internal sealed class AutoBuyServiceCycleFeature : IAutomataServiceCycleFeature
             _dependencies,
             registration,
             context.LifecycleValue,
-            context.ConfigurationGeneration
-#if SERVICE_CYCLE_PROFILE
-            , adapters.Actions
-#endif
-            );
+            context.ConfigurationGeneration,
+            adapters.Actions);
     }
 
 }
 
 /// <summary>
-/// The non-generic per-frame runtime for Auto Buy inside the shared host. Its native adapters are
-/// stateless (a fresh reader and purchase adapter resolve Type-keyed contracts that are stable
-/// across lifecycles), so beyond the typed registration handle it owns only its feature-status
-/// bridge. The decision journal records every cycle, but it is not what the UI reads: the toggle
-/// button, its tooltip, and the Mod Config health row all read the feature status registry, and
-/// without the bridge below nothing refreshed that registry once gameplay was live.
+/// The non-generic per-frame runtime for Auto Buy inside the shared host. It owns the action adapter's
+/// lifecycle-bound purchase-route evidence as well as its feature-status bridge, and invalidates the
+/// former whenever the native lifecycle changes or the registration is disposed. The decision
+/// journal records every cycle, but it is not what the UI reads: the toggle button, its tooltip, and
+/// the Mod Config health row all read the feature status registry, and without the bridge below
+/// nothing refreshed that registry once gameplay was live.
 /// </summary>
 internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntime
 {
@@ -64,11 +61,9 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
     private readonly ServiceRegistration<
         AutoBuyCycleState,
         AutoBuyCycleAction> _registration;
-    private readonly long _lifecycleValue;
+    private long _lifecycleValue;
     private readonly ConfigGeneration _initialConfigurationGeneration;
-#if SERVICE_CYCLE_PROFILE
     private readonly AutoBuyCycleActionAdapter _actions;
-#endif
     private AutoBuyServiceCycleDiagnosticsBridge? _diagnostics;
 
     internal AutoBuyFeatureRuntime(
@@ -77,19 +72,14 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
             AutoBuyCycleState,
             AutoBuyCycleAction> registration,
         long lifecycleValue,
-        ConfigGeneration initialConfigurationGeneration
-#if SERVICE_CYCLE_PROFILE
-        , AutoBuyCycleActionAdapter actions
-#endif
-        )
+        ConfigGeneration initialConfigurationGeneration,
+        AutoBuyCycleActionAdapter actions)
     {
         _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
         _registration = registration ?? throw new ArgumentNullException(nameof(registration));
         _lifecycleValue = lifecycleValue;
         _initialConfigurationGeneration = initialConfigurationGeneration;
-#if SERVICE_CYCLE_PROFILE
         _actions = actions ?? throw new ArgumentNullException(nameof(actions));
-#endif
     }
 
     public void ActivateDiagnostics()
@@ -103,6 +93,9 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
 
     public void ObserveFrame(SuiteFramePump pump, in SuiteFramePumpReport report)
     {
+#if SERVICE_CYCLE_PROFILE
+        _actions.EmitRouteDiagnostic(_dependencies.ReadLifecycleEpoch());
+#endif
         _diagnostics?.Observe(pump, in report, _dependencies.OwnershipMask());
     }
 
@@ -113,8 +106,11 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
         long nativeLifecycle,
         ConfigGeneration configurationGeneration)
     {
-        // The native reader and purchase adapter cache only Type-keyed contracts, which are stable
-        // across lifecycles, so there is nothing to invalidate on a lifecycle boundary.
+        if (_lifecycleValue != nativeLifecycle)
+        {
+            _actions.InvalidateTopology();
+            _lifecycleValue = nativeLifecycle;
+        }
         _diagnostics?.ObserveLifecycle(
             nativeLifecycle,
             configurationGeneration,
@@ -123,7 +119,11 @@ internal sealed class AutoBuyFeatureRuntime : IAutomataServiceCycleFeatureRuntim
 
     public void DisposeDiagnostics() => _diagnostics = null;
 
-    public void DisposeRegistration() => _registration.Dispose();
+    public void DisposeRegistration()
+    {
+        _actions.InvalidateTopology();
+        _registration.Dispose();
+    }
 
 #if SERVICE_CYCLE_PROFILE
     internal ServiceActionResult TryExecuteGameMcp(

@@ -168,7 +168,8 @@ internal sealed class GameWorldCollector
         : this(
             WorldNativeTypes.Resolve,
             static () => UnityEngine.Time.fixedDeltaTime,
-            EmptyWorldMasteryExperienceSource.Instance)
+            EmptyWorldMasteryExperienceSource.Instance,
+            productionPurchaseTopology: true)
     {
     }
 
@@ -176,7 +177,8 @@ internal sealed class GameWorldCollector
         : this(
             WorldNativeTypes.Resolve,
             static () => UnityEngine.Time.fixedDeltaTime,
-            masteryExperience)
+            masteryExperience,
+            productionPurchaseTopology: true)
     {
     }
 
@@ -198,6 +200,15 @@ internal sealed class GameWorldCollector
         Func<string, Type?> resolveType,
         Func<double> readFixedDeltaTime,
         IWorldMasteryExperienceSource? masteryExperience = null)
+        : this(resolveType, readFixedDeltaTime, masteryExperience, productionPurchaseTopology: false)
+    {
+    }
+
+    private GameWorldCollector(
+        Func<string, Type?> resolveType,
+        Func<double> readFixedDeltaTime,
+        IWorldMasteryExperienceSource? masteryExperience,
+        bool productionPurchaseTopology)
     {
         if (resolveType is null) throw new ArgumentNullException(nameof(resolveType));
         if (readFixedDeltaTime is null) throw new ArgumentNullException(nameof(readFixedDeltaTime));
@@ -273,7 +284,9 @@ internal sealed class GameWorldCollector
             resolveType("StructureSO"),
             resolveType("ResearchSO"),
             resolveType("PrerequisiteLinkSO"));
-        _purchaseViewRelations = new WorldPurchaseViewRelationReader(resolveType);
+        _purchaseViewRelations = new WorldPurchaseViewRelationReader(
+            resolveType,
+            productionPurchaseTopology);
         _requirementNativeVerdicts = new WorldRequirementNativeVerdictReader(
             _entityRequirements);
         _prerequisiteLinkTiers = new WorldPrerequisiteLinkTierReader(

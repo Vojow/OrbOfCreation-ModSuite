@@ -1,8 +1,8 @@
 # Runtime architecture dossier
 
-> **Lifecycle: Accepted production foundation.** ServiceCycle is the production runtime for every automation feature in the suite.
+ServiceCycle is the production runtime for every automation feature in the suite.
 
-[Back to documentation](../README.md) · [Active plans](../plans/README.md)
+[Back to documentation](../README.md)
 
 ## Purpose
 
@@ -12,64 +12,39 @@ configuration, world state, and strategy — and never reads the game to make a 
 performing an action, the main thread re-checks live game state, so a stale decision is discarded
 rather than overriding the game.
 
-Read the maintained contracts in this order:
+## Index
 
-1. [How a service gets its data](service-data-flow.md) is the spine: the three publications, the two
-   kinds of service, and what a service may not do. Start here.
-2. [Service-cycle runtime](service-cycle-runtime.md) defines execution, lifecycle, scheduling, and action ownership.
-3. [Observability](observability.md) defines the independent full-trace, decision-journal, and performance-profile products.
-4. [Goals and invariants](goals-and-invariants.md) records correctness and safety rules.
-5. [Architecture](architecture.md) explains component boundaries and data flow.
-6. [Engineering decisions](decisions.md) records durable design choices.
-7. [Shared world collection](world-collection.md) defines the one reader every service consumes.
-8. [Game boundary doctrine](game-boundary-doctrine.md) governs every touch of the game: owned
-   math, freshness-classified validators, GameActions as the only mutation path, and suite UI
-   that speaks the game's idiom.
-9. [Game MCP frame operations](game-mcp-frame-operations.md) defines the perf-debug transport's
-   one request-scoped inbox, frame ordering, data lifetimes, and HTTP/Unity boundary.
+1. [How a service gets its data](service-data-flow.md) — the contract: three publications, two
+   service shapes, and the reads a service may not make. Authority if anything else disagrees.
+2. [Service-cycle runtime](service-cycle-runtime.md) — how a cycle executes, from wake to terminal
+   receipt.
+3. [Shared world collection](world-collection.md) — the one reader: what it collects, how it reads
+   without writing, and the freshness gate every consumer is held by.
+4. [Collection quirks](world-collection-decisions.md) — the numbered W-entries source comments cite.
+5. [Observability](observability.md) — the four observation products, their artifacts, and how to
+   read a capture.
+6. [Architecture](architecture.md) — where the components sit and what depends on what.
+7. [Goals and invariants](goals-and-invariants.md) — product goals, the conditions on owned math,
+   evidence grades, strategy rules, and the non-goals.
+8. [Game boundary doctrine](game-boundary-doctrine.md) — the rules for every touch of the game.
+9. [Deferrals](deferrals.md) — what is deliberately not built, and what each item waits on.
+10. [Game MCP frame operations](game-mcp-frame-operations.md) — the perf-debug transport: one
+    request-scoped inbox, frame ordering, data lifetimes, and the HTTP/Unity boundary.
 
-## Production boundary
+## The four boundaries
 
-- A feature-neutral Automata host owns one registry and one frame pump.
-- Each registered service is admitted at most once per accepted frame.
-- One collection service reads the game; ordinary services consume its published snapshot.
-- World collection runs at a hardcoded 250-millisecond cadence. Every ordinary service evaluates
-  after each world or configuration publication; after any game-facing attempt it waits for a world
-  collected strictly later. Explicit gameplay waits and fault backoffs remain.
-- Main-thread capture exists only for the source service; the ordinary contract has no capture member.
-- A service worker owns its mutable planning state and evaluates synchronously.
-- Returned actions are advisory until the main thread revalidates current native facts.
-- Lifecycle replacement retires stale workers without blocking the Unity thread.
-- The game remains authoritative for availability, cost, quantity, queue room, completion, and mutation results.
-- World collection is the only source service. Auto Items, Auto Harvest, Auto Buy, Spell
-  Leveling, Auto Cast, Auto Concept, and Mentor are ordinary services.
-
-There is one production path, no runtime selector, and no fallback implementation.
-
-## Observability boundary
-
-Manual full traces, the rolling decision journal, and opt-in performance profiles are independent diagnostic products. They share neutral transport/storage primitives but have separate formats, controls, retention, and failure boundaries. Diagnostic failure disables or faults that diagnostic path without changing gameplay behavior.
-
-Recorded runs are re-read as evidence, never re-executed: there is no replay system, and hand-crafted
-scenario fixtures carry that testing value.
-
-## Verification boundary
-
-- `./script/test` is the complete bounded portable development gate.
-- Real-reference builds and installed-game contract tests validate reflected game boundaries.
-- Interactive runtime validation is required for gameplay, UI, save, and installation claims.
-- The differential verification pass runs in the game under Ctrl+Alt+Y and compares every owned
-  number against the game's own answer for every entity in the save — record readings, frame
-  globals, rates, prices and the exclusion buckets. In-session agreement is what
-  [goals and invariants](goals-and-invariants.md) requires before an owned formula may be trusted,
-  and offline tests cannot establish it.
-
-Passing one boundary does not imply another. Current commands and runtime procedures live in the [testing guide](../testing/README.md).
-
-## What this foundation does not have yet
-
-- **A strategist.** No service publishes a `SuiteStrategy` bulletin; the publisher, the stances, and
+- **Production.** One feature-neutral Automata host owns one registry and one frame pump. One source
+  service reads the game; every other service consumes its publication and is admitted at most once
+  per accepted frame. The game stays authoritative for availability, cost, quantity, queue room,
+  completion, and mutation results. There is one production path, no runtime selector, and no
+  fallback implementation.
+- **Observability.** Manual full traces, the rolling decision journal, and opt-in performance
+  profiles are independent diagnostic products sharing only neutral transport and storage. Recorded
+  runs are re-read as evidence, never re-executed. Diagnostic failure disables or faults that path
+  without changing gameplay behaviour.
+- **Verification.** `./script/test` is the complete bounded portable gate; real-reference builds and
+  installed-game contract tests cover reflected game boundaries; interactive runtime validation is
+  required for gameplay, UI, save, and installation claims. Passing one boundary does not imply
+  another. Current commands live in the [testing guide](../testing/README.md).
+- **Not yet built.** No service publishes a `SuiteStrategy` bulletin. The publisher, the stances, and
   the neutral default exist, and every consumer already reads a neutral one.
-
-The [project roadmap](../plans/roadmap.md) sequences these; open decisions live in
-[active plans](../plans/README.md).

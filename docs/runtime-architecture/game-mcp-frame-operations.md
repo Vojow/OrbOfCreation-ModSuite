@@ -5,7 +5,7 @@
 > gameplay scheduler, or permanent action authority.
 
 [Back to dossier](README.md) · [Game boundary doctrine](game-boundary-doctrine.md) ·
-[Shared world collection](world-collection.md) · [User guide](../user-guide/game-mcp.md)
+[Shared world collection](world-collection.md) · [MCP tools](../development/mcp-tools.md)
 
 ## Why this exists
 

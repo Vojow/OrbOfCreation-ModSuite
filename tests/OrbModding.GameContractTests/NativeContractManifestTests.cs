@@ -181,7 +181,7 @@ public sealed class NativeContractManifestTests
         var repositoryRoot = RepositoryPaths.RequireRoot();
 
         Assert.Equal(3, manifest.SchemaVersion);
-        Assert.Equal(1256, manifest.Contracts.Count);
+        Assert.Equal(1247, manifest.Contracts.Count);
         Assert.Equal(10, manifest.SourceAudit.Exemptions.Count);
         Assert.False(string.IsNullOrWhiteSpace(manifest.AuditedAt));
         Assert.False(string.IsNullOrWhiteSpace(manifest.GameBuild));
@@ -520,7 +520,7 @@ public sealed class NativeContractManifestTests
         var referenceRoot = Path.Combine(repositoryRoot, "lib", "game-refs", "v1.0.5");
         var failures = new List<string>();
 
-        Assert.Contains(manifest.Contracts, contract => contract.Visibility == "private");
+        Assert.Equal(85, manifest.Contracts.Count(contract => contract.Visibility == "private"));
 
         foreach (var assemblyEntry in manifest.Assemblies)
         {

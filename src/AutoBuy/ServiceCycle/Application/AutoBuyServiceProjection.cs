@@ -8,7 +8,7 @@ namespace OrbAutomata;
 /// eligibility, requested-level, and exclusion dimensions under the same cycle identity.
 /// </summary>
 /// <remarks>
-/// The eleven exclusion counters answer the question a bare "0 eligible of 180" cannot: which term
+/// The ten exclusion counters answer the question a bare "0 eligible of 180" cannot: which term
 /// refused them. Captured minus eligible equals their sum on every cycle, so an operator reading the
 /// journal can attribute every candidate that did not reach the plan without attaching a debugger.
 /// The grouping histogram remains in the worker decision state; the bounded neutral projection is
@@ -40,7 +40,9 @@ internal static class AutoBuyServiceProjection
     internal const int ExcludedOwningViewUnavailableKey = 28;
     internal const int ExcludedOwningViewRelationMissingKey = 29;
     internal const int ExcludedOwningViewRelationUnreadableKey = 30;
-    internal const int ExcludedOwningViewRelationAmbiguousKey = 31;
+    // Key 31 is retired. It represented the invalid sole-owner assumption and must never be reused,
+    // so old decision journals remain unambiguous when decoded beside new ones.
+    internal const int RetiredOwningViewRelationAmbiguousKey = 31;
     internal const int ExcludedOwningViewRelationContradictoryKey = 32;
 
     public static void Write(
@@ -63,7 +65,6 @@ internal static class AutoBuyServiceProjection
         output.Add(Key(ExcludedOwningViewUnavailableKey), Integer(exclusions.OwningViewUnavailable));
         output.Add(Key(ExcludedOwningViewRelationMissingKey), Integer(exclusions.OwningViewRelationMissing));
         output.Add(Key(ExcludedOwningViewRelationUnreadableKey), Integer(exclusions.OwningViewRelationUnreadable));
-        output.Add(Key(ExcludedOwningViewRelationAmbiguousKey), Integer(exclusions.OwningViewRelationAmbiguous));
         output.Add(Key(ExcludedOwningViewRelationContradictoryKey), Integer(exclusions.OwningViewRelationContradictory));
 
     }

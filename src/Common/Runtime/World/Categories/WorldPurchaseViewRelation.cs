@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Text;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
@@ -13,20 +14,34 @@ internal enum WorldPurchaseCandidateKind
     Upgrade = 2,
 }
 
-/// <summary>Whether one candidate has one complete, exact route through an owning view and list.</summary>
+/// <summary>Whether one candidate has a complete authored set of owning-view routes.</summary>
 internal enum WorldPurchaseViewRelationStatus
 {
     Resolved = 0,
     Missing,
     Unreadable,
-    Ambiguous,
     Contradictory,
 }
 
+/// <summary>One detached authored route from a candidate through a list to a view.</summary>
+internal readonly struct WorldPurchaseViewRoute
+{
+    internal WorldPurchaseViewRoute(Guid candidateId, Guid listId, Guid viewId)
+    {
+        CandidateId = candidateId;
+        ListId = listId;
+        ViewId = viewId;
+    }
+
+    internal Guid CandidateId { get; }
+    internal Guid ListId { get; }
+    internal Guid ViewId { get; }
+}
+
 /// <summary>
-/// One candidate's authored route to the UI: exact candidate kind and category, exact containing
-/// list, and exact owning view. A non-resolved row is retained so consumers can name why the
-/// candidate was withheld instead of silently dropping it.
+/// One candidate's authored route-set header: exact candidate kind and category plus the number of
+/// detached list/view routes. A non-resolved row is retained so consumers can name why the candidate
+/// was withheld instead of silently dropping it.
 /// </summary>
 internal readonly struct WorldPurchaseViewRelation : IWorldEntity
 {
@@ -34,15 +49,13 @@ internal readonly struct WorldPurchaseViewRelation : IWorldEntity
         Guid candidateId,
         WorldPurchaseCandidateKind kind,
         Guid categoryId,
-        Guid listId,
-        Guid viewId,
+        int routeCount,
         WorldPurchaseViewRelationStatus status)
     {
         CandidateId = candidateId;
         Kind = kind;
         CategoryId = categoryId;
-        ListId = listId;
-        ViewId = viewId;
+        RouteCount = routeCount;
         Status = status;
     }
 
@@ -53,22 +66,45 @@ internal readonly struct WorldPurchaseViewRelation : IWorldEntity
     /// <summary>The exact <c>StructureTypeSO</c> identity; empty for an <c>UpgradeSO</c>.</summary>
     internal Guid CategoryId { get; }
 
-    internal Guid ListId { get; }
-    internal Guid ViewId { get; }
+    internal int RouteCount { get; }
     internal WorldPurchaseViewRelationStatus Status { get; }
 }
 
-/// <summary>A detached relation plus the live view object used only by the action boundary.</summary>
-internal readonly struct NativePurchaseViewResolution
+/// <summary>One lifecycle-bound native route used only for live action admission.</summary>
+internal readonly struct NativePurchaseViewRoute
 {
-    internal NativePurchaseViewResolution(in WorldPurchaseViewRelation relation, object? view)
+    internal NativePurchaseViewRoute(Guid listId, string listName, Guid viewId, string viewName, object view)
     {
-        Relation = relation;
+        ListId = listId;
+        ListName = listName ?? string.Empty;
+        ViewId = viewId;
+        ViewName = viewName ?? string.Empty;
         View = view;
     }
 
+    internal Guid ListId { get; }
+    internal string ListName { get; }
+    internal Guid ViewId { get; }
+    internal string ViewName { get; }
+    internal object View { get; }
+}
+
+/// <summary>A detached relation plus its lifecycle-bound live view routes.</summary>
+internal readonly struct NativePurchaseViewResolution
+{
+    internal NativePurchaseViewResolution(
+        in WorldPurchaseViewRelation relation,
+        NativePurchaseViewRoute[] routes,
+        string candidateName)
+    {
+        Relation = relation;
+        Routes = routes ?? Array.Empty<NativePurchaseViewRoute>();
+        CandidateName = candidateName ?? string.Empty;
+    }
+
     internal WorldPurchaseViewRelation Relation { get; }
-    internal object? View { get; }
+    internal NativePurchaseViewRoute[] Routes { get; }
+    internal string CandidateName { get; }
 }
 
 /// <summary>Exact reflection/list work performed by one live owning-view resolution.</summary>
@@ -85,15 +121,16 @@ internal struct NativePurchaseViewAdmissionReadCounts
 
 /// <summary>
 /// The one audited resolver for Auto Buy owning-view admission. World collection uses it to publish
-/// the immutable candidate-to-list/view relation; the action boundary uses the same implementation
-/// to resolve that relation again and ask the exact live <c>ViewSO.IsAvailable()</c> immediately
-/// before purchase admission.
+/// one immutable candidate-to-list/view route snapshot per lifecycle. The action boundary never
+/// enumerates authored topology: it finds the candidate in that snapshot and asks each captured
+/// <c>ViewSO.IsAvailable()</c> immediately before purchase admission.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Both <c>ViewSO.relevantLists</c> and <c>ViewSO.availableLists</c> contribute normal player
-/// reachability. A candidate must appear exactly once after identical view/list matches from the two
-/// sources are collapsed. No display name participates.
+/// reachability. A candidate may have any number of distinct view/list routes; each route must name
+/// the exact candidate once, and identical routes from the two sources are collapsed. No display
+/// name participates in identity or admission.
 /// </para>
 /// <para>
 /// Structures additionally prove their own <c>structureType</c> identity and exact membership in
@@ -103,7 +140,11 @@ internal struct NativePurchaseViewAdmissionReadCounts
 /// </remarks>
 internal sealed class NativePurchaseViewAdmissionResolver
 {
+    private static NativePurchaseViewAdmissionResolver? _production;
     private readonly BindingSet _native;
+    private Dictionary<CandidateKey, NativePurchaseViewResolution> _snapshot = new();
+    private long _snapshotEpoch;
+    internal long CapturedEpoch => _snapshotEpoch;
 
     private NativePurchaseViewAdmissionResolver(BindingSet native) => _native = native;
 
@@ -123,9 +164,27 @@ internal sealed class NativePurchaseViewAdmissionResolver
         return true;
     }
 
+    internal static bool TryCreateProduction(
+        Func<string, Type?> resolve,
+        out NativePurchaseViewAdmissionResolver? resolver,
+        out string reason)
+    {
+        if (_production is not null)
+        {
+            resolver = _production;
+            reason = string.Empty;
+            return true;
+        }
+        if (!TryCreate(resolve, out resolver, out reason)) return false;
+        _production = resolver;
+        return true;
+    }
+
     /// <summary>Reads one relation row for every exact native Auto Buy candidate.</summary>
     internal int ReadAll(
+        long lifecycleEpoch,
         WorldRelationBuffer<WorldPurchaseViewRelation> output,
+        WorldRelationBuffer<WorldPurchaseViewRoute> routeOutput,
         out int unresolved,
         out int skipped)
     {
@@ -134,12 +193,15 @@ internal sealed class NativePurchaseViewAdmissionResolver
         skipped = 0;
         var sampled = 0;
         var identities = new HashSet<Guid>();
+        var snapshot = new Dictionary<CandidateKey, NativePurchaseViewResolution>();
         sampled += ReadRegistry(
             WorldPurchaseCandidateKind.Structure,
             _native.StructureAll,
             _native.StructureType,
             identities,
+            snapshot,
             output,
+            routeOutput,
             ref unresolved,
             ref skipped);
         sampled += ReadRegistry(
@@ -147,10 +209,88 @@ internal sealed class NativePurchaseViewAdmissionResolver
             _native.UpgradeAll,
             _native.UpgradeType,
             identities,
+            snapshot,
             output,
+            routeOutput,
             ref unresolved,
             ref skipped);
+        _snapshot = snapshot;
+        _snapshotEpoch = lifecycleEpoch;
         return sampled;
+    }
+
+    internal void Invalidate()
+    {
+        _snapshot = new Dictionary<CandidateKey, NativePurchaseViewResolution>();
+        _snapshotEpoch = 0;
+    }
+
+    internal bool TryGetCaptured(
+        WorldPurchaseCandidateKind kind,
+        Guid candidateId,
+        long lifecycleEpoch,
+        out NativePurchaseViewResolution resolution)
+    {
+        if (lifecycleEpoch <= 0 || _snapshotEpoch != lifecycleEpoch)
+        {
+            resolution = default;
+            return false;
+        }
+        return _snapshot.TryGetValue(new CandidateKey(kind, candidateId), out resolution);
+    }
+
+    internal NativePurchaseViewResolution[] Captured(long lifecycleEpoch)
+    {
+        if (lifecycleEpoch <= 0 || _snapshotEpoch != lifecycleEpoch || _snapshot.Count == 0)
+            return Array.Empty<NativePurchaseViewResolution>();
+        var rows = new NativePurchaseViewResolution[_snapshot.Count];
+        _snapshot.Values.CopyTo(rows, 0);
+        Array.Sort(rows, static (left, right) => left.Relation.CandidateId.CompareTo(right.Relation.CandidateId));
+        return rows;
+    }
+
+    internal string[] DescribeCaptured(long lifecycleEpoch)
+    {
+        var captured = Captured(lifecycleEpoch);
+        if (captured.Length == 0) return Array.Empty<string>();
+        var descriptions = new string[captured.Length];
+        for (var candidateIndex = 0; candidateIndex < captured.Length; candidateIndex++)
+        {
+            var candidate = captured[candidateIndex];
+            var builder = new StringBuilder();
+            builder.Append(candidate.Relation.CandidateId.ToString("D"))
+                .Append(' ')
+                .Append(candidate.CandidateName)
+                .Append(" routes=[");
+            for (var routeIndex = 0; routeIndex < candidate.Routes.Length; routeIndex++)
+            {
+                if (routeIndex > 0) builder.Append(", ");
+                var route = candidate.Routes[routeIndex];
+                builder.Append("(view=")
+                    .Append(route.ViewId.ToString("D"))
+                    .Append(' ')
+                    .Append(route.ViewName)
+                    .Append(", list=")
+                    .Append(route.ListId.ToString("D"))
+                    .Append(' ')
+                    .Append(route.ListName)
+                    .Append(", view-available=");
+                var available = "unreadable";
+                try
+                {
+                    if (route.View is not null && route.View.GetType() == _native.ViewType &&
+                        _native.ViewAvailable.Invoke(route.View, Array.Empty<object>()) is bool value)
+                        available = value ? "true" : "false";
+                }
+                catch (Exception ex) when (IsExpected(ex))
+                {
+                }
+                builder.Append(available).Append(')');
+            }
+            builder.Append(']');
+            descriptions[candidateIndex] = builder.ToString();
+        }
+        return descriptions;
     }
 
     /// <summary>Resolves one already identity-checked candidate through the complete live graph.</summary>
@@ -231,16 +371,30 @@ internal sealed class NativePurchaseViewAdmissionResolver
     {
         available = false;
         if (resolution.Relation.Status != WorldPurchaseViewRelationStatus.Resolved ||
-            resolution.View is null ||
-            resolution.View.GetType() != _native.ViewType)
+            resolution.Routes.Length == 0)
             return false;
+        var unreadable = false;
         try
         {
-            reads.AddMethodCall();
-            if (_native.ViewAvailable.Invoke(resolution.View, Array.Empty<object>()) is not bool value)
-                return false;
-            available = value;
-            return true;
+            for (var index = 0; index < resolution.Routes.Length; index++)
+            {
+                var view = resolution.Routes[index].View;
+                if (view is null || view.GetType() != _native.ViewType)
+                {
+                    unreadable = true;
+                    continue;
+                }
+                reads.AddMethodCall();
+                if (_native.ViewAvailable.Invoke(view, Array.Empty<object>()) is not bool value)
+                {
+                    unreadable = true;
+                    continue;
+                }
+                if (!value) continue;
+                available = true;
+                return true;
+            }
+            return !unreadable;
         }
         catch (Exception ex) when (IsExpected(ex))
         {
@@ -253,7 +407,9 @@ internal sealed class NativePurchaseViewAdmissionResolver
         FieldInfo registryField,
         Type expectedType,
         HashSet<Guid> identities,
+        Dictionary<CandidateKey, NativePurchaseViewResolution> snapshot,
         WorldRelationBuffer<WorldPurchaseViewRelation> output,
+        WorldRelationBuffer<WorldPurchaseViewRoute> routeOutput,
         ref int unresolved,
         ref int skipped)
     {
@@ -285,7 +441,21 @@ internal sealed class NativePurchaseViewAdmissionResolver
                 continue;
             }
             var resolution = Resolve(kind, id, candidate);
+            if (resolution.CandidateName.Length == 0)
+            {
+                var relation = resolution.Relation;
+                resolution = new NativePurchaseViewResolution(
+                    in relation,
+                    resolution.Routes,
+                    DiagnosticName(id));
+            }
             output.Append(resolution.Relation);
+            for (var routeIndex = 0; routeIndex < resolution.Routes.Length; routeIndex++)
+            {
+                var route = resolution.Routes[routeIndex];
+                routeOutput.Append(new WorldPurchaseViewRoute(id, route.ListId, route.ViewId));
+            }
+            snapshot.Add(new CandidateKey(kind, id), resolution);
             if (resolution.Relation.Status != WorldPurchaseViewRelationStatus.Resolved) unresolved++;
             sampled++;
         }
@@ -299,9 +469,7 @@ internal sealed class NativePurchaseViewAdmissionResolver
         object candidate,
         ref NativePurchaseViewAdmissionReadCounts reads)
     {
-        object? matchedView = null;
-        var matchedViewId = Guid.Empty;
-        var matchedListId = Guid.Empty;
+        var routes = new List<NativePurchaseViewRoute>();
         var views = List(ReadField(_native.ViewAll, null, ref reads), "ViewSO.All");
         var seenViews = new HashSet<Guid>();
         foreach (var value in views)
@@ -318,9 +486,7 @@ internal sealed class NativePurchaseViewAdmissionResolver
                 view,
                 viewId,
                 _native.RelevantLists,
-                ref matchedView,
-                ref matchedViewId,
-                ref matchedListId,
+                routes,
                 ref reads);
             MatchLists(
                 kind,
@@ -329,22 +495,27 @@ internal sealed class NativePurchaseViewAdmissionResolver
                 view,
                 viewId,
                 _native.AvailableLists,
-                ref matchedView,
-                ref matchedViewId,
-                ref matchedListId,
+                routes,
                 ref reads);
         }
 
-        if (matchedView is null)
+        if (routes.Count == 0)
             return Failed(kind, candidateId, categoryId, WorldPurchaseViewRelationStatus.Missing);
+        routes.Sort(static (left, right) =>
+        {
+            var view = left.ViewId.CompareTo(right.ViewId);
+            return view != 0 ? view : left.ListId.CompareTo(right.ListId);
+        });
         var relation = new WorldPurchaseViewRelation(
             candidateId,
             kind,
             categoryId,
-            matchedListId,
-            matchedViewId,
+            routes.Count,
             WorldPurchaseViewRelationStatus.Resolved);
-        return new NativePurchaseViewResolution(in relation, matchedView);
+        return new NativePurchaseViewResolution(
+            in relation,
+            routes.ToArray(),
+            DiagnosticName(candidateId));
     }
 
     private void MatchLists(
@@ -354,9 +525,7 @@ internal sealed class NativePurchaseViewAdmissionResolver
         object view,
         Guid viewId,
         FieldInfo source,
-        ref object? matchedView,
-        ref Guid matchedViewId,
-        ref Guid matchedListId,
+        List<NativePurchaseViewRoute> routes,
         ref NativePurchaseViewAdmissionReadCounts reads)
     {
         var lists = List(ReadField(source, view, ref reads), "ViewSO." + source.Name);
@@ -383,8 +552,8 @@ internal sealed class NativePurchaseViewAdmissionResolver
             if (listId == Guid.Empty)
                 throw new RelationFailure(WorldPurchaseViewRelationStatus.Contradictory);
             var members = List(
-                Invoke(CandidateListMembers(kind), value, ref reads),
-                runtimeType.Name + ".GetAll()");
+                ReadField(CandidateListMembers(kind), value, ref reads),
+                runtimeType.Name + ".value");
             var matches = CountExactMembership(
                 members,
                 CandidateType(kind),
@@ -396,18 +565,22 @@ internal sealed class NativePurchaseViewAdmissionResolver
             if (matches != 1)
                 throw new RelationFailure(WorldPurchaseViewRelationStatus.Contradictory);
 
-            if (matchedView is null)
+            var duplicate = false;
+            for (var index = 0; index < routes.Count; index++)
             {
-                matchedView = view;
-                matchedViewId = viewId;
-                matchedListId = listId;
-                continue;
+                if (routes[index].ViewId == viewId && routes[index].ListId == listId)
+                {
+                    duplicate = true;
+                    break;
+                }
             }
-
-            // The same authored route can be named in both fields. Anything else gives the candidate
-            // more than one alleged owner and is not an admission relation the suite may choose among.
-            if (matchedViewId != viewId || matchedListId != listId)
-                throw new RelationFailure(WorldPurchaseViewRelationStatus.Ambiguous);
+            if (duplicate) continue;
+            routes.Add(new NativePurchaseViewRoute(
+                listId,
+                DiagnosticName(listId),
+                viewId,
+                DiagnosticName(viewId),
+                view));
         }
     }
 
@@ -445,10 +618,32 @@ internal sealed class NativePurchaseViewAdmissionResolver
             candidateId,
             kind,
             categoryId,
-            Guid.Empty,
-            Guid.Empty,
+            0,
             status);
-        return new NativePurchaseViewResolution(in relation, null);
+        return new NativePurchaseViewResolution(in relation, Array.Empty<NativePurchaseViewRoute>(), string.Empty);
+    }
+
+    private static string DiagnosticName(Guid uuid)
+    {
+#if SERVICE_CYCLE_PROFILE
+        return OrbModding.Common.EntityIdentityFormatter.Format(uuid);
+#else
+        return string.Empty;
+#endif
+    }
+
+    private readonly struct CandidateKey : IEquatable<CandidateKey>
+    {
+        internal CandidateKey(WorldPurchaseCandidateKind kind, Guid candidateId)
+        {
+            Kind = kind;
+            CandidateId = candidateId;
+        }
+        private WorldPurchaseCandidateKind Kind { get; }
+        private Guid CandidateId { get; }
+        public bool Equals(CandidateKey other) => Kind == other.Kind && CandidateId == other.CandidateId;
+        public override bool Equals(object? value) => value is CandidateKey other && Equals(other);
+        public override int GetHashCode() => unchecked(((int)Kind * 397) ^ CandidateId.GetHashCode());
     }
 
     private Type CandidateType(WorldPurchaseCandidateKind kind) =>
@@ -464,7 +659,7 @@ internal sealed class NativePurchaseViewAdmissionResolver
             ? _native.StructureIdentity
             : _native.UpgradeIdentity;
 
-    private MethodInfo CandidateListMembers(WorldPurchaseCandidateKind kind) =>
+    private FieldInfo CandidateListMembers(WorldPurchaseCandidateKind kind) =>
         kind == WorldPurchaseCandidateKind.Structure
             ? _native.StructureListMembers
             : _native.UpgradeListMembers;
@@ -486,15 +681,6 @@ internal sealed class NativePurchaseViewAdmissionResolver
     {
         reads.AddFieldRead();
         return field.GetValue(target);
-    }
-
-    private static object? Invoke(
-        MethodInfo method,
-        object target,
-        ref NativePurchaseViewAdmissionReadCounts reads)
-    {
-        reads.AddMethodCall();
-        return method.Invoke(target, Array.Empty<object>());
     }
 
     private static object Exact(object? value, Type expected, string contract) =>
@@ -551,8 +737,8 @@ internal sealed class NativePurchaseViewAdmissionResolver
             MethodInfo structureCategoryIdentity,
             MethodInfo listIdentity,
             MethodInfo viewAvailable,
-            MethodInfo structureListMembers,
-            MethodInfo upgradeListMembers)
+            FieldInfo structureListMembers,
+            FieldInfo upgradeListMembers)
         {
             ViewType = viewType;
             StructureType = structureType;
@@ -596,8 +782,8 @@ internal sealed class NativePurchaseViewAdmissionResolver
         internal MethodInfo StructureCategoryIdentity { get; }
         internal MethodInfo ListIdentity { get; }
         internal MethodInfo ViewAvailable { get; }
-        internal MethodInfo StructureListMembers { get; }
-        internal MethodInfo UpgradeListMembers { get; }
+        internal FieldInfo StructureListMembers { get; }
+        internal FieldInfo UpgradeListMembers { get; }
 
         internal static bool TryCreate(
             Func<string, Type?> resolve,
@@ -637,8 +823,16 @@ internal sealed class NativePurchaseViewAdmissionResolver
                     MethodFromHierarchy(structureCategory, id, "GetGuid", typeof(Guid)),
                     MethodFromHierarchy(structureList, id, "GetGuid", typeof(Guid)),
                     Method(view, "IsAvailable", typeof(bool)),
-                    Method(structureList, "GetAll", typeof(List<>).MakeGenericType(structure)),
-                    Method(upgradeList, "GetAll", typeof(List<>).MakeGenericType(upgrade)));
+                    FieldFromHierarchy(
+                        structureList,
+                        abstractList,
+                        "value",
+                        typeof(List<>).MakeGenericType(structure)),
+                    FieldFromHierarchy(
+                        upgradeList,
+                        abstractList,
+                        "value",
+                        typeof(List<>).MakeGenericType(upgrade)));
                 reason = string.Empty;
                 return true;
             }
@@ -666,6 +860,22 @@ internal sealed class NativePurchaseViewAdmissionResolver
                 ? field
                 : throw new InvalidOperationException(
                     $"{owner.Name}.{name} : {fieldType.Name} was unavailable.");
+        }
+
+        private static FieldInfo FieldFromHierarchy(
+            Type owner,
+            Type abstractList,
+            string name,
+            Type fieldType)
+        {
+            var field = owner.GetField(name, Instance);
+            var declaring = field?.DeclaringType;
+            return field is not null && field.FieldType == fieldType && declaring is not null &&
+                   declaring.IsGenericType &&
+                   declaring.GetGenericTypeDefinition().BaseType == abstractList
+                ? field
+                : throw new InvalidOperationException(
+                    $"{owner.Name}.{name} inherited from AbstractListVariable`1 was unavailable.");
         }
 
         private static MethodInfo Method(Type owner, string name, Type returnType)
@@ -698,25 +908,57 @@ internal sealed class NativePurchaseViewAdmissionResolver
     }
 }
 
+internal static class WorldPurchaseViewRouteLookup
+{
+    internal static bool TryFindRange(
+        PublicationTable<WorldPurchaseViewRoute> table,
+        Guid candidateId,
+        out int start,
+        out int count)
+    {
+        var low = 0;
+        var high = table.Count - 1;
+        var found = -1;
+        while (low <= high)
+        {
+            var middle = low + ((high - low) / 2);
+            var comparison = table[middle].CandidateId.CompareTo(candidateId);
+            if (comparison < 0) low = middle + 1;
+            else
+            {
+                if (comparison == 0) found = middle;
+                high = middle - 1;
+            }
+        }
+        if (found < 0)
+        {
+            start = 0;
+            count = 0;
+            return false;
+        }
+        start = found;
+        var end = found + 1;
+        while (end < table.Count && table[end].CandidateId == candidateId) end++;
+        count = end - found;
+        return true;
+    }
+}
+
 /// <summary>Collects authored Auto Buy view relations once per lifecycle epoch.</summary>
 internal sealed class WorldPurchaseViewRelationReader : IWorldCategoryReader
 {
     internal const string CategoryName = "purchase view relations";
 
-    private readonly NativePurchaseViewAdmissionResolver? _resolver;
-    private readonly string _unavailable;
+    private readonly Func<string, Type?> _resolve;
+    private readonly bool _production;
+    private NativePurchaseViewAdmissionResolver? _resolver;
+    private string _unavailable = string.Empty;
 
-    internal WorldPurchaseViewRelationReader(Func<string, Type?> resolve)
+    internal WorldPurchaseViewRelationReader(Func<string, Type?> resolve, bool production = false)
     {
-        if (NativePurchaseViewAdmissionResolver.TryCreate(resolve, out var resolver, out var reason))
-        {
-            _resolver = resolver;
-            _unavailable = string.Empty;
-        }
-        else
-        {
-            _unavailable = reason;
-        }
+        _resolve = resolve ?? throw new ArgumentNullException(nameof(resolve));
+        _production = production;
+        TryBind();
     }
 
     public string Category => CategoryName;
@@ -725,11 +967,15 @@ internal sealed class WorldPurchaseViewRelationReader : IWorldCategoryReader
     public WorldCategoryReport Collect(HashSet<Guid> claimed, GameWorldCycleFrame frame)
     {
         frame.PurchaseViewRelations.Reset();
-        if (_resolver is null) return WorldCategoryReport.Missing(Category, _unavailable);
+        frame.PurchaseViewRoutes.Reset();
+        if (_resolver is null && !TryBind())
+            return WorldCategoryReport.Missing(Category, _unavailable);
         try
         {
-            var sampled = _resolver.ReadAll(
+            var sampled = _resolver!.ReadAll(
+                frame.CollectedAtEpoch,
                 frame.PurchaseViewRelations,
+                frame.PurchaseViewRoutes,
                 out var unresolved,
                 out var skipped);
             return new WorldCategoryReport(
@@ -745,7 +991,26 @@ internal sealed class WorldPurchaseViewRelationReader : IWorldCategoryReader
         catch (Exception ex) when (ex is TargetInvocationException or ArgumentException or
                                    InvalidOperationException or TargetException or MemberAccessException)
         {
+            _resolver!.Invalidate();
+            frame.PurchaseViewRelations.Reset();
+            frame.PurchaseViewRoutes.Reset();
             return WorldCategoryReport.Missing(Category, ex.GetBaseException().Message);
         }
+    }
+
+    private bool TryBind()
+    {
+        var created = _production
+            ? NativePurchaseViewAdmissionResolver.TryCreateProduction(
+                _resolve,
+                out var resolver,
+                out var reason)
+            : NativePurchaseViewAdmissionResolver.TryCreate(
+                _resolve,
+                out resolver,
+                out reason);
+        _resolver = resolver;
+        _unavailable = created ? string.Empty : reason;
+        return created;
     }
 }

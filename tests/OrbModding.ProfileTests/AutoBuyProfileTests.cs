@@ -51,14 +51,13 @@ public sealed class AutoBuyProfileTests : IDisposable
                 ServiceCycleProfileSpan.AutoBuyActionCandidateResolution,
                 stableIdReads: 2,
                 listEntries: 1),
-            // The shared view resolver walks the exact category/list/view chain, then the boundary
-            // asks both live availability terms and the thin StructureSO.CanPurchase() fold.
+            // Lifecycle bind already captured the authored category/list/view chain. The action
+            // boundary reads only current view availability and the thin StructureSO.CanPurchase()
+            // fold, so no topology fields or list entries appear on the warm action path.
             item => AssertStage(
                 item,
                 ServiceCycleProfileSpan.AutoBuyActionAdmissionRevalidation,
-                fieldReads: 5,
-                methodCalls: 10,
-                listEntries: 5),
+                methodCalls: 3),
             item => AssertStage(
                 item,
                 ServiceCycleProfileSpan.AutoBuyActionNativeSubmission,
@@ -101,13 +100,43 @@ public sealed class AutoBuyProfileTests : IDisposable
         Assert.Same(measurement, probe.Detach());
     }
 
+    [Fact]
+    public void LifecycleRouteDiagnosticNamesEveryRouteAndItsCurrentVisibility()
+    {
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        global::StructureSO.All.Add(structure);
+        var topology = CaptureTopology(out var relations, out var routes);
+
+        Assert.Equal(1, relations.Count);
+        Assert.Equal(1, routes.Count);
+        var line = Assert.Single(topology.DescribeCaptured(PlannedEpoch));
+        Assert.Contains(structure.GetGuid().ToString("D"), line);
+        Assert.Contains(global::ViewSO.All[0].GetGuid().ToString("D"), line);
+        Assert.Contains(global::ViewSO.All[0].relevantLists[0].GetGuid().ToString("D"), line);
+        Assert.Contains("view-available=true", line);
+
+        global::ViewSO.All[0].available = false;
+
+        Assert.Contains(
+            "view-available=false",
+            Assert.Single(topology.DescribeCaptured(PlannedEpoch)));
+    }
+
     private static ServiceActionResult Execute(
         AutomataProfileOperations operations,
         AutoBuyCandidateKind kind,
         Guid uuid)
     {
+        var topology = CaptureTopology(out var relations, out var routes);
+        Assert.Equal(1, relations.Count);
+        Assert.Equal(1, routes.Count);
         var adapter = new AutoBuyCycleActionAdapter(
-            new AutoBuyNativePurchaseAdapter(operations),
+            new AutoBuyNativePurchaseAdapter(operations, topology),
             new AutoBuyNativeQueueRoomAdapter(),
             () => PlannedEpoch,
             () => AutoBuyCandidateKinds.All,
@@ -117,6 +146,29 @@ public sealed class AutoBuyProfileTests : IDisposable
             new AutoBuyCycleAction(kind, uuid, PlannedEpoch),
             Configuration(),
             ActionContext());
+    }
+
+    private static NativePurchaseViewAdmissionResolver CaptureTopology(
+        out WorldRelationBuffer<WorldPurchaseViewRelation> relations,
+        out WorldRelationBuffer<WorldPurchaseViewRoute> routes)
+    {
+        Assert.True(
+            NativePurchaseViewAdmissionResolver.TryCreate(
+                WorldNativeTypes.Resolve,
+                out var topology,
+                out var topologyFailure),
+            topologyFailure);
+        relations = new WorldRelationBuffer<WorldPurchaseViewRelation>();
+        routes = new WorldRelationBuffer<WorldPurchaseViewRoute>();
+        topology!.ReadAll(
+            PlannedEpoch,
+            relations,
+            routes,
+            out var unresolved,
+            out var skipped);
+        Assert.Equal(0, unresolved);
+        Assert.Equal(0, skipped);
+        return topology;
     }
 
     private static ServiceActionContext ActionContext()

@@ -1494,12 +1494,12 @@ public sealed class GameWorldCollectorTests : IDisposable
         public List<FakeStructure> structures = new();
     }
 
-    private sealed class FakeStructureListVariable : FakeAbstractListVariable
+    private sealed class FakeStructureListVariable : FakeAbstractListVariable<FakeStructure>
     {
         public List<FakeStructure> GetAll() => FakeStructure.All;
     }
 
-    private sealed class FakeUpgradeListVariable : FakeAbstractListVariable
+    private sealed class FakeUpgradeListVariable : FakeAbstractListVariable<FakeUpgrade>
     {
         public List<FakeUpgrade> GetAll() => FakeUpgrade.All;
     }

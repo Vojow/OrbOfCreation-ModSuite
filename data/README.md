@@ -31,7 +31,7 @@ The importer guarantees UUID uniqueness, not name uniqueness. Consumers must res
 
 The production subset is produced by `tools/generate-known-entities.ps1` (`tools/generate-known-entities.sh` on POSIX hosts). Every build verifies that the checked-in generated source is reproducible and that each selected UUID, name, and managed type still matches the canonical mapping. Add entities deliberately; the full catalog is never part of the production runtime API. The shipped plugin embeds neither table: the MCP `entity_catalog` projects the live lifecycle identity snapshot, and these files stay offline research and fixture-builder inputs; `entity-mappings.tsv` remains the canonical row set, so display-only drift never invents an identity.
 
-The mapping records identity, not serialized relationships. Type memberships, prerequisite links, attribute-group members, list contents, unlock state, and live runtime instances require assembly inspection, serialized asset inspection, or a runtime probe. See [Entity catalog](../docs/reverse-engineering/entity-catalog.md) and [Entity correlations](../docs/reverse-engineering/entity-correlations.md).
+The mapping records identity, not serialized relationships. Type memberships, prerequisite links, attribute-group members, list contents, unlock state, and live runtime instances require assembly inspection, serialized asset inspection, or a runtime probe. See [Type model](../docs/reverse-engineering/type-model.md).
 
 ## Display names
 

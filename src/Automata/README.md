@@ -254,6 +254,8 @@ Every outcome waits for a new world publication; Auto Scribe has no cadence or r
 
 Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. Empty slots are skipped, active auras are treated as already satisfied, channels pause the rotation, and persistent spells are never turned off automatically.
 
+The rotation cursor advances when a slot is chosen, not when its cast commits. Whether a spell has anything to aim at is an unbounded reflective walk of the live effect graph with no snapshot form, so the worker cannot see it and the boundary is where a targetless spell is refused; a cursor that waited for a commit would re-pick that same spell every cycle and starve every other slot. A refused cast costs itself its turn and comes round again one rotation later.
+
 `FullCharge=true` holds charge-capable spells through the game's native charge-input contract until the full-charge point. While Auto Cast owns that hold, the rest of the rotation pauses. The hold is released when charging completes, Auto Cast is disabled or emergency-blocked, the setting is turned off, manual spell input occurs, or the plugin shuts down. Set `FullCharge=false` to fire charge-capable spells immediately without charging.
 
 A planned cast is advisory. Before firing, Auto Cast rediscovers the slot and requires the stable recipe UUID, exact native Spell reference, runtime type, and slot index to match. Scene changes, save implementation, and player-manager restarts discard prepared casts immediately.
@@ -286,6 +288,8 @@ registered automation feature always owns one quick control. Spell-leveling stat
 suite's Auto Buy tooltip rather than becoming a separate control.
 
 Before every add or rotation, Auto Concept reconstructs that exact prospective native drain vector, rejects every positive drain whose authoritative resource state is zero, converts the remainder through each resource's live quality with `ResourceSO.GetTrueSpend`, and compares the projected rate with `RateReservePercent`. Finite resources must also meet `MinimumResourcePercent`. A replacement whose resource is at zero is skipped without blocking other resource-safe concepts or acquired slots in the timed order. Unknown vectors, identity mismatches, incompatible slots, and changed mastery limits fail closed. Each world publication checks cached active assignments; if the native drain ratio falls below `MinimumDrainRatio`, a drained resource reaches zero, or its live net rate becomes negative, it schedules removal of only the quantity recorded as suite-owned.
+
+The prospective multiplier is not a published fact. The native answer for quantity N exists only after constructing a throwaway `AlchemyInstance`, setting its quantity, and calling `GetDrainCostMod()`, and a published recipe's drain-cost scalar is not evidence that it reproduces that instance method. The halving search, reserve test, quantity floor, and subtraction of the live current drain therefore stay together in the action adapter's preflight, immediately before any add or rotation removal.
 
 A live slot or prospective-drain refusal ends Auto Concept's work on the current world reading. The
 engine waits for a strictly newer world before the receipt is reconciled and the candidate re-enters

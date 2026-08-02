@@ -193,6 +193,11 @@ internal class FakeAbstractListVariable : FakeIdRegistry
 {
 }
 
+internal class FakeAbstractListVariable<T> : FakeAbstractListVariable
+{
+    public List<T> value = new();
+}
+
 internal sealed class FakeScribeRecipeList
 {
     public List<FakeScribeRecipe> value = new();

@@ -45,7 +45,7 @@ internal struct AutoBuyCycleState
 /// </summary>
 /// <remarks>
 /// The diagnosis this exists for took a decompile and a day. Auto Buy reported 409 candidates and 0
-/// eligible for four hundred consecutive cycles and said nothing further, so every one of the eleven
+/// eligible for four hundred consecutive cycles and said nothing further, so every one of the ten
 /// terms that could have produced that zero had to be eliminated by reading the code. One counter per
 /// term makes the same question a glance.
 /// </remarks>
@@ -85,11 +85,8 @@ internal enum AutoBuyExclusion
     /// <summary>The candidate-to-list/view graph could not be read completely.</summary>
     OwningViewRelationUnreadable = 9,
 
-    /// <summary>More than one distinct list/view route claimed the candidate.</summary>
-    OwningViewRelationAmbiguous = 10,
-
     /// <summary>The route contradicted exact candidate, category, list, or view identity.</summary>
-    OwningViewRelationContradictory = 11,
+    OwningViewRelationContradictory = 10,
 }
 
 /// <summary>How many candidates each exclusion term accounted for in one cycle.</summary>
@@ -109,7 +106,6 @@ internal readonly struct AutoBuyExclusionHistogram
         int owningViewUnavailable,
         int owningViewRelationMissing,
         int owningViewRelationUnreadable,
-        int owningViewRelationAmbiguous,
         int owningViewRelationContradictory)
     {
         KindNotSelected = kindNotSelected;
@@ -121,7 +117,6 @@ internal readonly struct AutoBuyExclusionHistogram
         OwningViewUnavailable = owningViewUnavailable;
         OwningViewRelationMissing = owningViewRelationMissing;
         OwningViewRelationUnreadable = owningViewRelationUnreadable;
-        OwningViewRelationAmbiguous = owningViewRelationAmbiguous;
         OwningViewRelationContradictory = owningViewRelationContradictory;
     }
 
@@ -134,13 +129,12 @@ internal readonly struct AutoBuyExclusionHistogram
     public int OwningViewUnavailable { get; }
     public int OwningViewRelationMissing { get; }
     public int OwningViewRelationUnreadable { get; }
-    public int OwningViewRelationAmbiguous { get; }
     public int OwningViewRelationContradictory { get; }
 
     public int Total => KindNotSelected + Unavailable +
         RequirementsUnmet + Terminal + Unaffordable + Unpriceable +
         OwningViewUnavailable + OwningViewRelationMissing +
-        OwningViewRelationUnreadable + OwningViewRelationAmbiguous +
+        OwningViewRelationUnreadable +
         OwningViewRelationContradictory;
 
     public int For(AutoBuyExclusion exclusion) => exclusion switch
@@ -154,7 +148,6 @@ internal readonly struct AutoBuyExclusionHistogram
         AutoBuyExclusion.OwningViewUnavailable => OwningViewUnavailable,
         AutoBuyExclusion.OwningViewRelationMissing => OwningViewRelationMissing,
         AutoBuyExclusion.OwningViewRelationUnreadable => OwningViewRelationUnreadable,
-        AutoBuyExclusion.OwningViewRelationAmbiguous => OwningViewRelationAmbiguous,
         AutoBuyExclusion.OwningViewRelationContradictory => OwningViewRelationContradictory,
         _ => 0,
     };

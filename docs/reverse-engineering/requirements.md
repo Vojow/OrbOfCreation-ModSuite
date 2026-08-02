@@ -1,0 +1,124 @@
+# The requirement graph
+
+What gates a purchase, as data. The player-visible residue of this graph is two lines on
+[attributes-and-upgrades](../game-systems/attributes-and-upgrades.md); everything else here exists
+for chain-planning and admission checks.
+
+## Displayed level is a three-term sum
+
+```
+displayed level = purchased level + base levels + bonus levels
+```
+
+**Requirement checks do not use the displayed term.** They evaluate purchased and base levels only,
+so a node showing a healthy green `+5` while its purchased level is `0` **fails** a requirement of
+`≥ 5`, and the interface gives no hint that the number it shows is not the number being tested.
+Bonus levels also **do not advance the paid cost curve**: a node at purchased level 2 with 2 bonus
+levels costs what level 2 alone costs. Never plan a gate against the number on screen.
+
+## Which level a leaf reads depends on the leaf class
+
+The rule above holds where it was observed; it is not universal. The two leaf classes read at IL
+level do not behave the same way, and neither generalizes to a third.
+
+- `StructureRequirement.InternalIsValid` reads `StructureSO.quantity` directly and references
+  `selfBonusLevels` nowhere, so granted or effective levels can never satisfy a purchased-quantity
+  requirement.
+- `ResearchRequirement.InternalIsValid` dispatches the virtual `UpgradeableObject.GetLevel()` slot,
+  whose `ResearchSO` override returns the total level — bonus levels **included**.
+
+Research therefore has no single interchangeable "Research level":
+
+| Question | Native path | Bonus levels |
+|---|---|---|
+| does a prerequisite on this research pass? | `ResearchRequirement.InternalIsValid` → virtual `GetLevel()` | **counted** |
+| is this research complete, or at its native maximum? | `ResearchSO.IsMaxLevel()` → `GetBaseLevel()`, referencing neither `GetBonusLevels()` nor `GetLevel()` | **excluded** |
+
+A research node can satisfy another node's prerequisite on the strength of bonus levels while still
+being short of its own maximum. Read `GetPurchasedLevels()`, `GetBaseLevel()`, `GetBonusLevels()`
+and `GetLevel()` as four separately named values; collapsing them loses exactly the distinction the
+game is making. The verdicts that decompose a research refusal — `IsVisible()`, `IsComplete()`,
+`CanDevelop()`, `IsWithinDevelopRange()`, `MeetsLevelRequirements()`, `StillHasLeeway()`,
+`IsBelowArtificialMaxLevel()`, `IsBelowMaxInvestmentLevel()` — are only comparable with each other
+and with those levels when read in the same generation.
+
+Research `levelPrerequisites` join the same authored graph as upgrades and structures, with native
+`GetRequirementLevel()` as the check level.
+
+## Visibility and availability are separate
+
+A node is **hidden** until its prerequisite tier and its gating levels are met. It then becomes
+visible but possibly still unavailable, and only later purchasable. Seeing a node does not mean it
+can be acted on, and a node's absence is a data question, not an interface bug.
+
+Requirements can also be **per level**: the same node can demand different things at level 3 than it
+did at level 1.
+
+## Requirements reach across systems
+
+A requirement is not restricted to the system its node lives in. E.g., *Arcanism II* costs only
+`10,000` Arcanum but requires the *Arcane Dominion* **research** to have at least one level — the
+research merely being available at level 0 is not enough. Requirements also routinely demand
+**possession of a resource** not yet produced, and some are **hard gates** on a specific level
+count rather than soft scaling conditions. Model hard and soft requirements separately; they behave
+differently.
+
+## A worked chain
+
+```
+Improved Scribing            — hidden
+├── requires Technology tier              — met
+└── requires Scribism >= 1                — NOT met (level 0)
+    ├── Scribism requires Improved Concepts >= 1   — met
+    └── Scribism requires possession of Ink        — NOT met (0 Ink)
+        └── Ink is produced by Refine Ink
+            └── Refine Ink is hidden until Research Scribing >= 1
+                └── Research Scribing requires:
+                    ├── Innovation tier
+                    ├── Research Electric >= 1
+                    ├── possession of Elementia     — NOT met (0)
+                    └── hard gate Expert Items >= 5 — NOT met
+```
+
+The last line is the trap: a visible `Expert Items (+5)` bonus still fails the `>= 5` gate, because
+purchased level is 0. A chain can run four or five hops deep through hidden nodes before it reaches
+something purchasable; walking backwards from the wanted node is the only reliable way to find the
+real blocker.
+
+## Asking the game instead of walking the graph
+
+`Prerequisites.Container` carries two `Check` members, and they are not interchangeable:
+
+| Member | Takes | Side effects |
+|---|---|---|
+| `Check()` | nothing | stamps the frame and latches `available` |
+| `Check(Requirements.ConditionInfo)` | the level being bought | none — stamps nothing, latches nothing |
+
+The parameterized overload is the only requirement call safe to make from a read pass, and the level
+passed to it is part of the answer: an upgrade is meaningfully checked at purchased plus queued plus
+one, a structure at its persisted `quantity`. A verdict recorded without its exact input level and
+owner kind cannot be compared with anything later.
+
+Use it as a differential oracle beside your own expanded verdict, in the same generation — never as
+an admission result. A boolean cannot name which leaf failed, cannot preserve the authored AND/OR
+structure, and cannot expose a chain-planning dependency, which is the entire reason to walk the
+graph. Disagreement between the two verdicts, or missing native evidence, is a loud failure of the
+explanation rather than a tiebreak in favour of either side.
+
+Bind it exactly or not at all: the exact container field, the exact one-parameter overload, and the
+exact public `ConditionInfo(long)` constructor. An ambiguously resolved member is a reason to
+withhold the whole comparison, because a mis-shaped call returns a confident wrong verdict instead
+of an error.
+
+**`CanPurchase` and `CanFire` are not oracles.** `StructureSO.CanPurchase`, `UpgradeSO.CanPurchase`
+and `ConsumableSO.CanFire` are action-admission surfaces with much larger unpublished dependency
+surfaces, and nothing static proves them free of side effects under a read pass. Their component
+terms are readable separately — see
+[native-action-surfaces.md](native-action-surfaces.md) — so a reader reports the composite as
+absent (`native_can_purchase_not_published`, `native_can_fire_not_published`) rather than calling it.
+
+## Challenges modify requirements
+
+Challenges can modify requirements themselves, applied as passive modifiers — e.g., a challenge
+applying `-5` to a research node's requirements, which the node displays as `leeway 5`. See
+[challenges](../game-systems/challenges.md).

@@ -39,9 +39,20 @@ ownership lease as a fast backstop.
 
 The Mods page is the only in-game editor for exact temporary-item approval. It sends each discovered
 item through the worker's shared exact-topology family resolver and lists only resolved Fruit,
-Potion, and Thread operations, ordered by operation then native name. Fruit + Relic items therefore
+Potion, and Thread operations, ordered by operation then displayed name. Fruit + Relic items therefore
 remain Relics and are not listed. Each row shows the native icon, its resolved operation followed by
 every other authored family name, and current stock beside a raised/recessed approval row.
+
+That display capture runs on the Unity main thread and validates its complete read set before it
+enumerates one item: `ConsumableSO.All`, each entry's exact `GetGuid()` identity, the visible
+discovery flag, the `consumableTypes` relationship with every type's own `GetGuid()`, the item's
+native `GetIcon()`, and the current private `quantity` stock field. Names are deliberately not in
+that set. Every item and family label comes from Common's already-bound live entity catalog, so the
+picker owns no parallel `GetName()` reflection contract and the manifest carries no picker-owned
+name binding; an item or family the catalog cannot name is a loud failure rather than a
+UUID-labelled row. The capture keeps only immutable facts plus each item's captured sprite — no
+consumable, family, or native UI object survives the call.
+
 The state line always says how many
 discovered items are approved. Stored UUIDs that do not resolve remain explicit removable rows; a
 failed native discovery read is a red failure state and never masquerades as the healthy
@@ -52,4 +63,4 @@ There is no raw-text, family, select-all, or blacklist control.
 
 The shared quick control changes only `AutoItems.Mode`; exact temporary-item approval remains on
 the Mods page. Native evidence and remaining live-validation limits are documented in the
-[Auto Items native pipeline](../../docs/reverse-engineering/auto-items-native-pipeline.md).
+[native action surfaces](../../docs/reverse-engineering/native-action-surfaces.md).

@@ -12,7 +12,10 @@ The gameplay runtime starts normally only on an audited build. After a game upda
 
 ## 1. Back up your save
 
-Close the game and copy its save directory before installing or changing automation. Do not run the suite alongside AutobuyOrb or another automatic buyer.
+Close the game and copy its save directory before installing or changing automation. On Windows the
+saves live under `%USERPROFILE%\AppData\LocalLow\MarpleGames\Orb of Creation`; under Proton, the same
+folder sits inside the game's `compatdata` prefix. Do not run the suite alongside AutobuyOrb or
+another automatic buyer.
 
 ## 2. Install BepInEx 5
 
@@ -49,4 +52,5 @@ Upgrading from a release before 0.4.0 does not carry your settings over. The sui
 
 The suite detects the exact AutobuyOrb BepInEx GUID. If AutobuyOrb is installed, the suite disables only its overlapping Structure and Upgrade automation and leaves Auto Cast, Auto Concept, Spell Leveling, and Mentor available. This is best-effort safety, not universal third-party detection: unknown unregistered automation is not disabled and cannot be proven absent, so prefer one plugin per automated native action family.
 
-Continue with [configuration and safety](configuration.md).
+Continue with [configuration and safety](configuration.md). If something
+misbehaves, start with [troubleshooting](troubleshooting.md).

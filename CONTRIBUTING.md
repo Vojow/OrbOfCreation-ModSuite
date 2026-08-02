@@ -5,8 +5,8 @@ Thanks for helping improve OrbOfCreation-ModSuite. This is an unofficial BepInEx
 
 ## Branches and scope
 
-`develop` is the integration branch. Open small, focused pull requests against
-`develop`; `main` carries released versions. Release work follows both the
+Open small, focused pull requests against `main`; releases are tagged from it.
+Release work follows both the
 [release procedure](docs/releasing.md) and the
 [release review checklist](docs/development/releases.md).
 

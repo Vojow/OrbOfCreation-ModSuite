@@ -84,8 +84,10 @@ public sealed class WorldIdentityWalkTests
     /// owns. Their secondary identities or levels describe one edge or stock tier rather than a
     /// second entity namespace. <c>CraftingDecisions</c> and <c>CraftingDecisionCosts</c> are the
     /// current execution route and price evidence keyed by a recipe the crafting-recipe table
-    /// already owns. <c>CollectionCategories</c> is availability evidence about one
-    /// collector pass, not a native row and not a second identity namespace. <c>ScribeWork</c>,
+    /// already owns. <c>PurchaseViewRoutes</c> likewise holds authored edges between a
+    /// candidate, list, and view whose identities belong to their primary tables.
+    /// <c>CollectionCategories</c> is availability evidence about one collector pass, not a native
+    /// row and not a second identity namespace. <c>ScribeWork</c>,
     /// <c>StructureEnchantments</c>, <c>ScrollTargets</c>, and
     /// <c>ScrollTargetEvidence</c> are relationship or evidence rows keyed by recipes, structures,
     /// Scrolls, and enchantments whose owning tables already carry those identities.
@@ -100,6 +102,7 @@ public sealed class WorldIdentityWalkTests
     {
         "CollectionCategories",
         "PurchaseCosts",
+        "PurchaseViewRoutes",
         "PlotActions",
         "PlotActionInstances",
         "ActionQueueSlots",
