@@ -20,7 +20,13 @@ saves, and player control; fail closed when a game contract is unknown.
 
 - Follow [the engineering doctrine](docs/development/engineering-doctrine.md).
 - Keep changes focused and leave unrelated work untouched.
-- Update maintained behavior documentation with behavior changes.
+- Update maintained behavior documentation with behavior changes; adding doc
+  lines means removing the lines they obsolete.
+- Commit subjects use area prefixes (`world:`, `ui:`, `docs:`, `tests:`,
+  `build:`, `release:`, `autobuy:`, `autoharvest:`, …).
+- PRs stay small and land on `develop`.
+- `artifacts/` is gitignored on purpose: working reports stay local and are
+  never force-added.
 - Nested `AGENTS.md` files add rules for their subtrees.
 
 ## Verification
@@ -35,7 +41,11 @@ saves, and player control; fail closed when a game contract is unknown.
 
 ## References
 
-- Development workflow: `CONTRIBUTING.md`
-- Testing and runtime validation: `docs/testing/README.md`
-- Native boundary: `docs/runtime-architecture/game-boundary-doctrine.md`
+- Game knowledge: `docs/game-systems/README.md` (facts) and
+  `docs/strategy/README.md` (how to play well)
+- Digging into the game's code: `docs/reverse-engineering/README.md`
 - Runtime architecture: `docs/runtime-architecture/README.md`
+- Native boundary: `docs/runtime-architecture/game-boundary-doctrine.md`
+- Testing and runtime validation: `docs/testing/README.md`
+- Development workflow: `CONTRIBUTING.md`
+- Docs maintenance rules: `docs/AGENTS.md`

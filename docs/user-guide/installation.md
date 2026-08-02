@@ -12,7 +12,10 @@ The gameplay runtime starts normally only on an audited build. After a game upda
 
 ## 1. Back up your save
 
-Close the game and copy its save directory before installing or changing automation. Do not run the suite alongside AutobuyOrb or another automatic buyer.
+Close the game and copy its save directory before installing or changing automation. On Windows the
+saves live under `%USERPROFILE%\AppData\LocalLow\MarpleGames\Orb of Creation`; under Proton, the same
+folder sits inside the game's `compatdata` prefix. Do not run the suite alongside AutobuyOrb or
+another automatic buyer.
 
 ## 2. Install BepInEx 5
 

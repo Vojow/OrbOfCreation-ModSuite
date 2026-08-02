@@ -1,16 +1,17 @@
-# Game MCP (performance-debug only)
+# Game MCP tooling
 
-The suite serves a localhost MCP endpoint from inside Orb Of Creation when, and only when, it was
-built with the `perf-debug` profile. Ordinary and release builds compile the server and every MCP
-gadget out.
+An engineering surface, not a player feature. The suite serves a localhost MCP endpoint from inside
+Orb Of Creation when, and only when, it was built with the `perf-debug` profile. Ordinary and
+release builds compile the server and every MCP gadget out, so nothing described here is reachable
+from a published release.
 
 ## Connect
 
-Close the game before installing, then launch it through Steam:
+Install a `perf-debug` build with the game closed (see [development setup](setup.md)), then launch
+the game through Steam:
 
 ```sh
-tools/install-supported-suite.sh perf-debug
-open "steam://rungameid/1910680"
+./script/install perf-debug
 ```
 
 The endpoint starts on the title screen, before a run is loaded:

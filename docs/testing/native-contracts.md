@@ -1,7 +1,7 @@
 # Native contract workflow
 
 [Testing doctrine](README.md) ·
-[Reverse-engineering audit](../reverse-engineering/audit.md)
+[Reverse-engineering audit](../reverse-engineering/audited-build.md)
 
 [`data/native-contracts.json`](../../data/native-contracts.json) is the audited
 compatibility boundary for reflection and Harmony. It admits complete

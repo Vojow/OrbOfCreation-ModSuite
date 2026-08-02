@@ -1,42 +1,34 @@
 # Documentation
 
-Choose the path that matches what you are trying to do.
+Four knowledge layers and the practical pages. One line each; the link is that folder's own index.
 
-## Players
+## Knowledge layers
 
-- [Install the supported suite](user-guide/installation.md)
-- [Configure automation safely](user-guide/configuration.md)
-- [Troubleshoot a problem](user-guide/troubleshooting.md)
-- [Attach a strategist through the performance-debug game MCP](user-guide/game-mcp.md)
-- [Remove the mods](user-guide/uninstalling.md)
-- [Automation behavior reference](../src/Automata/README.md)
-- [Mod Config UI reference](../src/ModConfig/README.md)
-- [Mentor reference](../src/Mentor/README.md)
+- [Game systems](game-systems/README.md) — how Orb of Creation itself works, version 1.0.5. Facts
+  only. Read before reasoning about any in-game number.
+- [Strategy](strategy/README.md) — how to play it well: per-resource policies, run planning, the
+  advisor program. Opinion, built on game systems.
+- [Reverse engineering](reverse-engineering/README.md) — how to dig into the game's assemblies and
+  what the digging established. Read before touching a native member.
+- [Runtime architecture](runtime-architecture/README.md) — how the suite is built: three
+  publications, two service shapes, where the game may be touched. Read before changing runtime code.
 
-## Contributors and maintainers
+## Practical pages
 
-- [Engineering doctrine](development/engineering-doctrine.md)
-- [Development setup](development/setup.md)
-- [Contributing workflow](../CONTRIBUTING.md)
-- [Testing doctrine](testing/README.md)
-- [Native contract workflow](testing/native-contracts.md)
-- [Runtime validation protocol](testing/runtime-validation.md)
-- [Release review checklist](development/releases.md)
-- [Release procedure](releasing.md)
-- [Source layout](../src/README.md)
+- [User guide](user-guide/installation.md) — install, configure, troubleshoot, uninstall. What
+  players are told.
+- [Testing](testing/README.md) — evidence layers, test selection, and the ordered V0–V7 runtime
+  gates. Read before calling anything green.
+- [Engineering doctrine](development/engineering-doctrine.md) — the review rules, each earned by a
+  concrete defect. Read before arguing a review point.
+- [Development setup](development/setup.md) — build, portable tests, and an authorized local install.
+- [MCP tools](development/mcp-tools.md) — the performance-debug game MCP reference.
+- [Contributing](../CONTRIBUTING.md) — the contributor workflow.
+- [Releasing](releasing.md) — the owner's tag-and-publish procedure and the review checklist before it.
+- [The north star](north-star.md) — the goal every change serves. When a change conflicts with it,
+  say which one is wrong.
 
-## Reverse-engineering research
-
-- [Examined build and reading order](reverse-engineering/README.md)
-- [Architecture](reverse-engineering/architecture.md)
-- [Entity catalog](reverse-engineering/entity-catalog.md)
-- [Latest assembly audit](reverse-engineering/audit.md)
-
-Research pages distinguish **Verified**, **Inferred**, and **Candidate** findings. They document the supported installed-game baseline and do not include game binaries.
-
-## Architecture and direction
-
-- [The north star](north-star.md)
-- [Runtime architecture dossier](runtime-architecture/README.md)
-- [Accepted service-cycle runtime](runtime-architecture/service-cycle-runtime.md)
-- [Service-cycle observability](runtime-architecture/observability.md)
+Released behavior is documented beside the code it describes: `src/README.md` for the layout, then
+the per-feature `src/Automata`, `src/AutoItems`, `src/AutoScribe`, `src/Mentor`, and `src/ModConfig`
+READMEs. This tree explains the game, the strategy, the design, and the process — never what a
+shipped feature currently does.
