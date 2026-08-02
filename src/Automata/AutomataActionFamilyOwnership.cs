@@ -47,6 +47,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.EquipmentLoadout };
     private static readonly AutomationActionFamily[] ChallengeFamilies =
         { AutomationActionFamily.ChallengeLifecycle };
+    private static readonly AutomationActionFamily[] PrestigeFamilies =
+        { AutomationActionFamily.PrestigeLifecycle };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -155,6 +157,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.EquipmentLoadout);
     public bool TryCaptureChallengeMutationPermit() =>
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.ChallengeLifecycle);
+    public bool TryCapturePrestigeMutationPermit() =>
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.PrestigeLifecycle);
     public string ItemsOwnershipFailure =>
         _itemsClaimFailure.Length != 0
             ? _itemsClaimFailure
@@ -181,6 +185,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         "The current MCP operation does not hold EquipmentLoadout.";
     public string ChallengeOwnershipFailure =>
         "The current MCP operation does not hold ChallengeLifecycle.";
+    public string PrestigeOwnershipFailure =>
+        "The current MCP operation does not hold PrestigeLifecycle.";
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -472,6 +478,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.GenericDiscovery => GenericDiscoveryFamilies,
         GameMcpCommandKind.EquipmentLoadout => EquipmentLoadoutFamilies,
         GameMcpCommandKind.Challenge => ChallengeFamilies,
+        GameMcpCommandKind.Prestige => PrestigeFamilies,
         _ => Array.Empty<AutomationActionFamily>(),
     };
 
@@ -512,6 +519,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         AutomationActionFamily.GenericDiscovery => false,
         AutomationActionFamily.EquipmentLoadout => false,
         AutomationActionFamily.ChallengeLifecycle => false,
+        AutomationActionFamily.PrestigeLifecycle => false,
         _ => false,
     };
 

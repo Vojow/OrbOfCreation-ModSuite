@@ -417,6 +417,20 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
+    internal static GameMcpValue ProjectPrestigePostState(GameMcpFrameContext state)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        var result = new JObject
+        {
+            ["scene"] = state.SceneName,
+            ["prestigeState"] = ProjectPrestigeState(world),
+            ["challengeState"] = ProjectChallengeState(world),
+        };
+        return result.Freeze();
+    }
+
     internal static GameMcpValue ProjectEntityState(
         GameWorldState world,
         string categoryName,
@@ -1890,8 +1904,74 @@ internal static class GameMcpWorldQuery
             ["prestigeOffers"] = ChallengeReferences(context.PrestigeOffers),
             ["fetchTime"] = FetchDecision(fetchAvailable, context),
             ["fetchPrestige"] = FetchDecision(fetchAvailable, context),
+            ["prestige"] = ProjectPrestigeState(world),
         };
         return result.Freeze();
+    }
+
+    internal static GameMcpValue ProjectPrestigeState(GameWorldState world)
+    {
+        if (world is null) throw new ArgumentNullException(nameof(world));
+        var context = world.ChallengeContext;
+        if (!context.Available || !context.PrestigeAvailable)
+            return new JObject
+            {
+                ["available"] = false,
+                ["reasonCode"] = !context.Available && context.UnavailableReason.Length != 0
+                    ? context.UnavailableReason
+                    : context.PrestigeUnavailableReason.Length == 0
+                    ? "prestige_state_unavailable"
+                    : context.PrestigeUnavailableReason,
+            }.Freeze();
+
+        var available = context.WorldCycleComplete && context.ChallengesFetched;
+        var reset = new JObject { ["available"] = available };
+        if (!available)
+            reset["reasonCode"] = !context.WorldCycleComplete
+                ? "world_cycle_incomplete"
+                : "challenges_not_fetched";
+        var result = new JObject
+        {
+            ["persistenceCurrent"] = new GameMcpDomainValue(new BigDouble(context.PersistenceCurrent)),
+            ["persistenceProjected"] = new GameMcpDomainValue(new BigDouble(context.PersistenceProjected)),
+            ["persistencePrevious"] = new GameMcpDomainValue(new BigDouble(context.PersistencePrevious)),
+            ["resetCount"] = new GameMcpDomainValue(new BigDouble(context.ResetCount)),
+            ["queuedChallenges"] = PrestigeChallenges(world, queuedRewards: false),
+            ["queuedRewards"] = PrestigeChallenges(world, queuedRewards: true),
+            ["reset"] = reset,
+        };
+        if (context.PersistentResourceId != Guid.Empty)
+        {
+            var holding = new JObject { ["resourceId"] = context.PersistentResourceId.ToString("D") };
+            if (WorldLookup.TryFind(world.Resources, context.PersistentResourceId, out var resource))
+            {
+                holding["amount"] = new GameMcpDomainValue(resource.TrueQuantity);
+                if (resource.IsCapped)
+                    holding["capacity"] = new GameMcpDomainValue(resource.Reading.Capacity);
+                holding["atCapacity"] = resource.IsAtCapacity;
+            }
+            result["persistentResource"] = holding;
+        }
+        return result.Freeze();
+    }
+
+    private static JArray PrestigeChallenges(GameWorldState world, bool queuedRewards)
+    {
+        var result = new JArray();
+        if (queuedRewards)
+        {
+            for (var index = 0; index < world.Challenges.Count; index++)
+                if (world.Challenges[index].RewardQueued)
+                    result.Add(world.Challenges[index].EntityId.ToString("D"));
+            return result;
+        }
+        for (var index = 0; index < world.ChallengeContext.PrestigeOffers.Count; index++)
+        {
+            var id = world.ChallengeContext.PrestigeOffers[index].ChallengeId;
+            if (WorldLookup.TryFind(world.Challenges, id, out var challenge) && challenge.State == 1)
+                result.Add(id.ToString("D"));
+        }
+        return result;
     }
 
     private static JObject FetchDecision(bool available, in WorldChallengeContext context)

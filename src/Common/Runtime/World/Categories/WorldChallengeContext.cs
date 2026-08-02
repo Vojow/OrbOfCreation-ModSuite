@@ -33,6 +33,35 @@ internal readonly struct WorldChallengeContext
         int selectionMaximum, PublicationTable<WorldChallengeReference> selected,
         PublicationTable<WorldChallengeReference> timeOffers,
         PublicationTable<WorldChallengeReference> prestigeOffers)
+        : this(available, unavailableReason, worldCycleComplete, challengesFetched,
+            rerollsLeft, rerollsMaximum, selectionMaximum, false,
+            "prestige state was not captured", Guid.Empty, 0, 0, 0, 0,
+            selected, timeOffers, prestigeOffers)
+    {
+    }
+
+    internal WorldChallengeContext(bool available, string unavailableReason,
+        bool worldCycleComplete, bool challengesFetched, int rerollsLeft, int rerollsMaximum,
+        int selectionMaximum, Guid persistentResourceId, int persistenceCurrent,
+        int persistenceProjected, int persistencePrevious, int resetCount,
+        PublicationTable<WorldChallengeReference> selected,
+        PublicationTable<WorldChallengeReference> timeOffers,
+        PublicationTable<WorldChallengeReference> prestigeOffers)
+        : this(available, unavailableReason, worldCycleComplete, challengesFetched,
+            rerollsLeft, rerollsMaximum, selectionMaximum, true, string.Empty,
+            persistentResourceId, persistenceCurrent, persistenceProjected,
+            persistencePrevious, resetCount, selected, timeOffers, prestigeOffers)
+    {
+    }
+
+    internal WorldChallengeContext(bool available, string unavailableReason,
+        bool worldCycleComplete, bool challengesFetched, int rerollsLeft, int rerollsMaximum,
+        int selectionMaximum, bool prestigeAvailable, string prestigeUnavailableReason,
+        Guid persistentResourceId, int persistenceCurrent,
+        int persistenceProjected, int persistencePrevious, int resetCount,
+        PublicationTable<WorldChallengeReference> selected,
+        PublicationTable<WorldChallengeReference> timeOffers,
+        PublicationTable<WorldChallengeReference> prestigeOffers)
     {
         Available = available;
         UnavailableReason = unavailableReason ?? string.Empty;
@@ -41,6 +70,13 @@ internal readonly struct WorldChallengeContext
         RerollsLeft = rerollsLeft;
         RerollsMaximum = rerollsMaximum;
         SelectionMaximum = selectionMaximum;
+        PrestigeAvailable = prestigeAvailable;
+        PrestigeUnavailableReason = prestigeUnavailableReason ?? string.Empty;
+        PersistentResourceId = persistentResourceId;
+        PersistenceCurrent = persistenceCurrent;
+        PersistenceProjected = persistenceProjected;
+        PersistencePrevious = persistencePrevious;
+        ResetCount = resetCount;
         _selected = selected;
         _timeOffers = timeOffers;
         _prestigeOffers = prestigeOffers;
@@ -53,6 +89,13 @@ internal readonly struct WorldChallengeContext
     internal int RerollsLeft { get; }
     internal int RerollsMaximum { get; }
     internal int SelectionMaximum { get; }
+    internal bool PrestigeAvailable { get; }
+    internal string PrestigeUnavailableReason { get; }
+    internal Guid PersistentResourceId { get; }
+    internal int PersistenceCurrent { get; }
+    internal int PersistenceProjected { get; }
+    internal int PersistencePrevious { get; }
+    internal int ResetCount { get; }
     internal PublicationTable<WorldChallengeReference> Selected =>
         _selected ?? PublicationTable<WorldChallengeReference>.Empty;
     internal PublicationTable<WorldChallengeReference> TimeOffers =>
@@ -77,6 +120,13 @@ internal sealed class WorldChallengeContextBuffer
     internal int RerollsLeft { get; private set; }
     internal int RerollsMaximum { get; private set; }
     internal int SelectionMaximum { get; private set; }
+    internal Guid PersistentResourceId { get; private set; }
+    internal int PersistenceCurrent { get; private set; }
+    internal int PersistenceProjected { get; private set; }
+    internal int PersistencePrevious { get; private set; }
+    internal int ResetCount { get; private set; }
+    internal bool PrestigeAvailable { get; private set; }
+    internal string PrestigeUnavailableReason { get; private set; } = string.Empty;
 
     internal void Reset()
     {
@@ -86,6 +136,10 @@ internal sealed class WorldChallengeContextBuffer
         WorldCycleComplete = false;
         ChallengesFetched = false;
         RerollsLeft = RerollsMaximum = SelectionMaximum = 0;
+        PersistentResourceId = Guid.Empty;
+        PersistenceCurrent = PersistenceProjected = PersistencePrevious = ResetCount = 0;
+        PrestigeAvailable = false;
+        PrestigeUnavailableReason = string.Empty;
     }
 
     internal void SetHeader(bool complete, bool fetched, int left, int maximum, int selectionMaximum)
@@ -96,6 +150,24 @@ internal sealed class WorldChallengeContextBuffer
         RerollsLeft = Math.Max(left, 0);
         RerollsMaximum = Math.Max(maximum, 0);
         SelectionMaximum = Math.Max(selectionMaximum, 0);
+    }
+
+    internal void SetPrestige(Guid persistentResourceId, int persistenceCurrent,
+        int persistenceProjected, int persistencePrevious, int resetCount)
+    {
+        PrestigeAvailable = true;
+        PrestigeUnavailableReason = string.Empty;
+        PersistentResourceId = persistentResourceId;
+        PersistenceCurrent = persistenceCurrent;
+        PersistenceProjected = persistenceProjected;
+        PersistencePrevious = persistencePrevious;
+        ResetCount = Math.Max(resetCount, 0);
+    }
+
+    internal void SetPrestigeUnavailable(string reason)
+    {
+        PrestigeAvailable = false;
+        PrestigeUnavailableReason = reason ?? string.Empty;
     }
 
     internal void SetUnavailable(string reason)
@@ -113,6 +185,8 @@ internal sealed class WorldChallengeContextBuffer
 
     internal WorldChallengeContext Build() => new(Available, UnavailableReason,
         WorldCycleComplete, ChallengesFetched, RerollsLeft, RerollsMaximum, SelectionMaximum,
+        PrestigeAvailable, PrestigeUnavailableReason, PersistentResourceId, PersistenceCurrent,
+        PersistenceProjected, PersistencePrevious, ResetCount,
         PublicationTable<WorldChallengeReference>.Create(_selected, _selectedCount),
         PublicationTable<WorldChallengeReference>.Create(_time, _timeCount),
         PublicationTable<WorldChallengeReference>.Create(_prestige, _prestigeCount));
@@ -142,13 +216,20 @@ internal sealed class WorldChallengeContextReader : IWorldCategoryReader
     private readonly Func<object, object?>? _rerollsMaximum;
     private readonly Func<object, object?>? _worldCycleComplete;
     private readonly Func<object, object?>? _challengesFetched;
+    private readonly Func<object, object?>? _persistentResource;
+    private readonly Func<object, object?>? _persistenceCurrent;
+    private readonly Func<object, object?>? _persistenceProjected;
+    private readonly Func<object, object?>? _persistencePrevious;
+    private readonly Func<object, object?>? _resetCount;
     private readonly Func<object, IList?>? _values;
     private readonly Func<object, int>? _maximum;
     private readonly Func<object, object, bool>? _restricted;
     private readonly Func<object, int>? _asInt;
     private readonly Func<object, bool>? _getBool;
     private readonly Func<object, Guid>? _id;
+    private readonly Func<object, Guid>? _resourceId;
     private readonly string _unavailable;
+    private readonly string _prestigeUnavailable;
 
     internal WorldChallengeContextReader(Func<string, Type?> resolveType)
     {
@@ -158,6 +239,7 @@ internal sealed class WorldChallengeContextReader : IWorldCategoryReader
         var listType = resolveType("ChallengeListVariable");
         var intType = resolveType("IntVariable");
         var boolType = resolveType("BoolVariable");
+        var resourceType = resolveType("ResourceSO");
         _challengeManager = StaticReference(_challengeManagerType, "instance", _challengeManagerType);
         _resetManager = StaticReference(_resetManagerType, "instance", _resetManagerType);
         _preferred = NativeAccessorBinder.Reference(_challengeManagerType, "preferredChallenges", listType);
@@ -167,6 +249,11 @@ internal sealed class WorldChallengeContextReader : IWorldCategoryReader
         _rerollsMaximum = NativeAccessorBinder.Reference(_resetManagerType, "challengeRerollsMax", intType);
         _worldCycleComplete = NativeAccessorBinder.Reference(_resetManagerType, "hasCompleteWorldCycle", boolType);
         _challengesFetched = NativeAccessorBinder.Reference(_resetManagerType, "hasFetchedChallenges", boolType);
+        _persistentResource = NativeAccessorBinder.Reference(_resetManagerType, "persistentResource", resourceType);
+        _persistenceCurrent = NativeAccessorBinder.Reference(_resetManagerType, "persistValue", intType);
+        _persistenceProjected = NativeAccessorBinder.Reference(_resetManagerType, "persistValueNew", intType);
+        _persistencePrevious = NativeAccessorBinder.Reference(_resetManagerType, "persistValueLast", intType);
+        _resetCount = NativeAccessorBinder.Reference(_resetManagerType, "persistentResetCount", intType);
         _values = NativeAccessorBinder.CollectionField(listType, "value");
         _maximum = NativeAccessorBinder.Call<int>(listType, "GetMax");
         _restricted = NativeAccessorBinder.CallWithObjectArgument<bool>(
@@ -174,6 +261,7 @@ internal sealed class WorldChallengeContextReader : IWorldCategoryReader
         _asInt = NativeAccessorBinder.Call<int>(intType, "AsInt");
         _getBool = NativeAccessorBinder.Call<bool>(boolType, "GetValue");
         _id = NativeAccessorBinder.Call<Guid>(_challengeType, "GetGuid");
+        _resourceId = NativeAccessorBinder.Call<Guid>(resourceType, "GetGuid");
         _unavailable = _challengeType is null || _challengeManagerType is null ||
             _resetManagerType is null || listType is null || intType is null || boolType is null ||
             _challengeManager is null || _resetManager is null || _preferred is null ||
@@ -182,6 +270,11 @@ internal sealed class WorldChallengeContextReader : IWorldCategoryReader
             _values is null || _maximum is null || _restricted is null || _asInt is null ||
             _getBool is null || _id is null
                 ? "the complete challenge decision binding set was unavailable"
+                : string.Empty;
+        _prestigeUnavailable = resourceType is null || _persistentResource is null ||
+            _persistenceCurrent is null || _persistenceProjected is null ||
+            _persistencePrevious is null || _resetCount is null || _resourceId is null
+                ? "the complete prestige decision binding set was unavailable"
                 : string.Empty;
     }
 
@@ -223,6 +316,31 @@ internal sealed class WorldChallengeContextReader : IWorldCategoryReader
             Append(preferred, preferred, buffer.AppendSelected);
             Append(time, preferred, buffer.AppendTime);
             Append(prestige, preferred, buffer.AppendPrestige);
+            if (_prestigeUnavailable.Length != 0)
+            {
+                buffer.SetPrestigeUnavailable(_prestigeUnavailable);
+                return new WorldCategoryReport(Category, WorldCategoryOutcome.Collected, 1, 1,
+                    _prestigeUnavailable);
+            }
+            try
+            {
+                var resource = _persistentResource!(resetManager);
+                var persistenceCurrent = _persistenceCurrent!(resetManager);
+                var persistenceProjected = _persistenceProjected!(resetManager);
+                var persistencePrevious = _persistencePrevious!(resetManager);
+                var resetCount = _resetCount!(resetManager);
+                if (resource is null || persistenceCurrent is null || persistenceProjected is null ||
+                    persistencePrevious is null || resetCount is null)
+                    throw new InvalidOperationException("a prestige decision member was null");
+                buffer.SetPrestige(_resourceId!(resource), _asInt!(persistenceCurrent),
+                    _asInt!(persistenceProjected), _asInt!(persistencePrevious), _asInt!(resetCount));
+            }
+            catch (Exception exception)
+            {
+                var reason = "reading prestige decisions threw: " + exception.GetBaseException().Message;
+                buffer.SetPrestigeUnavailable(reason);
+                return new WorldCategoryReport(Category, WorldCategoryOutcome.Collected, 1, 1, reason);
+            }
             return new WorldCategoryReport(Category, WorldCategoryOutcome.Collected, 1, 0, string.Empty);
         }
         catch (Exception exception)

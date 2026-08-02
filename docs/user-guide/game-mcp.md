@@ -120,6 +120,7 @@ does not refresh it by hidden navigation.
 | `game_discover` | Discover one published alchemy recipe, equipment asset, glyph, ritual, or time rune |
 | `game_equipment` | Equip/increase or unequip/decrease one created artifact using live native multi-buy |
 | `game_challenge` | Select, queue, abandon, or fetch the Time/prestige challenge offers |
+| `game_prestige` | Confirm and perform the irreversible persistent reset |
 | `game_spell_workbench` | Select an authored spell recipe, discover it, or create another equipped instance |
 | `game_spell_composition` | Set the global spell output level or replace one equipped spell's augment stack |
 | `game_spell_loadout` | Remove one exact equipped runtime spell or move it to another loadout slot |
@@ -281,6 +282,12 @@ fully named `selected`, `timeOffers`, and `prestigeOffers`; selection capacity; 
 rerolls; and explicit `fetchTime`/`fetchPrestige` availability. This shared state is captured once
 on Unity's main thread with the ordinary world and projected by reference.
 
+`challengeState.prestige` is the persistent-reset pre-decision surface. It reports the current,
+projected, and previous persistence values, reset count, the fully named persistent resource with
+its current spendable amount and real capacity semantics, queued prestige challenges, queued
+rewards, and the exact `reset.available` decision. No attempt/refusal is needed to learn whether a
+reset can run.
+
 The MCP-only sequence is:
 
 1. Page `challenges`; compare next difficulty/reward and the named ordered offers from
@@ -290,6 +297,10 @@ The MCP-only sequence is:
 3. Call `queue` to toggle an offered target's activation state, or `abandon` for an active target.
 4. Call `fetch_time` or `fetch_prestige` without a UUID. The terminal response returns the complete
    replacement named offer lists and remaining next decisions; no read-back is required.
+5. When the prestige decision is available, call `game_prestige(confirm=true)`. Success waits for a
+   newer world after the native scene reload and returns the new scene, `prestigeState`, and
+   `challengeState` inline. The explicit boolean prevents an empty or accidental call from
+   triggering the irreversible reset.
 
 The MCP-only decision/action sequence is seven calls when two offers need explanations:
 
@@ -659,6 +670,17 @@ every offer entered the native queued state. Rerolls, fetched flags, rewards, ef
 accounting remain evidence rather than success gates. Committed target modes return the complete
 newer named challenge row plus shared challenge state; fetch returns the shared state. No success
 receipt or follow-up read is required.
+
+`game_prestige` requires `confirm:true`. The boundary rereads the reset manager's world-cycle
+completion and challenge-fetch flags plus the persistent reset count on Unity's main
+thread, then captures `PrestigeLifecycle` ownership last. The public native method merely schedules
+the operation behind a screen fade, so MCP invokes the exact audited private transaction directly;
+that transaction performs persistent-state preservation/reset, activates queued rewards and
+prestige challenges, updates the persistent resource, and reloads the scene. Success is gated only
+by the exact lifecycle replacement. Resource and counter movements are not ledger gates. A native
+throw or a returned transaction without lifecycle replacement faults and quarantines the family.
+After success, the response waits for the newer post-reset world and carries its scene plus complete
+prestige and challenge next-decision state, with no receipt, payment stanza, or read-back call.
 
 CLI play commands therefore need no generation option:
 

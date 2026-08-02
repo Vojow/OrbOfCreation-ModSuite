@@ -575,6 +575,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .ChallengeOwnershipFailure)
+                    , createPrestige: () => new PrestigeGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCapturePrestigeMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .PrestigeOwnershipFailure)
 #endif
                     );
             },
@@ -1495,13 +1503,16 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandResult committed,
         ulong actionWorldGeneration)
     {
-        const float timeoutSeconds = 5f;
+        var timeoutSeconds = command.Kind == GameMcpCommandKind.Prestige ? 30f : 5f;
         var deadline = Time.realtimeSinceStartup + timeoutSeconds;
         GameMcpFrameContext? latest = null;
         while (Time.realtimeSinceStartup < deadline)
         {
             yield return null;
-            latest = CaptureGameMcpFrameContext(GameMcpFrameData.World);
+            latest = CaptureGameMcpFrameContext(
+                command.Kind == GameMcpCommandKind.Prestige
+                    ? GameMcpFrameData.World | GameMcpFrameData.Scene
+                    : GameMcpFrameData.World);
             if (latest.World is null || latest.World.Generation.Value <= actionWorldGeneration)
                 continue;
             if (command.Kind != GameMcpCommandKind.DiscoveryTreeOffer ||
@@ -1539,6 +1550,8 @@ public sealed class Plugin : BaseUnityPlugin
                     GameMcpWorldQuery.ProjectConsumablePostState(latest, command.TargetId),
                 GameMcpCommandKind.Challenge =>
                     GameMcpWorldQuery.ProjectChallengePostState(latest, command.TargetId),
+                GameMcpCommandKind.Prestige =>
+                    GameMcpWorldQuery.ProjectPrestigePostState(latest),
                 _ => GameMcpWorldQuery.ProjectPostState(latest, category, command.TargetId),
             };
         }
@@ -1581,6 +1594,7 @@ public sealed class Plugin : BaseUnityPlugin
         },
         GameMcpCommandKind.EquipmentLoadout => "equipment",
         GameMcpCommandKind.Challenge => "challenges",
+        GameMcpCommandKind.Prestige => "challenges",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 
@@ -1802,6 +1816,8 @@ public sealed class Plugin : BaseUnityPlugin
             nativeType = "EquipmentSO";
         else if (kind == GameMcpCommandKind.Challenge)
             nativeType = "ChallengeSO";
+        else if (kind == GameMcpCommandKind.Prestige)
+            nativeType = "PersistentResetManager";
         else if (kind == GameMcpCommandKind.ConfigurationSet)
         {
             mode = request.Section;

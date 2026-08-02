@@ -53,7 +53,7 @@ internal static class GameMcpEntityCapabilityMap
         if (world is null) throw new ArgumentNullException(nameof(world));
         if (target == Guid.Empty && capability is not (
                 GameMcpCommandKind.SpellComposition or GameMcpCommandKind.Targeting or
-                GameMcpCommandKind.Challenge))
+                GameMcpCommandKind.Challenge or GameMcpCommandKind.Prestige))
         {
             reason = "a non-empty stable UUID is required";
             return false;
@@ -114,6 +114,8 @@ internal static class GameMcpEntityCapabilityMap
                 AvailableGlobal(world.ChallengeContext.Available, "challenge decision state", out reason),
             GameMcpCommandKind.Challenge =>
                 Entity(world.EntityIdentities, world.Challenges, target, "challenges", capability, out reason),
+            GameMcpCommandKind.Prestige =>
+                AvailableGlobal(world.ChallengeContext.Available, "prestige decision state", out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -377,7 +379,8 @@ internal static class GameMcpEntityCapabilityMap
         D("rituals", "RitualSO", GameMcpCommandKind.GenericDiscovery),
         D("achievements", "AchievementSO"),
         D("advancements", "AdvancementSO"),
-        D("challenges", "ChallengeSO", GameMcpCommandKind.Challenge),
+        D("challenges", "ChallengeSO", GameMcpCommandKind.Challenge,
+            GameMcpCommandKind.Prestige),
         D("thought-streams", "ThoughtStreamSO"),
         D("tutorials", "TutorialSO"),
         D("views", "ViewSO"),

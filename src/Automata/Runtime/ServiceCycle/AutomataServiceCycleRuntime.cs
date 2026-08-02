@@ -32,6 +32,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly GenericDiscoveryGameAction? _genericDiscovery;
     private readonly EquipmentLoadoutGameAction? _equipmentLoadout;
     private readonly ChallengeGameAction? _challenges;
+    private readonly PrestigeGameAction? _prestige;
     private bool _disposed;
 #if SERVICE_CYCLE_PROFILE
     private ulong _nextGameMcpActionIdentity;
@@ -50,7 +51,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         TargetingGameAction? targeting = null,
         GenericDiscoveryGameAction? genericDiscovery = null,
         EquipmentLoadoutGameAction? equipmentLoadout = null,
-        ChallengeGameAction? challenges = null)
+        ChallengeGameAction? challenges = null,
+        PrestigeGameAction? prestige = null)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _configurationPublication = configurationPublication ??
@@ -66,6 +68,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _genericDiscovery = genericDiscovery;
         _equipmentLoadout = equipmentLoadout;
         _challenges = challenges;
+        _prestige = prestige;
     }
 
     internal SuiteRuntimeConfiguration CurrentConfiguration => _configurationPublication.ReadLatest().Snapshot;
@@ -131,6 +134,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _genericDiscovery?.InvalidateLifecycle();
         _equipmentLoadout?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
+        _prestige?.InvalidateLifecycle();
     }
 
 #if SERVICE_CYCLE_PROFILE
@@ -191,6 +195,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteEquipmentLoadout(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Challenge)
                 return ExecuteChallenge(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.Prestige)
+                return ExecutePrestige(command, lifecycle, configuration.Generation.Value);
             var service = ServiceForGameMcp(command.Kind);
             var context = CreateGameMcpContext(
                 registry,
@@ -475,6 +481,23 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
             configurationGeneration, submission.Reason,
             GameMcpChallengeProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecutePrestige(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_prestige is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared prestige GameAction was not composed", lifecycle,
+                configurationGeneration);
+        var action = new PrestigeAction(command.ExpectedLifecycleGeneration);
+        var submission = _prestige.Submit(in action);
+        var result = PrestigeActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason,
+            GameMcpPrestigeProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteSpellWorkbench(
@@ -811,6 +834,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _genericDiscovery?.Dispose();
             _equipmentLoadout?.Dispose();
             _challenges?.Dispose();
+            _prestige?.Dispose();
             if (!_host.EmergencyStopEngaged)
                 _host.SetEmergencyStop(true, EmergencyStopReason.SuiteShutdown);
         }

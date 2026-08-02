@@ -33,6 +33,7 @@ internal enum GameMcpCommandKind
     GenericDiscovery = 22,
     EquipmentLoadout = 23,
     Challenge = 24,
+    Prestige = 25,
 }
 
 internal static class GameMcpCommandKinds
@@ -43,7 +44,8 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.SpellComposition or GameMcpCommandKind.SpellLoadout or
             GameMcpCommandKind.Targeting or GameMcpCommandKind.Consumable or
             GameMcpCommandKind.Crafting or GameMcpCommandKind.GenericDiscovery or
-            GameMcpCommandKind.EquipmentLoadout or GameMcpCommandKind.Challenge;
+            GameMcpCommandKind.EquipmentLoadout or GameMcpCommandKind.Challenge or
+            GameMcpCommandKind.Prestige;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -62,6 +64,7 @@ internal static class GameMcpCommandKinds
         "game_discover" => GameMcpCommandKind.GenericDiscovery,
         "game_equipment" => GameMcpCommandKind.EquipmentLoadout,
         "game_challenge" => GameMcpCommandKind.Challenge,
+        "game_prestige" => GameMcpCommandKind.Prestige,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -652,6 +655,17 @@ internal static class GameMcpActionResultCodeNames
             if (code == ChallengeActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == ChallengeActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == ChallengeActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.Prestige)
+        {
+            if (code == PrestigeActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == PrestigeActionResultCodes.Quarantined) return "quarantined";
+            if (code == PrestigeActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == PrestigeActionResultCodes.WorldCycleIncomplete) return "world_cycle_incomplete";
+            if (code == PrestigeActionResultCodes.ChallengesNotFetched) return "challenges_not_fetched";
+            if (code == PrestigeActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == PrestigeActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == PrestigeActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

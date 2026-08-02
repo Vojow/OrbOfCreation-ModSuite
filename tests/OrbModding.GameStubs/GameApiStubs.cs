@@ -906,10 +906,16 @@ public class SaveStateManager
 public class GameManager
 {
     public static long currentFrame;
+    public static int PersistentResetCalls { get; set; }
+    public static int CleanGameCalls { get; set; }
 
     public static void ResetGameState()
     {
     }
+
+    public static void PersistentResetGameState() => PersistentResetCalls++;
+
+    public static void CleanGame() => CleanGameCalls++;
 
     public void InitGame()
     {
@@ -919,15 +925,25 @@ public class GameManager
 public class PersistentResetManager
 {
     public static PersistentResetManager instance = new PersistentResetManager();
+    public ResourceSO persistentResource = new ResourceSO();
+    public IntVariable persistValue = new IntVariable { Value = 0 };
+    public IntVariable persistValueNew = new IntVariable { Value = 0 };
+    public IntVariable persistValueLast = new IntVariable { Value = 0 };
+    public IntVariable persistentResetCount = new IntVariable { Value = 0 };
     public IntVariable challengeRerollsLeft = new IntVariable();
     public IntVariable challengeRerollsMax = new IntVariable();
     public BoolVariable hasCompleteWorldCycle = new BoolVariable();
     public BoolVariable hasFetchedChallenges = new BoolVariable();
     public ChallengeListVariable activeChallenges = new ChallengeListVariable();
+    public ChallengeListVariable allChallenges = new ChallengeListVariable();
     public List<ChallengeSO> NextChallenges { get; } = new List<ChallengeSO>();
     public bool SuppressFetch { get; set; }
     public bool ThrowAfterFetch { get; set; }
     public int FetchCalls { get; private set; }
+    public int ResetCalls { get; private set; }
+    public bool SuppressReset { get; set; }
+    public bool ThrowAfterReset { get; set; }
+    public static Action? PersistentResetSignal { get; set; }
 
     public void FetchNewChallenges()
     {
@@ -943,6 +959,22 @@ public class PersistentResetManager
 
     private void PersistentResetLogic()
     {
+        ResetCalls++;
+        PersistentResetSignal?.Invoke();
+        if (!SuppressReset)
+        {
+            persistValueLast.Value = persistValue.Value;
+            persistentResetCount.Value++;
+            hasCompleteWorldCycle.value = false;
+            hasFetchedChallenges.value = false;
+            foreach (var challenge in allChallenges.value) challenge.rewardQueued = false;
+            foreach (var challenge in activeChallenges.value)
+                if (challenge.state == ChallengeSO.ChallengeState.QueuedStart)
+                    challenge.state = ChallengeSO.ChallengeState.CurrentlyActive;
+            GameManager.PersistentResetGameState();
+            GameManager.CleanGame();
+        }
+        if (ThrowAfterReset) throw new InvalidOperationException("injected failure after persistent reset");
     }
 }
 

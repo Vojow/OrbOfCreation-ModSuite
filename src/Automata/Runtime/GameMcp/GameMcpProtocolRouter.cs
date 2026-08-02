@@ -369,6 +369,12 @@ internal sealed class GameMcpProtocolRouter
                 if (builder.Mode is "fetch_time" or "fetch_prestige" && builder.Uuid != Guid.Empty)
                     throw new GameMcpInvalidParamsException("uuid is accepted only for select, queue, or abandon");
                 break;
+            case "game_prestige":
+                builder.Mode = "reset";
+                if (!OptionalBool(arguments, "confirm", false))
+                    throw new GameMcpInvalidParamsException(
+                        "confirm must be true to request the irreversible persistent reset");
+                break;
             case "suite_config_set":
                 builder.ConfigurationGeneration = RequiredUlong(
                     arguments, "configurationGeneration");
@@ -439,7 +445,7 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
             "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
-            "game_challenge" =>
+            "game_challenge" or "game_prestige" =>
                 GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
@@ -467,7 +473,7 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
             "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
-            "game_challenge" =>
+            "game_challenge" or "game_prestige" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
@@ -752,6 +758,18 @@ internal sealed class GameMcpProtocolRouter
                         ["uuid"] = StringSchema("Required for select, queue, and abandon; a published ChallengeSO UUID."),
                     },
                     "mode"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_prestige",
+                "Reset the persistent world",
+                "Commit the irreversible native persistent reset after the world cycle and challenge choices are ready. Success waits for a fresh post-reset world and returns its named prestige and challenge decisions inline.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["confirm"] = BooleanSchema("Must be true to confirm the irreversible persistent reset."),
+                    },
+                    "confirm"),
                 readOnly: false,
                 idempotent: false),
             Tool(

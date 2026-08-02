@@ -20307,6 +20307,99 @@
       "owners": ["Automata equipment loadout GameAction"], "usages": ["reflection"], "place": "action"
     },
     {
+      "id": "prestige.reset-manager.type-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "prestige.int-variable.type-action", "assembly": "assembly-csharp",
+      "type": "IntVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata prestige GameAction", "Common prestige world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "prestige.bool-variable.type-action", "assembly": "assembly-csharp",
+      "type": "BoolVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "prestige.reset-manager-instance-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "instance",
+      "visibility": "public", "static": true, "valueType": "PersistentResetManager",
+      "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "prestige.reset-cycle-complete-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "hasCompleteWorldCycle",
+      "visibility": "public", "static": false, "valueType": "BoolVariable",
+      "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "prestige.reset-fetched-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "hasFetchedChallenges",
+      "visibility": "public", "static": false, "valueType": "BoolVariable",
+      "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "prestige.reset-count-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "persistentResetCount",
+      "visibility": "public", "static": false, "valueType": "IntVariable",
+      "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "prestige.bool-get-action", "assembly": "assembly-csharp",
+      "type": "BoolVariable", "typeVisibility": "public", "kind": "method", "member": "GetValue",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "prestige.int-as-int-action", "assembly": "assembly-csharp",
+      "type": "IntVariable", "typeVisibility": "public", "kind": "method", "member": "AsInt",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata prestige GameAction", "Common prestige world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "prestige.reset-logic-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "method", "member": "PersistentResetLogic",
+      "visibility": "private", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata prestige GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "prestige.persistent-resource-capture", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "persistentResource",
+      "visibility": "public", "static": false, "valueType": "ResourceSO",
+      "owners": ["Common prestige world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "prestige.persist-value-capture", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "persistValue",
+      "visibility": "public", "static": false, "valueType": "IntVariable",
+      "owners": ["Common prestige world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "prestige.persist-value-new-capture", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "persistValueNew",
+      "visibility": "public", "static": false, "valueType": "IntVariable",
+      "owners": ["Common prestige world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "prestige.persist-value-last-capture", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "persistValueLast",
+      "visibility": "public", "static": false, "valueType": "IntVariable",
+      "owners": ["Common prestige world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "prestige.reset-count-capture", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "persistentResetCount",
+      "visibility": "public", "static": false, "valueType": "IntVariable",
+      "owners": ["Common prestige world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "prestige.resource-guid-capture", "assembly": "assembly-csharp",
+      "type": "IdScriptableObject", "typeVisibility": "public", "kind": "method", "member": "GetGuid",
+      "visibility": "public", "static": false, "returnType": "System.Guid", "parameters": [],
+      "owners": ["Common prestige world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
       "id": "challenge.challenge.type-action", "assembly": "assembly-csharp",
       "type": "ChallengeSO", "typeVisibility": "public", "kind": "type",
       "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
@@ -20526,6 +20619,7 @@
       "src/GenericDiscovery",
       "src/EquipmentLoadout",
       "src/Challenge",
+      "src/Prestige",
       "src/Mentor",
       "src/ModConfig",
       "src/SpellComposition",

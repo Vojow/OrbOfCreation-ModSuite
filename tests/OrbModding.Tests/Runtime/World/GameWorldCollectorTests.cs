@@ -1729,6 +1729,11 @@ public sealed class GameWorldCollectorTests : IDisposable
     private sealed class FakePersistentResetManager
     {
         public static FakePersistentResetManager instance = new();
+        public FakeResource persistentResource = new();
+        public FakeCount persistValue = new(0);
+        public FakeCount persistValueNew = new(0);
+        public FakeCount persistValueLast = new(0);
+        public FakeCount persistentResetCount = new(0);
         public FakeChallengeList activeChallenges = new();
         public FakeCount challengeRerollsLeft = new(1);
         public FakeCount challengeRerollsMax = new(1);

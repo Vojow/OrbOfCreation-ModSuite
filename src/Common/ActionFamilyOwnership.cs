@@ -23,6 +23,7 @@ public enum AutomationActionFamily
     GenericDiscovery = 507,
     EquipmentLoadout = 508,
     ChallengeLifecycle = 509,
+    PrestigeLifecycle = 510,
     SpellMasteryExperienceGrant = 600,
     ArtifactMasteryExperienceGrant = 601,
     AlchemyMasteryExperienceGrant = 602,
