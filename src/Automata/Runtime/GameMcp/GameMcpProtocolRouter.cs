@@ -309,6 +309,13 @@ internal sealed class GameMcpProtocolRouter
                     builder.UuidCounts = RequireUuidCountArray(arguments, "augmentGlyphs", 64);
                 }
                 break;
+            case "game_spell_loadout":
+                builder.Mode = RequireOneOf(arguments, "mode", "remove", "move");
+                builder.Uuid = RequireUuid(arguments, "spellInstanceUuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                if (builder.Mode == "move")
+                    builder.SlotIndex = RequiredInt(arguments, "destinationSlot", 0, 255);
+                break;
             case "suite_config_set":
                 builder.ConfigurationGeneration = RequiredUlong(
                     arguments, "configurationGeneration");
@@ -377,7 +384,7 @@ internal sealed class GameMcpProtocolRouter
     {
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
-            "game_spell_composition" => GameMcpOperationClass.Gameplay,
+            "game_spell_composition" or "game_spell_loadout" => GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
         "game_screenshot" when request.SaveCapture => GameMcpOperationClass.SuiteAdministration,
@@ -402,7 +409,7 @@ internal sealed class GameMcpProtocolRouter
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
-            "game_spell_composition" =>
+            "game_spell_composition" or "game_spell_loadout" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
@@ -592,6 +599,20 @@ internal sealed class GameMcpProtocolRouter
                             64),
                     },
                     "mode"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_spell_loadout",
+                "Remove or move an equipped spell",
+                "Remove one exact runtime spell or move it to another native loadout slot. Success returns the complete newer named loadout and every next move/remove option inline.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("remove", "move"),
+                        ["spellInstanceUuid"] = StringSchema("Runtime spell-instance UUID published by spell-slots or an equipped spell row."),
+                        ["destinationSlot"] = IntegerSchema(0, 255),
+                    },
+                    "mode", "spellInstanceUuid"),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -793,6 +814,23 @@ internal sealed class GameMcpProtocolRouter
                     "unexpected_for_mode", "outputLevel",
                     "field 'outputLevel' is not accepted for mode 'set_augments'"));
             }
+        }
+
+        if (string.Equals(name, "game_spell_loadout", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var destination = arguments.ContainsKey("destinationSlot");
+            if (mode == "move" && !destination)
+                errors.Add(ValidationError(
+                    "missing_required",
+                    "destinationSlot",
+                    "required field 'destinationSlot' is missing for mode 'move'"));
+            else if (mode == "remove" && destination)
+                errors.Add(ValidationError(
+                    "unexpected_for_mode",
+                    "destinationSlot",
+                    "field 'destinationSlot' is not accepted for mode 'remove'"));
         }
 
         if (errors.Count > 0) throw GameMcpInvalidParamsException.Validation(errors);

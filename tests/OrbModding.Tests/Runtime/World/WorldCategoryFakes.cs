@@ -800,6 +800,7 @@ internal sealed class FakeSpell
     public int requiredMasteryLevel;
     public bool durationSpell;
     public bool usageRequirementsMet = true;
+    public int CanRemoveCalls { get; private set; }
     public List<FakeGlyph> augmentGlyphs = new();
 
     public FakeSpellRecipe? get_reference() => spellReference;
@@ -813,6 +814,11 @@ internal sealed class FakeSpell
     public bool CanCharge() => chargeable;
     public bool CanCast() => castReady;
     public bool IsChargeAvailable() => chargeAvailable;
+    public bool CanRemove()
+    {
+        CanRemoveCalls++;
+        return IsChargeAvailable() && !IsCasting();
+    }
     public bool HasEnoughResources() => resourcesCovered;
     public int GetCurrSpellCharges() => currentCharges;
     public int GetMaxSpellCharges() => maximumCharges;

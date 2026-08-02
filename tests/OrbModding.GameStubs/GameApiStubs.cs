@@ -426,6 +426,22 @@ public class AbstractListVariable<T> : AbstractListVariable
     public int Count => value.Count;
     public void Empty() => value.Clear();
     public bool IsAtMax() => value.Count >= GetMax();
+    public bool SuppressSwap { get; set; }
+    public bool ThrowBeforeSwap { get; set; }
+    public bool ThrowAfterSwap { get; set; }
+    public int SwapCalls { get; private set; }
+    public int UpdateObservableCalls { get; private set; }
+
+    public void SwapPositions(int first, int second)
+    {
+        SwapCalls++;
+        if (ThrowBeforeSwap) throw new InvalidOperationException("injected failure before slot swap");
+        if (!SuppressSwap)
+            (value[first], value[second]) = (value[second], value[first]);
+        if (ThrowAfterSwap) throw new InvalidOperationException("injected failure after slot swap");
+    }
+
+    public void UpdateObservable() => UpdateObservableCalls++;
 }
 
 public class GenericListVariable<T> : AbstractListVariable<T>
@@ -455,6 +471,8 @@ public class GenericListVariable<T> : AbstractListVariable<T>
         if (!SuppressAdd) value.Add(element);
         if (ThrowAfterAdd) throw new InvalidOperationException("injected failure after admission");
     }
+
+    public virtual void Remove(T element) => value.Remove(element);
 
     protected virtual bool IsFilledElement(T element) => element is not null;
 
@@ -837,6 +855,10 @@ public class Spell
     public bool DurationSpell { get; set; }
     public bool ToggledSpell { get; set; }
     public bool NativeUsageRequirementsMet { get; set; } = true;
+    public bool NativeEmpty { get; set; }
+    public bool NativeCasting { get; set; }
+    public bool NativeReadyingCast { get; set; }
+    public bool NativeChargeAvailable { get; set; } = true;
     public bool SuppressAugmentMutation { get; set; }
     public bool ThrowBeforeAugmentMutation { get; set; }
     public bool ThrowAfterAugmentMutation { get; set; }
@@ -857,10 +879,10 @@ public class Spell
     public UnityEngine.Sprite GetIcon() => Icon;
     public bool IsChanneled() => Channeled;
     public bool IsToggledSpell() => ToggledSpell;
-    public bool IsEmpty() => false;
+    public bool IsEmpty() => NativeEmpty;
     public bool CanCharge() => true;
-    public bool IsCasting() => false;
-    public bool IsReadyingCast() => false;
+    public bool IsCasting() => NativeCasting;
+    public bool IsReadyingCast() => NativeReadyingCast;
 
     /// <summary>
     /// The game's own composite readiness answer, settable so a boundary can be shown refusing a cast
@@ -870,7 +892,8 @@ public class Spell
 
     public bool CanCast() => NativeCanCast;
     public bool IsAttuning() => false;
-    public bool IsChargeAvailable() => true;
+    public bool IsChargeAvailable() => NativeChargeAvailable;
+    public bool CanRemove() => IsChargeAvailable() && !IsCasting();
     public bool HasEnoughResources() => true;
     public int GetCurrSpellCharges() => CurrentCharges;
     public int GetMaxSpellCharges() => MaximumCharges;
@@ -1525,6 +1548,10 @@ public class SpellManager
     public bool CreateEmptyIdentity { get; set; }
     public bool ThrowAfterDiscovery { get; set; }
     public bool ThrowAfterCreation { get; set; }
+    public bool SuppressRemoval { get; set; }
+    public bool ThrowBeforeRemoval { get; set; }
+    public bool ThrowAfterRemoval { get; set; }
+    public int RemoveCalls { get; private set; }
     public int TryLevelAllCalls { get; private set; }
 
     public static bool CanCastASpell() => NativeCanCast;
@@ -1579,6 +1606,14 @@ public class SpellManager
 
     private void AddSpell(Spell spell) => activeSpells.Add(spell);
 
+    public void RemoveSpell(Spell spell)
+    {
+        RemoveCalls++;
+        if (ThrowBeforeRemoval) throw new InvalidOperationException("injected failure before spell removal");
+        if (!SuppressRemoval) activeSpells.Remove(spell);
+        if (ThrowAfterRemoval) throw new InvalidOperationException("injected failure after spell removal");
+    }
+
     public void FireSpellIndex(int index)
     {
         var spell = activeSpells[index];
@@ -1611,7 +1646,28 @@ public class SpellManager
 /// </summary>
 public sealed class SpellListVariable : GenericListVariable<Spell>, IEnumerable
 {
+    public bool PreserveSlotsOnRemove { get; set; } = true;
+
     public Spell this[int index] => value[index];
+
+    protected override bool IsFilledElement(Spell element) =>
+        element is not null && !element.IsEmpty();
+
+    public override void Remove(Spell element)
+    {
+        var index = value.IndexOf(element);
+        if (index < 0) return;
+        if (PreserveSlotsOnRemove)
+        {
+            value[index] = new Spell
+            {
+                NativeEmpty = true,
+                guidContainer = new GuidContainer(Guid.Empty),
+            };
+            return;
+        }
+        value.RemoveAt(index);
+    }
 
     public IEnumerator GetEnumerator() => value.GetEnumerator();
 }

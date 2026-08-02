@@ -18604,6 +18604,144 @@
         "reflection"
       ],
       "place": "action"
+    },
+    {
+      "id": "spell-loadout.spell-can-remove-capture",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanRemove",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata spell loadout world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-loadout.spell-is-empty-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsEmpty",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata spell loadout GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-loadout.spell-can-remove-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanRemove",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata spell loadout GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-loadout.spell-get-name-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetName",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.String",
+      "parameters": [],
+      "owners": [
+        "Automata spell loadout GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-loadout.manager-remove-spell-action",
+      "assembly": "assembly-csharp",
+      "type": "SpellManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "RemoveSpell",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "Spell"
+      ],
+      "owners": [
+        "Automata spell loadout GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-loadout.list-swap-positions-action",
+      "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "SwapPositions",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [
+        "System.Int32",
+        "System.Int32"
+      ],
+      "owners": [
+        "Automata spell loadout GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-loadout.list-update-observable-action",
+      "assembly": "assembly-csharp",
+      "type": "AbstractListVariable",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "UpdateObservable",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Void",
+      "parameters": [],
+      "owners": [
+        "Automata spell loadout GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     }
   ],
   "sourceAudit": {
@@ -18621,6 +18759,7 @@
       "src/Mentor",
       "src/ModConfig",
       "src/SpellComposition",
+      "src/SpellLoadout",
       "src/SpellWorkbench",
       "src/SpellLeveling"
     ],

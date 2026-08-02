@@ -86,8 +86,37 @@ internal static class GameMcpEntityCapabilityMap
                     capability,
                     out reason),
             GameMcpCommandKind.SpellComposition => SpellCompositionTarget(world, target, out reason),
+            GameMcpCommandKind.SpellLoadout => SpellLoadoutTarget(world, target, out reason),
             _ => Unsupported(capability, out reason),
         };
+    }
+
+    private static bool SpellLoadoutTarget(
+        GameWorldState world,
+        Guid target,
+        out string reason)
+    {
+        if (!Supports("spell-slots", GameMcpCommandKind.SpellLoadout))
+        {
+            reason = "the authoritative capability map does not admit spell-loadout targets";
+            return false;
+        }
+        var matches = 0;
+        for (var index = 0; index < world.SpellSlots.Count; index++)
+            if (world.SpellSlots[index].Occupied &&
+                world.SpellSlots[index].SpellInstanceId == target)
+                matches++;
+        if (matches == 1)
+        {
+            reason = string.Empty;
+            return true;
+        }
+        reason = matches == 0
+            ? "runtime Spell identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
+              " is absent from published equipped spell instances"
+            : "runtime Spell identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
+              " is ambiguous across " + matches + " equipped instances";
+        return false;
     }
 
     private static bool SpellCompositionTarget(
@@ -254,7 +283,8 @@ internal static class GameMcpEntityCapabilityMap
         D("plot-action-instances", "PlotNodeActionInstance"),
         D("action-queues", "ActionQueueVariable"),
         D("action-queue-slots", "PlotNodeActionInstance"),
-        D("spell-slots", "Spell", GameMcpCommandKind.SpellComposition),
+        D("spell-slots", "Spell", GameMcpCommandKind.SpellComposition,
+            GameMcpCommandKind.SpellLoadout),
         D("spell-costs", "Spell"),
         D("mastery-experience", "SpellRecipeSO|AlchemyRecipeSO|EquipmentSO"),
         D("concept-recipes", "AlchemyRecipeSO"),

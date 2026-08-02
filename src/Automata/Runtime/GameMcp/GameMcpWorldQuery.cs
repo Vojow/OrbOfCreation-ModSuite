@@ -851,6 +851,8 @@ internal static class GameMcpWorldQuery
             ? ProjectDiscoveryTree(world, in tree)
             : row is WorldSpellRecipe spellRecipe
             ? ProjectSpellRecipe(world, in spellRecipe)
+            : row is WorldSpellSlot spellSlot
+            ? ProjectSpellSlot(world, in spellSlot)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -1063,6 +1065,53 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
+    /// <summary>The one newer-world loadout shape shared by remove and move.</summary>
+    internal static GameMcpValue ProjectSpellLoadoutPostState(GameMcpFrameContext state)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        var slots = new JArray();
+        var equipped = 0;
+        for (var index = 0; index < world.SpellSlots.Count; index++)
+        {
+            var slot = world.SpellSlots[index];
+            if (slot.Occupied) equipped++;
+            slots.Add(ProjectSpellSlot(world, in slot));
+        }
+        return new JObject
+        {
+            ["loadout"] = new JObject
+            {
+                ["equippedCount"] = equipped,
+                ["maximumEquipped"] = world.SpellWorkbench.MaximumEquipped,
+                ["hasEmptySlot"] = world.SpellWorkbench.HasEmptySlot,
+                ["slots"] = slots,
+            },
+        }.Freeze();
+    }
+
+    private static GameMcpValue ProjectSpellSlot(
+        GameWorldState world,
+        in WorldSpellSlot slot)
+    {
+        if (!slot.Occupied)
+        {
+            return new JObject
+            {
+                ["category"] = "spell-slots",
+                ["nativeType"] = "Spell",
+                ["slot"] = slot.SlotIndex,
+                ["occupied"] = false,
+            }.Freeze();
+        }
+        var result = ProjectEquippedSpell(world, in slot);
+        result["category"] = "spell-slots";
+        result["nativeType"] = "Spell";
+        result["occupied"] = true;
+        return result.Freeze();
+    }
+
     private static JObject ProjectEquippedSpell(
         GameWorldState world,
         in WorldSpellSlot slot)
@@ -1088,6 +1137,54 @@ internal static class GameMcpWorldQuery
             ["toggleable"] = slot.Toggled,
             ["usageRequirementsMet"] = slot.UsageRequirementsMet,
         };
+        if (slot.Casting) result["casting"] = true;
+        if (slot.ReadyingCast) result["readyingCast"] = true;
+        if (slot.Attuning) result["attuning"] = true;
+        result["remove"] = slot.CanRemove
+            ? new JObject { ["available"] = true }
+            : new JObject
+            {
+                ["available"] = false,
+                ["reasonCode"] = "native_remove_refused",
+            };
+        var destinations = new JArray();
+        for (var destinationIndex = 0;
+             destinationIndex < world.SpellSlots.Count;
+             destinationIndex++)
+        {
+            var destination = world.SpellSlots[destinationIndex];
+            if (destination.SlotIndex == slot.SlotIndex) continue;
+            var option = new JObject
+            {
+                ["slot"] = destination.SlotIndex,
+            };
+            if (destination.Occupied)
+            {
+                var destinationRecipe = EntityIdentityFormatter.Describe(
+                    destination.SpellRecipeId,
+                    world.EntityIdentities);
+                option["occupant"] = new JObject
+                {
+                    ["uuid"] = destination.SpellInstanceId.ToString("D"),
+                    ["name"] = destinationRecipe.HasName
+                        ? destinationRecipe.Name
+                        : "Equipped spell",
+                };
+            }
+            else option["empty"] = true;
+            destinations.Add(option);
+        }
+        result["move"] = destinations.Count > 0
+            ? new JObject
+            {
+                ["available"] = true,
+                ["destinations"] = destinations,
+            }
+            : new JObject
+            {
+                ["available"] = false,
+                ["reasonCode"] = "no_other_slot",
+            };
         if (slot.AugmentGlyphs.Count > 0)
         {
             var applied = new JArray();
@@ -1500,6 +1597,8 @@ internal static class GameMcpWorldQuery
             ? ProjectDiscoveryTree(world, in tree)
             : row is WorldSpellRecipe spellRecipe
             ? ProjectSpellRecipe(world, in spellRecipe)
+            : row is WorldSpellSlot spellSlot
+            ? ProjectSpellSlot(world, in spellSlot)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,

@@ -35,6 +35,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.SpellWorkbenchLifecycle };
     private static readonly AutomationActionFamily[] SpellCompositionFamilies =
         { AutomationActionFamily.SpellComposition };
+    private static readonly AutomationActionFamily[] SpellLoadoutFamilies =
+        { AutomationActionFamily.SpellLoadout };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -121,6 +123,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.SpellWorkbenchLifecycle);
     public bool TryCaptureSpellCompositionMutationPermit() =>
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.SpellComposition);
+    public bool TryCaptureSpellLoadoutMutationPermit() =>
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.SpellLoadout);
     public string ItemsOwnershipFailure =>
         _itemsClaimFailure.Length != 0
             ? _itemsClaimFailure
@@ -137,6 +141,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         "The current MCP operation does not hold SpellWorkbenchLifecycle.";
     public string SpellCompositionOwnershipFailure =>
         "The current MCP operation does not hold SpellComposition.";
+    public string SpellLoadoutOwnershipFailure =>
+        "The current MCP operation does not hold SpellLoadout.";
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -421,6 +427,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.DiscoveryTreeOffer => DiscoveryTreeOfferFamilies,
         GameMcpCommandKind.SpellWorkbench => SpellWorkbenchFamilies,
         GameMcpCommandKind.SpellComposition => SpellCompositionFamilies,
+        GameMcpCommandKind.SpellLoadout => SpellLoadoutFamilies,
         _ => Array.Empty<AutomationActionFamily>(),
     };
 
@@ -454,6 +461,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         AutomationActionFamily.DiscoveryTreeOfferLifecycle => false,
         AutomationActionFamily.SpellWorkbenchLifecycle => false,
         AutomationActionFamily.SpellComposition => false,
+        AutomationActionFamily.SpellLoadout => false,
         _ => false,
     };
 

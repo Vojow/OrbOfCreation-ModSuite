@@ -23,7 +23,8 @@ internal static class AutomataServiceCycleComposition
         ManualLogSource log,
         Func<DiscoveryTreeOfferGameAction>? createDiscoveryTreeOffers = null,
         Func<SpellWorkbenchGameAction>? createSpellWorkbench = null,
-        Func<SpellCompositionGameAction>? createSpellComposition = null)
+        Func<SpellCompositionGameAction>? createSpellComposition = null,
+        Func<SpellLoadoutGameAction>? createSpellLoadout = null)
     {
         try
         {
@@ -35,7 +36,8 @@ internal static class AutomataServiceCycleComposition
                 log,
                 createDiscoveryTreeOffers,
                 createSpellWorkbench,
-                createSpellComposition);
+                createSpellComposition,
+                createSpellLoadout);
             log.LogAutomataInfo("Automata ServiceCycle runtime registered.");
             return runtime;
         }
@@ -61,7 +63,8 @@ internal static class AutomataServiceCycleComposition
         ManualLogSource log,
         Func<DiscoveryTreeOfferGameAction>? createDiscoveryTreeOffers = null,
         Func<SpellWorkbenchGameAction>? createSpellWorkbench = null,
-        Func<SpellCompositionGameAction>? createSpellComposition = null)
+        Func<SpellCompositionGameAction>? createSpellComposition = null,
+        Func<SpellLoadoutGameAction>? createSpellLoadout = null)
     {
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
         if (hostDependencies is null) throw new ArgumentNullException(nameof(hostDependencies));
@@ -77,6 +80,7 @@ internal static class AutomataServiceCycleComposition
         DiscoveryTreeOfferGameAction? discoveryTreeOffers = null;
         SpellWorkbenchGameAction? spellWorkbench = null;
         SpellCompositionGameAction? spellComposition = null;
+        SpellLoadoutGameAction? spellLoadout = null;
         var featureRuntimes = new List<IAutomataServiceCycleFeatureRuntime>(features.Count);
         try
         {
@@ -130,6 +134,7 @@ internal static class AutomataServiceCycleComposition
             discoveryTreeOffers = createDiscoveryTreeOffers?.Invoke();
             spellWorkbench = createSpellWorkbench?.Invoke();
             spellComposition = createSpellComposition?.Invoke();
+            spellLoadout = createSpellLoadout?.Invoke();
             return new AutomataServiceCycleRuntime(
                 hostDependencies.ReadLifecycleEpoch,
                 configurationPublication,
@@ -138,13 +143,15 @@ internal static class AutomataServiceCycleComposition
                 configurationGeneration,
                 discoveryTreeOffers,
                 spellWorkbench,
-                spellComposition);
+                spellComposition,
+                spellLoadout);
         }
         catch
         {
             discoveryTreeOffers?.Dispose();
             spellWorkbench?.Dispose();
             spellComposition?.Dispose();
+            spellLoadout?.Dispose();
             DisposeFailedConstruction(featureRuntimes, observability, host, registry);
             throw;
         }

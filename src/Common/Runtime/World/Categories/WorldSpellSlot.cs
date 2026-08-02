@@ -145,6 +145,59 @@ internal readonly struct WorldSpellSlot
         bool durationSpell,
         bool usageRequirementsMet,
         PublicationTable<WorldSpellSlotGlyph> augmentGlyphs)
+        : this(
+            slotIndex,
+            spellInstanceId,
+            spellRecipeId,
+            occupied,
+            casting,
+            readyingCast,
+            attuning,
+            channeled,
+            toggled,
+            chargeable,
+            castReady,
+            chargeAvailable,
+            chargeAvailable && !casting,
+            resourcesCovered,
+            currentCharges,
+            maximumCharges,
+            cooldownRemaining,
+            outputLevel,
+            effectiveLevel,
+            requiredMasteryLevel,
+            recipeMasteryLevel,
+            durationSpell,
+            usageRequirementsMet,
+            augmentGlyphs)
+    {
+    }
+
+    internal WorldSpellSlot(
+        int slotIndex,
+        Guid spellInstanceId,
+        Guid spellRecipeId,
+        bool occupied,
+        bool casting,
+        bool readyingCast,
+        bool attuning,
+        bool channeled,
+        bool toggled,
+        bool chargeable,
+        bool castReady,
+        bool chargeAvailable,
+        bool canRemove,
+        bool resourcesCovered,
+        int currentCharges,
+        int maximumCharges,
+        BigDouble cooldownRemaining,
+        int outputLevel,
+        int effectiveLevel,
+        int requiredMasteryLevel,
+        int recipeMasteryLevel,
+        bool durationSpell,
+        bool usageRequirementsMet,
+        PublicationTable<WorldSpellSlotGlyph> augmentGlyphs)
     {
         SlotIndex = slotIndex;
         SpellInstanceId = spellInstanceId;
@@ -158,6 +211,7 @@ internal readonly struct WorldSpellSlot
         Chargeable = chargeable;
         CastReady = castReady;
         ChargeAvailable = chargeAvailable;
+        CanRemove = canRemove;
         ResourcesCovered = resourcesCovered;
         CurrentCharges = currentCharges;
         MaximumCharges = maximumCharges;
@@ -218,6 +272,9 @@ internal readonly struct WorldSpellSlot
 
     /// <summary>Whether a charge is off cooldown and available to spend.</summary>
     internal bool ChargeAvailable { get; }
+
+    /// <summary>The game's own live <c>Spell.CanRemove()</c> answer.</summary>
+    internal bool CanRemove { get; }
 
     /// <summary>Whether the game says the caster can currently pay for this spell.</summary>
     internal bool ResourcesCovered { get; }
@@ -381,6 +438,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
     private readonly Func<object, bool>? _canCharge;
     private readonly Func<object, bool>? _canCast;
     private readonly Func<object, bool>? _isChargeAvailable;
+    private readonly Func<object, bool>? _canRemove;
     private readonly Func<object, bool>? _hasEnoughResources;
     private readonly Func<object, int>? _currentCharges;
     private readonly Func<object, int>? _maximumCharges;
@@ -437,6 +495,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         _canCharge = spell.Call<bool>("CanCharge");
         _canCast = spell.Call<bool>("CanCast");
         _isChargeAvailable = spell.Call<bool>("IsChargeAvailable");
+        _canRemove = spell.Call<bool>("CanRemove");
         _hasEnoughResources = spell.Call<bool>("HasEnoughResources");
         _currentCharges = spell.Call<int>("GetCurrSpellCharges");
         _maximumCharges = spell.Call<int>("GetMaxSpellCharges");
@@ -586,6 +645,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
             _canCharge!(spell),
             _canCast!(spell),
             _isChargeAvailable!(spell),
+            _canRemove!(spell),
             _hasEnoughResources!(spell),
             _currentCharges!(spell),
             _maximumCharges!(spell),
@@ -635,6 +695,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         _outputLevel is not null && _effectiveLevel is not null &&
         _requiredMasteryLevel is not null && _recipeMasteryLevel is not null &&
         _durationSpell is not null && _usageRequirementsMet is not null &&
+        _canRemove is not null &&
         _getAugmentGlyphs is not null && _getGlyphQuantity is not null && _glyphId is not null;
 
     private PublicationTable<WorldSpellSlotGlyph> ReadAugmentGlyphs(object spell)

@@ -27,6 +27,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly DiscoveryTreeOfferGameAction? _discoveryTreeOffers;
     private readonly SpellWorkbenchGameAction? _spellWorkbench;
     private readonly SpellCompositionGameAction? _spellComposition;
+    private readonly SpellLoadoutGameAction? _spellLoadout;
     private bool _disposed;
 #if SERVICE_CYCLE_PROFILE
     private ulong _nextGameMcpActionIdentity;
@@ -40,7 +41,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         ConfigGeneration configurationGeneration,
         DiscoveryTreeOfferGameAction? discoveryTreeOffers = null,
         SpellWorkbenchGameAction? spellWorkbench = null,
-        SpellCompositionGameAction? spellComposition = null)
+        SpellCompositionGameAction? spellComposition = null,
+        SpellLoadoutGameAction? spellLoadout = null)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _configurationPublication = configurationPublication ??
@@ -51,6 +53,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _discoveryTreeOffers = discoveryTreeOffers;
         _spellWorkbench = spellWorkbench;
         _spellComposition = spellComposition;
+        _spellLoadout = spellLoadout;
     }
 
     internal SuiteRuntimeConfiguration CurrentConfiguration => _configurationPublication.ReadLatest().Snapshot;
@@ -111,6 +114,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _discoveryTreeOffers?.InvalidateLifecycle();
         _spellWorkbench?.InvalidateLifecycle();
         _spellComposition?.InvalidateLifecycle();
+        _spellLoadout?.InvalidateLifecycle();
     }
 
 #if SERVICE_CYCLE_PROFILE
@@ -154,6 +158,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteSpellWorkbench(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.SpellComposition)
                 return ExecuteSpellComposition(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.SpellLoadout)
+                return ExecuteSpellLoadout(command, lifecycle, configuration.Generation.Value);
             var service = ServiceForGameMcp(command.Kind);
             var context = CreateGameMcpContext(
                 registry,
@@ -232,6 +238,40 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             configurationGeneration,
             submission.Reason,
             GameMcpSpellCompositionProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecuteSpellLoadout(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        GameMcpNativeActionAdmission.AssertNativeType(command, "Spell");
+        if (_spellLoadout is null)
+            return GameMcpCommandResult.Rejected(
+                "contract_unavailable",
+                "the shared spell loadout GameAction was not composed",
+                lifecycle,
+                configurationGeneration);
+        var kind = command.Mode switch
+        {
+            "remove" => SpellLoadoutActionKind.Remove,
+            "move" => SpellLoadoutActionKind.Move,
+            _ => throw new ArgumentException("unsupported spell loadout mode " + command.Mode),
+        };
+        var action = new SpellLoadoutAction(
+            kind,
+            command.TargetId,
+            command.Amount - 1,
+            command.ExpectedLifecycleGeneration);
+        var submission = _spellLoadout.Submit(in action);
+        var result = SpellLoadoutActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(
+            in result,
+            command.Kind,
+            lifecycle,
+            configurationGeneration,
+            submission.Reason,
+            GameMcpSpellLoadoutProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteSpellWorkbench(
@@ -560,6 +600,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _discoveryTreeOffers?.Dispose();
             _spellWorkbench?.Dispose();
             _spellComposition?.Dispose();
+            _spellLoadout?.Dispose();
             if (!_host.EmergencyStopEngaged)
                 _host.SetEmergencyStop(true, EmergencyStopReason.SuiteShutdown);
         }

@@ -3390,6 +3390,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(busy.Chargeable);
         Assert.False(busy.CastReady);
         Assert.False(busy.ChargeAvailable);
+        Assert.False(busy.CanRemove);
         Assert.False(busy.ResourcesCovered);
 
         // An occupant with no recipe behind it still publishes a row: the slot is filled, and a
@@ -3405,6 +3406,9 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.False(idle.Channeled);
         Assert.False(idle.Toggled);
         Assert.True(idle.CastReady);
+        Assert.True(idle.CanRemove);
+        Assert.Equal(1, loadout.value[0]!.CanRemoveCalls);
+        Assert.Equal(1, loadout.value[1]!.CanRemoveCalls);
     }
 
     /// <summary>

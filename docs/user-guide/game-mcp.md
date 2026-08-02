@@ -119,6 +119,7 @@ does not refresh it by hidden navigation.
 | `game_discovery_offer` | Initiate, select, confirm, or reroll one Discovery Tree offer lifecycle |
 | `game_spell_workbench` | Select an authored spell recipe, discover it, or create another equipped instance |
 | `game_spell_composition` | Set the global spell output level or replace one equipped spell's augment stack |
+| `game_spell_loadout` | Remove one exact equipped runtime spell or move it to another loadout slot |
 | `suite_config_set` | Commit one allowlisted setting through the configuration store |
 | `suite_emergency_stop` | Engage or resume the suite's shared emergency stop |
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
@@ -297,6 +298,28 @@ type, availability, augment role, maximum uses, combined compatibility, and mast
 the Unity main thread. Success is the requested global value or exact target/stack outcome. It has
 no payment framing, receipt poll, request echo, world-generation argument, or read-back call.
 
+### Spell loadout loop
+
+`spell-slots` is the pre-decision surface for `game_spell_loadout`. Each occupied row contains the
+named runtime spell and recipe, exact slot, active cast/ready/attune state when applicable, the
+game's current remove verdict, and every other destination in native order with a named occupant or
+empty marker. The shared loadout summary exposes equipped count, capacity, and whether a hole
+exists.
+
+The MCP-only loadout sequence is:
+
+1. Read `world_list(category="spell-slots")` and choose one exact runtime `spellInstance.uuid`.
+2. Call `game_spell_loadout(mode="move", spellInstanceUuid=..., destinationSlot=...)`; success
+   returns the complete newer named loadout and all next decisions.
+3. Call `game_spell_loadout(mode="remove", spellInstanceUuid=...)` only when that row's
+   `remove.available` is true; success returns the complete newer named loadout with the target
+   absent.
+
+The boundary re-resolves the runtime UUID and native remove verdict or slot range on the Unity main
+thread, acquires the family permit last, and verifies only requested identity/outcome. Weight,
+glyph usage, drain, and resource accounting are observations, not gates. There is no generation,
+payment, receipt, request echo, catalog join, or post-mutation read-back.
+
 ### Entity explanation
 
 `explain_entity` accepts one canonical `uuid` and pins the latest immutable world publication before
@@ -457,6 +480,14 @@ availability, augment classification, maximum usage, combined non-level compatib
 mastery before its one native setter. Success is exact global value or exact target UUID plus exact
 canonical glyph/count stack. A committed result is the newer spell composition and next-decision
 economics; failure evidence is retained only when native execution was reached.
+
+`game_spell_loadout` requires `mode` plus one equipped runtime `spellInstanceUuid`. `remove`
+rejects `destinationSlot` and rechecks the game's live `Spell.CanRemove()` verdict. `move` requires
+a zero-based `destinationSlot`, re-resolves the source slot, and invokes the same native
+swap-plus-notify path as the spellbook. Success is exact target absence with survivor order
+preserved, or the complete slot sequence with exactly source and destination exchanged. A
+committed result is the complete newer named loadout; failure evidence is retained only after
+native execution was reached.
 
 CLI play commands therefore need no generation option:
 

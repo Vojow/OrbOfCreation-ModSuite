@@ -535,6 +535,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .SpellCompositionOwnershipFailure)
+                    , createSpellLoadout: () => new SpellLoadoutGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureSpellLoadoutMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .SpellLoadoutOwnershipFailure)
 #endif
                     );
             },
@@ -1485,9 +1493,14 @@ public sealed class Plugin : BaseUnityPlugin
                  command.Mode,
                  command.SecondaryId)))
         {
-            state = command.Kind == GameMcpCommandKind.SpellComposition
-                ? GameMcpWorldQuery.ProjectSpellCompositionPostState(latest, command.TargetId)
-                : GameMcpWorldQuery.ProjectPostState(latest, category, command.TargetId);
+            state = command.Kind switch
+            {
+                GameMcpCommandKind.SpellComposition =>
+                    GameMcpWorldQuery.ProjectSpellCompositionPostState(latest, command.TargetId),
+                GameMcpCommandKind.SpellLoadout =>
+                    GameMcpWorldQuery.ProjectSpellLoadoutPostState(latest),
+                _ => GameMcpWorldQuery.ProjectPostState(latest, category, command.TargetId),
+            };
         }
         else
         {
@@ -1513,6 +1526,7 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandKind.DiscoveryTreeOffer => "discovery-trees",
         GameMcpCommandKind.SpellWorkbench => "spell-recipes",
         GameMcpCommandKind.SpellComposition => "spell-recipes",
+        GameMcpCommandKind.SpellLoadout => "spell-slots",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 
@@ -1708,6 +1722,11 @@ public sealed class Plugin : BaseUnityPlugin
             nativeType = "SpellRecipeSO";
         else if (kind == GameMcpCommandKind.SpellComposition)
             nativeType = request.Mode == "set_output_level" ? "IntVariable" : "Spell";
+        else if (kind == GameMcpCommandKind.SpellLoadout)
+        {
+            nativeType = "Spell";
+            amount = checked(request.SlotIndex + 1);
+        }
         else if (kind == GameMcpCommandKind.ConfigurationSet)
         {
             mode = request.Section;
