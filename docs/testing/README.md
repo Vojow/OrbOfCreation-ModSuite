@@ -43,6 +43,25 @@ issue: `dotnet test tests/OrbModding.Tests/OrbModding.Tests.csproj -p:UseGameStu
 - Keep trace fixtures inside the versioned schema. Opaque payload bags, private
   save fields, and free-text log parsing create unreviewable second protocols.
 
+## Waiting without starving the thing you wait for
+
+A spinning wait competes with the work it is waiting for. `SpinWait.SpinUntil` and
+`while (pump.PumpFrame(frame++).CapturesAttempted == 0) { }` both hold the calling core at full
+tilt against the background worker whose progress they need: instrumented on a machine loaded to
+eight busy cores, the wait for the capture after a faulted batch took 86 to 1908 frames, and 2
+every time with a `Thread.Yield()` in the loop body. It also destroys evidence — every pumped frame
+emits semantic trace events into the fixture's 256-entry ring, so a spinning wait overruns the ring
+and a test asserting the *absence* of an event can no longer prove its drain was complete. Reproduce
+by running the single test in isolation under `nproc - 2` busy-loop processes; beside its neighbours
+it passes, because xunit's own thread churn supplies the yield the loop does not.
+
+A wall-clock deadline is a hang detector or it is a bug. Sized to how long the work takes today, it
+makes every future slowdown look like a broken feature: one test allowed a background writer 500 ms
+for a commit that takes about a second on a cold process, so it failed deterministically when run
+alone and passed only beside neighbours that had warmed the runtime up. Give the deadline a name
+that says "hang" and a ceiling nothing legitimate reaches; assert latency in an assertion instead,
+where a change to it is visible.
+
 ## Turn traces into regressions
 
 A trace is a hypothesis generator, not a test. Preserve the trace or recent-event

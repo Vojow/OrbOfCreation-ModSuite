@@ -52,4 +52,4 @@ There is no raw-text, family, select-all, or blacklist control.
 
 The shared quick control changes only `AutoItems.Mode`; exact temporary-item approval remains on
 the Mods page. Native evidence and remaining live-validation limits are documented in the
-[Auto Items native pipeline](../../docs/reverse-engineering/auto-items-native-pipeline.md).
+[native action surfaces](../../docs/reverse-engineering/native-action-surfaces.md).

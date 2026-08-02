@@ -1,70 +1,34 @@
-# Orb of Creation reverse-engineering notes
+# Reverse engineering Orb of Creation
 
 [Back to documentation](../README.md)
 
-These notes describe the managed-code architecture of the installed Orb of Creation build. The current main assembly was re-audited on 2026-07-13; see the [reverse-engineering audit](audit.md) for hashes, corrections, and confidence boundaries.
+How an engineer digs into this game's code: the tools, the shapes the assembly repeats, the
+places its names mislead, and the action surfaces already decompiled. A techniques manual — it
+exists so nobody pays the decompile cost for the same finding twice.
 
-## Examined build
+Three folders divide the subject:
 
-- Unity `6000.0.70`
-- 64-bit Mono runtime
-- BepInEx `5.4.23.5`
-- Main game assembly: `Orb Of Creation_Data/Managed/Assembly-CSharp.dll`
-- Numeric library: `Orb Of Creation_Data/Managed/Assembly-CSharp-firstpass.dll`
-- Save format version observed: `6`
+| Folder | Question it answers |
+|---|---|
+| this one | how the game is built, and how to find out more |
+| [`game-systems/`](../game-systems/README.md) | what the game does, in the player's terms |
+| [`runtime-architecture/`](../runtime-architecture/README.md) | how the suite decides to act on it |
 
-The findings come from assembly metadata and selected IL method bodies read with Mono.Cecil. No game binaries were modified. Runtime-resolved compatibility findings are also recorded in the machine-readable [`data/native-contracts.json`](../../data/native-contracts.json); maintain it through the [native contract workflow](../testing/native-contracts.md).
+A fact a player could observe belongs in `game-systems/`. A fact that costs IL, serialized
+assets, or a live registry read belongs here.
 
-## Suggested reading order
+## Index
 
-1. [Architecture](architecture.md)
-2. [Identity and registries](identity-and-registries.md)
-3. [Entity catalog and taxonomy](entity-catalog.md)
-4. [Entity correlations](entity-correlations.md)
-5. [In-game vocabulary](in-game-vocabulary.md) — what players call each managed type;
-   `StructureSO` is shown on screen as "Attribute".
-6. [Evidence strength](evidence-strength.md)
-7. [Alchemy gameplay-domain classification](alchemy-domain-classification.md)
-8. [Resources and large numbers](resources-and-bigdouble.md)
-9. [Economy mechanics](economy-mechanics.md)
-10. [Save system](save-system.md)
-11. [Modding hooks](modding-hooks.md)
-12. [Reverse-engineering audit](audit.md)
-
-## Auto Buy dossier
-
-- [Raw-fact input graph](auto-buy-raw-fact-inputs.md) — installed Structure,
-  Upgrade, resource, prerequisite, and modifier inputs for worker-side game math.
-- [Native purchase pipeline](auto-buy-native-pipeline.md) — discovery,
-  admission, live validation, mutation verification, and failure boundaries.
-- [Queue and completion model](auto-buy-queue-and-completion.md) — shared queue
-  authority, manual versus automated signals, settlement, and lifecycle reset.
-- [Stage profiles](auto-buy-stage-profiles.md) — verified catalog facts,
-  synthetic stress workloads, and the still-missing observed progression
-  profiles.
-
-## Auto Items dossier
-
-- [Native Scroll and Relic pipeline](auto-items-native-pipeline.md) — exact family identity,
-  shared world facts, freshness-classified native validation, the consumable GameAction, and
-  remaining live-evidence limits.
-
-## Auto Scribe dossier
-
-- [Native Scribe pipeline](auto-scribe-native-pipeline.md) — audited role relationships,
-  levelled coverage facts, freshness-classified preflights, exact payment/admission evidence,
-  partial commits, and remaining live-evidence limits.
-
-Implementation plans and maintainer procedures are indexed separately in the [documentation hub](../README.md).
-
-## Important discovered identifier
-
-| Entity | UUID | Runtime type |
-|---|---|---|
-| Alchemic Scroll | `67acd892-8a8a-455a-aa71-3fb06e75bf38` | `ResourceSO` |
-
-## Historical confidence labels
-
-- **Verified:** directly present in metadata or inspected IL. New code-facing results use `StaticallyVerified` or `SerializedAssetVerified` from the [evidence model](evidence-strength.md).
-- **Inferred:** conclusion based on verified structure but not yet confirmed at runtime.
-- **Candidate:** promising target that should remain `Unresolved` until tested in a logging-only plugin.
+- [Audited build](audited-build.md) — the pinned baseline, its assembly hashes, and how to move it.
+- [Decompiling workflow](decompiling-workflow.md) — the tools, the order to use them in, and how to cite what you find.
+- [Architecture](architecture.md) — the lifecycle and manager loops every gameplay object is driven by.
+- [Identity and registries](identity-and-registries.md) — UUID is identity; type is the boundary; a name is never either.
+- [Type model](type-model.md) — the concrete/type/registry/modifier shape every domain repeats, and where a bonus can double-apply.
+- [Naming traps](naming-traps.md) — the places where the code's word and the player's word mean different things.
+- [Resources and BigDouble](resources-and-bigdouble.md) — big numbers, the resource API, and the cost math you have to reproduce exactly.
+- [Save system](save-system.md) — the save format, the collection pipeline, and how to read one by hand.
+- [UI internals](ui-internals.md) — lazy construction, latching, UI-only paths, and the quirks that look like bugs.
+- [Interaction patterns](ui-patterns.md) — the seven screen shapes; read an unopened page on sight.
+- [Modding hooks](modding-hooks.md) — where to attach, what not to touch, and how to prove a mutation landed.
+- [Requirements](requirements.md) — the requirement graph: what gates actually read, node visibility states, and walking a chain to the real blocker.
+- [Native action surfaces](native-action-surfaces.md) — the purchase, consumable and crafting paths, already decompiled.

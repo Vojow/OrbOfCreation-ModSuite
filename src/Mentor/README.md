@@ -55,6 +55,14 @@ with one successful equipped tick. Discovery, creation, reset, loadout, and
 apply-mastery signal patches are gone because the next world publication already
 contains those facts. Mentor suppresses observations caused by its own grants.
 
+Those four patches are inputs, not a parallel runtime, and they exist because
+earned XP is not a snapshot delta: a native mastery rollover consumes saved XP
+and Mentor's own grant writes the same value, so subtracting two world
+publications cannot recover what was earned. The journal is main-thread and
+value-only, its rows are sequence-stamped, collection copies them onto the frame,
+the worker consumes each sequence once even when later generations repeat a row,
+and the sequence resets when the collected epoch changes.
+
 ServiceCycle owns scheduling, lifecycle retirement, fair action turns, status,
 and trace projection. There are no Mentor operations-per-frame or CPU-budget
 settings. Configuration schema 4 discards those obsolete keys. The remaining

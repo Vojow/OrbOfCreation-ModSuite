@@ -1,8 +1,10 @@
 # How a service gets its data
 
 The canonical statement of what a ServiceCycle service is allowed to read, and where that data comes
-from. If anything else in this repository disagrees with this document, this document is right and the
-other thing is stale.
+from. If anything else in this repository disagrees with this document, this document is right and
+the other thing is stale.
+
+[Back to dossier](README.md)
 
 ## The rule
 
@@ -12,25 +14,14 @@ decision. It reads those three.
 
 The one exception is the **action boundary**, which is not a data source but a safety net: before
 mutating the game, an action re-validates against live native state and refuses if the world moved.
-That stays, and it is not "collection". Deciding uses snapshots; acting re-checks reality.
-
-## Why this exists
-
-Every service used to read the game itself, on the Unity thread, once per cycle — the *capture* or
-*collect* phase. That was a hack from before there was anything to share. It meant N services each
-paying to read overlapping state, each with their own native contracts to keep working, each free to
-invent their own idea of what a number means, and all of it on the frame budget.
-
-One shared collection replaces all of it. The collect phase is **gone** for ordinary services —
-not deprecated, not optional: the ordinary contract has no capture member, so a service that wants
-one has to be the source service instead, and there is only ever one of those.
+That is not collection. Deciding uses snapshots; acting re-checks reality.
 
 ## The two kinds of service
 
 ### Source service — publishes one of the three
 
 Reads the game (or the config file) on the main thread and hands back one immutable object that
-everyone else consumes. There are three, and there will only ever be three:
+everyone else consumes. There are three publications, and there will only ever be three:
 
 | Publication | Owner | Lives in |
 | --- | --- | --- |
@@ -58,18 +49,18 @@ read twice and no place to keep a capture even if a service wanted one.
 3. Allocates a fresh world state. Nothing published is ever written again, so immutability is
    structural rather than a convention a reader has to trust.
 4. **Does the expensive math** — every derived number any service needs, computed once, here, off the
-   main thread. This is the point of the whole design: the game recomputes derived values from scratch
-   on every call, so we own that math instead of asking 400 times a cycle.
+   main thread. This is the point of the whole design: the game recomputes derived values from
+   scratch on every call, so the suite owns that math instead of asking 400 times a cycle.
 5. Publishes **one action** carrying the finished immutable snapshot and its generation.
 6. The pump executes that action, which makes the snapshot the newest one. Publication-class actions
    dispatch before mutating ones, so a snapshot handed back this frame is live before any consumer
-   decides anything this frame.
+   decides anything that frame.
 
 ## Ordinary service flow
 
 1. The pump asks whether this service may start: its own wake policy, **and** whether the world has
-   advanced past its last game-facing action attempt. A commit is absent from the pinned snapshot;
-   a skip, rejection, or fault proves the live action boundary disagreed with it. In every case the
+   advanced past its last game-facing action attempt. A commit is absent from the pinned snapshot; a
+   skip, rejection, or fault proves the live action boundary disagreed with it. In every case the
    service waits for a later reading instead of planning again from facts just shown unreliable.
 2. If it may start, it is handed immutable references to world, configuration and strategy.
 3. The worker reads them freely. They are immutable, and anything newer is a *different object*, so
@@ -85,12 +76,9 @@ last acted on". It is **an identity tag, never a key into storage**.
 
 `ServiceWorldPublisher` holds exactly one field: the latest publication. There is no history, no map,
 no ring buffer, and no pool. A worker pins a reference for the duration of its cycle; once it drops
-that reference and a newer publication exists, the old one is garbage. Live at any moment: the latest,
-plus one per in-flight cycle.
-
-A pool was considered and rejected — the reuse would have to be proven safe against every worker that
-might still hold a reference, which is the invariant nobody can check locally, in exchange for
-allocations that happen a few times a second off the main thread.
+that reference and a newer publication exists, the old one is garbage. Live at any moment: the
+latest, plus one per in-flight cycle. A pool is rejected — reuse would have to be proven safe against
+every worker that might still hold a reference, which is the invariant nobody can check locally.
 
 ## What a service may not do
 
@@ -99,38 +87,10 @@ allocations that happen a few times a second off the main thread.
 - Hold a publisher at all. The runtime pins each publication once when the cycle opens and hands the
   snapshot over; a service that could read again mid-cycle would evaluate against one world and act
   against another.
-- Carry state between cycles. The worker is stateless by contract; pacing comes from the wake policy.
+- Carry state between cycles outside its own `TState`. The worker is stateless by contract; pacing
+  comes from the wake policy.
 
-## Status
-
-Built and load-bearing:
-
-- Publication, generation stamping, immutability, latest-wins, and the freshness gate — enforced by
-  the runtime rather than restated by each consumer ([W50](world-collection-decisions.md)).
-- Collection as a registered service, so it sits inside budget accounting, tracing, health and
-  emergency stop rather than beside them, with publishing as a first-class action effect so worker
-  output reaches consumers through the ordinary pipeline in the same frame.
-- **Step 4's rate math.** Every published resource row carries a `TrueRate` computed by
-  `GameResourceRateMath` on the worker — the first derived number the suite owns outright instead of
-  asking the game for.
-- **Step 4's cost math.** `PurchaseCosts` publishes what one more level of each structure *and each
-  upgrade* costs, from two separate chains sharing only the table they land in. The structure chain is
-  compared against the game's own answer by the differential verification run, entity by entity in a
-  live save; the upgrade chain has no differential entry of its own.
-- **Both consumers off the game while deciding.** Auto Buy's candidates are the snapshot's structures
-  and upgrades, priced, levelled and classified from published rows; Auto Harvest takes six of its
-  eight facts from the snapshot, including the action's audited structural safety, computed on its
-  worker from the plot-authoring, phase-descriptor and effect-block tables. Neither has a capture: what
-  each one did is a frame projector the worker calls immediately before deciding
-  ([W51](world-collection-decisions.md)). Auto Harvest's quarantine and contract circuit stay at the
-  action boundary and reach the worker as result codes it records in its own state.
-
-Not built, and honest about it:
-
-- **Strategy delivery.** No service publishes a bulletin, so the third of the three publications is
-  stamped by the runtime but never carries anything.
-
-The live action queue is collected but never decided against. Both services compete for the same slots
-and consume them with their own actions, so a published reading would be wrong inside a single world
+The live action queue is published but never decided against. Services compete for the same slots and
+consume them with their own actions, so a published reading would be wrong inside a single world
 generation; the queue is read at the action boundary, immediately before the mutation that depends on
 it ([W53](world-collection-decisions.md)).
