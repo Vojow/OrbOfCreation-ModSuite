@@ -68,6 +68,9 @@ carried cross-run bonuses (authored constants do not).
   what rerolling a set costs, and what passing one grants.
 - **Whether a purchase can cost three or more resources** — nothing in one full snapshot of priced
   entities exceeded two currencies. Settle across the full authored set, not one save.
+- **Which entities get cheaper per level** — the per-level cost-factor census shows a real tail
+  below 1.0; which entities sit in it, and whether the shrinking is authored or a modifier
+  artifact, is unextracted.
 
 ## World and crafting
 

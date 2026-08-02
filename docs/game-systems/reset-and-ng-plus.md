@@ -1,8 +1,10 @@
 # Reset and new game plus
 
 Prestige lives at **Time > Reset**, and that page publishes exactly three decision facts: your
-starting Time Advancements next run, the delta against the previous run, and what survives the reset
-— **Challenges, Achievements, Time Advancements**.
+starting Time Advancements next run, the delta against the previous run, and a survival list
+reading **Challenges, Achievements, Time Advancements**. Take the Challenges entry loosely: active
+challenges are commonly cleared by a reset and are picked fresh when starting an NG+ run — what
+that line actually preserves is unrecorded (see [challenges.md](challenges.md)).
 
 Everything not on that survival list is lost: resources, attributes, upgrades, spells, glyphs,
 concepts, research, and the runes themselves — though the persistent advancement levels runes granted

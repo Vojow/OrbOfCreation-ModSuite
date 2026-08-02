@@ -100,14 +100,17 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 
 ## Systems
 
-- [concepts.md](concepts.md) — slotted passive scalers that level over time and drain continuously.
+- [concepts.md](concepts.md) — passive scalers; only a concept in a development slot levels or
+  drains.
 - [agromancy.md](agromancy.md) — plots, nodes and growth phases; growth runs with the screen closed.
 - [aspects.md](aspects.md) — three pedestals through which Workshop, Alchemy and Rituals arrive.
-- [disciplines.md](disciplines.md) — which tab each attribute category feeds, and which are unplayed.
-- [crafting.md](crafting.md) — Workshop rows and the Scribe drop slot; crafts pay at submission.
+- [disciplines.md](disciplines.md) — four disciplines change name between purchase page and
+  advancement tab; several are unplayed.
+- [crafting.md](crafting.md) — Workshop recipe rows; crafts pay at submission.
+- [scribing.md](scribing.md) — the Scribe drop slot and its Starting Level dial; largely unmapped.
 - [artifacts.md](artifacts.md) — an equipment loadout bound by weight and slots at once.
-- [consumables.md](consumables.md) — eight families, preparation times, replenish, and random scroll
-  targeting.
+- [consumables.md](consumables.md) — family tags (partly unmapped), preparation times, replenish
+  research, and scroll targeting.
 - [carry-limits.md](carry-limits.md) — per-item capacity; a weaker arrival is paid for and silently
   discarded.
 - [toxicity.md](toxicity.md) — the meter that rate-limits item usage and drains faster the fuller it
@@ -121,9 +124,10 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
   split.
 - [achievement-strength.md](achievement-strength.md) — +1 % all resource gain and +1 starting Time
   Advancement per point.
-- [challenges.md](challenges.md) — up to three active; they modify requirements, not only numbers.
-- [reset-and-ng-plus.md](reset-and-ng-plus.md) — challenges, achievements and TA survive; only NG+
-  resets cost curves.
+- [challenges.md](challenges.md) — picked at NG+ start, cleared by resets; they modify
+  requirements, not only numbers.
+- [reset-and-ng-plus.md](reset-and-ng-plus.md) — achievements and TA survive, challenges get
+  cleared; only NG+ resets cost curves.
 
 ## Interface
 

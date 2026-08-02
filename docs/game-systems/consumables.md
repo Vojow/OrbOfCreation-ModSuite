@@ -1,28 +1,23 @@
 # Consumables
 
 Consumables are the game's stockpiled one-shot items: fruits, potions, relics, scrolls and threads.
-They are used from the Inventory panel or a hotbar key and produced by crafting.
+They are used from the Inventory panel or a hotbar key and arrive through crafting and gathering.
 
-## Families
+## Family tags
 
-The game authors **68 consumables** across exactly **8 family patterns**. Five family names describe
-what an item *does*:
+The data authors **68 consumables**, each carrying one or more family tags: Fruit, Potion, Relic,
+Scroll, Thread, Treasure, Food, Modification, Resource. The tags mix two roles, and the full mapping
+is **not yet established** — it gets recorded as it is played, not inferred:
 
-| Operation family | What it is |
-|---|---|
-| Fruit | Temporary buff item |
-| Potion | Temporary buff item |
-| Relic | Permanent, immediate effect (advancement levels and similar) |
-| Scroll | Applies an enchantment to a target |
-| Thread | Temporary buff item |
+- **Source**: Fruit marks an item gathered from a fruit tree (see [agromancy.md](agromancy.md)).
+- **Effect**: a fruit can be a **Relic** or a **Food**, and that side determines what it does — a
+  Relic is a permanent, immediate effect (advancement levels and similar); a Food is a temporary
+  buff.
+- **Scroll** applies an enchantment to a target.
 
-The remaining family tags — **Treasure**, **Food**, **Modification**, **Resource** — are not
-operations. They describe how an item is acquired or what category it belongs to: a "treasure relic"
-and a "fruit relic" are both simply Relics.
-
-Exactly **four** items carry two operation families at once (`Fruit + Relic`) and all four behave as
-**Relics**: Blitz Berry, Continuous Coconut, Frugal Fig and Power Pear. No other combination in the
-game spans two operations.
+In the audited data four items are tagged both Fruit and Relic — Blitz Berry, Continuous Coconut,
+Frugal Fig and Power Pear — consistent with the source/effect split. Which role Potion, Thread,
+Treasure, Modification and Resource each play is unrecorded.
 
 ## Permanence and preparation
 
@@ -45,17 +40,18 @@ runs a preparation period first:
    are done.
 
 Some items **replenish**: after firing, the cost is refunded and a unit is granted back for free.
-That grant goes through the [carry rules](carry-limits.md) like any other gain.
+Replenishment is a researchable bonus rather than an authored property of the item — its in-game
+name is unrecorded. The grant goes through the [carry rules](carry-limits.md) like any other gain.
 
 The player's multi-buy setting governs consumables too: it decides how many units a single use action
 collects.
 
 ## Scroll targeting
 
-Scroll-type consumables **target randomly within their authored pool**. Each scroll carries a target
-structure defining which entities it can enchant; the eligible list is computed against the strongest
-level of that scroll you currently own, and one entry is chosen at random. An empty eligible list
-means the scroll has nothing valid to enchant.
+You aim a scroll at a target of your choice; an optional **random mode** instead picks randomly from
+the scroll's eligible pool. Each scroll carries a target structure defining which entities it can
+enchant; the eligible list is computed against the strongest level of that scroll you currently own,
+and an empty eligible list means the scroll has nothing valid to enchant.
 
 ## Buff shape
 

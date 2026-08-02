@@ -30,7 +30,7 @@ Two strips are always present and belong to no single screen:
 | Magic > Augments | [augments.md](augments.md) |
 | Scholar > Concepts | [concepts.md](concepts.md) |
 | Scholar > Research | [research.md](research.md) |
-| Scholar > Scribe | [crafting.md](crafting.md) |
+| Scholar > Scribe | [scribing.md](scribing.md) |
 | World > Aspects | [aspects.md](aspects.md) |
 | World > Agromancy | [agromancy.md](agromancy.md) |
 | Workshop > Artifacts | [artifacts.md](artifacts.md) |

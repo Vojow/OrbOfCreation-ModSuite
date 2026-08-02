@@ -13,7 +13,10 @@ is meaningless**; the only comparable quantity is time-to-produce.
 
 Each level's cost exceeds the previous level's by a factor clustering at **≈×1.25**, with a visible
 group around ×1.30 and a real tail *below* 1.0 — a handful of entities actually get **cheaper** per
-level. Costs also span an enormous range within one save, roughly `10⁻¹` through `10⁶⁰`.
+level. Which entities sit in that tail is unextracted; see [open-questions.md](open-questions.md).
+
+Costs span an enormous range: roughly `10⁻¹` through `10⁶⁰` on the observed mid-progression save,
+and far beyond it late — endgame saves reach magnitudes on the order of `10⁵⁰⁰⁰`.
 
 ## Cost Scaling is retroactive
 

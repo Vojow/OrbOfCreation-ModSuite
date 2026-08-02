@@ -1,9 +1,11 @@
 # Disciplines
 
-Each attribute category feeds a progression tab (see [tab-and-orb-xp.md](tab-and-orb-xp.md)), and orb
-research levels the disciplines those tabs belong to.
+To the player, each discipline is simply its own tab. This page exists for the two things that are
+not obvious from inside one tab: four disciplines **change name** between the purchase page and the
+advancement tab their attributes feed (see [tab-and-orb-xp.md](tab-and-orb-xp.md)), and two
+top-level screens host **two disciplines each**:
 
-| Discipline page | Where it lives | Progression tab it feeds |
+| Purchase page | Top-level screen | Advancement tab |
 |---|---|---|
 | Wizardry | Magic | Wizardry |
 | Scholar | Scholar | Scholar |
@@ -17,9 +19,5 @@ research levels the disciplines those tabs belong to.
 **Druidry is single-route content**: it is reachable only through World > Druidry, because World does
 not co-reference its subtabs the way Magic co-references Wizardry. If that subtab is not yet
 available, its content is not visible anywhere else. See [reachability.md](reachability.md).
-
-**Mysticism carries a decaying Stability meter** — e.g., observed at `4.73e3` falling `−0.376 %/s`.
-It is the ritual system's health pool, drained by enemy attacks while a ritual runs, and no other
-purchase page carries one.
 
 Several disciplines have never been played; see [unmapped-systems.md](unmapped-systems.md).
