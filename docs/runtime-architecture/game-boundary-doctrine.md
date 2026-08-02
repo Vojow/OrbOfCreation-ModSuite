@@ -271,3 +271,12 @@ UUID handles or compose the next action; compact text is allowed for genuinely h
 catalogs or summaries. A tool has one response shape and one vocabulary regardless of media. Format
 freedom is not permission to create a second spelling, numeric encoding, status vocabulary, or
 pagination dialect for the same concept.
+
+### Settlement-timeout evidence refinement
+
+The one-second settlement deadline is a wedge guard, not permission to return a content-free
+success. If no strictly newer publication exposes the committed post-state by that deadline, the
+response retains `committed` and emits one exceptional `postStateUnavailable` fact with
+`reasonCode=post_state_timeout`. It still never projects the admission world as post-state. This
+failure-only evidence replaces the earlier silent-omission wording; successful responses carry no
+lag field or settlement ceremony.

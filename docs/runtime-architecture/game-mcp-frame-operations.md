@@ -92,6 +92,8 @@ batch.
    waits up to one second for a world strictly newer than its admission world. All gameplay tools
    use the same readiness predicate and command-to-world projector; only event-driven discovery
    offers strengthen readiness by requiring their requested mode/offer transition to be published.
+   If the deadline expires, one shared `postStateUnavailable / post_state_timeout` shape replaces
+   the otherwise empty committed body; ordinary fresh responses carry no settlement marker.
 
 ### Cancellation and shutdown
 
@@ -193,7 +195,9 @@ Reads use `available`/`unavailable`, one `worldGeneration`, and the requested ro
 Mutations use `committed`/`refused`/`faulted`; success returns the newer post-state with the generation
 that supplied it and omits payment evidence, request echoes, and counters, while failure keeps named
 target, concrete reason, a pointer to the owning read surface, mismatches that actually occurred,
-and decomposed receipt evidence. `content` is
+and decomposed receipt evidence. The exceptional case where a committed outcome cannot be observed
+in a newer publication within one second retains `committed` plus only
+`postStateUnavailable / post_state_timeout`; it never substitutes the older world. `content` is
 reserved for text-first tools and actual image media; structured data appears once in
 `structuredContent`. Committed, refused, and faulted GameAction results are all successful MCP tool executions:
 their domain `status`/`reasonCode` carries the outcome and `isError` stays false so an MCP client cannot
