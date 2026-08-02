@@ -1,0 +1,19 @@
+# Reset and new game plus
+
+Prestige lives at **Time > Reset**, and that page publishes exactly three decision facts: your
+starting Time Advancements next run, the delta against the previous run, and what survives the reset
+— **Challenges, Achievements, Time Advancements**.
+
+Everything not on that survival list is lost: resources, attributes, upgrades, spells, glyphs,
+concepts, research, and the runes themselves — though the persistent advancement levels runes granted
+keep applying (see [time-runes.md](time-runes.md)).
+
+A persistent reset also clears each discovery tree's ladder and choice state, so every ladder
+restarts at its base price; see [discovery-pricing.md](discovery-pricing.md).
+
+Two effects belong to NG+ alone:
+
+- **Cost curves reset only at NG+.** Advancement and progression costs climb until attributes become
+  unaffordable, and an ordinary reset does not undo that escalation.
+- **NG+ starts you with bonus orb levels**, some pre-allocated and some free to place. Free bonus
+  levels do not advance the paid cost curve; see [requirement-graph.md](requirement-graph.md).

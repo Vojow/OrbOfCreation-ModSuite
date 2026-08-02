@@ -1,45 +1,140 @@
-# Game Systems
+# Game systems
 
-How Orb of Creation actually works: the systems, the math, and how they interact. Written for
-a player who wants to understand the game — and read at the start of every session that drives
-or reasons about it. Facts only; how to *play well* lives in [`../strategy/`](../strategy/README.md).
+How Orb of Creation works: mechanics, math, and the gaps. Play advice lives in
+[../strategy/](../strategy/README.md).
 
-Everything here describes game version 1.0.5. Claims are either decompiled from the game's
-code, observed directly in-game, or explained by the game's design; anything unverified is
-marked as such inline. Unknowns are collected in [open-questions.md](open-questions.md).
+All constants are read from game version 1.0.5 and are invalidated by a game update.
 
-## Reading order
+## Numbers
 
-1. [value-computation.md](value-computation.md) — how the game computes every number: caching,
-   modifier folding, rounding, big-number behavior. Read this first; everything depends on it.
-2. [resources.md](resources.md) — the growth terms, capacity and overcap, splash, resource
-   types and keywords.
-3. [casting-and-spells.md](casting-and-spells.md) — casting, costs, cooldowns, channels,
-   charging, the loadout, output/reserve levels.
-4. [glyphs-augments-recipe-books.md](glyphs-augments-recipe-books.md) — the naming minefield,
-   and how spell augmentation really works.
-5. [mastery-and-xp.md](mastery-and-xp.md) — the earned-by-doing tracks: spell mastery, spell
-   types, casting level, spell levels.
-6. [discovery.md](discovery.md) — the roll/pick layer: pools, pricing ladders, rerolls, and
-   the commitment point.
-7. [attributes-upgrades-development.md](attributes-upgrades-development.md) — Attributes
-   (structures), upgrades, the development queue, cost scaling.
-8. [progression-advancements.md](progression-advancements.md) — tab XP, Orb XP, advancement
-   currencies, research, orbs, and the requirement graph.
-9. [concepts.md](concepts.md) — the Scholarism line: slots, stacks, drain, concept mastery.
-10. [time-and-prestige.md](time-and-prestige.md) — time runes, Time Advancements, challenges,
-    NG+ and what persists.
-11. [world.md](world.md) — Agromancy, Druidry, Aspects, Dimensional.
-12. [consumables-and-items.md](consumables-and-items.md) — fruits, potions, relics, scrolls,
-    threads; carry limits and what happens at capacity.
-13. [crafting-and-equipment.md](crafting-and-equipment.md) — Scribe, Workshop crafting,
-    artifacts and their loadout.
-14. [ui-map.md](ui-map.md) — every tab and screen, and the seven interaction patterns the
-    whole game is built from.
-15. [open-questions.md](open-questions.md) — what we don't know yet.
+- [modifiers.md](modifiers.md) — five kinds of modifier, folded in a fixed non-commutative order.
+- [per-level-scaling.md](per-level-scaling.md) — whether an effect's levels add or multiply is a
+  property of that effect.
+- [numbers-and-rounding.md](numbers-and-rounding.md) — mantissa/exponent storage, two-significant-digit
+  prices, spend-to-zero.
+- [cost-pipeline.md](cost-pipeline.md) — six stages build a price; Quality divides it again at
+  payment.
+- [lazy-evaluation.md](lazy-evaluation.md) — a value is worked out when something reads it, so
+  displays lag.
 
-## Vocabulary
+## Resources
 
-The game, its code, and its own tooltips sometimes use different names for the same thing.
-The load-bearing translations appear in each page where they matter; the quick table lives in
-[ui-map.md](ui-map.md#vocabulary).
+- [growth-terms.md](growth-terms.md) — Rate, Gained, Capacity, Quality, Attribute Cost, Reverb,
+  Replenish, Decay.
+- [growth-levers.md](growth-levers.md) — missing-% pays you for being empty, interest for being full,
+  rest for not transacting.
+- [capacity.md](capacity.md) — a price above your cap is unreachable, not slow; resolving it is a
+  cross-currency detour.
+- [overcap.md](overcap.md) — a one-shot 3 s timer, then a rubber band pulling the excess back to cap.
+- [spark.md](spark.md) — the only resource that decays toward zero, even below cap.
+- [splash.md](splash.md) — type-targeted gain split by lifetime production rate; it feeds the rich and
+  does not conserve.
+- [resource-types.md](resource-types.md) — every resource carries type keywords, and effects target
+  keywords, not resources.
+- [allocations.md](allocations.md) — advancement points, spell capacity and the like: quantity/cap
+  reads unspent/earned.
+- [emblems.md](emblems.md) — passive token effects; Momentum is the one worked out.
+
+## Casting
+
+- [spells.md](spells.md) — a spell is a cost, a cooldown and an effect list that other purchases can
+  edit.
+- [spell-types.md](spell-types.md) — fifteen tags; buffs resolve against effective types, not the
+  printed name.
+- [effect-grammar.md](effect-grammar.md) — every effect is term + statistic + keyword-target.
+- [spell-loadout.md](spell-loadout.md) — spots and weight bind independently; a weight-0 spell still
+  costs a lane.
+- [cast-modes.md](cast-modes.md) — charms open buff windows, channels block casting and drain,
+  charging trades time for power.
+- [output-and-reserve.md](output-and-reserve.md) — two global dials: Output prices the active cast,
+  Reserve prices the passive economy.
+- [casting-level.md](casting-level.md) — a global track fed by every cast plus a passive trickle.
+- [spell-mastery.md](spell-mastery.md) — per-spell XP that only casting fills, plus the three
+  spell-type tracks.
+- [spell-levels.md](spell-levels.md) — cost curve 3.3^(L(1+0.007L)); levelling raises output and XP
+  together.
+- [spell-catalogue.md](spell-catalogue.md) — observed spells and their authored tags (partial; the
+  full set is unknown).
+
+## Augments
+
+- [pool-unlockers.md](pool-unlockers.md) — glyphs, a.k.a. recipe books, expand what future rolls can
+  contain.
+- [augments.md](augments.md) — per-spell sockets, loadout-wide copies, weight per copy, and global
+  per-level passives.
+
+## Discovery
+
+- [discovery.md](discovery.md) — you compose components and the game resolves the output; paying is
+  the commitment.
+- [discovery-pricing.md](discovery-pricing.md) — each tree has its own ladder, advanced only by
+  optional picks.
+
+## Purchases
+
+- [attributes-and-upgrades.md](attributes-and-upgrades.md) — the two purchase families, their
+  asymmetries, and category migration.
+- [development-queue.md](development-queue.md) — buying queues; the queue, not the resource, is the
+  early binder.
+- [purchase-checks.md](purchase-checks.md) — what the buy button tests, and the ways a purchase fails
+  silently.
+- [cost-scaling.md](cost-scaling.md) — ≈×1.25 per level, two-currency prices, and retroactive cost
+  scaling.
+- [auto-buy.md](auto-buy.md) — the native sweeper fires only on empty queue, 5 s idle, and <0.1 % of
+  stock.
+
+## Progression
+
+- [tab-and-orb-xp.md](tab-and-orb-xp.md) — every completed attribute level pays +1 tab XP and +1 Orb
+  XP.
+- [advancement-currencies.md](advancement-currencies.md) — tab levels raise caps, never balances; the
+  supply is run-finite.
+- [research.md](research.md) — timed nodes priced in school points, revealing further nodes on
+  completion.
+- [orbs.md](orbs.md) — one orb per global level, spent on disciplines that gate later content.
+- [requirement-graph.md](requirement-graph.md) — gates read purchased levels, not the displayed sum,
+  and reach across systems.
+- [reachability.md](reachability.md) — most content has two routes; single-route content vanishes with
+  its one screen.
+
+## Systems
+
+- [concepts.md](concepts.md) — slotted passive scalers that level over time and drain continuously.
+- [agromancy.md](agromancy.md) — plots and nodes; harvest state only refreshes while the page is open.
+- [aspects.md](aspects.md) — three pedestals through which Workshop, Alchemy and Rituals arrive.
+- [disciplines.md](disciplines.md) — which tab each attribute category feeds, and which are unplayed.
+- [crafting.md](crafting.md) — Workshop rows and the Scribe drop slot; crafts pay at submission.
+- [artifacts.md](artifacts.md) — an equipment loadout bound by weight and slots at once.
+- [consumables.md](consumables.md) — eight families, preparation times, replenish, and random scroll
+  targeting.
+- [carry-limits.md](carry-limits.md) — per-item capacity; a weaker arrival is paid for and silently
+  discarded.
+- [toxicity.md](toxicity.md) — the meter that rate-limits item usage and drains faster the fuller it
+  is.
+
+## Time and prestige
+
+- [time-runes.md](time-runes.md) — rune level, persist level and mastery level are three different
+  tracks.
+- [time-advancements.md](time-advancements.md) — refunded every reset, so the only question is the
+  split.
+- [achievement-strength.md](achievement-strength.md) — +1 % all resource gain and +1 starting Time
+  Advancement per point.
+- [challenges.md](challenges.md) — up to three active; they modify requirements, not only numbers.
+- [reset-and-ng-plus.md](reset-and-ng-plus.md) — challenges, achievements and TA survive; only NG+
+  resets cost curves.
+
+## Interface
+
+- [screens.md](screens.md) — seven screens, their subtabs, and which page holds what.
+- [ui-patterns.md](ui-patterns.md) — compose-and-confirm, budgeted loadouts, level dials, purchase
+  lists, timed jobs.
+- [ui-behaviours.md](ui-behaviours.md) — wheel ownership, tab reselect, late top bar, nested tooltips,
+  red vs grey.
+- [vocabulary.md](vocabulary.md) — attribute/statistic, glyph/recipe book/augment, concepts/alchemy.
+
+## Gaps
+
+- [open-questions.md](open-questions.md) — known-unknown mechanics, each with what would settle it.
+- [unmapped-systems.md](unmapped-systems.md) — Rituals, Alchemy, Zeal, Dimensional and the other
+  unplayed features.
