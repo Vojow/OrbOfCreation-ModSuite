@@ -96,7 +96,7 @@ public sealed class GameMcpFrameRoutingContractTests
             "game_navigate",
             Arguments("game_navigate"));
         Assert.Equal(GameMcpOperationClass.UiState, ui.Classification);
-        Assert.Equal(GameMcpFrameData.None, ui.RequiredData);
+        Assert.Equal(GameMcpFrameData.World | GameMcpFrameData.Scene, ui.RequiredData);
 
         var administration = GameMcpProtocolRouter.BuildOperation(
             "suite_emergency_stop",

@@ -261,19 +261,19 @@ public sealed class Plugin : BaseUnityPlugin
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
         ComposeModConfig();
-        if (_runtimeActivationAllowed && _configurationStore.Current.General.Enabled)
+        if (GameMcpActionRegistrationPolicy.ShouldCompose(
+                _runtimeActivationAllowed,
+                _configurationStore.Current.General.Enabled))
         {
+            // The shared runtime also owns the player's MCP GameActions. Automation policy still
+            // honors General/Enabled and every feature mode, but those settings must not remove
+            // the game's manual action boundary from the MCP surface.
             EnsureRuntimeComposition();
         }
         else if (!_runtimeActivationAllowed && _automaticSaveBackup.AllowsAutomation)
         {
             Log.LogAutomataWarning(
                 "Compatibility emergency stop is active. Press Resume all in Mods > General or the top-left STOP control to accept and resume, or use Advanced to accept while keeping STOP engaged.");
-        }
-        else if (_runtimeActivationAllowed)
-        {
-            Log.LogAutomataInfo(
-                "Orb Of Creation automation is disabled by General/Enabled; configuration and emergency recovery remain available.");
         }
 #if SERVICE_CYCLE_PROFILE
         if (!GameMcpTooltipNativeAccess.TryCreate(
@@ -669,7 +669,9 @@ public sealed class Plugin : BaseUnityPlugin
         UpdateBuildCompatibilityOverride();
         PublishChangedConfiguration();
         ValidateSuiteShortcuts();
-        if (!_runtimeActivationAllowed || !_configurationStore!.Current.General.Enabled)
+        if (!GameMcpActionRegistrationPolicy.ShouldCompose(
+                _runtimeActivationAllowed,
+                _configurationStore!.Current.General.Enabled))
         {
             _runtimeCompositionAttempted = false;
         }
@@ -681,7 +683,7 @@ public sealed class Plugin : BaseUnityPlugin
             }
             catch (Exception ex)
             {
-                Logger.LogError("Could not activate automation after the master switch was enabled: " +
+                Logger.LogError("Could not compose the shared gameplay runtime: " +
                                 ex.GetBaseException().Message);
                 _featureStatuses?.ObserveServiceCycleUnavailable(
                     _configurationStore.Current,
@@ -1511,8 +1513,7 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandResult committed,
         ulong actionWorldGeneration)
     {
-        var timeoutSeconds = command.Kind == GameMcpCommandKind.Prestige ? 30f : 5f;
-        var deadline = Time.realtimeSinceStartup + timeoutSeconds;
+        var deadline = Time.realtimeSinceStartup + GameMcpPostStateSettlement.MaximumWaitSeconds;
         GameMcpFrameContext? latest = null;
         while (Time.realtimeSinceStartup < deadline)
         {
@@ -1521,7 +1522,10 @@ public sealed class Plugin : BaseUnityPlugin
                 command.Kind == GameMcpCommandKind.Prestige
                     ? GameMcpFrameData.World | GameMcpFrameData.Scene
                     : GameMcpFrameData.World);
-            if (latest.World is null || latest.World.Generation.Value <= actionWorldGeneration)
+            if (latest.World is null ||
+                !GameMcpPostStateSettlement.IsStrictlyNewer(
+                    latest.World.Generation.Value,
+                    actionWorldGeneration))
                 continue;
             if (command.Kind != GameMcpCommandKind.DiscoveryTreeOffer ||
                 GameMcpWorldQuery.HasDiscoveryPostState(
@@ -1536,7 +1540,10 @@ public sealed class Plugin : BaseUnityPlugin
 
         var category = GameMcpPostStateCategory(command);
         GameMcpValue state;
-        if (latest?.World is not null && latest.World.Generation.Value > actionWorldGeneration &&
+        if (latest?.World is not null &&
+            GameMcpPostStateSettlement.IsStrictlyNewer(
+                latest.World.Generation.Value,
+                actionWorldGeneration) &&
             (command.Kind != GameMcpCommandKind.DiscoveryTreeOffer ||
              GameMcpWorldQuery.HasDiscoveryPostState(
                  latest,
@@ -1544,7 +1551,7 @@ public sealed class Plugin : BaseUnityPlugin
                  command.Mode,
                  command.SecondaryId)))
         {
-            state = command.Kind switch
+            var projected = command.Kind switch
             {
                 GameMcpCommandKind.SpellComposition =>
                     GameMcpWorldQuery.ProjectSpellCompositionPostState(latest, command.TargetId),
@@ -1562,15 +1569,25 @@ public sealed class Plugin : BaseUnityPlugin
                     GameMcpWorldQuery.ProjectPrestigePostState(latest),
                 _ => GameMcpWorldQuery.ProjectPostState(latest, category, command.TargetId),
             };
+            var fresh = new GameMcpObjectBuilder
+            {
+                ["worldGeneration"] = latest.World.Generation.Value,
+            };
+            if (projected is GameMcpObject projectedObject) fresh.CopyFrom(projectedObject);
+            else fresh["postState"] = projected;
+            state = fresh.Freeze();
         }
         else
         {
+            var observedGeneration = latest?.World?.Generation.Value ?? actionWorldGeneration;
             state = new GameMcpObjectBuilder
             {
-                ["postStateUnavailable"] = new GameMcpObjectBuilder
+                ["worldGeneration"] = observedGeneration,
+                ["postState"] = new GameMcpObjectBuilder
                 {
-                    ["reasonCode"] = "post_state_timeout",
-                    ["reason"] = "a newer published world did not expose the committed transition within five seconds",
+                    ["status"] = "unobserved",
+                    ["reasonCode"] = "projection_lagged",
+                    ["reason"] = "no strictly newer published world exposed the committed transition within 250ms",
                 },
             }.Freeze();
         }
@@ -2144,6 +2161,7 @@ public sealed class Plugin : BaseUnityPlugin
 
         var details = new GameMcpObjectBuilder
         {
+            ["worldGeneration"] = state.World?.Generation.Value ?? 0,
             ["scene"] = state.SceneName,
             ["runtimeAvailable"] = state.RuntimeAvailable,
         };
@@ -2309,6 +2327,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private IEnumerator NavigateGameMcpAcrossFrames(GameMcpCommand command)
     {
+        var mutationWorldGeneration = command.FrameContext?.World?.Generation.Value ?? 0;
         if (!TryBeginNavigateGameMcp(
                 command,
                 out var subtabSelector,
@@ -2332,22 +2351,24 @@ public sealed class Plugin : BaseUnityPlugin
                     out var subtab,
                     out var subtabReason))
             {
-                CompleteGameMcpCommand(
+                yield return CompleteNavigateGameMcpAfterSettlement(
                     command,
                     NavigationRefusal(
                         "subtab_match_failed",
                         subtabReason,
                         details,
                         "subtabCandidates",
-                        subtabs.Select(candidate => candidate.Label)));
+                        subtabs.Select(candidate => candidate.Label)),
+                    mutationWorldGeneration);
                 yield break;
             }
             if (!subtab.TrySelect(out var selectionReason))
             {
-                CompleteGameMcpCommand(
+                yield return CompleteNavigateGameMcpAfterSettlement(
                     command,
                     GadgetRejected("subtab_selection_failed", selectionReason)
-                        .WithDetails(details.Freeze()));
+                        .WithDetails(details.Freeze()),
+                    mutationWorldGeneration);
                 yield break;
             }
             yield return null;
@@ -2359,26 +2380,76 @@ public sealed class Plugin : BaseUnityPlugin
                 SceneManager.GetActiveScene().name);
             if (!string.Equals(plotResult.Status, "committed", StringComparison.Ordinal))
             {
-                CompleteGameMcpCommand(
+                yield return CompleteNavigateGameMcpAfterSettlement(
                     command,
-                    plotResult.WithDetails(details.Freeze()));
+                    plotResult.WithDetails(details.Freeze()),
+                    mutationWorldGeneration);
                 yield break;
             }
             details["plotNodeUuid"] = command.TargetId.ToString("D");
         }
-        var destinationSubtabs = CaptureSubtabs();
-        if (destinationSubtabs.Count > 0)
-            details["subtabStrips"] = ProjectSubtabStrips(destinationSubtabs);
         var result = GadgetCommitted(
             "navigation_arrived",
             "the requested catalog destination was invoked through native UI controls",
             details);
-        if (command.Capture)
+        yield return CompleteNavigateGameMcpAfterSettlement(
+            command,
+            result,
+            mutationWorldGeneration,
+            includeDestinationState: true,
+            capture: command.Capture);
+    }
+
+    private IEnumerator CompleteNavigateGameMcpAfterSettlement(
+        GameMcpCommand command,
+        GameMcpCommandResult result,
+        ulong mutationWorldGeneration,
+        bool includeDestinationState = false,
+        bool capture = false)
+    {
+        var deadline = Time.realtimeSinceStartup + GameMcpPostStateSettlement.MaximumWaitSeconds;
+        GameMcpFrameContext? state = null;
+        do
         {
-            yield return CaptureGameMcpAtEndOfFrame(command, result);
+            yield return null;
+            state = CaptureGameMcpFrameContext(GameMcpFrameData.World | GameMcpFrameData.Scene);
+        }
+        while (Time.realtimeSinceStartup < deadline &&
+               (state.World is null ||
+                !GameMcpPostStateSettlement.IsStrictlyNewer(
+                    state.World.Generation.Value,
+                    mutationWorldGeneration)));
+
+        var details = new GameMcpObjectBuilder();
+        if (result.Details is GameMcpObject existing) details.CopyFrom(existing);
+        var fresh = state?.World is not null &&
+            GameMcpPostStateSettlement.IsStrictlyNewer(
+                state.World.Generation.Value,
+                mutationWorldGeneration);
+        details["worldGeneration"] = state?.World?.Generation.Value ?? mutationWorldGeneration;
+        if (fresh && includeDestinationState)
+        {
+            var destinationSubtabs = CaptureSubtabs();
+            if (destinationSubtabs.Count > 0)
+                details["subtabStrips"] = ProjectSubtabStrips(destinationSubtabs);
+        }
+        else if (!fresh)
+        {
+            details["postState"] = new GameMcpObjectBuilder
+            {
+                ["status"] = "unobserved",
+                ["reasonCode"] = "projection_lagged",
+                ["reason"] = "no strictly newer published world exposed the navigation result within 250ms",
+            };
+        }
+
+        var settled = result.WithDetails(details.Freeze());
+        if (capture && string.Equals(settled.Status, "committed", StringComparison.Ordinal))
+        {
+            yield return CaptureGameMcpAtEndOfFrame(command, settled);
             yield break;
         }
-        CompleteGameMcpCommand(command, result);
+        CompleteGameMcpCommand(command, settled);
     }
 
     private GameMcpCommandResult NavigateExactPlot(

@@ -482,7 +482,9 @@ internal sealed class GameMcpProtocolRouter
             "game_challenge" or "game_prestige" or "game_research" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
-        "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
+        "game_navigate" or "game_continue" =>
+            GameMcpFrameData.World | GameMcpFrameData.Scene,
+        "game_screenshot" or "game_probe" or
             "game_screen_catalog" or "game_tooltips" or "game_tooltip" =>
             GameMcpFrameData.None,
         _ => throw new InvalidOperationException("no frame-data policy exists for tool " + name),
