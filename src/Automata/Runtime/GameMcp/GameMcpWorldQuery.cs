@@ -853,6 +853,8 @@ internal static class GameMcpWorldQuery
             ? ProjectSpellRecipe(world, in spellRecipe)
             : row is WorldSpellSlot spellSlot
             ? ProjectSpellSlot(world, in spellSlot)
+            : row is WorldTargetingRequest targeting
+            ? ProjectTargeting(world, in targeting)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -1089,6 +1091,70 @@ internal static class GameMcpWorldQuery
                 ["slots"] = slots,
             },
         }.Freeze();
+    }
+
+    internal static GameMcpValue ProjectTargetingPostState(GameMcpFrameContext state, Guid submittedTarget)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        var result = new JObject();
+        if (submittedTarget != Guid.Empty)
+            result["submittedTarget"] = ProjectTargetCandidate(world, submittedTarget, -1);
+        if (world.Targeting.Count == 0)
+            result["targeting"] = new JObject { ["pending"] = false };
+        else
+        {
+            var request = world.Targeting[0];
+            result["targeting"] = ProjectTargeting(world, in request);
+        }
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectTargeting(
+        GameWorldState world, in WorldTargetingRequest request)
+    {
+        var candidates = new JArray();
+        for (var index = 0; index < request.Candidates.Count; index++)
+        {
+            var candidate = request.Candidates[index];
+            candidates.Add(ProjectTargetCandidate(world, candidate.StructureId, candidate.Position));
+        }
+        var result = new JObject
+        {
+            ["pending"] = true,
+            ["owner"] = request.OwnerName,
+            ["ownerNativeType"] = request.OwnerNativeType,
+            ["selectionType"] = request.SelectionNativeType,
+            ["candidates"] = candidates,
+            ["randomize"] = new JObject { ["available"] = candidates.Count > 0 },
+        };
+        if (request.CancelAvailable) result["cancel"] = new JObject { ["available"] = true };
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectTargetCandidate(GameWorldState world, Guid id, int position)
+    {
+        var identity = EntityIdentityFormatter.Describe(id, world.EntityIdentities);
+        var result = new JObject
+        {
+            ["uuid"] = id.ToString("D"),
+            ["name"] = identity.HasName ? identity.Name : id.ToString("D"),
+        };
+        if (position >= 0) result["position"] = position;
+        if (identity.AssetName.Length > 0 && !string.Equals(identity.AssetName, identity.Name, StringComparison.Ordinal))
+            result["internalName"] = identity.AssetName;
+        for (var index = 0; index < world.Structures.Count; index++)
+        {
+            var structure = world.Structures[index];
+            if (structure.EntityId != id) continue;
+            result["committedLevel"] = structure.CommittedLevel;
+            result["effectiveLevel"] = structure.EffectiveLevel;
+            result["available"] = structure.Reading.Unlocked;
+            if (structure.HasWorkInFlight) result["workInFlight"] = true;
+            break;
+        }
+        return result.Freeze();
     }
 
     private static GameMcpValue ProjectSpellSlot(
@@ -1599,6 +1665,8 @@ internal static class GameMcpWorldQuery
             ? ProjectSpellRecipe(world, in spellRecipe)
             : row is WorldSpellSlot spellSlot
             ? ProjectSpellSlot(world, in spellSlot)
+            : row is WorldTargetingRequest targeting
+            ? ProjectTargeting(world, in targeting)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -1716,6 +1784,7 @@ internal static class GameMcpWorldQuery
             Composite(nameof(GameWorldState.ActionQueueSlots), world => world.ActionQueueSlots),
             Composite(nameof(GameWorldState.SpellSlots), world => world.SpellSlots),
             Composite(nameof(GameWorldState.SpellCosts), world => world.SpellCosts),
+            Composite(nameof(GameWorldState.Targeting), world => world.Targeting),
             Composite(nameof(GameWorldState.MasteryExperience), world => world.MasteryExperience),
             Composite(nameof(GameWorldState.ConceptRecipes), world => world.ConceptRecipes),
             Composite(nameof(GameWorldState.AlchemyInstances), world => world.AlchemyInstances),
@@ -1785,6 +1854,7 @@ internal static class GameMcpWorldQuery
         "plot-action-instances" => new[] { "plot-actions" },
         "action-queue-slots" => new[] { "action-queues" },
         "spell-costs" => new[] { "spell-slots" },
+        "targeting" => new[] { "targeting" },
         "concept-recipes" or "alchemy-instances" or "alchemy-costs" =>
             new[] { "concept-instances" },
         "plot-phase-descriptors" => new[] { "plot-authoring" },
@@ -1994,6 +2064,11 @@ internal static class GameMcpWorldQuery
             "cooldownRemaining",
         },
         "spell-costs" => new[] { "slotIndex", "kind", "resourceId", "amount" },
+        "targeting" => new[]
+        {
+            "ownerName", "ownerNativeType", "selectionNativeType", "cancelAvailable",
+            "candidates.position", "candidates.structureId",
+        },
         "mastery-experience" => new[]
         {
             "sequence", "domain", "sourceId", "sourceMastery", "sourceEligible",

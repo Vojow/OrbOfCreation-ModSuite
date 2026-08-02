@@ -543,6 +543,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .SpellLoadoutOwnershipFailure)
+                    , createTargeting: () => new TargetingGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureTargetingMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .TargetingOwnershipFailure)
 #endif
                     );
             },
@@ -1499,6 +1507,10 @@ public sealed class Plugin : BaseUnityPlugin
                     GameMcpWorldQuery.ProjectSpellCompositionPostState(latest, command.TargetId),
                 GameMcpCommandKind.SpellLoadout =>
                     GameMcpWorldQuery.ProjectSpellLoadoutPostState(latest),
+                GameMcpCommandKind.Targeting =>
+                    GameMcpWorldQuery.ProjectTargetingPostState(
+                        latest,
+                        GameMcpTargetingProjection.SubmittedTarget(committed.Details)),
                 _ => GameMcpWorldQuery.ProjectPostState(latest, category, command.TargetId),
             };
         }
@@ -1527,6 +1539,7 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandKind.SpellWorkbench => "spell-recipes",
         GameMcpCommandKind.SpellComposition => "spell-recipes",
         GameMcpCommandKind.SpellLoadout => "spell-slots",
+        GameMcpCommandKind.Targeting => "targeting",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 
@@ -1727,6 +1740,8 @@ public sealed class Plugin : BaseUnityPlugin
             nativeType = "Spell";
             amount = checked(request.SlotIndex + 1);
         }
+        else if (kind == GameMcpCommandKind.Targeting)
+            nativeType = request.Mode == "submit" ? "StructureSO" : "TargetingManager+TargetLink";
         else if (kind == GameMcpCommandKind.ConfigurationSet)
         {
             mode = request.Section;

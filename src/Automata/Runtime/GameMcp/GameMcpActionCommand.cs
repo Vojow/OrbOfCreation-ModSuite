@@ -27,6 +27,7 @@ internal enum GameMcpCommandKind
     SpellWorkbench = 16,
     SpellComposition = 17,
     SpellLoadout = 18,
+    Targeting = 19,
 }
 
 internal static class GameMcpCommandKinds
@@ -34,7 +35,8 @@ internal static class GameMcpCommandKinds
     internal static bool IsGameplayAction(GameMcpCommandKind kind) =>
         kind is >= GameMcpCommandKind.Purchase and <= GameMcpCommandKind.SpellLevel or
             GameMcpCommandKind.DiscoveryTreeOffer or GameMcpCommandKind.SpellWorkbench or
-            GameMcpCommandKind.SpellComposition or GameMcpCommandKind.SpellLoadout;
+            GameMcpCommandKind.SpellComposition or GameMcpCommandKind.SpellLoadout or
+            GameMcpCommandKind.Targeting;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -47,6 +49,7 @@ internal static class GameMcpCommandKinds
         "game_spell_workbench" => GameMcpCommandKind.SpellWorkbench,
         "game_spell_composition" => GameMcpCommandKind.SpellComposition,
         "game_spell_loadout" => GameMcpCommandKind.SpellLoadout,
+        "game_targeting" => GameMcpCommandKind.Targeting,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -414,6 +417,9 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.SpellLoadout)
             return "the spell loadout boundary returned " + disposition +
                 " with exact preflight code " + exact;
+        if (commandKind == GameMcpCommandKind.Targeting)
+            return "the targeting boundary returned " + disposition +
+                " with exact preflight code " + exact;
         return "the native action boundary returned " + disposition +
             " with exact result code " + exact;
     }
@@ -528,6 +534,19 @@ internal static class GameMcpActionResultCodeNames
             if (code == SpellLoadoutActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == SpellLoadoutActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == SpellLoadoutActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.Targeting)
+        {
+            if (code == TargetingActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == TargetingActionResultCodes.Quarantined) return "quarantined";
+            if (code == TargetingActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == TargetingActionResultCodes.NoPendingRequest) return "no_pending_request";
+            if (code == TargetingActionResultCodes.TargetUnavailable) return "target_unavailable";
+            if (code == TargetingActionResultCodes.NativeTargetRefused) return "native_target_refused";
+            if (code == TargetingActionResultCodes.CancelUnavailable) return "cancel_unavailable";
+            if (code == TargetingActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == TargetingActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == TargetingActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

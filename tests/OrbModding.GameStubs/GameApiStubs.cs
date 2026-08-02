@@ -2007,6 +2007,22 @@ public sealed class ConceptResource
     public Guid GetGuid() => Guid.TryParse(uuid, out var guid) ? guid : Guid.Empty;
 }
 
+public sealed class EffectResultInfo
+{
+    public static bool SuppressCancel { get; set; }
+    public static bool ThrowAfterCancel { get; set; }
+    private bool cancelled;
+    internal readonly List<TargetingManager.TargetLink> Links = new();
+    public bool IsCancelled() => cancelled;
+    public void Cancel()
+    {
+        if (SuppressCancel) return;
+        cancelled = true;
+        foreach (var link in Links.ToArray()) TargetingManager.RemoveRequest(link);
+        if (ThrowAfterCancel) throw new InvalidOperationException("stub throw after cancel");
+    }
+}
+
 public static class TargetingManager
 {
     /// <summary>
@@ -2016,9 +2032,12 @@ public static class TargetingManager
     public static int OpenRequests { get; set; }
 
     /// <summary>What the selector will offer, or null for a request nothing can satisfy.</summary>
-    public static object? AvailableTarget { get; set; }
+    public static Targeting.ITargetable? AvailableTarget { get; set; }
 
     public static List<object> SubmittedTargets { get; } = new List<object>();
+    public static bool SuppressSubmit { get; set; }
+    public static bool ThrowAfterSubmit { get; set; }
+    private static TargetLink? currentLink;
 
     public static bool Targeting
     {
@@ -2029,11 +2048,25 @@ public static class TargetingManager
     public static bool IsTargeting() => OpenRequests > 0;
 
     public static TargetLink? GetTargetingLink() =>
-        AvailableTarget is null ? null : new TargetLink(AvailableTarget);
+        !IsTargeting() || AvailableTarget is null
+            ? null
+            : currentLink ??= new TargetLink(AvailableTarget);
 
-    public static void SubmitTarget(object target)
+    public static void SubmitTarget(Targeting.ITargetable target)
     {
+        if (SuppressSubmit) return;
+        var link = GetTargetingLink();
+        link?.AssignTarget(target);
         SubmittedTargets.Add(target);
+        if (OpenRequests > 0) OpenRequests--;
+        currentLink = null;
+        if (ThrowAfterSubmit) throw new InvalidOperationException("stub throw after submit");
+    }
+
+    public static void RemoveRequest(TargetLink link)
+    {
+        if (!ReferenceEquals(currentLink, link)) return;
+        currentLink = null;
         if (OpenRequests > 0) OpenRequests--;
     }
 
@@ -2041,16 +2074,44 @@ public static class TargetingManager
     {
         OpenRequests = 0;
         AvailableTarget = null;
+        currentLink = null;
         SubmittedTargets.Clear();
+        SuppressSubmit = false;
+        ThrowAfterSubmit = false;
+        EffectResultInfo.SuppressCancel = false;
+        EffectResultInfo.ThrowAfterCancel = false;
     }
 
     public sealed class TargetLink
     {
-        private readonly object _target;
+        private readonly Targeting.ITargetable offered;
+        private readonly ITooltipable owner;
+        private readonly Targeting.BaseTargetSelection targetSelection = new Targeting.BaseTargetSelection();
+        private Targeting.ITargetable? target;
+        private readonly EffectResultInfo resultInfo;
+        private bool targetFound;
 
-        public TargetLink(object target) => _target = target;
+        public TargetLink(Targeting.ITargetable offeredTarget)
+        {
+            offered = offeredTarget;
+            owner = offeredTarget as ITooltipable ?? new TooltipableObject { displayName = "Target request" };
+            resultInfo = new EffectResultInfo();
+            resultInfo.Links.Add(this);
+        }
 
-        public object GetRandom() => _target;
+        public Targeting.ITargetable GetRandom() => offered;
+        public List<ITooltipable> GetAllTargets() => offered is ITooltipable tooltipable
+            ? new List<ITooltipable> { tooltipable }
+            : new List<ITooltipable>();
+        public ITooltipable GetOwner() => owner;
+        public Targeting.BaseTargetSelection GetTargetSelection() => targetSelection;
+        public bool CheckTarget(Targeting.ITargetable candidate) => ReferenceEquals(candidate, offered);
+        public bool HasTarget() => targetFound;
+        internal void AssignTarget(Targeting.ITargetable candidate)
+        {
+            target = candidate;
+            targetFound = true;
+        }
     }
 }
 
@@ -2067,12 +2128,19 @@ public interface ITooltipable
     List<TooltipNode> GetAltTooltipNodes();
 }
 
-public class TooltipableObject : IdScriptableObject
+public class TooltipableObject : IdScriptableObject, ITooltipable
 {
     public string displayName = string.Empty;
     public UnityEngine.Sprite Icon { get; set; } = new UnityEngine.Sprite();
     public virtual string GetName() => displayName;
     public UnityEngine.Sprite GetIcon() => Icon;
+    public virtual string GetDisplayType() => GetType().Name;
+    public virtual UnityEngine.Color GetColor() => UnityEngine.Color.white;
+    public virtual bool IsColoredIcon() => false;
+    public virtual bool HasAltTooltips() => false;
+    public virtual string GetDescription() => string.Empty;
+    public virtual List<TooltipNode> GetTooltipNodes() => new();
+    public virtual List<TooltipNode> GetAltTooltipNodes() => new();
 }
 
 public sealed class AttributeSO : TooltipableObject

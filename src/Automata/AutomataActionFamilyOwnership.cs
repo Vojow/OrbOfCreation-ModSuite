@@ -37,6 +37,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.SpellComposition };
     private static readonly AutomationActionFamily[] SpellLoadoutFamilies =
         { AutomationActionFamily.SpellLoadout };
+    private static readonly AutomationActionFamily[] TargetingFamilies =
+        { AutomationActionFamily.Targeting };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -125,6 +127,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.SpellComposition);
     public bool TryCaptureSpellLoadoutMutationPermit() =>
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.SpellLoadout);
+    public bool TryCaptureTargetingMutationPermit() =>
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.Targeting);
     public string ItemsOwnershipFailure =>
         _itemsClaimFailure.Length != 0
             ? _itemsClaimFailure
@@ -143,6 +147,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         "The current MCP operation does not hold SpellComposition.";
     public string SpellLoadoutOwnershipFailure =>
         "The current MCP operation does not hold SpellLoadout.";
+    public string TargetingOwnershipFailure =>
+        "The current MCP operation does not hold Targeting.";
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -428,6 +434,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.SpellWorkbench => SpellWorkbenchFamilies,
         GameMcpCommandKind.SpellComposition => SpellCompositionFamilies,
         GameMcpCommandKind.SpellLoadout => SpellLoadoutFamilies,
+        GameMcpCommandKind.Targeting => TargetingFamilies,
         _ => Array.Empty<AutomationActionFamily>(),
     };
 
@@ -462,6 +469,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         AutomationActionFamily.SpellWorkbenchLifecycle => false,
         AutomationActionFamily.SpellComposition => false,
         AutomationActionFamily.SpellLoadout => false,
+        AutomationActionFamily.Targeting => false,
         _ => false,
     };
 

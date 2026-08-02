@@ -239,7 +239,7 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
     public void ACastResolvesEveryTargetRequestItOpens()
     {
         var spell = Equip(Ember);
-        var target = new object();
+        var target = new StructureSO();
         global::TargetingManager.AvailableTarget = target;
         spell.RequestsOnFire = 2;
 

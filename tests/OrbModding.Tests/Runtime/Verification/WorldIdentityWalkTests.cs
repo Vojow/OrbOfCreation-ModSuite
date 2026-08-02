@@ -87,6 +87,8 @@ public sealed class WorldIdentityWalkTests
     /// <c>StructureEnchantments</c>, <c>ScrollTargets</c>, and
     /// <c>ScrollTargetEvidence</c> are relationship or evidence rows keyed by recipes, structures,
     /// Scrolls, and enchantments whose owning tables already carry those identities.
+    /// <c>Targeting</c> is the one current request and its candidate edges; its candidates are
+    /// structures already owned by the structures table, while the request itself has no UUID.
     /// <para>
     /// <c>ActionQueues</c> is not among them: a queue is a list variable with a uuid of its own that
     /// no other category collects, so it is walked like any other entity.
@@ -113,6 +115,7 @@ public sealed class WorldIdentityWalkTests
         "StructureEnchantments",
         "ScrollTargets",
         "ScrollTargetEvidence",
+        "Targeting",
         "PlotAuthoring",
         "PlotPhaseDescriptors",
         "EffectBlocks",

@@ -28,6 +28,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly SpellWorkbenchGameAction? _spellWorkbench;
     private readonly SpellCompositionGameAction? _spellComposition;
     private readonly SpellLoadoutGameAction? _spellLoadout;
+    private readonly TargetingGameAction? _targeting;
     private bool _disposed;
 #if SERVICE_CYCLE_PROFILE
     private ulong _nextGameMcpActionIdentity;
@@ -42,7 +43,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         DiscoveryTreeOfferGameAction? discoveryTreeOffers = null,
         SpellWorkbenchGameAction? spellWorkbench = null,
         SpellCompositionGameAction? spellComposition = null,
-        SpellLoadoutGameAction? spellLoadout = null)
+        SpellLoadoutGameAction? spellLoadout = null,
+        TargetingGameAction? targeting = null)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _configurationPublication = configurationPublication ??
@@ -54,6 +56,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _spellWorkbench = spellWorkbench;
         _spellComposition = spellComposition;
         _spellLoadout = spellLoadout;
+        _targeting = targeting;
     }
 
     internal SuiteRuntimeConfiguration CurrentConfiguration => _configurationPublication.ReadLatest().Snapshot;
@@ -115,6 +118,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _spellWorkbench?.InvalidateLifecycle();
         _spellComposition?.InvalidateLifecycle();
         _spellLoadout?.InvalidateLifecycle();
+        _targeting?.InvalidateLifecycle();
     }
 
 #if SERVICE_CYCLE_PROFILE
@@ -160,6 +164,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteSpellComposition(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.SpellLoadout)
                 return ExecuteSpellLoadout(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.Targeting)
+                return ExecuteTargeting(command, lifecycle, configuration.Generation.Value);
             var service = ServiceForGameMcp(command.Kind);
             var context = CreateGameMcpContext(
                 registry,
@@ -272,6 +278,33 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             configurationGeneration,
             submission.Reason,
             GameMcpSpellLoadoutProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecuteTargeting(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        GameMcpNativeActionAdmission.AssertNativeType(
+            command,
+            command.Mode == "submit" ? "StructureSO" : "TargetingManager+TargetLink");
+        if (_targeting is null)
+            return GameMcpCommandResult.Rejected(
+                "contract_unavailable", "the shared targeting GameAction was not composed",
+                lifecycle, configurationGeneration);
+        var kind = command.Mode switch
+        {
+            "submit" => TargetingActionKind.Submit,
+            "randomize" => TargetingActionKind.Randomize,
+            "cancel" => TargetingActionKind.Cancel,
+            _ => throw new ArgumentException("unsupported targeting mode " + command.Mode),
+        };
+        var action = new TargetingAction(kind, command.TargetId, command.ExpectedLifecycleGeneration);
+        var submission = _targeting.Submit(in action);
+        var result = TargetingActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(
+            in result, command.Kind, lifecycle, configurationGeneration,
+            submission.Reason, GameMcpTargetingProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteSpellWorkbench(
@@ -601,6 +634,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _spellWorkbench?.Dispose();
             _spellComposition?.Dispose();
             _spellLoadout?.Dispose();
+            _targeting?.Dispose();
             if (!_host.EmergencyStopEngaged)
                 _host.SetEmergencyStop(true, EmergencyStopReason.SuiteShutdown);
         }

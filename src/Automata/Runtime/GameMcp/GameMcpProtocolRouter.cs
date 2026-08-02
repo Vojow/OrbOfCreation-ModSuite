@@ -316,6 +316,11 @@ internal sealed class GameMcpProtocolRouter
                 if (builder.Mode == "move")
                     builder.SlotIndex = RequiredInt(arguments, "destinationSlot", 0, 255);
                 break;
+            case "game_targeting":
+                builder.Mode = RequireOneOf(arguments, "mode", "submit", "randomize", "cancel");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                if (builder.Mode == "submit") builder.Uuid = RequireUuid(arguments, "targetUuid");
+                break;
             case "suite_config_set":
                 builder.ConfigurationGeneration = RequiredUlong(
                     arguments, "configurationGeneration");
@@ -384,7 +389,8 @@ internal sealed class GameMcpProtocolRouter
     {
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
-            "game_spell_composition" or "game_spell_loadout" => GameMcpOperationClass.Gameplay,
+            "game_spell_composition" or "game_spell_loadout" or "game_targeting" =>
+                GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
         "game_screenshot" when request.SaveCapture => GameMcpOperationClass.SuiteAdministration,
@@ -409,7 +415,7 @@ internal sealed class GameMcpProtocolRouter
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
-            "game_spell_composition" or "game_spell_loadout" =>
+            "game_spell_composition" or "game_spell_loadout" or "game_targeting" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
@@ -613,6 +619,19 @@ internal sealed class GameMcpProtocolRouter
                         ["destinationSlot"] = IntegerSchema(0, 255),
                     },
                     "mode", "spellInstanceUuid"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_targeting",
+                "Submit, randomize, or cancel the pending target",
+                "Resolve the game's one current target request. Success returns the exact submitted structure and the complete next pending request inline.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("submit", "randomize", "cancel"),
+                        ["targetUuid"] = StringSchema("Required only for submit; use an eligible named targeting candidate UUID."),
+                    },
+                    "mode"),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -831,6 +850,19 @@ internal sealed class GameMcpProtocolRouter
                     "unexpected_for_mode",
                     "destinationSlot",
                     "field 'destinationSlot' is not accepted for mode 'remove'"));
+        }
+
+        if (string.Equals(name, "game_targeting", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var target = arguments.ContainsKey("targetUuid");
+            if (mode == "submit" && !target)
+                errors.Add(ValidationError("missing_required", "targetUuid",
+                    "required field 'targetUuid' is missing for mode 'submit'"));
+            else if (mode is "randomize" or "cancel" && target)
+                errors.Add(ValidationError("unexpected_for_mode", "targetUuid",
+                    "field 'targetUuid' is not accepted for mode '" + mode + "'"));
         }
 
         if (errors.Count > 0) throw GameMcpInvalidParamsException.Validation(errors);

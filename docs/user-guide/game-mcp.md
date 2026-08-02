@@ -120,6 +120,7 @@ does not refresh it by hidden navigation.
 | `game_spell_workbench` | Select an authored spell recipe, discover it, or create another equipped instance |
 | `game_spell_composition` | Set the global spell output level or replace one equipped spell's augment stack |
 | `game_spell_loadout` | Remove one exact equipped runtime spell or move it to another loadout slot |
+| `game_targeting` | Submit a specific eligible target, submit a native random target, or cancel the current request |
 | `suite_config_set` | Commit one allowlisted setting through the configuration store |
 | `suite_emergency_stop` | Engage or resume the suite's shared emergency stop |
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
@@ -320,6 +321,25 @@ thread, acquires the family permit last, and verifies only requested identity/ou
 glyph usage, drain, and resource accounting are observations, not gates. There is no generation,
 payment, receipt, request echo, catalog join, or post-mutation read-back.
 
+### Targeting decision loop
+
+`targeting` is the pre-decision surface for `game_targeting`. It is empty while no target request
+is pending. Its active row names the requesting effect, identifies the native selection kind,
+reports whether cancellation is available, and carries every eligible structure in native order.
+Each candidate is fully named and includes current committed/effective level, availability, and
+work-in-flight state. Costs and affordability are absent because targeting spends no resource.
+
+The MCP-only targeting sequence is:
+
+1. Read `world_list(category="targeting")` and compare its named ordered candidates.
+2. Call `game_targeting(mode="submit", targetUuid=...)` to submit one exact candidate, or
+   `game_targeting(mode="randomize")` to let the native request choose and immediately submit.
+3. Call `game_targeting(mode="cancel")` when the active row reports cancellation available.
+
+Submit and randomize success return the named submitted structure plus the complete newer target
+state. Cancel returns the complete newer state. In every mode that means the next named request and
+candidates, or `pending:false`; no follow-up read is needed.
+
 ### Entity explanation
 
 `explain_entity` accepts one canonical `uuid` and pins the latest immutable world publication before
@@ -488,6 +508,15 @@ swap-plus-notify path as the spellbook. Success is exact target absence with sur
 preserved, or the complete slot sequence with exactly source and destination exchanged. A
 committed result is the complete newer named loadout; failure evidence is retained only after
 native execution was reached.
+
+`game_targeting` has three conditional shapes. `submit` requires one `targetUuid`; `randomize` and
+`cancel` reject it. Submit re-resolves that UUID within the live native candidate list and reruns
+the request's native target verdict immediately before mutation. Randomize invokes the game's own
+random choice and immediately submits that result; it is not a candidate-only shuffle. Cancel uses
+the current link's owning `EffectResultInfo`, because closing the targeting UI does not cancel
+gameplay. Success is exact submitted-object identity plus retirement of the original request, or
+the exact result becoming cancelled plus request retirement. A committed result includes the
+complete newer target state; failures retain native outcome evidence only after mutation began.
 
 CLI play commands therefore need no generation option:
 

@@ -110,6 +110,10 @@ public sealed record GameWorldState
         0,
         0);
 
+    /// <summary>The native current target request, empty when the game is not targeting.</summary>
+    internal PublicationTable<WorldTargetingRequest> Targeting { get; init; } =
+        PublicationTable<WorldTargetingRequest>.Empty;
+
     internal PublicationTable<WorldSpellType> SpellTypes { get; init; } =
         PublicationTable<WorldSpellType>.Empty;
 

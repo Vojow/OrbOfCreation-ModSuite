@@ -44,6 +44,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         FakeCount.All.Clear();
         FakeFlag.All.Clear();
         FakePlayerGlobals.Reset();
+        FakeTargetingManager.Reset();
         WorldCategoryFakes.Clear();
     }
 
@@ -76,6 +77,10 @@ public sealed class GameWorldCollectorTests : IDisposable
             // collector that cannot reach them silently prices every structure at parity.
             ["Player"] = typeof(FakePlayerGlobals),
             ["ValueModifierRecord"] = typeof(FakeModifierRecord),
+            ["TargetingManager"] = typeof(FakeTargetingManager),
+            ["TargetingManager+TargetLink"] = typeof(FakeTargetingManager.TargetLink),
+            ["ITooltipable"] = typeof(IFakeTooltipable),
+            ["EffectResultInfo"] = typeof(FakeTargetingResultInfo),
         };
 
         foreach (var pair in WorldCategoryFakes.ByTypeName) byName[pair.Key] = pair.Value;
@@ -327,7 +332,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Fifty-one passes: the four categories
+        // The scope claim, asserted rather than described. Fifty-two passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -338,17 +343,18 @@ public sealed class GameWorldCollectorTests : IDisposable
         // bindings rather than registries of their own, the
         // plot-and-action pairs, which belong to neither side, and
         // the two that belong to no per-type registry at all and are reached by uuid: the action
-        // queues, the equipped spell loadout, and the paired Concept registries. A pass that quietly stopped covering one would show
+        // queues, the equipped spell loadout, the paired Concept registries, and the current
+        // targeting request. A pass that quietly stopped covering one would show
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(51, report.Categories.Length);
+        Assert.Equal(52, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "concept instances", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "concept instances", "targeting", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -1276,6 +1282,29 @@ public sealed class GameWorldCollectorTests : IDisposable
         }
     }
 
+    [Fact]
+    public void PendingTargetRequestPublishesEveryEligibleStructureInNativeOrder()
+    {
+        var owner = new FakeStructure { Identity = Guid.NewGuid() };
+        var first = new FakeStructure { Identity = Guid.NewGuid(), Level = 3 };
+        var second = new FakeStructure { Identity = Guid.NewGuid(), Level = 7 };
+        FakeStructure.All.AddRange(new[] { owner, first, second });
+        FakeTargetingManager.Current = new FakeTargetingManager.TargetLink(owner, first, second);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        var request = Assert.Single(world.Targeting.AsSpan().ToArray());
+        Assert.Equal(owner.GetName(), request.OwnerName);
+        Assert.True(request.CancelAvailable);
+        Assert.Equal(new[] { first.Identity, second.Identity },
+            request.Candidates.AsSpan().ToArray().Select(candidate => candidate.StructureId));
+        Assert.Equal(new[] { 0, 1 },
+            request.Candidates.AsSpan().ToArray().Select(candidate => candidate.Position));
+    }
+
     // The member shape each binder requires, stated once. Field names that a binder reads as fields
     // are spelled exactly as the game spells them; everything else is reached through an accessor, so
     // the property names here are free to read well.
@@ -1299,7 +1328,35 @@ public sealed class GameWorldCollectorTests : IDisposable
         public List<FakeUpgrade> GetAll() => FakeUpgrade.All;
     }
 
-    private sealed class FakeStructure : FakeIdRegistry
+    private interface IFakeTooltipable { string GetName(); }
+
+    private sealed class FakeTargetingResultInfo { }
+
+    private static class FakeTargetingManager
+    {
+        internal static TargetLink? Current;
+        public static bool IsTargeting() => Current is not null;
+        public static TargetLink? GetTargetingLink() => Current;
+        internal static void Reset() => Current = null;
+
+        internal sealed class TargetLink
+        {
+            private readonly List<IFakeTooltipable> targets;
+            private readonly IFakeTooltipable owner;
+            private readonly FakeScribeBaseTargetSelection selection = new();
+            private readonly FakeTargetingResultInfo resultInfo = new();
+            internal TargetLink(IFakeTooltipable owner, params IFakeTooltipable[] targets)
+            {
+                this.owner = owner;
+                this.targets = new List<IFakeTooltipable>(targets);
+            }
+            public List<IFakeTooltipable> GetAllTargets() => new(targets);
+            public IFakeTooltipable GetOwner() => owner;
+            public FakeScribeBaseTargetSelection GetTargetSelection() => selection;
+        }
+    }
+
+    private sealed class FakeStructure : FakeIdRegistry, IFakeTooltipable, IFakeScribeTargetable
     {
         public static readonly List<FakeStructure> All = new();
 
@@ -1344,6 +1401,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         public int GetQueuedQuantity() => Queued;
 
         public bool IsAvailable() => Available;
+
+        public string GetName() => "Structure " + Identity.ToString("D");
     }
 
     /// <summary>A structure's authored cost, shaped as the game shapes it: a list wrapper.</summary>

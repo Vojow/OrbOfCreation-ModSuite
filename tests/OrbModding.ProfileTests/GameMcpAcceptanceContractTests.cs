@@ -290,7 +290,7 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(overview["detailCategories"]);
         Assert.Null(overview["unlocks"]);
         Assert.Null(overview["harvest"]);
-        Assert.Equal(1297, System.Text.Encoding.UTF8.GetByteCount(
+        Assert.Equal(1309, System.Text.Encoding.UTF8.GetByteCount(
             overview.ToString(Newtonsoft.Json.Formatting.None)));
 
         var exact = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
@@ -485,6 +485,7 @@ public sealed class GameMcpProtocolSurfaceTests
             "game_spell_level", "game_discovery_offer", "suite_config_set",
             "suite_emergency_stop", "game_screenshot", "game_continue",
             "game_navigate", "game_tooltip",
+            "game_targeting",
         };
 
         foreach (var tool in GameMcpAcceptanceFixture.Tools().Where(tool =>

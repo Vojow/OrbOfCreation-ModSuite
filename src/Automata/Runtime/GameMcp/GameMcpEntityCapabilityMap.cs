@@ -51,7 +51,8 @@ internal static class GameMcpEntityCapabilityMap
         out string reason)
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
-        if (target == Guid.Empty && capability != GameMcpCommandKind.SpellComposition)
+        if (target == Guid.Empty && capability is not (
+                GameMcpCommandKind.SpellComposition or GameMcpCommandKind.Targeting))
         {
             reason = "a non-empty stable UUID is required";
             return false;
@@ -87,8 +88,29 @@ internal static class GameMcpEntityCapabilityMap
                     out reason),
             GameMcpCommandKind.SpellComposition => SpellCompositionTarget(world, target, out reason),
             GameMcpCommandKind.SpellLoadout => SpellLoadoutTarget(world, target, out reason),
+            GameMcpCommandKind.Targeting => TargetingTarget(world, target, out reason),
             _ => Unsupported(capability, out reason),
         };
+    }
+
+    private static bool TargetingTarget(GameWorldState world, Guid target, out string reason)
+    {
+        if (!Supports("targeting", GameMcpCommandKind.Targeting) || world.Targeting.Count != 1)
+        {
+            reason = "the published world has no exact pending targeting request";
+            return false;
+        }
+        if (target == Guid.Empty) { reason = string.Empty; return true; }
+        var candidates = world.Targeting[0].Candidates;
+        var matches = 0;
+        for (var index = 0; index < candidates.Count; index++)
+            if (candidates[index].StructureId == target) matches++;
+        if (matches == 1) { reason = string.Empty; return true; }
+        reason = matches == 0
+            ? "StructureSO target " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
+              " is absent from the published eligible-target set"
+            : "StructureSO target is ambiguous in the published eligible-target set";
+        return false;
     }
 
     private static bool SpellLoadoutTarget(
@@ -243,7 +265,7 @@ internal static class GameMcpEntityCapabilityMap
     private static GameMcpEntityCapabilityDescriptor[] Create() => new[]
     {
         D("resources", "ResourceSO"),
-        D("structures", "StructureSO", GameMcpCommandKind.Purchase),
+        D("structures", "StructureSO", GameMcpCommandKind.Purchase, GameMcpCommandKind.Targeting),
         D("upgrades", "UpgradeSO", GameMcpCommandKind.Purchase),
         D("research", "ResearchSO"),
         D("double-variables", "DoubleVariable"),
@@ -286,6 +308,7 @@ internal static class GameMcpEntityCapabilityMap
         D("spell-slots", "Spell", GameMcpCommandKind.SpellComposition,
             GameMcpCommandKind.SpellLoadout),
         D("spell-costs", "Spell"),
+        D("targeting", "TargetingManager+TargetLink", GameMcpCommandKind.Targeting),
         D("mastery-experience", "SpellRecipeSO|AlchemyRecipeSO|EquipmentSO"),
         D("concept-recipes", "AlchemyRecipeSO"),
         D("alchemy-instances", "AlchemyInstance"),

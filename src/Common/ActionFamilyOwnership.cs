@@ -19,6 +19,7 @@ public enum AutomationActionFamily
     SpellWorkbenchLifecycle = 503,
     SpellComposition = 504,
     SpellLoadout = 505,
+    Targeting = 506,
     SpellMasteryExperienceGrant = 600,
     ArtifactMasteryExperienceGrant = 601,
     AlchemyMasteryExperienceGrant = 602,

@@ -74,6 +74,7 @@ internal sealed class GameWorldCollector
     private readonly WorldActionQueueReader _actionQueues;
     private readonly WorldSpellSlotReader _spellSlots;
     private readonly WorldSpellWorkbenchReader _spellWorkbench;
+    private readonly WorldTargetingReader _targeting;
     private readonly WorldAlchemyInstanceReader _alchemyInstances;
     private readonly WorldPlotAuthoringReader _plotAuthoring;
     private readonly WorldEffectBlockReader _effectBlocks;
@@ -253,6 +254,7 @@ internal sealed class GameWorldCollector
             resolveType("SpellListVariable"),
             resolveType);
         _spellWorkbench = new WorldSpellWorkbenchReader(resolveType);
+        _targeting = new WorldTargetingReader(resolveType);
         _alchemyInstances = new WorldAlchemyInstanceReader(
             resolveType("IdScriptableObject"),
             resolveType(KnownEntities.ActiveConcepts.ManagedTypeName),
@@ -286,6 +288,7 @@ internal sealed class GameWorldCollector
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
             _recipeBooks, _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions,
             _spellWorkbench,
+            _targeting,
             _actionQueues, _spellSlots, _alchemyInstances, _plotAuthoring, _effectBlocks,
             _entityRequirements, _purchaseViewRelations, _requirementNativeVerdicts,
             _prerequisiteLinkTiers,
