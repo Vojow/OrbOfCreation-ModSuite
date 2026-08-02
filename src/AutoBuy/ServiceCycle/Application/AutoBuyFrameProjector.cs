@@ -215,13 +215,41 @@ internal static class AutoBuyFrameProjector
         for (var index = 0; index < routeCount; index++)
         {
             var route = world.PurchaseViewRoutes[routeStart + index];
-            if (route.ViewId == Guid.Empty || route.ListId == Guid.Empty ||
-                !WorldLookup.TryFind(world.Views, route.ViewId, out var view))
+            if (route.ListId == Guid.Empty)
             {
                 unreadable = true;
                 continue;
             }
-            if (view.Available) return AutoBuyOwningViewStatus.Available;
+
+            var alreadyVisited = false;
+            for (var prior = 0; prior < index; prior++)
+            {
+                if (world.PurchaseViewRoutes[routeStart + prior].ListId != route.ListId) continue;
+                alreadyVisited = true;
+                break;
+            }
+            if (alreadyVisited) continue;
+
+            // Distinct authored lists are alternate routes. Every view carrying one list is the
+            // complete gate chain for that route, so a visible child cannot bypass a locked parent.
+            var routeReadable = true;
+            var routeAvailable = true;
+            for (var member = index; member < routeCount; member++)
+            {
+                var routeMember = world.PurchaseViewRoutes[routeStart + member];
+                if (routeMember.ListId != route.ListId) continue;
+                if (routeMember.ViewId == Guid.Empty ||
+                    !WorldLookup.TryFind(world.Views, routeMember.ViewId, out var view))
+                {
+                    routeReadable = false;
+                    continue;
+                }
+                if (!view.Available) routeAvailable = false;
+            }
+
+            if (routeReadable && routeAvailable)
+                return AutoBuyOwningViewStatus.Available;
+            if (!routeReadable) unreadable = true;
         }
         return unreadable
             ? AutoBuyOwningViewStatus.RelationUnreadable

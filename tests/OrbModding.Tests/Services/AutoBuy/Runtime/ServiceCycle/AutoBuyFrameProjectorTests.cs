@@ -160,6 +160,37 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
     }
 
     [Fact]
+    public void CollectorProjectorEvaluator_LockedParentAndVisibleChildSharingOneList_FailsClosed()
+    {
+        global::ViewSO.All.Clear();
+        var resource = Resource();
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        PriceStructure(structure, resource, new BigDouble(1.0, 0));
+        global::StructureSO.All.Add(structure);
+
+        var sharedList = new global::StructureListVariable { value = global::StructureSO.All };
+        var lockedParent = new global::ViewSO { available = false };
+        lockedParent.relevantLists.Add(sharedList);
+        var visibleChild = new global::ViewSO { available = true };
+        visibleChild.relevantLists.Add(sharedList);
+        global::ViewSO.All.Add(lockedParent);
+        global::ViewSO.All.Add(visibleChild);
+
+        var config = Config(structures: true, upgrades: false);
+        var frame = Project(config);
+
+        Assert.Equal(
+            AutoBuyOwningViewStatus.Unavailable,
+            Assert.Single(frame.Candidates.ToArray()).OwningView);
+        Assert.Equal(0, PlannedActionCount(in frame, in config));
+    }
+
+    [Fact]
     public void CollectorProjectorEvaluator_ZeroRoutesFailsClosedAsMissing()
     {
         global::ViewSO.All.Clear();

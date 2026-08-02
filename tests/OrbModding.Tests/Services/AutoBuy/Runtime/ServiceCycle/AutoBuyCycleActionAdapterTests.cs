@@ -530,6 +530,36 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
+    public void Execute_LockedParentAndVisibleChildSharingOneList_RefusesBeforePayment()
+    {
+        global::ViewSO.All.Clear();
+        var sharedList = new global::StructureListVariable { value = global::StructureSO.All };
+        var lockedParent = new global::ViewSO { available = false };
+        lockedParent.relevantLists.Add(sharedList);
+        var visibleChild = new global::ViewSO { available = true };
+        visibleChild.relevantLists.Add(sharedList);
+        global::ViewSO.All.Add(lockedParent);
+        global::ViewSO.All.Add(visibleChild);
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        global::StructureSO.All.Add(structure);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Structure,
+            Guid.Parse(structure.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.OwningViewUnavailable, result.Code);
+        Assert.Equal(0, structure.queuedQuantity);
+        Assert.Equal(0, structure.purchaseCost.PerformCalls);
+    }
+
+    [Fact]
     public void Execute_NoVisibleOwningViewRoute_RefusesWithoutPayment()
     {
         global::ViewSO.All[0].available = false;
