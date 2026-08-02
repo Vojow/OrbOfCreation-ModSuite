@@ -32,3 +32,9 @@ assets, or a live registry read belongs here.
 - [Modding hooks](modding-hooks.md) — where to attach, what not to touch, and how to prove a mutation landed.
 - [Requirements](requirements.md) — the requirement graph: what gates actually read, node visibility states, and walking a chain to the real blocker.
 - [Native action surfaces](native-action-surfaces.md) — the purchase, consumable and crafting paths, already decompiled.
+
+The product-version-pinned authored model, progression graph, and census live under
+[`data/`](../../data/README.md).
+Use the uv-managed [`tools/`](../../tools/README.md) project to extract, verify, query, or render
+the local exhaustive progression atlas. These tools read installed files only; live state remains
+the responsibility of running-game probes.

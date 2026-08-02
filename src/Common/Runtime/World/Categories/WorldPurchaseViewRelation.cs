@@ -128,9 +128,10 @@ internal struct NativePurchaseViewAdmissionReadCounts
 /// <remarks>
 /// <para>
 /// Both <c>ViewSO.relevantLists</c> and <c>ViewSO.availableLists</c> contribute normal player
-/// reachability. A candidate may have any number of distinct view/list routes; each route must name
-/// the exact candidate once, and identical routes from the two sources are collapsed. No display
-/// name participates in identity or admission.
+/// reachability. All views carrying the same list form one complete route and must be available.
+/// Distinct list identities are alternate routes, of which one proven-available route is sufficient.
+/// Each route edge must name the exact candidate once, and identical edges from the two sources are
+/// collapsed. No display name participates in identity or admission.
 /// </para>
 /// <para>
 /// Structures additionally prove their own <c>structureType</c> identity and exact membership in
@@ -378,21 +379,51 @@ internal sealed class NativePurchaseViewAdmissionResolver
         {
             for (var index = 0; index < resolution.Routes.Length; index++)
             {
-                var view = resolution.Routes[index].View;
-                if (view is null || view.GetType() != _native.ViewType)
+                var route = resolution.Routes[index];
+                if (route.ListId == Guid.Empty)
                 {
                     unreadable = true;
                     continue;
                 }
-                reads.AddMethodCall();
-                if (_native.ViewAvailable.Invoke(view, Array.Empty<object>()) is not bool value)
+
+                var alreadyVisited = false;
+                for (var prior = 0; prior < index; prior++)
                 {
-                    unreadable = true;
-                    continue;
+                    if (resolution.Routes[prior].ListId != route.ListId) continue;
+                    alreadyVisited = true;
+                    break;
                 }
-                if (!value) continue;
-                available = true;
-                return true;
+                if (alreadyVisited) continue;
+
+                var routeReadable = true;
+                var routeAvailable = true;
+                for (var member = index; member < resolution.Routes.Length; member++)
+                {
+                    var routeMember = resolution.Routes[member];
+                    if (routeMember.ListId != route.ListId) continue;
+                    var view = routeMember.View;
+                    if (routeMember.ViewId == Guid.Empty ||
+                        view is null ||
+                        view.GetType() != _native.ViewType)
+                    {
+                        routeReadable = false;
+                        continue;
+                    }
+                    reads.AddMethodCall();
+                    if (_native.ViewAvailable.Invoke(view, Array.Empty<object>()) is not bool value)
+                    {
+                        routeReadable = false;
+                        continue;
+                    }
+                    if (!value) routeAvailable = false;
+                }
+
+                if (routeReadable && routeAvailable)
+                {
+                    available = true;
+                    return true;
+                }
+                if (!routeReadable) unreadable = true;
             }
             return !unreadable;
         }

@@ -15,9 +15,11 @@ area prefix followed by an imperative summary, for example `autoharvest: validat
 prerequisites`, `ui: repair native navigation`, `build: isolate outputs`, or
 `docs: remove retired guidance`.
 
-Do not commit game assemblies, BepInEx binaries, save files, local configuration,
-decompiler output, credentials, user-specific paths, or other proprietary game
-assets. Sanitize logs before attaching them.
+Do not commit game binaries or assemblies, playable asset bundles, BepInEx binaries,
+save files, local configuration, decompiler code output, credentials, or user-specific
+paths. Product-version-pinned extracted serialized game data under `data/` is allowed with the
+game developer's permission and is regenerated only through the repository tools.
+Sanitize logs before attaching them.
 
 ## Engineering rules
 

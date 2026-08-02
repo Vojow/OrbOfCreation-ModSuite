@@ -1,96 +1,109 @@
-# Entity mappings
+# Authored game data
 
-This directory stores the known mapping between Orb of Creation entity UUIDs, internal asset names, and managed types.
+This directory stores the product-version-pinned serialized model extracted from Orb of Creation
+and the small views consumed by the suite, documentation, and contributor tools. The game developer permits
+distribution of extracted serialized data. Game binaries, assemblies, playable assets, decompiler
+code output, and saves remain excluded from the repository.
 
-## Files
+## Provenance
 
-The directory also contains `native-contracts.json`, the audited machine-readable inventory of game assembly hashes and native reflection/Harmony contracts. It records signatures, visibility, feature ownership, and the place each contract is touched. Maintain it through the [native contract workflow](../docs/testing/native-contracts.md); it does not replace runtime fail-closed checks.
+[`game-data-manifest.json`](game-data-manifest.json) names the serialized game and Unity versions,
+records the exact asset-file scope, and stores the SHA-256 and byte length of every generated
+output. All generated files have one source: `cd tools && uv run orb-gamedata extract`.
+Hand-edited or independently imported identity views fail `uv run orb-gamedata verify`.
+The dataset does not pin a Windows or macOS assembly hash and does not retain source paths or Unity
+path IDs. Equivalent installs of the same product version are expected to produce the same bytes.
 
-- `entity-mappings.tsv` — normalized mapping with `id`, `name`, and `type` columns.
-- `entity-display-names.tsv` — `id`, `type`, `name`, and `displayName`: the label the game
-  actually shows a player, for 2,246 entities that carry a non-empty label. The extraction has
-  2,780 identity rows: 2,778 overlap the canonical mapping and two are retained as drift evidence. See
-  [Display names](#display-names).
-- `entity-types.tsv` — mapping count grouped by managed type.
-- `known-entities.tsv` — explicit supported-domain subset used to generate production identity declarations.
-- `source/message.txt` — preserved UTF-8 source used for the current import.
+The generated set is:
 
-The TSV format is used because it is simple to diff, search, and consume from scripts without quoting the entity names unnecessarily.
+- `game-data.json` — every serialized content ScriptableObject and stat Variable, grouped by managed
+  type and internal name, with managed references expanded and game-entity pointers resolved.
+  UUID-less records remain present with `id: null` and stable content-derived keys.
+- `progression-graph.json` — stable entity references, requirement groups and operators,
+  `PrerequisiteLinkSO` tiers, bound owners, and consumers.
+- `game-data-census.json` — version-pinned totals and per-type populations cited by tests and docs.
+- `entity-mappings.tsv` — UUID, internal name, and managed type.
+- `entity-display-names.tsv` — UUID, managed type, internal name, and player-facing display name.
+- `entity-types.tsv` — entity count per managed type.
+- `source/message.txt` — deterministic arrow-delimited interchange view of the identity catalog.
 
-## Dataset guarantees and limits
+`known-entities.tsv` is the deliberately curated production subset used to generate runtime identity
+declarations; it is validated against the full mapping but is not an extraction output.
+`native-contracts.json` separately audits runtime managed-assembly and reflection/Harmony contracts.
+It is not extractor admission or dataset provenance; maintain it through the
+[native-contract workflow](../docs/testing/native-contracts.md).
 
-Current validated totals:
+## Census and identity rules
 
-- 2,792 entity rows.
-- 2,792 unique UUIDs.
-- 141 managed runtime types.
-- 2,751 unique internal names.
-- 39 duplicated name labels covering 80 rows.
+The committed full model contains 2,894 serialized content objects across 142 managed classes. The
+identity catalog and progression graph contain 2,818 UUID-backed entities across 141 managed types.
+The difference is deliberate: the full model preserves 78 UUID-less sound/UI objects, while the
+catalog also includes two UUID-backed non-content classes. The identity rows contain 2,818 unique
+UUIDs and 2,777 unique internal names: 39 names are duplicated across 80 rows. Identity therefore
+has three separate roles:
 
-The importer guarantees UUID uniqueness, not name uniqueness. Consumers must resolve by `id`, validate `type`, and use `name` only for display or diagnostics.
+1. UUID is the stable key.
+2. Managed type is the validation boundary.
+3. Internal and display names are diagnostics and presentation only.
 
-The production subset is produced by `tools/generate-known-entities.ps1` (`tools/generate-known-entities.sh` on POSIX hosts). Every build verifies that the checked-in generated source is reproducible and that each selected UUID, name, and managed type still matches the canonical mapping. Add entities deliberately; the full catalog is never part of the production runtime API. The shipped plugin embeds neither table: the MCP `entity_catalog` projects the live lifecycle identity snapshot, and these files stay offline research and fixture-builder inputs; `entity-mappings.tsv` remains the canonical row set, so display-only drift never invents an identity.
+The model contains player-facing display names on 2,274 rows. Display names collide more often than
+internal names: 152 labels cover 363 rows. Display name plus managed type still has 18 collision
+groups—12 `ViewSO`, 5 `AttributeSO`, and 1 `PlotNodeActionSO`—so lookup tools report ambiguity
+instead of picking a row.
 
-The mapping records identity, not serialized relationships. Type memberships, prerequisite links, attribute-group members, list contents, unlock state, and live runtime instances require assembly inspection, serialized asset inspection, or a runtime probe. See [Type model](../docs/reverse-engineering/type-model.md).
+Add entities to the production subset deliberately; the full catalog is never part of the production
+runtime API. The shipped plugin embeds neither table: the MCP `entity_catalog` projects the live
+lifecycle identity snapshot, and these files stay offline research and fixture-builder inputs;
+`entity-mappings.tsv` remains the canonical row set, so display-only drift never invents an identity.
 
-## Display names
+The model is authored static state. Live quantities, current visibility, runtime registry
+membership, applied modifiers, queues, and save progress require a running-game observation.
 
-Internal asset names are not what a player sees, and they are not a reliable guide to it:
-`WizardryMagebloom` is shown as "Witchcraft", and `PNAFruitTreeCollect` is shown as
-nothing a screenshot would ever contain. Anything authored from in-game observation —
-milestone tables, embargo lists, curated priorities — has to start from the visible label,
-so `entity-display-names.tsv` records `TooltipableObject.displayName` per UUID.
+## Use
 
-**Display name alone is not a key.** 152 labels are shared by more than one entity.
-**Display name plus managed type very nearly is:** within `ResourceSO`, `StructureSO`,
-`UpgradeSO`, and `ResearchSO` there is not a single collision, so anything a strategy names
-resolves uniquely once its category is known. The 18 labels that do collide within one type
-split 12 `ViewSO`, 5 `AttributeSO`, and 1 `PlotNodeActionSO`: screen names ("Loadout",
-"Upgrade", "Alchemy"), stat labels ("Superior", "Quality", "Size") scoped to different
-subjects, and the plot action "Enrich". Each needs its owner to disambiguate.
-
-Resolve labels with `tools/find-entity.py`, which searches both name columns and flags colliding
-labels instead of silently picking one. Plain lookups need only the checked-in TSVs; `--costs`
-additionally joins against a `game_data.json` extraction, which must be named explicitly (see
-[Refreshing the mappings](#refreshing-the-mappings)).
-
-Note that this file is the one place the identity-only limit above is partially lifted: the
-extraction it comes from does carry serialized relationships, which is what `--costs`
-surfaces. The TSV itself still stores identity only.
-
-## Refreshing the mappings
-
-**Refreshing requires a game-data extraction that this repository does not contain and cannot
-produce.** Both refresh paths read a file extracted from an installed copy of the game; neither
-tool has a default location, and neither will guess one. The checked-in TSVs are the output of
-those extractions, and they are what a contributor without the extraction works from.
-
-The UUID/name/type mapping is imported from a preserved message dump:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\import-entity-mappings.ps1 -SourcePath "C:\path\to\message.txt"
-```
-
-The importer validates every line, rejects duplicate UUIDs, and writes deterministic UTF-8 files
-without a byte-order mark.
-
-Display names come from a separate source — the game's Unity assets rather than the message
-import. Point the importer at a `game_data.json` extraction with `--source`, or set
-`ORB_GAME_DATA_JSON`:
+From the repository root:
 
 ```bash
-tools/import-entity-display-names.py --source path/to/game_data.json
-ORB_GAME_DATA_JSON=path/to/game_data.json tools/import-entity-display-names.py
+tools/find-entity.py "Improved Alchemy" --type UpgradeSO
+tools/find-entity.py --uuid 67acd892-8a8a-455a-aa71-3fb06e75bf38
+tools/find-entity.py mana --costs
 ```
 
-Without one of the two, the importer exits and tells you so rather than reading some
-conventional path. `tools/find-entity.py --costs` takes the same `--source` flag and the same
-environment variable, for the same reason.
+The packaged equivalents are available from `tools/`:
 
-The two extractions are independent, so the importer cross-checks them and reports UUIDs present
-in only one, plus any managed-type or asset-name disagreement, rather than reconciling silently.
-Rows appearing in only one file mean the two were taken from different game versions; re-run the
-extraction before trusting the delta.
+```bash
+uv run find-entity mana --costs
+uv run orb-gamedata query --class ResourceSO
+uv run orb-gamedata query --uuid 67acd892-8a8a-455a-aa71-3fb06e75bf38 --requirements
+uv run orb-gamedata report atlas
+uv run orb-gamedata report discovery-pools
+uv run orb-gamedata report cost-curves
+```
+
+`tools/import-entity-display-names.py --source path/to/game-data.json` remains a compatibility entry
+point for regenerating that one view. Normal refreshes use `extract`, which owns all views together.
+
+## Refresh and verification
+
+Extraction accepts a Windows install root, a macOS `.app`, or either platform's Unity `Data`
+directory. It reads the installation and writes only the selected output and log directories.
+
+```bash
+cd tools
+uv sync --locked --all-groups
+uv run orb-gamedata extract --game-dir "/path/to/Orb of Creation"
+uv run orb-gamedata verify
+uv run orb-gamedata verify --game-dir "/path/to/Orb of Creation"
+uv run pytest
+```
+
+Offline verification checks manifest hashes, provenance agreement, model/graph UUID equality,
+object and class counts, the census, and every TSV/source view. Supplying `--game-dir` adds a fresh
+read-only scan and requires byte-for-byte equality with the committed generated set.
+
+Build the production subset using `tools/generate-known-entities.ps1` or
+`tools/generate-known-entities.sh`. Every build verifies that its UUID, name, and managed type still
+match the canonical mapping.
 
 ## Known example
 

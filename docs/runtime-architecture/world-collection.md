@@ -141,7 +141,11 @@ candidate's exact category/list/owning-view relation from both `ViewSO.relevantL
 `availableLists`, with a named fail-closed row when the relation is missing, unreadable, ambiguous or
 contradictory — so the planner excludes content behind an unavailable owning view instead of
 repeatedly proposing work only the action boundary can refuse. The boundary rebuilds the same
-relation from live native objects immediately before payment.
+relation from live native objects immediately before payment. All views carrying one exact list form
+that list's complete route and must be available, because a child view does not supersede its parent
+screen's progression gate. Separate list identities remain alternate routes, and one completely
+available route is sufficient. This distinction preserves authored global access without treating two
+views of the same gated list as independent entrances.
 
 **Do not sort members into runtime state and definition constants.** The tempting fourth rule is to skip
 fields the game never writes. It was measured and rejected: classifying the 270 members remaining after

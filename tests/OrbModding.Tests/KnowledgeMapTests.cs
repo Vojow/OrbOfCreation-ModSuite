@@ -17,7 +17,7 @@ public sealed class KnowledgeMapTests
         var mappings = ReadMappings();
         var typeSummary = ReadTypeSummary();
 
-        Assert.Equal(2792, mappings.Count);
+        Assert.Equal(2818, mappings.Count);
         Assert.Equal(141, typeSummary.Count);
         Assert.All(mappings, row => Assert.True(Guid.TryParse(row.Id, out _), $"Invalid UUID: {row.Id}"));
         Assert.Equal(mappings.Count, mappings.Select(row => row.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());

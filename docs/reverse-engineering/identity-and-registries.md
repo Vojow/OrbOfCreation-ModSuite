@@ -39,8 +39,8 @@ becomes active later, so "is it there" and "can I act on it" are two separate qu
 
 ## Resolution rule
 
-The canonical mapping holds 2,792 rows and 2,792 unique UUIDs across 141 managed types — but only
-2,751 unique internal names. 39 labels are reused, covering 80 rows: `SpellDuration` names a
+The canonical mapping holds 2,818 rows and 2,818 unique UUIDs across 141 managed types — but only
+2,777 unique internal names. 39 labels are reused, covering 80 rows: `SpellDuration` names a
 `DoubleVariable`, a `ModifierListVariable`, and a `ScalingWeightSO`; `WorkshopStructures` names a
 `StructureListVariable`, a `StructureTypeSO`, and a `ViewSO`; `Arcane` and `Dragon` each name both
 a `GlyphSO` and a `SpellTypeSO`.
@@ -58,10 +58,11 @@ to a same-named object, because a same-named object is a different object.
 Display names collide harder than internal names; see [naming-traps.md](naming-traps.md) for how
 a player's word resolves to exactly one managed type.
 
-For scale before you walk a registry: the mapping holds 223 `UpgradeSO`, 180 `StructureSO`, 80
-`ResourceSO` and 67 `ConsumableSO` rows, against an observed live action-queue capacity of 304.
+For scale before you walk a registry: the mapping holds 229 `UpgradeSO`, 180 `StructureSO`, 80
+`ResourceSO` and 68 `ConsumableSO` rows, against an observed live action-queue capacity of 304.
 Those are authored populations, not live availability; the per-type census is
-[`data/entity-types.tsv`](../../data/entity-types.tsv).
+[`data/entity-types.tsv`](../../data/entity-types.tsv), and the build-pinned scan census is
+[`data/game-data-census.json`](../../data/game-data-census.json).
 
 ## Base-class chain
 
