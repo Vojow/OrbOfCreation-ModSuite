@@ -29,4 +29,5 @@ assets, or a live registry read belongs here.
 - [Save system](save-system.md) — the save format, the collection pipeline, and how to read one by hand.
 - [UI internals](ui-internals.md) — lazy construction, latching, UI-only paths, and the quirks that look like bugs.
 - [Modding hooks](modding-hooks.md) — where to attach, what not to touch, and how to prove a mutation landed.
+- [Requirements](requirements.md) — the requirement graph: what gates actually read, node visibility states, and walking a chain to the real blocker.
 - [Native action surfaces](native-action-surfaces.md) — the purchase, consumable and crafting paths, already decompiled.

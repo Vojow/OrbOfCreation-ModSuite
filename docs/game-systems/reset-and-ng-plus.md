@@ -18,4 +18,5 @@ Two effects belong to NG+ alone:
 - **Cost curves reset only at NG+.** Advancement and progression costs climb until attributes become
   unaffordable, and an ordinary reset does not undo that escalation.
 - **NG+ starts you with bonus orb levels**, some pre-allocated and some free to place. Free bonus
-  levels do not advance the paid cost curve; see [requirement-graph.md](requirement-graph.md).
+  levels do not advance the paid cost curve; see
+  [attributes-and-upgrades.md](attributes-and-upgrades.md).

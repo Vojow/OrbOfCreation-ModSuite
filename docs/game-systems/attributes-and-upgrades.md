@@ -12,6 +12,13 @@ Talent, Purity, Radiant, Innate and Infusion. An effect reading "+X % Aura Effec
 Aura you own, present and future; an effect naming a single attribute hits only that one. This is the
 ordinary effect grammar; see [effect-grammar.md](effect-grammar.md).
 
+## Bonus levels are power, not progress
+
+A row's displayed level includes bonus levels granted by effects, but requirement gates test only
+the levels you actually purchased — a node showing a green `+5` can still fail a `≥ 5` requirement,
+with no hint that the shown number is not the tested one. Bonus levels also do not advance the paid
+cost curve: purchased level 2 with 2 bonus levels costs what level 2 alone costs.
+
 ## Upgrades are one-shot; attributes are not
 
 Most upgrades are genuine one-shot milestones: they either unlock something or make something

@@ -91,8 +91,6 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 - [research.md](research.md) — timed nodes priced in school points, revealing further nodes on
   completion.
 - [orbs.md](orbs.md) — one orb per global level, spent on disciplines that gate later content.
-- [requirement-graph.md](requirement-graph.md) — gates read purchased levels, not the displayed sum,
-  and reach across systems.
 
 ## Systems
 

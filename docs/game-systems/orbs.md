@@ -11,4 +11,4 @@ of that bar yields an orb.
   of which parts of the game you are choosing to reach.
 - A new-game-plus run starts with some bonus orb levels, some pre-allocated and some free to place.
   Free bonus levels do not advance the paid cost curve; see
-  [requirement-graph.md](requirement-graph.md).
+  [attributes-and-upgrades.md](attributes-and-upgrades.md).
