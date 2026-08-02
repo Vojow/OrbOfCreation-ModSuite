@@ -14,7 +14,8 @@ failure.
 - Install only the supported suite and remove overlapping automation mods.
 - Start with automation disabled and emergency stop engaged.
 - Record commit/archive hash, suite and game versions, assembly hashes, BepInEx
-  version, settings, save, and exact commands.
+  version, settings, save, and exact commands — the fields of
+  [the report template](../../tests/runtime/report-template.md).
 
 ## V0 — repository and installed contract gate
 

@@ -52,4 +52,5 @@ Upgrading from a release before 0.4.0 does not carry your settings over. The sui
 
 The suite detects the exact AutobuyOrb BepInEx GUID. If AutobuyOrb is installed, the suite disables only its overlapping Structure and Upgrade automation and leaves Auto Cast, Auto Concept, Spell Leveling, and Mentor available. This is best-effort safety, not universal third-party detection: unknown unregistered automation is not disabled and cannot be proven absent, so prefer one plugin per automated native action family.
 
-Continue with [configuration and safety](configuration.md).
+Continue with [configuration and safety](configuration.md). If something
+misbehaves, start with [troubleshooting](troubleshooting.md).

@@ -24,7 +24,7 @@ saves, and player control; fail closed when a game contract is unknown.
   lines means removing the lines they obsolete.
 - Commit subjects use area prefixes (`world:`, `ui:`, `docs:`, `tests:`,
   `build:`, `release:`, `autobuy:`, `autoharvest:`, …).
-- PRs stay small and land on `develop`.
+- PRs stay small and land on `main`.
 - `artifacts/` is gitignored on purpose: working reports stay local and are
   never force-added.
 - Nested `AGENTS.md` files add rules for their subtrees.
