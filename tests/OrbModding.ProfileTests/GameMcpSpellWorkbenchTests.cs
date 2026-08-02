@@ -23,19 +23,21 @@ public sealed class GameMcpSpellWorkbenchTests
         Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
 
     [Fact]
-    public void ToolIsOneThreeModeMutationWithoutGenerationOrDetailKnobs()
+    public void OutputFirstWorkbenchToolIsAbsentFromThePlayerSurface()
     {
+        Assert.DoesNotContain(GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "game_spell_workbench");
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
-            candidate => (string?)candidate["name"] == "game_spell_workbench");
+            candidate => (string?)candidate["name"] == "game_discover");
 
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         var schema = tool["inputSchema"]!;
         Assert.Equal(
-            new[] { "mode", "spellRecipeUuid" },
+            new[] { "mode" },
             schema["required"]!.Values<string>().ToArray());
         Assert.Equal(
-            new[] { "select", "discover", "create" },
+            new[] { "preview", "confirm", "offer_initiate", "offer_select", "offer_confirm", "offer_reroll" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
         Assert.NotNull(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
@@ -44,7 +46,7 @@ public sealed class GameMcpSpellWorkbenchTests
     }
 
     [Fact]
-    public void MissingRecipeIdentityNamesTheOffendingArgument()
+    public void ConfirmRequiresSurfaceAndComponentsNotAnOutputRecipe()
     {
         var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
         var response = router.Handle(GameMcpAcceptanceFixture.Request(
@@ -52,15 +54,16 @@ public sealed class GameMcpSpellWorkbenchTests
             "tools/call",
             new JObject
             {
-                ["name"] = "game_spell_workbench",
-                ["arguments"] = new JObject { ["mode"] = "select" },
+                ["name"] = "game_discover",
+                ["arguments"] = new JObject { ["mode"] = "confirm" },
             }));
 
         Assert.Equal(-32602, (int)response.Body!["error"]!["code"]!);
-        var error = Assert.Single(
-            response.Body["error"]!["data"]!["validationErrors"]!.Values<JObject>());
-        Assert.Equal("missing_required", (string?)error!["code"]);
-        Assert.Equal("spellRecipeUuid", (string?)error["field"]);
+        var errors = response.Body["error"]!["data"]!["validationErrors"]!
+            .Values<JObject>().ToArray();
+        Assert.Equal(new[] { "surface", "components" },
+            errors.Select(error => (string?)error["field"]));
+        Assert.All(errors, error => Assert.Equal("missing_required", (string?)error["code"]));
     }
 
     [Fact]
@@ -121,8 +124,9 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
         Assert.Equal("7.5e2", (string?)cost["cost"]);
         Assert.Equal("9e6", (string?)cost["amount"]);
-        Assert.Equal(1, (int)row["loadout"]!["equippedCount"]!);
-        Assert.Equal(3, (int)row["loadout"]!["maximumEquipped"]!);
+        Assert.Equal(1, (int)row["loadBudget"]!["used"]!);
+        Assert.Equal(3, (int)row["loadBudget"]!["maximum"]!);
+        Assert.True((bool)row["loadBudget"]!["fitsAnotherSpell"]!);
         var equipped = Assert.Single(row["equipped"]!.Values<JObject>())!;
         Assert.Equal(0, (int)equipped["slot"]!);
         Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
@@ -136,7 +140,8 @@ public sealed class GameMcpSpellWorkbenchTests
             Array.Empty<Guid>(), Array.Empty<Guid>());
         var after = new SpellWorkbenchState(
             RecipeId, true, Array.Empty<Guid>(), Array.Empty<Guid>(), Array.Empty<Guid>());
-        var evidence = new SpellWorkbenchEvidence(true, in before, in after);
+        var evidence = new SpellWorkbenchEvidence(
+            true, in before, in after, paymentInvoked: true);
         var submission = new SpellWorkbenchSubmission(
             SpellWorkbenchPreflight.Proceeded,
             SpellWorkbenchNativeStage.Verification,
@@ -167,7 +172,7 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Equal(new[]
             {
                 "status", "uuid", "name", "internalName", "category", "nativeType", "discovered",
-                "masteryLevel", "selected", "outputLevel", "coreGlyphs", "loadout", "select", "create",
+                "masteryLevel", "selected", "coreGlyphs", "loadBudget", "select", "create",
             },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
@@ -196,9 +201,10 @@ public sealed class GameMcpSpellWorkbenchTests
         var failure = GameMcpTestHarness.Json(
             GameMcpSpellWorkbenchProjection.Project(in failedSubmission));
         Assert.Null(failure["preflight"]);
+        Assert.True((bool)failure["paymentInvoked"]!);
         Assert.Equal("Gather Knowledge", (string?)failure["before"]!["resolvedRecipe"]!["name"]);
         Assert.Equal("Brew", (string?)failure["before"]!["coreGlyphs"]![0]!["name"]);
-        Assert.True((bool)failure["quarantined"]!);
+        Assert.Null(failure["quarantined"]);
     }
 
     [Fact]

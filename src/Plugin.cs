@@ -1430,6 +1430,11 @@ public sealed class Plugin : BaseUnityPlugin
             case "trace_health":
                 execution = GameMcpToolExecution.Read(ProjectGameMcpTraceHealth(context));
                 return true;
+            case "game_discover" when request.Mode == "preview":
+                execution = GameMcpToolExecution.Read(
+                    GameMcpWorldQuery.ProjectDiscoveryPreview(
+                        context, request.Key, request.UuidCounts));
+                return true;
             case "resource_read":
                 execution = ExecuteGameMcpResource(request.ResourceUri, context);
                 return true;
@@ -1522,56 +1527,20 @@ public sealed class Plugin : BaseUnityPlugin
                 command.Kind == GameMcpCommandKind.Prestige
                     ? GameMcpFrameData.World | GameMcpFrameData.Scene
                     : GameMcpFrameData.World);
-            if (latest.World is null ||
-                !GameMcpPostStateSettlement.IsStrictlyNewer(
-                    latest.World.Generation.Value,
-                    actionWorldGeneration))
-                continue;
-            if (command.Kind != GameMcpCommandKind.DiscoveryTreeOffer ||
-                GameMcpWorldQuery.HasDiscoveryPostState(
-                    latest,
-                    command.TargetId,
-                    command.Mode,
-                    command.SecondaryId))
-            {
+            if (GameMcpPostStateSettlement.IsReady(
+                    latest, actionWorldGeneration, command))
                 break;
-            }
         }
 
-        var category = GameMcpPostStateCategory(command);
         GameMcpValue state;
-        if (latest?.World is not null &&
-            GameMcpPostStateSettlement.IsStrictlyNewer(
-                latest.World.Generation.Value,
-                actionWorldGeneration) &&
-            (command.Kind != GameMcpCommandKind.DiscoveryTreeOffer ||
-             GameMcpWorldQuery.HasDiscoveryPostState(
-                 latest,
-                 command.TargetId,
-                 command.Mode,
-                 command.SecondaryId)))
+        if (GameMcpPostStateSettlement.IsReady(
+                latest, actionWorldGeneration, command))
         {
-            var projected = command.Kind switch
-            {
-                GameMcpCommandKind.SpellComposition =>
-                    GameMcpWorldQuery.ProjectSpellCompositionPostState(latest, command.TargetId),
-                GameMcpCommandKind.SpellLoadout =>
-                    GameMcpWorldQuery.ProjectSpellLoadoutPostState(latest),
-                GameMcpCommandKind.Targeting =>
-                    GameMcpWorldQuery.ProjectTargetingPostState(
-                        latest,
-                        GameMcpTargetingProjection.SubmittedTarget(committed.Details)),
-                GameMcpCommandKind.Consumable =>
-                    GameMcpWorldQuery.ProjectConsumablePostState(latest, command.TargetId),
-                GameMcpCommandKind.Challenge =>
-                    GameMcpWorldQuery.ProjectChallengePostState(latest, command.TargetId),
-                GameMcpCommandKind.Prestige =>
-                    GameMcpWorldQuery.ProjectPrestigePostState(latest),
-                _ => GameMcpWorldQuery.ProjectPostState(latest, category, command.TargetId),
-            };
+            var projected = GameMcpWorldQuery.ProjectGameplayPostState(
+                latest!, command, committed);
             var fresh = new GameMcpObjectBuilder
             {
-                ["worldGeneration"] = latest.World.Generation.Value,
+                ["worldGeneration"] = latest!.World!.Generation.Value,
             };
             if (projected is GameMcpObject projectedObject) fresh.CopyFrom(projectedObject);
             else fresh["postState"] = projected;
@@ -1579,50 +1548,10 @@ public sealed class Plugin : BaseUnityPlugin
         }
         else
         {
-            var observedGeneration = latest?.World?.Generation.Value ?? actionWorldGeneration;
-            state = new GameMcpObjectBuilder
-            {
-                ["worldGeneration"] = observedGeneration,
-                ["postState"] = new GameMcpObjectBuilder
-                {
-                    ["status"] = "unobserved",
-                    ["reasonCode"] = "projection_lagged",
-                    ["reason"] = "no strictly newer published world exposed the committed transition within 250ms",
-                },
-            }.Freeze();
+            state = new GameMcpObjectBuilder().Freeze();
         }
         CompleteGameMcpCommand(command, committed.WithDetails(state));
     }
-
-    private static string GameMcpPostStateCategory(GameMcpCommand command) => command.Kind switch
-    {
-        GameMcpCommandKind.Purchase => command.Mode == "structure" ? "structures" : "upgrades",
-        GameMcpCommandKind.Cast => "spell-recipes",
-        GameMcpCommandKind.Concept => "alchemy-recipes",
-        GameMcpCommandKind.Harvest => "plot-nodes",
-        GameMcpCommandKind.SpellLevel => "spell-recipes",
-        GameMcpCommandKind.DiscoveryTreeOffer => "discovery-trees",
-        GameMcpCommandKind.SpellWorkbench => "spell-recipes",
-        GameMcpCommandKind.SpellComposition => "spell-recipes",
-        GameMcpCommandKind.SpellLoadout => "spell-slots",
-        GameMcpCommandKind.Targeting => "targeting",
-        GameMcpCommandKind.Consumable => "consumables",
-        GameMcpCommandKind.Crafting => "crafting-recipes",
-        GameMcpCommandKind.GenericDiscovery => command.DerivedNativeType switch
-        {
-            "AlchemyRecipeSO" => "alchemy-recipes",
-            "EquipmentSO" => "equipment",
-            "GlyphSO" => "glyphs",
-            "RitualSO" => "rituals",
-            "TimeRuneSO" => "time-runes",
-            _ => throw new ArgumentOutOfRangeException(nameof(command.DerivedNativeType)),
-        },
-        GameMcpCommandKind.EquipmentLoadout => "equipment",
-        GameMcpCommandKind.Challenge => "challenges",
-        GameMcpCommandKind.Prestige => "challenges",
-        GameMcpCommandKind.Research => "research",
-        _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
-    };
 
     private static EntityIdentityCatalogSnapshot EntityIdentities(
         GameMcpFrameContext context) =>
@@ -1816,12 +1745,21 @@ public sealed class Plugin : BaseUnityPlugin
     {
         var request = operation.Request;
         var kind = GameMcpCommandKinds.FromToolName(request.ToolName);
+        if (request.ToolName == "game_discover" &&
+            request.Mode.StartsWith("offer_", StringComparison.Ordinal))
+            kind = GameMcpCommandKind.DiscoveryTreeOffer;
+        else if (request.ToolName == "game_discover" && request.Mode == "confirm")
+            kind = GameMcpCommandKind.SpellWorkbench;
+        else if (request.ToolName == "game_spell_loadout" && request.Mode == "add")
+            kind = GameMcpCommandKind.SpellWorkbench;
 
         var mode = request.Mode;
+        var targetId = request.Uuid;
         var nativeType = string.Empty;
         var amount = request.Amount;
         var payloadKey = string.Empty;
         var payloadValue = string.Empty;
+        GameMcpCommandResult? preparationFailure = null;
         if (kind == GameMcpCommandKind.Purchase && context.World is not null)
         {
             var structure = WorldLookup.TryFind(
@@ -1853,9 +1791,29 @@ public sealed class Plugin : BaseUnityPlugin
         else if (kind == GameMcpCommandKind.SpellLevel)
             nativeType = "SpellRecipeSO";
         else if (kind == GameMcpCommandKind.DiscoveryTreeOffer)
+        {
             nativeType = "DiscoveryTreeSO";
+            mode = request.Mode.Substring("offer_".Length);
+        }
         else if (kind == GameMcpCommandKind.SpellWorkbench)
+        {
             nativeType = "SpellRecipeSO";
+            if (request.ToolName == "game_discover")
+            {
+                mode = "discover";
+                if (context.World is null)
+                    preparationFailure = GameMcpCommandResult.Rejected(
+                        "world_not_published",
+                        context.RuntimeNotAvailableReason);
+                else if (!GameMcpWorldQuery.TryResolveSpellDiscovery(
+                             context.World.Snapshot, request.Key, request.UuidCounts,
+                             out targetId, out var resolutionReason))
+                    preparationFailure = GameMcpCommandResult.Rejected(
+                        "discovery_recipe_unresolved", resolutionReason);
+            }
+            else if (request.ToolName == "game_spell_loadout")
+                mode = "create";
+        }
         else if (kind == GameMcpCommandKind.SpellComposition)
             nativeType = request.Mode == "set_output_level" ? "IntVariable" : "Spell";
         else if (kind == GameMcpCommandKind.SpellLoadout)
@@ -1883,7 +1841,10 @@ public sealed class Plugin : BaseUnityPlugin
         else if (kind == GameMcpCommandKind.EquipmentLoadout)
             nativeType = "EquipmentSO";
         else if (kind == GameMcpCommandKind.Challenge)
+        {
             nativeType = "ChallengeSO";
+            if (mode == "activate") mode = "queue";
+        }
         else if (kind == GameMcpCommandKind.Prestige)
             nativeType = "PersistentResetManager";
         else if (kind == GameMcpCommandKind.Research)
@@ -1930,7 +1891,7 @@ public sealed class Plugin : BaseUnityPlugin
                     ? context.ConfigurationGeneration.Value
                     : 0,
             mode.Length == 0 ? request.ToolName : mode,
-            request.Uuid,
+            targetId,
             request.SecondaryUuid,
             nativeType,
             request.ExpectedNativeType,
@@ -1971,23 +1932,35 @@ public sealed class Plugin : BaseUnityPlugin
                 "the frame has no published configuration");
             return false;
         }
+        if (preparationFailure is not null)
+        {
+            failure = preparationFailure;
+            return false;
+        }
+        if (kind == GameMcpCommandKind.SpellComposition && mode == "set_reserve_level")
+        {
+            failure = GameMcpCommandResult.Rejected(
+                "contract_unavailable",
+                "this build cannot yet read or set the global Reserve Level");
+            return false;
+        }
         var reason = string.Empty;
         if (nativeType.Length == 0 || !GameMcpEntityCapabilityMap.Contains(
                 context.World.Snapshot,
-                request.Uuid,
+                targetId,
                 kind,
                 out reason))
         {
             var code = "unsupported_action_target";
             if (GameMcpEntityCapabilityMap.TryOwningTool(
                     context.World.Snapshot,
-                    request.Uuid,
+                    targetId,
                     out var owningCategory,
                     out var owningNativeType,
                     out var owningTool))
             {
                 var identity = EntityIdentityFormatter.Format(
-                    request.Uuid,
+                    targetId,
                     context.World.Snapshot.EntityIdentities);
                 if (owningTool.Length > 0)
                 {
@@ -2536,32 +2509,19 @@ public sealed class Plugin : BaseUnityPlugin
             state = CaptureGameMcpFrameContext(GameMcpFrameData.World | GameMcpFrameData.Scene);
         }
         while (Time.realtimeSinceStartup < deadline &&
-               (state.World is null ||
-                !GameMcpPostStateSettlement.IsStrictlyNewer(
-                    state.World.Generation.Value,
-                    mutationWorldGeneration)));
+               !GameMcpPostStateSettlement.HasFreshWorld(
+                   state, mutationWorldGeneration));
 
         var details = new GameMcpObjectBuilder();
         if (result.Details is GameMcpObject existing) details.CopyFrom(existing);
-        var fresh = state?.World is not null &&
-            GameMcpPostStateSettlement.IsStrictlyNewer(
-                state.World.Generation.Value,
-                mutationWorldGeneration);
-        details["worldGeneration"] = state?.World?.Generation.Value ?? mutationWorldGeneration;
+        var fresh = GameMcpPostStateSettlement.HasFreshWorld(
+            state, mutationWorldGeneration);
         if (fresh && includeDestinationState)
         {
+            details["worldGeneration"] = state!.World!.Generation.Value;
             var destinationSubtabs = CaptureSubtabs();
             if (destinationSubtabs.Count > 0)
                 details["subtabStrips"] = ProjectSubtabStrips(destinationSubtabs);
-        }
-        else if (!fresh)
-        {
-            details["postState"] = new GameMcpObjectBuilder
-            {
-                ["status"] = "unobserved",
-                ["reasonCode"] = "projection_lagged",
-                ["reason"] = "no strictly newer published world exposed the navigation result within 250ms",
-            };
         }
 
         var settled = result.WithDetails(details.Freeze());

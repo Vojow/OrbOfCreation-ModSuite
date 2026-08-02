@@ -20,19 +20,21 @@ namespace OrbModding.ProfileTests;
 public sealed class GameMcpDiscoveryTreeOfferTests
 {
     [Fact]
-    public void Tool_is_advertised_as_one_four_mode_mutating_surface()
+    public void EventOfferLifecycleIsFoldedIntoTheOneDiscoveryNamespace()
     {
+        Assert.DoesNotContain(GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "game_discovery_offer");
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
-            candidate => (string?)candidate["name"] == "game_discovery_offer");
+            candidate => (string?)candidate["name"] == "game_discover");
 
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         var schema = tool["inputSchema"]!;
         Assert.Equal(
-            new[] { "mode", "treeUuid" },
+            new[] { "mode" },
             schema["required"]!.Values<string>().ToArray());
         Assert.Equal(
-            new[] { "initiate", "select", "confirm", "reroll" },
+            new[] { "preview", "confirm", "offer_initiate", "offer_select", "offer_confirm", "offer_reroll" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
         Assert.NotNull(schema["properties"]!["offerUuid"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
@@ -50,10 +52,10 @@ public sealed class GameMcpDiscoveryTreeOfferTests
             "tools/call",
             new JObject
             {
-                ["name"] = "game_discovery_offer",
+                ["name"] = "game_discover",
                 ["arguments"] = new JObject
                 {
-                    ["mode"] = "select",
+                    ["mode"] = "offer_select",
                     ["treeUuid"] = Guid.NewGuid().ToString("D"),
                 },
             }));
@@ -597,6 +599,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
             Assert.Equal("Knowledge", (string?)nextCost["resource"]!["name"]);
             Assert.Equal("1.4e4", (string?)nextCost["cost"]);
             Assert.Equal("2e25", (string?)nextCost["amount"]);
+            Assert.True((bool)nextCost["affordable"]!);
 
             static int CommittedBytes(JObject postState)
             {
@@ -606,7 +609,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                     response.ToString(Newtonsoft.Json.Formatting.None));
             }
             Assert.Equal(
-                new[] { 573, 748, 472 },
+                new[] { 573, 748, 490 },
                 new[]
                 {
                     CommittedBytes(rerollResponse),
@@ -1032,7 +1035,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
     private static GameMcpOperationRequest OfferRequest(Guid treeId) =>
         new GameMcpOperationRequestBuilder
         {
-            ToolName = "game_discovery_offer",
+            ToolName = "game_discover",
             Classification = GameMcpOperationClass.Gameplay,
             RequiredData = GameMcpFrameData.World | GameMcpFrameData.Configuration,
             Uuid = treeId,

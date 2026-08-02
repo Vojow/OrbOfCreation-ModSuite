@@ -16,14 +16,11 @@ internal static class GameMcpDiscoveryTreeOfferProjection
         // complete success receipt; replaying action-local counters here would only duplicate it.
         if (submission.Verified) return new JObject().Freeze();
 
-        var result = new JObject
-        {
-            ["preflight"] = GameMcpEntityWireNormalizer.Snake(submission.Preflight.ToString()),
-        };
+        var result = new JObject();
         if (receipt.EvidenceAvailable)
         {
-            result["nativeStage"] = GameMcpEntityWireNormalizer.Snake(submission.Stage.ToString());
-            result["outcome"] = GameMcpEntityWireNormalizer.Snake(submission.Outcome.ToString());
+            result["nativeStage"] = submission.Stage.ToString();
+            result["outcome"] = submission.Outcome.ToString();
         }
         if (receipt.EvidenceAvailable)
         {
@@ -87,6 +84,7 @@ internal static class GameMcpDiscoveryTreeOfferProjection
                 ["cost"] = new GameMcpDomainValue(values[index].Expected),
                 ["balanceBefore"] = new GameMcpDomainValue(values[index].Before),
                 ["balanceAfter"] = new GameMcpDomainValue(values[index].After),
+                ["affordable"] = values[index].Before.CompareTo(values[index].Expected) >= 0,
                 ["observedDelta"] = new GameMcpDomainValue(values[index].Charged),
             });
         }

@@ -31,7 +31,6 @@ public sealed class SpellCompositionGameActionTests : IDisposable
         Assert.Equal(2, result.Evidence.Before.OutputLevel);
         Assert.Equal(7, result.Evidence.After.OutputLevel);
         Assert.Equal(12, result.Evidence.After.MaximumOutputLevel);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -44,7 +43,6 @@ public sealed class SpellCompositionGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(5, Player.GetSpellOutputLevel().AsInt());
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -79,7 +77,6 @@ public sealed class SpellCompositionGameActionTests : IDisposable
         Assert.Equal(2, spell.GetQuantityOfGlyph(first));
         Assert.Equal(1, spell.GetQuantityOfGlyph(second));
         Assert.Equal(2, result.Evidence.After.AugmentGlyphs.Length);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -111,7 +108,6 @@ public sealed class SpellCompositionGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(1, spell.GetQuantityOfGlyph(glyph));
-        Assert.False(action.IsQuarantined);
     }
 
     [Theory]
@@ -167,7 +163,6 @@ public sealed class SpellCompositionGameActionTests : IDisposable
 
         Assert.Equal((SpellCompositionPreflight)expected, result.Preflight);
         Assert.Equal(0, spell.SetAugmentCalls);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -188,7 +183,7 @@ public sealed class SpellCompositionGameActionTests : IDisposable
     }
 
     [Fact]
-    public void MissingRequestedOutcomeQuarantinesOnlyThisLifecycle()
+    public void MissingRequestedOutcomeFaultsThisAttemptAndTheNextCallRevalidates()
     {
         var (spell, glyph, _) = SpellFixture();
         spell.SuppressAugmentMutation = true;
@@ -202,7 +197,7 @@ public sealed class SpellCompositionGameActionTests : IDisposable
             new SpellCompositionGlyphStack(glyph.GetGuid(), 1)));
 
         Assert.Equal(SpellCompositionPreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(SpellCompositionPreflight.Quarantined, retry.Preflight);
+        Assert.Equal(SpellCompositionPreflight.VerificationFailed, retry.Preflight);
         Assert.True(failed.Evidence.Available);
         Assert.Empty(failed.Evidence.After.AugmentGlyphs);
     }

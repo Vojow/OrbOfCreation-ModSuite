@@ -50,6 +50,21 @@ internal static class GameMcpWorldQuery
             ["equippedSpellSlots"] = world.SpellSlots.Count,
             ["activeConceptAssignments"] = world.AlchemyInstances.Count,
         };
+        if (world.SpellWorkbench.MaximumOutputLevel > 0)
+            result["casting"] = new JObject
+            {
+                ["output"] = new JObject
+                {
+                    ["current"] = world.SpellWorkbench.OutputLevel,
+                    ["maximum"] = world.SpellWorkbench.MaximumOutputLevel,
+                },
+                ["reserve"] = new JObject
+                {
+                    ["status"] = "unavailable",
+                    ["reasonCode"] = "contract_unavailable",
+                    ["reason"] = "this build cannot yet read or set the global Reserve Level",
+                },
+            };
         return result;
     }
 
@@ -410,6 +425,81 @@ internal static class GameMcpWorldQuery
         return PostStateUnavailable(
             "post_state_not_published",
             "the newer world has no " + category.Name + " row for the committed target");
+    }
+
+    /// <summary>
+    /// Projects the complete decision-relevant state after any gameplay mutation. This is the
+    /// only command-to-world-projection switch; transport code only waits and delegates here.
+    /// </summary>
+    internal static GameMcpValue ProjectGameplayPostState(
+        GameMcpFrameContext state,
+        GameMcpCommand command,
+        GameMcpCommandResult committed) => command.Kind switch
+        {
+            GameMcpCommandKind.SpellWorkbench when string.Equals(
+                command.SourceOperation?.Request.ToolName,
+                "game_spell_loadout",
+                StringComparison.Ordinal) => ProjectSpellLoadoutPostState(state),
+            GameMcpCommandKind.SpellComposition =>
+                ProjectSpellCompositionPostState(state, command.TargetId),
+            GameMcpCommandKind.SpellLoadout => ProjectSpellLoadoutPostState(state),
+            GameMcpCommandKind.Targeting => ProjectTargetingPostState(
+                state,
+                GameMcpTargetingProjection.SubmittedTarget(committed.Details)),
+            GameMcpCommandKind.Consumable =>
+                ProjectConsumablePostState(state, command.TargetId),
+            GameMcpCommandKind.Challenge =>
+                ProjectChallengePostState(state, command.TargetId),
+            GameMcpCommandKind.Prestige => ProjectPrestigePostState(state),
+            GameMcpCommandKind.SpellLevel when string.Equals(
+                command.Mode,
+                "all",
+                StringComparison.Ordinal) => ProjectSpellLevelAllPostState(state),
+            _ => ProjectPostState(state, PostStateCategory(command), command.TargetId),
+        };
+
+    private static string PostStateCategory(GameMcpCommand command) => command.Kind switch
+    {
+        GameMcpCommandKind.Purchase => command.Mode == "structure" ? "structures" : "upgrades",
+        GameMcpCommandKind.Cast => "spell-recipes",
+        GameMcpCommandKind.Concept => "alchemy-recipes",
+        GameMcpCommandKind.Harvest => "plot-nodes",
+        GameMcpCommandKind.SpellLevel => "spell-recipes",
+        GameMcpCommandKind.DiscoveryTreeOffer => "discovery-trees",
+        GameMcpCommandKind.SpellWorkbench => "spell-recipes",
+        GameMcpCommandKind.Crafting => "crafting-recipes",
+        GameMcpCommandKind.GenericDiscovery => command.DerivedNativeType switch
+        {
+            "AlchemyRecipeSO" => "alchemy-recipes",
+            "EquipmentSO" => "equipment",
+            "GlyphSO" => "glyphs",
+            "RitualSO" => "rituals",
+            "TimeRuneSO" => "time-runes",
+            _ => throw new ArgumentOutOfRangeException(nameof(command.DerivedNativeType)),
+        },
+        GameMcpCommandKind.EquipmentLoadout => "equipment",
+        GameMcpCommandKind.Research => "research",
+        _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
+    };
+
+    private static GameMcpValue ProjectSpellLevelAllPostState(GameMcpFrameContext state)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        var spells = new JArray();
+        for (var index = 0; index < world.SpellRecipes.Count; index++)
+        {
+            var recipe = world.SpellRecipes[index];
+            if (!recipe.Discovered) continue;
+            spells.Add(new JObject
+            {
+                ["spellRecipeId"] = recipe.EntityId.ToString("D"),
+                ["masteryLevel"] = recipe.MasteryLevel,
+                ["masteryLevelReady"] = recipe.MasteryLevelReady,
+            });
+        }
+        return new JObject { ["spells"] = spells }.Freeze();
     }
 
     internal static GameMcpValue ProjectChallengePostState(
@@ -992,12 +1082,14 @@ internal static class GameMcpWorldQuery
                     for (var index = 0; index < tree.NextItemCosts.Count; index++)
                     {
                         var cost = tree.NextItemCosts[index];
+                        var amount = SpendableAmount(
+                            world, cost.ResourceId, cost.AvailableAmount);
                         costs.Add(new JObject
                         {
                             ["resourceId"] = cost.ResourceId.ToString("D"),
                             ["cost"] = new GameMcpDomainValue(cost.Amount),
-                            ["amount"] = new GameMcpDomainValue(
-                                SpendableAmount(world, cost.ResourceId, cost.AvailableAmount)),
+                            ["amount"] = new GameMcpDomainValue(amount),
+                            ["affordable"] = amount.CompareTo(cost.Amount) >= 0,
                         });
                     }
                     initiate["costs"] = costs;
@@ -1101,15 +1193,19 @@ internal static class GameMcpWorldQuery
 
         if (research.IsDeveloping)
         {
-            result["progress"] = new JObject
+            var progress = new JObject
             {
                 ["stage"] = Number(research.ResearchStage),
                 ["requiredStages"] = Number(research.RequiredStagesCached),
-                ["elapsed"] = new GameMcpDomainValue(decision.CurrentTime),
-                ["required"] = new GameMcpDomainValue(research.RequiredTimeCached),
-                ["remaining"] = new GameMcpDomainValue(decision.RemainingTime),
-                ["ratio"] = new GameMcpDomainValue(decision.TimeRatio),
+                ["elapsedSeconds"] = new GameMcpDomainValue(decision.CurrentTime),
+                ["requiredSeconds"] = new GameMcpDomainValue(research.RequiredTimeCached),
+                ["remainingSeconds"] = new GameMcpDomainValue(decision.RemainingTime),
+                ["completionRatio"] = new GameMcpDomainValue(decision.TimeRatio),
             };
+            if (research.IsActive)
+                progress["etaSeconds"] = new GameMcpDomainValue(decision.RemainingTime);
+            else progress["etaUnavailableReason"] = "paused";
+            result["progress"] = progress;
         }
         result["investmentLevel"] = Number(decision.CurrentInvestmentLevel);
         if (decision.Investment.Count > 0)
@@ -1508,12 +1604,6 @@ internal static class GameMcpWorldQuery
             ["masteryLevel"] = recipe.MasteryLevel,
             ["selected"] = selected,
         };
-        result["outputLevel"] = new JObject
-        {
-            ["current"] = world.SpellWorkbench.OutputLevel,
-            ["maximum"] = world.SpellWorkbench.MaximumOutputLevel,
-        };
-
         if (recipe.CoreGlyphs.Count > 0)
         {
             var glyphs = new JArray();
@@ -1544,12 +1634,7 @@ internal static class GameMcpWorldQuery
         }
         if (holdings.Count > 0) result["equipped"] = holdings;
 
-        result["loadout"] = new JObject
-        {
-            ["equippedCount"] = world.SpellWorkbench.EquippedCount,
-            ["maximumEquipped"] = world.SpellWorkbench.MaximumEquipped,
-            ["hasEmptySlot"] = world.SpellWorkbench.HasEmptySlot,
-        };
+        result["loadBudget"] = ProjectSpellLoadBudget(world);
 
         if (!selected && recipe.CoreGlyphs.Count > 0)
         {
@@ -1577,6 +1662,143 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
+    internal static GameMcpValue ProjectDiscoveryPreview(
+        GameMcpFrameContext state,
+        string surface,
+        GameMcpUuidCount[] components)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        if (!TryResolveSpellDiscovery(
+                world, surface, components, out var recipeId, out var reason))
+            return new JObject
+            {
+                ["status"] = "unavailable",
+                ["reasonCode"] = surface == "spellcraft"
+                    ? "discovery_recipe_unresolved"
+                    : "native_compose_resolver_not_bound",
+                ["reason"] = reason,
+                ["surface"] = surface,
+                ["components"] = ProjectComponentReferences(components),
+            }.Freeze();
+        if (!WorldLookup.TryFind(world.SpellRecipes, recipeId, out var recipe))
+            return PostStateUnavailable(
+                "discovery_recipe_unresolved",
+                "the component resolver produced a spell recipe absent from the same world");
+
+        var decision = recipe.Discovery;
+        var available = !recipe.Discovered && decision.Visible &&
+            decision.CanDiscover && decision.Affordable;
+        var confirm = new JObject
+        {
+            ["available"] = available,
+            ["affordable"] = decision.Affordable,
+        };
+        if (!available)
+            confirm["reasonCode"] = recipe.Discovered
+                ? "already_discovered"
+                : !decision.Visible
+                    ? "not_visible"
+                    : !decision.CanDiscover
+                        ? "discovery_unavailable"
+                        : "unaffordable";
+        var output = new JObject
+        {
+            ["entityId"] = recipe.EntityId.ToString("D"),
+            ["category"] = "spell-recipes",
+            ["nativeType"] = "SpellRecipeSO",
+            ["discovered"] = recipe.Discovered,
+            ["masteryLevel"] = recipe.MasteryLevel,
+            ["confirm"] = confirm,
+        };
+        var costs = ProjectSpellCosts(world, recipe.DiscoveryCosts);
+        if (costs.Count > 0) output["costs"] = costs;
+        return new JObject
+        {
+            ["status"] = "available",
+            ["surface"] = surface,
+            ["components"] = ProjectComponentReferences(components),
+            ["output"] = output,
+        }.Freeze();
+    }
+
+    internal static bool TryResolveSpellDiscovery(
+        GameWorldState world,
+        string surface,
+        GameMcpUuidCount[] components,
+        out Guid recipeId,
+        out string reason)
+    {
+        recipeId = Guid.Empty;
+        if (!string.Equals(surface, "spellcraft", StringComparison.Ordinal))
+        {
+            reason = "The " + surface +
+                " UI uses UIDiscoverablePage recipe resolution, whose installed lifecycle binding is not available in this fence.";
+            return false;
+        }
+        var expanded = new List<Guid>();
+        for (var index = 0; index < components.Length; index++)
+        {
+            var component = components[index];
+            if (!WorldLookup.TryFind(world.Glyphs, component.Uuid, out var glyph) ||
+                glyph.AugmentsSpells || !glyph.Available)
+            {
+                reason = "Component " +
+                    EntityIdentityFormatter.Format(component.Uuid, world.EntityIdentities) +
+                    " is not an available core glyph in this world.";
+                return false;
+            }
+            if (component.Count > glyph.MaximumUsages)
+            {
+                reason = "Component " +
+                    EntityIdentityFormatter.Format(component.Uuid, world.EntityIdentities) +
+                    " requests " + component.Count + " uses, but only " +
+                    glyph.MaximumUsages + " are usable.";
+                return false;
+            }
+            for (var count = 0; count < component.Count; count++)
+                expanded.Add(component.Uuid);
+        }
+        var matches = 0;
+        for (var index = 0; index < world.SpellRecipes.Count; index++)
+        {
+            var recipe = world.SpellRecipes[index];
+            if (recipe.CoreGlyphs.Count != expanded.Count) continue;
+            var match = true;
+            for (var glyph = 0; glyph < expanded.Count; glyph++)
+                if (recipe.CoreGlyphs[glyph].GlyphId != expanded[glyph])
+                {
+                    match = false;
+                    break;
+                }
+            if (!match) continue;
+            recipeId = recipe.EntityId;
+            matches++;
+        }
+        reason = matches switch
+        {
+            0 => "The ordered core-glyph composition resolves to no published spell recipe.",
+            1 => string.Empty,
+            _ => "The ordered core-glyph composition is ambiguous across " + matches +
+                 " published spell recipes.",
+        };
+        if (matches != 1) recipeId = Guid.Empty;
+        return matches == 1;
+    }
+
+    private static JArray ProjectComponentReferences(GameMcpUuidCount[] components)
+    {
+        var result = new JArray();
+        for (var index = 0; index < components.Length; index++)
+            result.Add(new JObject
+            {
+                ["componentId"] = components[index].Uuid.ToString("D"),
+                ["count"] = components[index].Count,
+            });
+        return result;
+    }
+
     /// <summary>The one newer-world post-state shape shared by both composition modes.</summary>
     internal static GameMcpValue ProjectSpellCompositionPostState(
         GameMcpFrameContext state,
@@ -1587,10 +1809,13 @@ internal static class GameMcpWorldQuery
         var world = state.World.Snapshot;
         var result = new JObject
         {
-            ["outputLevel"] = new JObject
+            ["casting"] = new JObject
             {
-                ["current"] = world.SpellWorkbench.OutputLevel,
-                ["maximum"] = world.SpellWorkbench.MaximumOutputLevel,
+                ["output"] = new JObject
+                {
+                    ["current"] = world.SpellWorkbench.OutputLevel,
+                    ["maximum"] = world.SpellWorkbench.MaximumOutputLevel,
+                },
             },
         };
         var equipped = new JArray();
@@ -1618,26 +1843,29 @@ internal static class GameMcpWorldQuery
             return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
         var world = state.World.Snapshot;
         var slots = new JArray();
-        var equipped = 0;
         for (var index = 0; index < world.SpellSlots.Count; index++)
         {
             var slot = world.SpellSlots[index];
-            if (slot.Occupied) equipped++;
             slots.Add(ProjectSpellSlot(world, in slot));
         }
         return new JObject
         {
             ["loadout"] = new JObject
             {
-                ["equippedCount"] = equipped,
-                ["maximumEquipped"] = world.SpellWorkbench.MaximumEquipped,
-                ["hasEmptySlot"] = world.SpellWorkbench.HasEmptySlot,
+                ["loadBudget"] = ProjectSpellLoadBudget(world),
                 ["slots"] = slots,
             },
             ["augmentOptions"] = ProjectSpellAugmentOptions(world),
             ["moveDestinations"] = ProjectSpellMoveDestinations(world),
         }.Freeze();
     }
+
+    private static JObject ProjectSpellLoadBudget(GameWorldState world) => new()
+    {
+        ["used"] = world.SpellWorkbench.EquippedCount,
+        ["maximum"] = world.SpellWorkbench.MaximumEquipped,
+        ["fitsAnotherSpell"] = world.SpellWorkbench.HasEmptySlot,
+    };
 
     internal static GameMcpValue ProjectTargetingPostState(GameMcpFrameContext state, Guid submittedTarget)
     {
@@ -1675,7 +1903,6 @@ internal static class GameMcpWorldQuery
             ["candidates"] = candidates,
             ["randomize"] = new JObject { ["available"] = candidates.Count > 0 },
         };
-        if (request.CancelAvailable) result["cancel"] = new JObject { ["available"] = true };
         return result.Freeze();
     }
 
@@ -1741,7 +1968,6 @@ internal static class GameMcpWorldQuery
             ["spellInstance"] = instance,
             ["spellRecipeId"] = slot.SpellRecipeId.ToString("D"),
             ["slot"] = slot.SlotIndex,
-            ["outputLevel"] = slot.OutputLevel,
             ["effectiveLevel"] = slot.EffectiveLevel,
             ["requiredMasteryLevel"] = slot.RequiredMasteryLevel,
             ["recipeMasteryLevel"] = slot.RecipeMasteryLevel,
@@ -1776,7 +2002,7 @@ internal static class GameMcpWorldQuery
                 ["count"] = value.Quantity,
             });
         }
-        result["augmentGlyphs"] = applied;
+        result["glyphs"] = applied;
         var immediate = ProjectEquippedSpellCosts(world, slot.SlotIndex, WorldSpellCostKind.Immediate);
         var drain = ProjectEquippedSpellCosts(world, slot.SlotIndex, WorldSpellCostKind.Drain);
         if (immediate.Count > 0) result["castCosts"] = immediate;
@@ -1796,7 +2022,7 @@ internal static class GameMcpWorldQuery
                 ["glyphId"] = glyph.GlyphId.ToString("D"),
                 ["ownedLevel"] = glyph.Level,
                 ["available"] = glyph.Available,
-                ["maximumUses"] = glyph.MaximumUsages,
+                ["usableCount"] = glyph.MaximumUsages,
                 ["masteryRequirement"] = glyph.MasteryReqCount,
             };
             if (glyph.FreeLevels != 0) option["bonusLevel"] = glyph.FreeLevels;
@@ -1868,9 +2094,12 @@ internal static class GameMcpWorldQuery
             };
             if (WorldLookup.TryFind(world.Resources, value.ResourceId, out var resource))
             {
-                row["amount"] = new GameMcpDomainValue(resource.Reading.Quantity);
-                row["affordable"] = resource.Reading.Quantity >= value.Amount;
+                var amount = SpendableAmount(
+                    world, value.ResourceId, resource.Reading.Quantity);
+                row["amount"] = new GameMcpDomainValue(amount);
+                row["affordable"] = amount >= value.Amount;
             }
+            else row["affordable"] = false;
             result.Add(row);
         }
         return result;
@@ -2120,15 +2349,15 @@ internal static class GameMcpWorldQuery
                         ? "selection_full"
                         : "selection_restricted";
         result["select"] = select;
-        var queueAvailable = context.Available && (inTime || inPrestige) && challenge.State is 0 or 1;
-        var queue = new JObject
+        var activateAvailable = context.Available && (inTime || inPrestige) && challenge.State is 0 or 1;
+        var activate = new JObject
         {
-            ["available"] = queueAvailable,
-            ["queued"] = challenge.State == 1,
+            ["available"] = activateAvailable,
+            ["selectedForActivation"] = challenge.State == 1,
         };
-        if (!queueAvailable)
-            queue["reasonCode"] = !inTime && !inPrestige ? "not_offered" : "invalid_state";
-        result["queue"] = queue;
+        if (!activateAvailable)
+            activate["reasonCode"] = !inTime && !inPrestige ? "not_offered" : "invalid_state";
+        result["activate"] = activate;
         if (challenge.State == 2)
             result["abandon"] = new JObject { ["available"] = true };
         return result.Freeze();
@@ -2158,8 +2387,8 @@ internal static class GameMcpWorldQuery
             ["selected"] = ChallengeReferences(context.Selected),
             ["timeOffers"] = ChallengeReferences(context.TimeOffers),
             ["prestigeOffers"] = ChallengeReferences(context.PrestigeOffers),
-            ["fetchTime"] = FetchDecision(fetchAvailable, context),
-            ["fetchPrestige"] = FetchDecision(fetchAvailable, context),
+            ["fetchTimeChallenges"] = FetchDecision(fetchAvailable, context),
+            ["fetchPrestigeChallenges"] = FetchDecision(fetchAvailable, context),
             ["prestige"] = ProjectPrestigeState(world),
         };
         return result.Freeze();
@@ -2188,12 +2417,13 @@ internal static class GameMcpWorldQuery
                 : "challenges_not_fetched";
         var result = new JObject
         {
-            ["persistenceCurrent"] = new GameMcpDomainValue(new BigDouble(context.PersistenceCurrent)),
-            ["persistenceProjected"] = new GameMcpDomainValue(new BigDouble(context.PersistenceProjected)),
-            ["persistencePrevious"] = new GameMcpDomainValue(new BigDouble(context.PersistencePrevious)),
-            ["resetCount"] = new GameMcpDomainValue(new BigDouble(context.ResetCount)),
-            ["queuedChallenges"] = PrestigeChallenges(world, queuedRewards: false),
-            ["queuedRewards"] = PrestigeChallenges(world, queuedRewards: true),
+            ["currentTimeAdvancements"] = context.PersistenceCurrent,
+            ["startingTimeAdvancements"] = context.PersistenceProjected,
+            ["previousStartingTimeAdvancements"] = context.PersistencePrevious,
+            ["changeFromPrevious"] = context.PersistenceProjected - context.PersistencePrevious,
+            ["resetCount"] = context.ResetCount,
+            ["survivingChallengeSelections"] = PrestigeChallenges(world, queuedRewards: false),
+            ["survivingChallengeRewards"] = PrestigeChallenges(world, queuedRewards: true),
             ["reset"] = reset,
         };
         if (context.PersistentResourceId != Guid.Empty)
@@ -2271,7 +2501,7 @@ internal static class GameMcpWorldQuery
             ["discovered"] = glyph.Discovered,
             ["level"] = glyph.Level,
             ["available"] = glyph.Available,
-            ["maximumUsages"] = glyph.MaximumUsages,
+            ["usableCount"] = glyph.MaximumUsages,
         };
         if (glyph.FreeLevels != 0) result["bonusLevel"] = glyph.FreeLevels;
         AddDiscoveryDecision(world, result, glyph.Discovery);
@@ -2498,6 +2728,8 @@ internal static class GameMcpWorldQuery
                         projected["affordable"] = spendable.CompareTo(resource.Amount) >= 0;
                     }
                 }
+                else if (resource.Kind == WorldCraftingRecipeResourceKind.AuthoredInput)
+                    projected["affordable"] = false;
                 if (resource.BandwidthResource) projected["bandwidth"] = true;
                 if (!resource.Visible) projected["hidden"] = true;
                 if (resource.Kind == WorldCraftingRecipeResourceKind.AuthoredInput)

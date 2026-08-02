@@ -1907,12 +1907,13 @@ public class SpellManager
     public SpellRecipeSO? GetSpellFromRecipe(List<GlyphSO> glyphs)
     {
         if (SuppressSelectionResolution) return null;
+        var coreGlyphs = glyphs.Where(glyph => !glyph.IsSpellAugment()).ToList();
         foreach (var recipe in availableSpellRecipes.value)
         {
-            if (recipe.coreRecipe.Count != glyphs.Count) continue;
+            if (recipe.coreRecipe.Count != coreGlyphs.Count) continue;
             var matches = true;
-            for (var index = 0; index < glyphs.Count; index++)
-                if (!ReferenceEquals(recipe.coreRecipe[index], glyphs[index])) { matches = false; break; }
+            for (var index = 0; index < coreGlyphs.Count; index++)
+                if (!ReferenceEquals(recipe.coreRecipe[index], coreGlyphs[index])) { matches = false; break; }
             if (matches) return recipe;
         }
         return null;
@@ -1939,6 +1940,8 @@ public class SpellManager
         var recipe = GetSpellFromRecipe(selectedCoreGlyphs.GetFilledElements());
         if (recipe is null || !recipe.IsDiscovered() || SuppressCreation || !activeSpells.HasEmptySpot()) return;
         var spell = new Spell(recipe);
+        spell.SetAugmentGlyphs(new Stacked.StackedIdRecord<GlyphSO>(
+            selectedAugmentGlyphs.GetFilledElements()));
         if (CreateEmptyIdentity) spell.guidContainer = new GuidContainer(Guid.Empty);
         AddSpell(spell);
         selectedCoreGlyphs.Empty();

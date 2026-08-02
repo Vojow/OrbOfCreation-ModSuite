@@ -5,7 +5,6 @@ namespace OrbAutomata;
 internal static class SpellWorkbenchActionResultCodes
 {
     internal static ServiceActionResultCode ContractUnavailable => new(4400);
-    internal static ServiceActionResultCode Quarantined => new(4401);
     internal static ServiceActionResultCode WrongThread => new(4402);
     internal static ServiceActionResultCode IdentityUnavailable => new(4403);
     internal static ServiceActionResultCode SelectionUnavailable => new(4404);

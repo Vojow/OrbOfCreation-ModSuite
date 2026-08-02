@@ -28,8 +28,10 @@ internal sealed class SpellWorkbenchNativeBindings
         "spell-workbench.recipe-is-creatable",
         "spell-workbench.recipe-get-discover-cost-action",
         "resource-cost-list.has-enough",
+        "resource-cost-list.perform-cost",
         "spell-workbench.glyph-is-available",
         "spell-workbench.glyph-is-augment",
+        "spell-composition.glyph-maximum-uses-action",
         "spell-workbench.list-value-action",
         "spell-workbench.list-empty-action",
         "spell-workbench.list-add-action",
@@ -46,8 +48,10 @@ internal sealed class SpellWorkbenchNativeBindings
         Func<object, IList> recipeGlyphs, Func<object, bool> discovered,
         Func<object, bool> canDiscover, Func<object, bool> creatable,
         Func<object, object> discoverCost,
-        Func<object, bool> hasEnough, Func<object, bool> glyphAvailable,
-        Func<object, bool> glyphAugment, Action<object> empty,
+        Func<object, bool> hasEnough, Action<object> performCost,
+        Func<IList> createGlyphList, Func<object, bool> glyphAvailable,
+        Func<object, bool> glyphAugment, Func<object, int> glyphMaximumUsages,
+        Action<object> empty,
         Action<object, object> add, Func<object, bool> hasEmpty,
         Func<object, object, object?> resolveRecipe, Func<object, object, object?> createCost,
         Action<object> discover,
@@ -70,8 +74,11 @@ internal sealed class SpellWorkbenchNativeBindings
         IsCreatable = creatable;
         GetDiscoverCost = discoverCost;
         HasEnough = hasEnough;
+        PerformCost = performCost;
+        CreateGlyphList = createGlyphList;
         IsGlyphAvailable = glyphAvailable;
         IsGlyphAugment = glyphAugment;
+        GetGlyphMaximumUsages = glyphMaximumUsages;
         Empty = empty;
         Add = add;
         HasEmpty = hasEmpty;
@@ -100,8 +107,11 @@ internal sealed class SpellWorkbenchNativeBindings
     internal Func<object, bool> IsCreatable { get; }
     internal Func<object, object> GetDiscoverCost { get; }
     internal Func<object, bool> HasEnough { get; }
+    internal Action<object> PerformCost { get; }
+    internal Func<IList> CreateGlyphList { get; }
     internal Func<object, bool> IsGlyphAvailable { get; }
     internal Func<object, bool> IsGlyphAugment { get; }
+    internal Func<object, int> GetGlyphMaximumUsages { get; }
     internal Action<object> Empty { get; }
     internal Action<object, object> Add { get; }
     internal Func<object, bool> HasEmpty { get; }
@@ -155,8 +165,10 @@ internal sealed class SpellWorkbenchNativeBindings
             var creatable = Method(recipeType, "IsCreatable", typeof(bool));
             var discoverCost = Method(recipeType, "GetDiscoverCost", costType);
             var enough = Method(costType, "HasEnough", typeof(bool));
+            var performCost = Method(costType, "PerformCost", typeof(void));
             var glyphAvailable = Method(glyphType, "IsAvailable", typeof(bool));
             var glyphAugment = Method(glyphType, "IsSpellAugment", typeof(bool));
+            var glyphMaximumUsages = Method(glyphType, "GetMaxUsages", typeof(int));
             var listValue = HierarchyField(glyphListType, "value", glyphList);
             var activeValue = HierarchyField(spellListType, "value", spellList);
             var empty = HierarchyMethod(glyphListType, "Empty", typeof(void));
@@ -177,7 +189,9 @@ internal sealed class SpellWorkbenchNativeBindings
                 InstanceList(recipeGlyphs), InstanceFunc<bool>(discovered),
                 InstanceFunc<bool>(canDiscover), InstanceFunc<bool>(creatable),
                 InstanceObject(discoverCost), InstanceFunc<bool>(enough),
+                InstanceAction(performCost), NewList(glyphList),
                 InstanceFunc<bool>(glyphAvailable), InstanceFunc<bool>(glyphAugment),
+                InstanceFunc<int>(glyphMaximumUsages),
                 InstanceAction(empty), InstanceObjectAction(add), InstanceFunc<bool>(hasEmpty),
                 InstanceObjectObject(resolve), InstanceObjectObject(createCost),
                 InstanceAction(discover), InstanceAction(create),
@@ -243,6 +257,10 @@ internal sealed class SpellWorkbenchNativeBindings
 
     private static Func<IList> StaticList(FieldInfo field) =>
         Expression.Lambda<Func<IList>>(Expression.Convert(Expression.Field(null, field), typeof(IList))).Compile();
+
+    private static Func<IList> NewList(Type type) =>
+        Expression.Lambda<Func<IList>>(
+            Expression.Convert(Expression.New(type), typeof(IList))).Compile();
 
     private static Func<object, object> ObjectField(FieldInfo field)
     {

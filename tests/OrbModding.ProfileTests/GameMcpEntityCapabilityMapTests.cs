@@ -37,7 +37,7 @@ public sealed class GameMcpEntityCapabilityMapTests
     }
 
     [Fact]
-    public void EveryAdvertisedCommandToolHasOneCanonicalKindAndEveryGameplayKindHasEntities()
+    public void AdvertisedToolsHaveCanonicalKindsAndInternalDiscoveryKindsShareOneNamespace()
     {
         var commandTools = GameMcpAcceptanceFixture.Tools()
             .Select(tool => (string)tool["name"]!)
@@ -49,8 +49,8 @@ public sealed class GameMcpEntityCapabilityMapTests
             .Select(name => (Name: name, Kind: GameMcpCommandKinds.FromToolName(name)))
             .ToArray();
 
-        Assert.Equal(26, mappings.Length);
-        Assert.Equal(26, mappings.Select(mapping => mapping.Kind).Distinct().Count());
+        Assert.Equal(24, mappings.Length);
+        Assert.Equal(24, mappings.Select(mapping => mapping.Kind).Distinct().Count());
         Assert.Equal(
             new[]
             {
@@ -59,14 +59,12 @@ public sealed class GameMcpEntityCapabilityMapTests
                 "game_concept",
                 "game_harvest",
                 "game_spell_level",
-                "game_discovery_offer",
                 "game_discover",
                 "game_equipment",
                 "game_challenge",
                 "game_prestige",
                 "game_research",
-                "game_spell_workbench",
-                "game_spell_composition",
+                "game_casting_dial",
                 "game_spell_loadout",
                 "game_targeting",
                 "game_consumable",
@@ -81,6 +79,10 @@ public sealed class GameMcpEntityCapabilityMapTests
             mapping => Assert.Contains(
                 GameMcpEntityCapabilityMap.Entries,
                 descriptor => descriptor.Capabilities.Contains(mapping.Kind)));
+        Assert.Equal("game_discover",
+            GameMcpCommandKinds.ToolName(GameMcpCommandKind.DiscoveryTreeOffer));
+        Assert.Equal("game_discover",
+            GameMcpCommandKinds.ToolName(GameMcpCommandKind.SpellWorkbench));
         Assert.Throws<ArgumentException>(() =>
             GameMcpCommandKinds.FromToolName("game_arbitrary_reflection"));
     }

@@ -474,7 +474,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         var kind = command.Mode switch
         {
             "select" => ChallengeActionKind.Select,
-            "queue" => ChallengeActionKind.Queue,
+            "activate" or "queue" => ChallengeActionKind.Queue,
             "abandon" => ChallengeActionKind.Abandon,
             "fetch_time" => ChallengeActionKind.FetchTime,
             "fetch_prestige" => ChallengeActionKind.FetchPrestige,
@@ -546,17 +546,31 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 "the shared spell workbench GameAction was not composed",
                 lifecycle,
                 configurationGeneration);
-        var kind = command.Mode switch
-        {
-            "select" => SpellWorkbenchActionKind.Select,
-            "discover" => SpellWorkbenchActionKind.Discover,
-            "create" => SpellWorkbenchActionKind.Create,
-            _ => throw new ArgumentException("unsupported spell workbench mode " + command.Mode),
-        };
+        var layout = new SpellWorkbenchGlyphStack[command.UuidCounts.Length];
+        for (var index = 0; index < layout.Length; index++)
+            layout[index] = new SpellWorkbenchGlyphStack(
+                command.UuidCounts[index].Uuid,
+                command.UuidCounts[index].Count);
+        var fromDiscovery = string.Equals(
+            command.SourceOperation?.Request.ToolName,
+            "game_discover",
+            StringComparison.Ordinal);
+        var fromLoadout = string.Equals(
+            command.SourceOperation?.Request.ToolName,
+            "game_spell_loadout",
+            StringComparison.Ordinal);
+        var kind = fromDiscovery
+            ? SpellWorkbenchActionKind.Discover
+            : fromLoadout
+                ? SpellWorkbenchActionKind.CreateWithLayout
+                : throw new ArgumentException(
+                    "spell workbench actions require a visible discovery or loadout surface");
         var action = new SpellWorkbenchAction(
             kind,
             command.TargetId,
-            command.ExpectedLifecycleGeneration);
+            command.ExpectedLifecycleGeneration,
+            fromDiscovery ? layout : Array.Empty<SpellWorkbenchGlyphStack>(),
+            fromLoadout ? layout : Array.Empty<SpellWorkbenchGlyphStack>());
         var submission = _spellWorkbench.Submit(in action);
         var result = SpellWorkbenchActionResultMapper.Map(in submission);
         return GameMcpCommandResult.FromAction(

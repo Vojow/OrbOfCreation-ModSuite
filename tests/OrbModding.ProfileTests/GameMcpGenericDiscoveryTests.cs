@@ -20,7 +20,7 @@ public sealed class GameMcpGenericDiscoveryTests
         Guid.Parse("f3000000-0000-0000-0000-000000000002");
 
     [Fact]
-    public void Tool_advertises_one_uuid_without_generation_or_receipt_inputs()
+    public void ToolAdvertisesOneComponentFirstAndEventOfferDiscoveryNamespace()
     {
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
@@ -28,15 +28,22 @@ public sealed class GameMcpGenericDiscoveryTests
 
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         var schema = tool["inputSchema"]!;
-        Assert.Equal(new[] { "uuid" }, schema["required"]!.Values<string>());
-        Assert.NotNull(schema["properties"]!["uuid"]);
+        Assert.Equal(new[] { "mode" }, schema["required"]!.Values<string>());
+        Assert.Equal(
+            new[] { "preview", "confirm", "offer_initiate", "offer_select", "offer_confirm", "offer_reroll" },
+            schema["properties"]!["mode"]!["enum"]!.Values<string>());
+        Assert.NotNull(schema["properties"]!["surface"]);
+        Assert.NotNull(schema["properties"]!["components"]);
+        Assert.NotNull(schema["properties"]!["treeUuid"]);
+        Assert.NotNull(schema["properties"]!["offerUuid"]);
+        Assert.Null(schema["properties"]!["uuid"]);
         Assert.NotNull(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
         Assert.Null(schema["properties"]!["amount"]);
     }
 
     [Fact]
-    public void Validation_names_missing_uuid_and_ignores_echoed_generation_metadata()
+    public void ValidationNamesMissingCompositionFieldsAndPreviewIsReadOnly()
     {
         var inbox = new GameMcpFrameInbox();
         var router = new GameMcpProtocolRouter(inbox);
@@ -56,8 +63,13 @@ public sealed class GameMcpGenericDiscoveryTests
                 ["name"] = "game_discover",
                 ["arguments"] = new JObject
                 {
-                    ["uuid"] = GlyphId.ToString("D"),
-                    ["worldGeneration"] = 17,
+                    ["mode"] = "preview",
+                    ["surface"] = "spellcraft",
+                    ["components"] = new JArray(new JObject
+                    {
+                        ["uuid"] = GlyphId.ToString("D"),
+                        ["count"] = 1,
+                    }),
                 },
             }));
 
@@ -66,9 +78,23 @@ public sealed class GameMcpGenericDiscoveryTests
         Assert.Contains(
             missingErrors.Values<JObject>(),
             error => (string?)error!["code"] == "missing_required" &&
-                     (string?)error["field"] == "uuid");
+                     (string?)error["field"] == "mode");
         Assert.NotEqual(-32602, (int?)accepted.Body?["error"]?["code"]);
-        Assert.Empty(inbox.ClaimPending());
+        var operation = GameMcpProtocolRouter.BuildOperation(
+            "game_discover",
+            new JObject
+            {
+                ["mode"] = "preview",
+                ["surface"] = "spellcraft",
+                ["components"] = new JArray(new JObject
+                {
+                    ["uuid"] = GlyphId.ToString("D"),
+                    ["count"] = 1,
+                }),
+            });
+        Assert.Equal(GameMcpOperationClass.ReadOnly, operation.Classification);
+        Assert.Equal("spellcraft", operation.Key);
+        Assert.Single(operation.UuidCounts);
     }
 
     [Fact]

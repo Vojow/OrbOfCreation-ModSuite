@@ -26,6 +26,7 @@ public sealed class GameMcpPrestigeTests
         Assert.Equal(new[] { "confirm" }, schema["required"]!.Values<string>());
         Assert.Equal("boolean", (string?)schema["properties"]!["confirm"]!["type"]);
         Assert.Null(schema["properties"]!["uuid"]);
+        Assert.Null(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
     }
 
@@ -56,13 +57,15 @@ public sealed class GameMcpPrestigeTests
 
         Assert.True(response["challengeState"] is not null, response.ToString());
         var prestige = response["challengeState"]!["prestige"]!;
-        Assert.Equal(7, (int)prestige["persistenceCurrent"]!);
-        Assert.Equal("1.1e1", (string?)prestige["persistenceProjected"]);
+        Assert.Equal(7, (int)prestige["currentTimeAdvancements"]!);
+        Assert.Equal(11, (int)prestige["startingTimeAdvancements"]!);
+        Assert.Equal(5, (int)prestige["previousStartingTimeAdvancements"]!);
+        Assert.Equal(6, (int)prestige["changeFromPrevious"]!);
         Assert.Equal(4, (int)prestige["resetCount"]!);
         Assert.Equal("Persistent Light", (string?)prestige["persistentResource"]!["resource"]!["name"]);
         Assert.Equal("8e1", (string?)prestige["persistentResource"]!["amount"]);
-        Assert.Equal("Prismatic Trial", (string?)prestige["queuedChallenges"]![0]!["name"]);
-        Assert.Equal("Reward Trial", (string?)prestige["queuedRewards"]![0]!["name"]);
+        Assert.Equal("Prismatic Trial", (string?)prestige["survivingChallengeSelections"]![0]!["name"]);
+        Assert.Equal("Reward Trial", (string?)prestige["survivingChallengeRewards"]![0]!["name"]);
         Assert.True((bool)prestige["reset"]!["available"]!);
     }
 

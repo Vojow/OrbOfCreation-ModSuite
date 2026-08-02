@@ -25,9 +25,9 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
-    public void PostStateSettlementRequiresOneStrictlyNewerWorldWithinOnePublicationCadence()
+    public void PostStateSettlementWaitsOneSecondForOneStrictlyNewerWorld()
     {
-        Assert.Equal(0.25f, GameMcpPostStateSettlement.MaximumWaitSeconds);
+        Assert.Equal(1f, GameMcpPostStateSettlement.MaximumWaitSeconds);
         Assert.False(GameMcpPostStateSettlement.IsStrictlyNewer(41, 41));
         Assert.False(GameMcpPostStateSettlement.IsStrictlyNewer(40, 41));
         Assert.True(GameMcpPostStateSettlement.IsStrictlyNewer(42, 41));
@@ -71,6 +71,9 @@ public sealed class GameMcpCorrectnessCoreTests
             observedConfigurationGeneration: 0).Project(command));
 
         Assert.Equal(77UL, (ulong)response["worldGeneration"]!);
+        Assert.Equal("world_get", (string?)response["readWith"]!["tool"]);
+        Assert.Equal("structures", (string?)response["readWith"]!["category"]);
+        Assert.Equal(command.TargetId.ToString("D"), (string?)response["readWith"]!["uuid"]);
         Assert.Null(response["lifecycleGenerationMismatch"]);
         Assert.Null(response["configurationGenerationMismatch"]);
     }

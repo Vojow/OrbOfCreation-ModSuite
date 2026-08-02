@@ -27,7 +27,6 @@ internal static class SpellCompositionActionResultMapper
     {
         SpellCompositionPreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
         SpellCompositionPreflight.ContractUnavailable => SpellCompositionActionResultCodes.ContractUnavailable,
-        SpellCompositionPreflight.Quarantined => SpellCompositionActionResultCodes.Quarantined,
         SpellCompositionPreflight.WrongThread => SpellCompositionActionResultCodes.WrongThread,
         SpellCompositionPreflight.IdentityUnavailable => SpellCompositionActionResultCodes.IdentityUnavailable,
         SpellCompositionPreflight.OutputLevelOutOfRange => SpellCompositionActionResultCodes.OutputLevelOutOfRange,

@@ -23,7 +23,7 @@ public sealed class GameMcpSpellLoadoutTests
         Guid.Parse("f40dfa54-2b96-4aee-97ec-5a8e8392a771");
 
     [Fact]
-    public void ToolIsOneTwoModeMutationWithoutGenerationOrReceiptKnobs()
+    public void ToolUsesOneAddRemoveMoveShapeAndBakesGlyphsOnlyOnAdd()
     {
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
@@ -32,12 +32,14 @@ public sealed class GameMcpSpellLoadoutTests
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         var schema = tool["inputSchema"]!;
         Assert.Equal(
-            new[] { "mode", "spellInstanceUuid" },
+            new[] { "mode" },
             schema["required"]!.Values<string>().ToArray());
         Assert.Equal(
-            new[] { "remove", "move" },
+            new[] { "add", "remove", "move" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
-        Assert.NotNull(schema["properties"]!["destinationSlot"]);
+        Assert.NotNull(schema["properties"]!["spellRecipeUuid"]);
+        Assert.NotNull(schema["properties"]!["glyphs"]);
+        Assert.NotNull(schema["properties"]!["destination"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
         Assert.Null(schema["properties"]!["detail"]);
         Assert.Null(schema["properties"]!["receipt"]);
@@ -69,14 +71,34 @@ public sealed class GameMcpSpellLoadoutTests
                 {
                     ["mode"] = "remove",
                     ["spellInstanceUuid"] = FirstInstanceId.ToString("D"),
-                    ["destinationSlot"] = 1,
+                    ["destination"] = 1,
                 },
             }));
 
-        Assert.Equal("destinationSlot", (string?)missing.Body!["error"]!["data"]!["validationErrors"]![0]!["field"]);
+        Assert.Equal("destination", (string?)missing.Body!["error"]!["data"]!["validationErrors"]![0]!["field"]);
         Assert.Equal("missing_required", (string?)missing.Body["error"]!["data"]!["validationErrors"]![0]!["code"]);
-        Assert.Equal("destinationSlot", (string?)unexpected.Body!["error"]!["data"]!["validationErrors"]![0]!["field"]);
+        Assert.Equal("destination", (string?)unexpected.Body!["error"]!["data"]!["validationErrors"]![0]!["field"]);
         Assert.Equal("unexpected_for_mode", (string?)unexpected.Body["error"]!["data"]!["validationErrors"]![0]!["code"]);
+    }
+
+    [Fact]
+    public void AddRequiresARecipeAndExplicitPossiblyEmptyGlyphLayout()
+    {
+        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
+        var missing = router.Handle(GameMcpAcceptanceFixture.Request(
+            1,
+            "tools/call",
+            new JObject
+            {
+                ["name"] = "game_spell_loadout",
+                ["arguments"] = new JObject { ["mode"] = "add" },
+            }));
+
+        var fields = missing.Body!["error"]!["data"]!["validationErrors"]!
+            .Values<JObject>()
+            .Select(error => (string?)error["field"])
+            .ToArray();
+        Assert.Equal(new[] { "spellRecipeUuid", "glyphs" }, fields);
     }
 
     [Fact]
@@ -150,6 +172,9 @@ public sealed class GameMcpSpellLoadoutTests
         Assert.Equal(new[] { "status", "loadout", "augmentOptions", "moveDestinations" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
+        Assert.Equal(2, (int)success["loadout"]!["loadBudget"]!["used"]!);
+        Assert.Equal(3, (int)success["loadout"]!["loadBudget"]!["maximum"]!);
+        Assert.True((bool)success["loadout"]!["loadBudget"]!["fitsAnotherSpell"]!);
         var slots = success["loadout"]!["slots"]!.Values<JObject>().ToArray();
         var firstSlot = Assert.IsType<JObject>(slots[0]);
         var secondSlot = Assert.IsType<JObject>(slots[1]);
@@ -165,7 +190,7 @@ public sealed class GameMcpSpellLoadoutTests
     }
 
     [Fact]
-    public void FailureKeepsNamedOrderedEvidenceAndQuarantineState()
+    public void FailureKeepsNamedOrderedEvidenceWithoutPersistentState()
     {
         var state = new SpellLoadoutState(
             new[] { FirstInstanceId, SecondInstanceId },

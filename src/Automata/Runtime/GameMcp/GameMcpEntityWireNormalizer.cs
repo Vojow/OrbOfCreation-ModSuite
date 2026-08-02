@@ -90,6 +90,10 @@ internal static class GameMcpEntityWireNormalizer
             item["reasonCode"] = Snake((string?)reasonCode ?? string.Empty);
         if (item["kind"] is JValue { Type: JTokenType.String } kind)
             item["kind"] = Snake((string?)kind ?? string.Empty);
+        NormalizeCode(item, "nativeStage");
+        NormalizeCode(item, "outcome");
+        NormalizeCode(item, "requestedMode");
+        NormalizeCode(item, "execution");
 
         if (item["mcpCategory"] is JToken category)
         {
@@ -252,6 +256,12 @@ internal static class GameMcpEntityWireNormalizer
         if (item[from] is not JToken value) return;
         if (item[to] is null) item[to] = value;
         item.Remove(from);
+    }
+
+    private static void NormalizeCode(JObject item, string field)
+    {
+        if (item[field] is JValue { Type: JTokenType.String } value)
+            item[field] = Snake((string?)value ?? string.Empty);
     }
 
     private static void RemovePassingPredicates(JObject item)

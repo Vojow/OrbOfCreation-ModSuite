@@ -6,7 +6,7 @@ using OrbModding.Common;
 
 namespace OrbAutomata;
 
-/// <summary>Lifecycle-bound, fail-closed native spell selection, discovery, and creation boundary.</summary>
+/// <summary>Lifecycle-bound spell discovery and explicit-layout loadout-add boundary.</summary>
 internal sealed class SpellWorkbenchGameAction : IDisposable
 {
     private readonly Func<long> _readLifecycleEpoch;
@@ -14,35 +14,36 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
     private readonly Func<string> _readOwnershipFailure;
     private readonly Func<string, Type?>? _resolveType;
     private readonly Func<string, bool>? _includeContract;
+    private readonly TypedRegistryResolver _registry;
     private readonly int _mainThreadId;
     private SpellWorkbenchNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
-    private string _quarantineReason = string.Empty;
 
     internal SpellWorkbenchGameAction(Func<long> readLifecycleEpoch,
         Func<bool> tryCaptureMutationPermit, Func<string> readOwnershipFailure,
-        Func<string, Type?>? resolveType = null, Func<string, bool>? includeContract = null)
+        Func<string, Type?>? resolveType = null, Func<string, bool>? includeContract = null,
+        TypedRegistryResolver? registry = null)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _tryCaptureMutationPermit = tryCaptureMutationPermit ?? throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
         _readOwnershipFailure = readOwnershipFailure ?? throw new ArgumentNullException(nameof(readOwnershipFailure));
         _resolveType = resolveType;
         _includeContract = includeContract;
+        var identity = RuntimeIdentityRegistryBinding.Shared;
+        _registry = registry ?? new TypedRegistryResolver(
+            _readLifecycleEpoch, identity.Read, identity.ReadStableUuid);
         _mainThreadId = Environment.CurrentManagedThreadId;
         BindLifecycle();
     }
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal bool IsQuarantined => _quarantineReason.Length != 0;
 
     internal SpellWorkbenchSubmission Submit(in SpellWorkbenchAction action)
     {
         if (Environment.CurrentManagedThreadId != _mainThreadId)
             return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.WrongThread,
                 $"Spell workbench actions are bound to Unity thread {_mainThreadId}, not thread {Environment.CurrentManagedThreadId}.");
-        if (_quarantineReason.Length != 0)
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.Quarantined, _quarantineReason);
         if (_bindings is not { } native)
             return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.ContractUnavailable,
                 _bindingFailure.Length == 0 ? "The lifecycle-scoped spell workbench binding set is unavailable." : _bindingFailure);
@@ -68,9 +69,9 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.IdentityUnavailable, reason);
             return action.Kind switch
             {
-                SpellWorkbenchActionKind.Select => Select(in action, native, manager, recipe),
                 SpellWorkbenchActionKind.Discover => Discover(in action, native, manager, recipe),
-                SpellWorkbenchActionKind.Create => Create(in action, native, manager, recipe),
+                SpellWorkbenchActionKind.CreateWithLayout =>
+                    CreateWithLayout(in action, native, manager, recipe),
                 _ => SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.ContractUnavailable,
                     "Unknown spell workbench action kind " + (int)action.Kind + "."),
             };
@@ -86,7 +87,6 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
         BindLifecycle();
     }
 
@@ -94,168 +94,360 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
-    }
-
-    private SpellWorkbenchSubmission Select(in SpellWorkbenchAction action,
-        SpellWorkbenchNativeBindings native, object manager, object recipe)
-    {
-        var glyphs = native.ReadRecipeGlyphs(recipe);
-        if (glyphs.Count == 0)
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.RecipeUnavailable,
-                "The target recipe has no authored core glyphs.");
-        for (var index = 0; index < glyphs.Count; index++)
-        {
-            var glyph = glyphs[index];
-            if (glyph is null || glyph.GetType() != native.GlyphType)
-                return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.RecipeUnavailable,
-                    $"Authored core glyph {index} was not an exact GlyphSO.");
-            if (native.IsGlyphAugment(glyph))
-                return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.RecipeUnavailable,
-                    $"Authored core glyph {index} is classified as an augment.");
-            if (!native.IsGlyphAvailable(glyph))
-                return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.SelectionUnavailable,
-                    $"Native GlyphSO.IsAvailable() refused authored core glyph {EntityIdentityFormatter.Format(native.ReadIdentity(glyph))}.");
-        }
-
-        var before = Capture(native, manager, recipe);
-        if (!TryCapturePermit(out var reason))
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.MutationPermitUnavailable, reason);
-        var stage = SpellWorkbenchNativeStage.ClearSelection;
-        var nativeCalls = 0;
-        try
-        {
-            var core = native.ReadCore(manager);
-            var augments = native.ReadAugments(manager);
-            native.Empty(core);
-            nativeCalls++;
-            native.Empty(augments);
-            nativeCalls++;
-            stage = SpellWorkbenchNativeStage.ApplySelection;
-            for (var index = 0; index < glyphs.Count; index++)
-            {
-                native.Add(core, glyphs[index]!);
-                nativeCalls++;
-            }
-            stage = SpellWorkbenchNativeStage.Verification;
-            var after = Capture(native, manager, recipe);
-            var matched = after.ResolvedRecipeId == action.SpellRecipeId &&
-                after.AugmentGlyphIds.Length == 0 && Same(after.CoreGlyphIds, ReadIds(native, glyphs));
-            return matched
-                ? Verified(stage, nativeCalls, in before, in after,
-                    "The exact authored core glyph sequence now resolves to the requested recipe.")
-                : Quarantine(in action, SpellWorkbenchPreflight.VerificationFailed, stage,
-                    NativeMutationOutcome.PostconditionFailed, nativeCalls, in before, in after,
-                    "The native selection did not resolve to the requested recipe.");
-        }
-        catch (Exception ex) when (IsExpected(ex))
-        {
-            var after = CaptureBestEffort(native, manager, recipe, in before);
-            if (after.ResolvedRecipeId == action.SpellRecipeId && after.AugmentGlyphIds.Length == 0)
-                return Verified(SpellWorkbenchNativeStage.Verification, nativeCalls, in before, in after,
-                    "Selection threw after the requested recipe became the exact native selection.");
-            return Quarantine(in action, SpellWorkbenchPreflight.PostCommitFault, stage,
-                NativeMutationOutcome.ExecutionThrew, nativeCalls, in before, in after,
-                "Selection threw before the requested recipe was observable: " + ex.GetBaseException().Message);
-        }
     }
 
     private SpellWorkbenchSubmission Discover(in SpellWorkbenchAction action,
         SpellWorkbenchNativeBindings native, object manager, object recipe)
     {
-        if (!TryRequireSelection(action.SpellRecipeId, native, manager, out var rejection)) return rejection;
+        if (action.AugmentGlyphs.Length != 0)
+            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.CompositionUnsupported,
+                "Discovery accepts core components only; augment glyphs are chosen when adding the spell.");
+        if (action.CoreGlyphs.Length == 0)
+            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.SelectionUnavailable,
+                "Discovery requires the exact visible component sequence from preview.");
+        return DiscoverFromComponents(in action, native, manager, recipe);
+    }
+
+    private SpellWorkbenchSubmission DiscoverFromComponents(
+        in SpellWorkbenchAction action,
+        SpellWorkbenchNativeBindings native,
+        object manager,
+        object recipe)
+    {
+        if (!TryResolveGlyphLayout(
+                action.CoreGlyphs, expectAugment: false, native,
+                out var components, out var componentReason))
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.SelectionUnavailable, componentReason);
         if (native.IsDiscovered(recipe))
             return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.AlreadyDiscovered,
-                "The requested spell recipe is already discovered.");
+                "The resolved spell recipe is already discovered.");
         if (!native.CanDiscover(recipe))
             return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.DiscoveryUnavailable,
-                "SpellRecipeSO.CanDiscover() refused the requested recipe.");
+                "SpellRecipeSO.CanDiscover() refused the resolved recipe.");
         if (!native.IsCreatable(recipe))
             return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.RecipeUnavailable,
-                "SpellRecipeSO.IsCreatable() refused the requested recipe.");
-        if (!native.HasEnough(native.GetDiscoverCost(recipe)))
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.Unaffordable,
-                "GetDiscoverCost().HasEnough() refused the requested recipe.");
-        return Execute(in action, native, manager, recipe, SpellWorkbenchNativeStage.Discover,
-            () => native.Discover(manager),
-            after => after.TargetDiscovered,
-            "The requested recipe is now discovered.");
-    }
+                "SpellRecipeSO.IsCreatable() refused the resolved recipe.");
+        var nativeComponents = NativeGlyphList(native, components);
+        var resolved = native.ResolveRecipe(manager, nativeComponents);
+        if (resolved is null || resolved.GetType() != native.RecipeType ||
+            native.ReadIdentity(resolved) != action.SpellRecipeId)
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.WrongSelection,
+                "The exact live component sequence did not resolve to the previewed spell recipe.");
+        var resolvedCost = native.GetDiscoverCost(resolved);
+        if (!native.HasEnough(resolvedCost))
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.Unaffordable,
+                "GetDiscoverCost().HasEnough() refused the resolved recipe.");
 
-    private SpellWorkbenchSubmission Create(in SpellWorkbenchAction action,
-        SpellWorkbenchNativeBindings native, object manager, object recipe)
-    {
-        if (!TryRequireSelection(action.SpellRecipeId, native, manager, out var rejection)) return rejection;
-        if (!native.IsDiscovered(recipe))
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.DiscoveryUnavailable,
-                "Create requires an already discovered recipe; use discover first.");
-        if (!native.IsCreatable(recipe))
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.RecipeUnavailable,
-                "SpellRecipeSO.IsCreatable() refused the requested recipe.");
-        var active = native.ReadActive(manager);
-        if (!native.HasEmpty(active))
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.LoadoutFull,
-                "The native active-spell list has no empty slot.");
-        var createCost = native.GetCreateCost(manager, native.ReadGlyphValues(native.ReadCore(manager)));
-        if (createCost is null || !native.HasEnough(createCost))
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.Unaffordable,
-                "GetSpellCreateCost().HasEnough() refused the current exact selection.");
         var before = Capture(native, manager, recipe);
-        return Execute(in action, native, manager, recipe, SpellWorkbenchNativeStage.Create,
-            () => native.Create(manager),
-            after => HasNewInstance(before.TargetSpellInstanceIds, after.TargetSpellInstanceIds),
-            "A new runtime spell instance referencing the requested recipe is equipped.");
-    }
+        if (!TryCapturePermit(out var permitReason))
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.MutationPermitUnavailable, permitReason);
 
-    private SpellWorkbenchSubmission Execute(in SpellWorkbenchAction action,
-        SpellWorkbenchNativeBindings native, object manager, object recipe,
-        SpellWorkbenchNativeStage stage, Action execute, Func<SpellWorkbenchState, bool> verify,
-        string success)
-    {
-        var before = Capture(native, manager, recipe);
-        if (!TryCapturePermit(out var reason))
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.MutationPermitUnavailable, reason);
+        var nativeCalls = 0;
+        var stage = SpellWorkbenchNativeStage.ClearSelection;
+        var previousCore = Copy(native.ReadGlyphValues(native.ReadCore(manager)));
+        var previousAugments = Copy(native.ReadGlyphValues(native.ReadAugments(manager)));
         try
         {
-            execute();
+            ApplySelection(native, manager, components, Array.Empty<object>(), ref nativeCalls);
+            stage = SpellWorkbenchNativeStage.ApplySelection;
+            var selected = native.ResolveRecipe(
+                manager, native.ReadGlyphValues(native.ReadCore(manager)));
+            if (selected is null || selected.GetType() != native.RecipeType ||
+                native.ReadIdentity(selected) != action.SpellRecipeId)
+            {
+                if (RestoreSelection(
+                        native, manager, previousCore, previousAugments, ref nativeCalls))
+                    return SpellWorkbenchSubmission.Reject(
+                        SpellWorkbenchPreflight.WrongSelection,
+                        "The exact live component sequence did not resolve to the previewed spell recipe.");
+                var divergent = CaptureBestEffort(native, manager, recipe, in before);
+                return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
+                    SpellWorkbenchNativeStage.ApplySelection,
+                    NativeMutationOutcome.PostconditionFailed, nativeCalls,
+                    in before, in divergent,
+                    "The live component selection diverged and its prior UI state could not be restored.");
+            }
+            if (!native.CanDiscover(selected) || !native.IsCreatable(selected))
+                return SpellWorkbenchSubmission.Reject(
+                    SpellWorkbenchPreflight.DiscoveryUnavailable,
+                    "The resolved recipe stopped being discoverable before payment.");
+            stage = SpellWorkbenchNativeStage.Discover;
+            native.Discover(manager);
+            nativeCalls++;
             var after = Capture(native, manager, recipe);
-            return verify(after)
-                ? Verified(SpellWorkbenchNativeStage.Verification, 1, in before, in after, success)
-                : Quarantine(in action, SpellWorkbenchPreflight.VerificationFailed,
-                    SpellWorkbenchNativeStage.Verification, NativeMutationOutcome.PostconditionFailed,
-                    1, in before, in after, "The requested native transition did not happen.");
+            return after.TargetDiscovered
+                ? Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
+                    in before, in after,
+                    "The component-resolved spell recipe is now discovered.")
+                : FaultAfterCommit(in action, SpellWorkbenchPreflight.VerificationFailed,
+                    SpellWorkbenchNativeStage.Verification,
+                    NativeMutationOutcome.PostconditionFailed, nativeCalls,
+                    in before, in after,
+                    "The resolved recipe did not become discovered.");
         }
         catch (Exception ex) when (IsExpected(ex))
         {
             var after = CaptureBestEffort(native, manager, recipe, in before);
-            if (verify(after))
-                return Verified(SpellWorkbenchNativeStage.Verification, 1, in before, in after,
-                    success + " The native call threw after the outcome landed.");
-            return Quarantine(in action, SpellWorkbenchPreflight.PostCommitFault, stage,
-                NativeMutationOutcome.ExecutionThrew, 1, in before, in after,
-                "Native execution threw before the requested outcome was observable: " + ex.GetBaseException().Message);
+            if (after.TargetDiscovered)
+                return Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
+                    in before, in after,
+                    "The component-resolved recipe became discovered before the native fault.");
+            RestoreSelection(
+                native, manager, previousCore, previousAugments, ref nativeCalls);
+            after = CaptureBestEffort(native, manager, recipe, in before);
+            return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
+                stage, NativeMutationOutcome.ExecutionThrew, nativeCalls,
+                in before, in after,
+                "Component discovery faulted before its outcome was observable: " +
+                ex.GetBaseException().Message);
         }
     }
 
-    private static bool TryRequireSelection(Guid target, SpellWorkbenchNativeBindings native,
-        object manager, out SpellWorkbenchSubmission rejection)
+    private SpellWorkbenchSubmission CreateWithLayout(
+        in SpellWorkbenchAction action,
+        SpellWorkbenchNativeBindings native,
+        object manager,
+        object recipe)
     {
-        var augments = native.ReadGlyphValues(native.ReadAugments(manager));
-        if (augments.Count != 0)
+        if (!TryResolveGlyphLayout(
+                action.AugmentGlyphs, expectAugment: true, native,
+                out var augments, out var augmentReason))
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.SelectionUnavailable, augmentReason);
+        var authored = native.ReadRecipeGlyphs(recipe);
+        var core = new List<object>(authored.Count);
+        for (var index = 0; index < authored.Count; index++)
         {
-            rejection = SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.CompositionUnsupported,
-                "B-002 accepts the base recipe only; clear augment composition or use the composition family.");
-            return false;
+            var glyph = authored[index];
+            if (glyph is null || glyph.GetType() != native.GlyphType ||
+                native.IsGlyphAugment(glyph) || !native.IsGlyphAvailable(glyph))
+                return SpellWorkbenchSubmission.Reject(
+                    SpellWorkbenchPreflight.RecipeUnavailable,
+                    "The recipe's authored core glyphs are not currently usable.");
+            core.Add(glyph);
         }
-        var resolved = native.ResolveRecipe(manager, native.ReadGlyphValues(native.ReadCore(manager)));
-        if (resolved is null || resolved.GetType() != native.RecipeType || native.ReadIdentity(resolved) != target)
+        if (!native.IsDiscovered(recipe))
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.DiscoveryUnavailable,
+                "Loadout add requires an already discovered recipe.");
+        if (!native.IsCreatable(recipe))
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.RecipeUnavailable,
+                "SpellRecipeSO.IsCreatable() refused the requested recipe.");
+        var active = native.ReadActive(manager);
+        if (!native.HasEmpty(active))
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.LoadoutFull,
+                "The native active-spell list has no empty slot.");
+        var combined = new List<object>(core.Count + augments.Count);
+        combined.AddRange(core);
+        combined.AddRange(augments);
+        var nativeCombined = NativeGlyphList(native, combined);
+        var resolved = native.ResolveRecipe(manager, nativeCombined);
+        if (resolved is null || resolved.GetType() != native.RecipeType ||
+            native.ReadIdentity(resolved) != action.SpellRecipeId)
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.WrongSelection,
+                "The authored core plus requested augment layout did not resolve to the requested recipe.");
+        var createCost = native.GetCreateCost(manager, nativeCombined);
+        if (createCost is null || !native.HasEnough(createCost))
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.Unaffordable,
+                "GetSpellCreateCost().HasEnough() refused the requested layout.");
+
+        var before = Capture(native, manager, recipe);
+        if (!TryCapturePermit(out var permitReason))
+            return SpellWorkbenchSubmission.Reject(
+                SpellWorkbenchPreflight.MutationPermitUnavailable, permitReason);
+
+        var nativeCalls = 0;
+        var stage = SpellWorkbenchNativeStage.ClearSelection;
+        var previousCore = Copy(native.ReadGlyphValues(native.ReadCore(manager)));
+        var previousAugments = Copy(native.ReadGlyphValues(native.ReadAugments(manager)));
+        try
         {
-            rejection = SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.WrongSelection,
-                "The live core-glyph selection does not resolve to the requested recipe.");
-            return false;
+            ApplySelection(native, manager, core, augments, ref nativeCalls);
+            stage = SpellWorkbenchNativeStage.ApplySelection;
+            var selected = native.ResolveRecipe(
+                manager, native.ReadGlyphValues(native.ReadCore(manager)));
+            if (selected is null || selected.GetType() != native.RecipeType ||
+                native.ReadIdentity(selected) != action.SpellRecipeId)
+            {
+                if (RestoreSelection(
+                        native, manager, previousCore, previousAugments, ref nativeCalls))
+                    return SpellWorkbenchSubmission.Reject(
+                        SpellWorkbenchPreflight.WrongSelection,
+                        "The authored core layout no longer resolves to the requested recipe.");
+                var divergent = CaptureBestEffort(native, manager, recipe, in before);
+                return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
+                    SpellWorkbenchNativeStage.ApplySelection,
+                    NativeMutationOutcome.PostconditionFailed, nativeCalls,
+                    in before, in divergent,
+                    "The loadout selection diverged and its prior UI state could not be restored.");
+            }
+            stage = SpellWorkbenchNativeStage.Payment;
+            native.PerformCost(createCost);
+            nativeCalls++;
+            stage = SpellWorkbenchNativeStage.Create;
+            native.Create(manager);
+            nativeCalls++;
+            var after = Capture(native, manager, recipe);
+            return HasNewInstance(
+                    before.TargetSpellInstanceIds, after.TargetSpellInstanceIds)
+                ? Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
+                    in before, in after,
+                    "A new spell with the selected augment layout is equipped.")
+                : FaultAfterMissingCreate(
+                    in action, native, manager, recipe, nativeCalls,
+                    previousCore, previousAugments, in before);
         }
-        rejection = default;
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            var after = CaptureBestEffort(native, manager, recipe, in before);
+            if (HasNewInstance(before.TargetSpellInstanceIds, after.TargetSpellInstanceIds))
+                return Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
+                    in before, in after,
+                    "The layout-backed spell was added before the native fault.");
+            RestoreSelection(
+                native, manager, previousCore, previousAugments, ref nativeCalls);
+            after = CaptureBestEffort(native, manager, recipe, in before);
+            return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
+                stage, NativeMutationOutcome.ExecutionThrew, nativeCalls,
+                in before, in after,
+                "Loadout add faulted after its payment boundary but before its outcome was observable: " +
+                ex.GetBaseException().Message);
+        }
+    }
+
+    private SpellWorkbenchSubmission FaultAfterMissingCreate(
+        in SpellWorkbenchAction action,
+        SpellWorkbenchNativeBindings native,
+        object manager,
+        object recipe,
+        int nativeCalls,
+        List<object> previousCore,
+        List<object> previousAugments,
+        in SpellWorkbenchState before)
+    {
+        RestoreSelection(native, manager, previousCore, previousAugments, ref nativeCalls);
+        var after = CaptureBestEffort(native, manager, recipe, in before);
+        return FaultAfterCommit(in action, SpellWorkbenchPreflight.VerificationFailed,
+            SpellWorkbenchNativeStage.Verification,
+            NativeMutationOutcome.PostconditionFailed, nativeCalls,
+            in before, in after,
+            "The creation payment boundary ran but the requested spell instance was not added.");
+    }
+
+    private bool TryResolveGlyphLayout(
+        SpellWorkbenchGlyphStack[] layout,
+        bool expectAugment,
+        SpellWorkbenchNativeBindings native,
+        out List<object> glyphs,
+        out string reason)
+    {
+        glyphs = new List<object>();
+        for (var index = 0; index < layout.Length; index++)
+        {
+            var stack = layout[index];
+            var resolution = _registry.Resolve(stack.GlyphId, native.GlyphType);
+            if (!resolution.IsResolved || !_registry.IsCurrent(resolution))
+            {
+                reason = resolution.IsResolved
+                    ? "The glyph registry resolution became stale."
+                    : resolution.Reason;
+                return false;
+            }
+            var glyph = resolution.Value!;
+            if (native.IsGlyphAugment(glyph) != expectAugment)
+            {
+                reason = EntityIdentityFormatter.Format(stack.GlyphId) +
+                    (expectAugment
+                        ? " is not a spell augment."
+                        : " is an augment and cannot be a core discovery component.");
+                return false;
+            }
+            if (!native.IsGlyphAvailable(glyph))
+            {
+                reason = "GlyphSO.IsAvailable() refused " +
+                    EntityIdentityFormatter.Format(stack.GlyphId) + ".";
+                return false;
+            }
+            var maximum = native.GetGlyphMaximumUsages(glyph);
+            if (stack.Count > maximum)
+            {
+                reason = "Requested " + stack.Count + " uses of " +
+                    EntityIdentityFormatter.Format(stack.GlyphId) +
+                    ", but the live usable count is " + maximum + ".";
+                return false;
+            }
+            for (var count = 0; count < stack.Count; count++) glyphs.Add(glyph);
+        }
+        reason = string.Empty;
         return true;
+    }
+
+    private static void ApplySelection(
+        SpellWorkbenchNativeBindings native,
+        object manager,
+        IList<object> coreGlyphs,
+        IList<object> augmentGlyphs,
+        ref int nativeCalls)
+    {
+        var core = native.ReadCore(manager);
+        var augments = native.ReadAugments(manager);
+        native.Empty(core);
+        nativeCalls++;
+        native.Empty(augments);
+        nativeCalls++;
+        for (var index = 0; index < coreGlyphs.Count; index++)
+        {
+            native.Add(core, coreGlyphs[index]);
+            nativeCalls++;
+        }
+        for (var index = 0; index < augmentGlyphs.Count; index++)
+        {
+            native.Add(augments, augmentGlyphs[index]);
+            nativeCalls++;
+        }
+    }
+
+    private static object NativeGlyphList(
+        SpellWorkbenchNativeBindings native,
+        IList<object> glyphs)
+    {
+        var result = native.CreateGlyphList();
+        for (var index = 0; index < glyphs.Count; index++) result.Add(glyphs[index]);
+        return result;
+    }
+
+    private static List<object> Copy(IList source)
+    {
+        var result = new List<object>(source.Count);
+        for (var index = 0; index < source.Count; index++)
+            if (source[index] is { } value) result.Add(value);
+        return result;
+    }
+
+    private static bool RestoreSelection(
+        SpellWorkbenchNativeBindings native,
+        object manager,
+        IList<object> core,
+        IList<object> augments,
+        ref int nativeCalls)
+    {
+        try
+        {
+            ApplySelection(native, manager, core, augments, ref nativeCalls);
+            return true;
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            return false;
+        }
     }
 
     private static SpellWorkbenchState Capture(SpellWorkbenchNativeBindings native,
@@ -349,16 +541,22 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             in evidence, reason);
     }
 
-    private SpellWorkbenchSubmission Quarantine(in SpellWorkbenchAction action,
+    private static SpellWorkbenchSubmission FaultAfterCommit(in SpellWorkbenchAction action,
         SpellWorkbenchPreflight preflight, SpellWorkbenchNativeStage stage,
         NativeMutationOutcome outcome, int nativeCalls, in SpellWorkbenchState before,
         in SpellWorkbenchState after, string reason)
     {
-        _quarantineReason = $"Spell workbench actions are quarantined for this lifecycle after {stage} on " +
+        var exactReason = $"Spell workbench action faulted after {stage} on " +
             $"recipe {EntityIdentityFormatter.Format(action.SpellRecipeId)}: {reason}";
-        var evidence = new SpellWorkbenchEvidence(true, in before, in after);
+        var paymentInvoked =
+            (action.Kind == SpellWorkbenchActionKind.Discover &&
+                stage >= SpellWorkbenchNativeStage.Discover) ||
+            (action.Kind == SpellWorkbenchActionKind.CreateWithLayout &&
+                stage >= SpellWorkbenchNativeStage.Payment);
+        var evidence = new SpellWorkbenchEvidence(
+            true, in before, in after, paymentInvoked);
         return new SpellWorkbenchSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(nativeCalls, 1, 0), in evidence, _quarantineReason);
+            new NativeMutationCallOutcome(nativeCalls, 1, 0), in evidence, exactReason);
     }
 
     private bool TryCapturePermit(out string reason)

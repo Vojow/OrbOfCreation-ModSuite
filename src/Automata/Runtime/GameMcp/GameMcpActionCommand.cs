@@ -55,9 +55,7 @@ internal static class GameMcpCommandKinds
         "game_concept" => GameMcpCommandKind.Concept,
         "game_harvest" => GameMcpCommandKind.Harvest,
         "game_spell_level" => GameMcpCommandKind.SpellLevel,
-        "game_discovery_offer" => GameMcpCommandKind.DiscoveryTreeOffer,
-        "game_spell_workbench" => GameMcpCommandKind.SpellWorkbench,
-        "game_spell_composition" => GameMcpCommandKind.SpellComposition,
+        "game_casting_dial" => GameMcpCommandKind.SpellComposition,
         "game_spell_loadout" => GameMcpCommandKind.SpellLoadout,
         "game_targeting" => GameMcpCommandKind.Targeting,
         "game_consumable" => GameMcpCommandKind.Consumable,
@@ -88,9 +86,9 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.Concept => "game_concept",
         GameMcpCommandKind.Harvest => "game_harvest",
         GameMcpCommandKind.SpellLevel => "game_spell_level",
-        GameMcpCommandKind.DiscoveryTreeOffer => "game_discovery_offer",
-        GameMcpCommandKind.SpellWorkbench => "game_spell_workbench",
-        GameMcpCommandKind.SpellComposition => "game_spell_composition",
+        GameMcpCommandKind.DiscoveryTreeOffer => "game_discover",
+        GameMcpCommandKind.SpellWorkbench => "game_discover",
+        GameMcpCommandKind.SpellComposition => "game_casting_dial",
         GameMcpCommandKind.SpellLoadout => "game_spell_loadout",
         GameMcpCommandKind.Targeting => "game_targeting",
         GameMcpCommandKind.Consumable => "game_consumable",
@@ -350,23 +348,23 @@ internal sealed class GameMcpCommandResult
         {
             ["status"] = status,
         };
-        if (command.SourceOperation?.Request.Classification is
-                GameMcpOperationClass.Gameplay or GameMcpOperationClass.UiState &&
+        var succeeded = status is "committed" or "available";
+        if (!succeeded &&
+            (command.SourceOperation?.Request.Classification == GameMcpOperationClass.Gameplay ||
+             command.SourceOperation?.Request.Classification == GameMcpOperationClass.UiState) &&
             command.FrameContext?.World is { } actionWorld)
         {
-            // Mutation responses name the world used for admission. A later post-state
-            // projection deliberately overwrites this with the strictly newer world that
-            // observed the transition.
+            // A refusal names the immutable world used for admission. Successful mutations add
+            // only the strictly newer world that actually observed their post-state.
             projected["worldGeneration"] = actionWorld.Generation.Value;
         }
-        var succeeded = status is "committed" or "available";
         if (!succeeded)
         {
             projected["reasonCode"] = stableCode;
             projected["reason"] = Reason;
             if (command.TargetId != Guid.Empty) projected["targetId"] = command.TargetId;
+            projected["readWith"] = GameMcpFailureRemedy.For(command);
             AddGenerationMismatch(projected, command);
-            AddFailureAudit(projected, command);
         }
         if (Details is GameMcpObject details) projected.CopyFrom(details);
         else if (Details is not null) projected["result"] = Details;
@@ -397,13 +395,84 @@ internal sealed class GameMcpCommandResult
         }
     }
 
-    private void AddFailureAudit(GameMcpObjectBuilder projected, GameMcpCommand command)
+}
+
+internal static class GameMcpFailureRemedy
+{
+    internal static GameMcpValue For(GameMcpCommand command)
     {
-        if (!HasActionResult) return;
-        if (ActionResult.HasNativeEvidence)
-            projected["nativeOutcome"] = ActionResult.NativeEvidence.Outcome.ToString();
+        var result = new GameMcpObjectBuilder();
+        switch (command.Kind)
+        {
+            case GameMcpCommandKind.Purchase:
+                WorldGet(result,
+                    command.DerivedNativeType == "StructureSO" ? "structures" : "upgrades",
+                    command.TargetId);
+                break;
+            case GameMcpCommandKind.Cast:
+            case GameMcpCommandKind.SpellLoadout:
+                WorldList(result, "spell-slots");
+                break;
+            case GameMcpCommandKind.Concept:
+                WorldGet(result, "alchemy-recipes", command.TargetId);
+                break;
+            case GameMcpCommandKind.Harvest:
+                WorldGet(result, "plot-nodes", command.TargetId);
+                break;
+            case GameMcpCommandKind.SpellLevel:
+                if (command.TargetId == Guid.Empty) WorldList(result, "spell-recipes");
+                else WorldGet(result, "spell-recipes", command.TargetId);
+                break;
+            case GameMcpCommandKind.DiscoveryTreeOffer:
+                WorldGet(result, "discovery-trees", command.TargetId);
+                break;
+            case GameMcpCommandKind.SpellWorkbench:
+            case GameMcpCommandKind.GenericDiscovery:
+                result["tool"] = "game_discover";
+                result["mode"] = "preview";
+                break;
+            case GameMcpCommandKind.SpellComposition:
+            case GameMcpCommandKind.Prestige:
+                result["tool"] = "world_overview";
+                break;
+            case GameMcpCommandKind.Targeting:
+                WorldList(result, "targeting");
+                break;
+            case GameMcpCommandKind.Consumable:
+                WorldGet(result, "consumables", command.TargetId);
+                break;
+            case GameMcpCommandKind.Crafting:
+                WorldGet(result, "crafting-recipes", command.TargetId);
+                break;
+            case GameMcpCommandKind.EquipmentLoadout:
+                WorldGet(result, "equipment", command.TargetId);
+                break;
+            case GameMcpCommandKind.Challenge:
+                if (command.TargetId == Guid.Empty) WorldList(result, "challenges");
+                else WorldGet(result, "challenges", command.TargetId);
+                break;
+            case GameMcpCommandKind.Research:
+                WorldGet(result, "research", command.TargetId);
+                break;
+            default:
+                result["tool"] = "suite_health";
+                break;
+        }
+        return result.Freeze();
     }
 
+    private static void WorldGet(GameMcpObjectBuilder result, string category, Guid uuid)
+    {
+        result["tool"] = "world_get";
+        result["category"] = category;
+        if (uuid != Guid.Empty) result["uuid"] = uuid.ToString("D");
+    }
+
+    private static void WorldList(GameMcpObjectBuilder result, string category)
+    {
+        result["tool"] = "world_list";
+        result["category"] = category;
+    }
 }
 
 
@@ -545,7 +614,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.SpellWorkbench)
         {
             if (code == SpellWorkbenchActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == SpellWorkbenchActionResultCodes.Quarantined) return "quarantined";
             if (code == SpellWorkbenchActionResultCodes.WrongThread) return "wrong_thread";
             if (code == SpellWorkbenchActionResultCodes.IdentityUnavailable) return "identity_unavailable";
             if (code == SpellWorkbenchActionResultCodes.SelectionUnavailable) return "selection_unavailable";
@@ -564,7 +632,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.SpellComposition)
         {
             if (code == SpellCompositionActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == SpellCompositionActionResultCodes.Quarantined) return "quarantined";
             if (code == SpellCompositionActionResultCodes.WrongThread) return "wrong_thread";
             if (code == SpellCompositionActionResultCodes.IdentityUnavailable) return "identity_unavailable";
             if (code == SpellCompositionActionResultCodes.OutputLevelOutOfRange) return "output_level_out_of_range";

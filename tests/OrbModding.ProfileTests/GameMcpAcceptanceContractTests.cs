@@ -216,6 +216,10 @@ public sealed class GameMcpWorldQueryTests
                 ["netRate"] = new GameMcpDomainValue(new BigDouble(4d, 1)),
                 ["unlocked"] = true,
                 ["truncated"] = true,
+                ["nativeStage"] = "ApplySelection",
+                ["outcome"] = "PostconditionFailed",
+                ["requestedMode"] = "RemoveOwned",
+                ["execution"] = "OneShotQueue",
             }.Freeze(),
             GameMcpTestHarness.EntityCatalog));
 
@@ -225,6 +229,10 @@ public sealed class GameMcpWorldQueryTests
         Assert.Equal("2.5e3", (string?)encoded["amount"]);
         Assert.Equal("4e1", (string?)encoded["netRatePerSecond"]);
         Assert.True((bool)encoded["available"]!);
+        Assert.Equal("apply_selection", (string?)encoded["nativeStage"]);
+        Assert.Equal("postcondition_failed", (string?)encoded["outcome"]);
+        Assert.Equal("remove_owned", (string?)encoded["requestedMode"]);
+        Assert.Equal("one_shot_queue", (string?)encoded["execution"]);
         Assert.Null(encoded["hasMore"]);
         Assert.Null(encoded["entityId"]);
         Assert.Null(encoded["playerFacingName"]);
@@ -482,7 +490,8 @@ public sealed class GameMcpProtocolSurfaceTests
         var actionNames = new HashSet<string>(StringComparer.Ordinal)
         {
             "game_purchase", "game_cast", "game_concept", "game_harvest",
-            "game_spell_level", "game_discovery_offer", "game_discover", "game_equipment", "suite_config_set",
+            "game_spell_level", "game_casting_dial", "game_spell_loadout", "game_discover",
+            "game_equipment", "suite_config_set",
             "suite_emergency_stop", "game_screenshot", "game_continue",
             "game_navigate", "game_tooltip",
             "game_targeting",

@@ -10,23 +10,16 @@ internal static class GameMcpSpellCompositionProjection
     internal static GameMcpValue Project(in SpellCompositionSubmission submission)
     {
         if (submission.Verified) return new JObject().Freeze();
-        var result = new JObject
-        {
-            ["preflight"] = GameMcpEntityWireNormalizer.Snake(submission.Preflight.ToString()),
-        };
+        var result = new JObject();
         if (submission.Evidence.Available)
         {
-            result["nativeStage"] = GameMcpEntityWireNormalizer.Snake(submission.Stage.ToString());
-            result["outcome"] = GameMcpEntityWireNormalizer.Snake(submission.Outcome.ToString());
+            result["nativeStage"] = submission.Stage.ToString();
+            result["outcome"] = submission.Outcome.ToString();
             var before = submission.Evidence.Before;
             var after = submission.Evidence.After;
             result["before"] = State(in before);
             result["after"] = State(in after);
         }
-        if (submission.Preflight is SpellCompositionPreflight.Quarantined or
-            SpellCompositionPreflight.PostCommitFault or
-            SpellCompositionPreflight.VerificationFailed)
-            result["quarantined"] = true;
         return result.Freeze();
     }
 

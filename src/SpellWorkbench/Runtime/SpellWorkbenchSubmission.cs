@@ -7,7 +7,6 @@ internal enum SpellWorkbenchPreflight
 {
     Proceeded = 0,
     ContractUnavailable = 1,
-    Quarantined = 2,
     WrongThread = 3,
     LifecycleReplaced = 4,
     IdentityUnavailable = 5,
@@ -30,8 +29,9 @@ internal enum SpellWorkbenchNativeStage
     ClearSelection = 1,
     ApplySelection = 2,
     Discover = 3,
-    Create = 4,
-    Verification = 5,
+    Payment = 4,
+    Create = 5,
+    Verification = 6,
 }
 
 internal readonly struct SpellWorkbenchState
@@ -55,16 +55,22 @@ internal readonly struct SpellWorkbenchState
 
 internal readonly struct SpellWorkbenchEvidence
 {
-    internal SpellWorkbenchEvidence(bool available, in SpellWorkbenchState before, in SpellWorkbenchState after)
+    internal SpellWorkbenchEvidence(
+        bool available,
+        in SpellWorkbenchState before,
+        in SpellWorkbenchState after,
+        bool paymentInvoked = false)
     {
         Available = available;
         Before = before;
         After = after;
+        PaymentInvoked = paymentInvoked;
     }
 
     internal bool Available { get; }
     internal SpellWorkbenchState Before { get; }
     internal SpellWorkbenchState After { get; }
+    internal bool PaymentInvoked { get; }
 }
 
 internal readonly struct SpellWorkbenchSubmission

@@ -9,14 +9,11 @@ internal static class GameMcpGenericDiscoveryProjection
     {
         if (submission.Verified) return new GameMcpObjectBuilder().Freeze();
 
-        var result = new GameMcpObjectBuilder
-        {
-            ["preflight"] = GameMcpEntityWireNormalizer.Snake(submission.Preflight.ToString()),
-        };
+        var result = new GameMcpObjectBuilder();
         if (submission.Receipt.EvidenceAvailable)
         {
-            result["nativeStage"] = GameMcpEntityWireNormalizer.Snake(submission.Stage.ToString());
-            result["outcome"] = GameMcpEntityWireNormalizer.Snake(submission.Outcome.ToString());
+            result["nativeStage"] = submission.Stage.ToString();
+            result["outcome"] = submission.Outcome.ToString();
         }
         if (submission.Receipt.EvidenceAvailable)
             result["receipt"] = Receipt(submission.Receipt);
@@ -45,6 +42,7 @@ internal static class GameMcpGenericDiscoveryProjection
                     ["cost"] = new GameMcpDomainValue(cost.Expected),
                     ["amountBefore"] = new GameMcpDomainValue(cost.Before),
                     ["amountAfter"] = new GameMcpDomainValue(cost.After),
+                    ["affordable"] = cost.Before.CompareTo(cost.Expected) >= 0,
                     ["observedDelta"] = new GameMcpDomainValue(cost.ObservedDelta),
                 });
             }

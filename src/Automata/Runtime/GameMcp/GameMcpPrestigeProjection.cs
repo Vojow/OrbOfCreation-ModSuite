@@ -8,14 +8,11 @@ internal static class GameMcpPrestigeProjection
     internal static GameMcpValue Project(in PrestigeSubmission submission)
     {
         if (submission.Verified) return new GameMcpObjectBuilder().Freeze();
-        var result = new GameMcpObjectBuilder
-        {
-            ["preflight"] = GameMcpEntityWireNormalizer.Snake(submission.Preflight.ToString()),
-        };
+        var result = new GameMcpObjectBuilder();
         if (submission.Receipt.EvidenceAvailable)
         {
-            result["nativeStage"] = GameMcpEntityWireNormalizer.Snake(submission.Stage.ToString());
-            result["outcome"] = GameMcpEntityWireNormalizer.Snake(submission.Outcome.ToString());
+            result["nativeStage"] = submission.Stage.ToString();
+            result["outcome"] = submission.Outcome.ToString();
             result["before"] = State(submission.Receipt.Before);
             result["observedLifecycleGeneration"] = submission.Receipt.After.LifecycleEpoch;
         }

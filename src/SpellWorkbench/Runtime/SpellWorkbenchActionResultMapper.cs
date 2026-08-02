@@ -21,7 +21,6 @@ internal static class SpellWorkbenchActionResultMapper
     {
         SpellWorkbenchPreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
         SpellWorkbenchPreflight.ContractUnavailable => SpellWorkbenchActionResultCodes.ContractUnavailable,
-        SpellWorkbenchPreflight.Quarantined => SpellWorkbenchActionResultCodes.Quarantined,
         SpellWorkbenchPreflight.WrongThread => SpellWorkbenchActionResultCodes.WrongThread,
         SpellWorkbenchPreflight.IdentityUnavailable => SpellWorkbenchActionResultCodes.IdentityUnavailable,
         SpellWorkbenchPreflight.SelectionUnavailable => SpellWorkbenchActionResultCodes.SelectionUnavailable,

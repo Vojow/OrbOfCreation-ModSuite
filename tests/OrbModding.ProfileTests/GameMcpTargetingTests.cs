@@ -24,7 +24,7 @@ public sealed class GameMcpTargetingTests
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         var schema = tool["inputSchema"]!;
         Assert.Equal(new[] { "mode" }, schema["required"]!.Values<string>());
-        Assert.Equal(new[] { "submit", "randomize", "cancel" },
+        Assert.Equal(new[] { "submit", "randomize" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>());
         Assert.NotNull(schema["properties"]!["targetUuid"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
@@ -38,7 +38,7 @@ public sealed class GameMcpTargetingTests
         var missing = Call(router, 1, new JObject { ["mode"] = "submit" });
         var unexpected = Call(router, 2, new JObject
         {
-            ["mode"] = "cancel", ["targetUuid"] = First.ToString("D"),
+            ["mode"] = "randomize", ["targetUuid"] = First.ToString("D"),
         });
         Assert.Equal("targetUuid", (string?)missing.Body!["error"]!["data"]!["validationErrors"]![0]!["field"]);
         Assert.Equal("missing_required", (string?)missing.Body["error"]!["data"]!["validationErrors"]![0]!["code"]);
@@ -65,7 +65,7 @@ public sealed class GameMcpTargetingTests
         Assert.Equal(5, (int)candidates[0]["effectiveLevel"]!);
         Assert.True((bool)candidates[0]["available"]!);
         Assert.True((bool)row["randomize"]!["available"]!);
-        Assert.True((bool)row["cancel"]!["available"]!);
+        Assert.Null(row["cancel"]);
     }
 
     [Fact]

@@ -392,8 +392,8 @@ public sealed class GameMcpFrameInboxTests
     public void TwoGameplayOperationsRevalidateLiveStateSequentiallyInOneFrame()
     {
         var inbox = new GameMcpFrameInbox();
-        Submit(inbox, "game_discovery_offer", GameMcpOperationClass.Gameplay);
-        Submit(inbox, "game_discovery_offer", GameMcpOperationClass.Gameplay);
+        Submit(inbox, "game_discover", GameMcpOperationClass.Gameplay);
+        Submit(inbox, "game_discover", GameMcpOperationClass.Gameplay);
         var liveOfferRevision = 0;
         var observedBeforeExecution = new List<int>();
 

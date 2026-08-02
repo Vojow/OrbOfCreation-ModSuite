@@ -307,7 +307,7 @@ internal sealed class SpellLevelNativeAdapter : ISpellLevelNativePort, ISpellLev
     {
         var evidence = NativeMutationVerifier.Execute(
             "Spell level all",
-            uuid.ToString("D"),
+            uuid == Guid.Empty ? "all ready spells" : uuid.ToString("D"),
             "total mastery level positive delta",
             ReadTotalMasteryLevels,
             () => _tryLevelAll!.Invoke(_manager, Array.Empty<object>()),

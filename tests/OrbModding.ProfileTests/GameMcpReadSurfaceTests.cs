@@ -143,10 +143,10 @@ public sealed class GameMcpStreamableHttpProtocolTests
                 "tools/call",
                 new JObject
                 {
-                    ["name"] = "game_discovery_offer",
+                    ["name"] = "game_discover",
                     ["arguments"] = new JObject
                     {
-                        ["mode"] = "initiate",
+                        ["mode"] = "offer_initiate",
                         ["treeUuid"] = tree.ToString("D"),
                     },
                 }));

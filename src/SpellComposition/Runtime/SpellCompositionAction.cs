@@ -58,7 +58,6 @@ internal enum SpellCompositionPreflight
     Proceeded = 0,
     LifecycleReplaced = 1,
     ContractUnavailable = 2,
-    Quarantined = 3,
     WrongThread = 4,
     IdentityUnavailable = 5,
     OutputLevelOutOfRange = 6,
@@ -165,7 +164,6 @@ internal readonly struct SpellCompositionSubmission
 internal static class SpellCompositionActionResultCodes
 {
     internal static readonly ServiceActionResultCode ContractUnavailable = new(7301);
-    internal static readonly ServiceActionResultCode Quarantined = new(7302);
     internal static readonly ServiceActionResultCode WrongThread = new(7303);
     internal static readonly ServiceActionResultCode IdentityUnavailable = new(7304);
     internal static readonly ServiceActionResultCode OutputLevelOutOfRange = new(7305);

@@ -9,15 +9,14 @@ internal static class GameMcpChallengeProjection
     internal static GameMcpValue Project(in ChallengeSubmission submission)
     {
         if (submission.Verified) return new GameMcpObjectBuilder().Freeze();
-        var result = new GameMcpObjectBuilder
-        {
-            ["preflight"] = GameMcpEntityWireNormalizer.Snake(submission.Preflight.ToString()),
-        };
+        var result = new GameMcpObjectBuilder();
         if (submission.Receipt.EvidenceAvailable)
         {
-            result["nativeStage"] = GameMcpEntityWireNormalizer.Snake(submission.Stage.ToString());
-            result["outcome"] = GameMcpEntityWireNormalizer.Snake(submission.Outcome.ToString());
-            result["requestedMode"] = GameMcpEntityWireNormalizer.Snake(submission.Receipt.Kind.ToString());
+            result["nativeStage"] = submission.Stage.ToString();
+            result["outcome"] = submission.Outcome.ToString();
+            result["requestedMode"] = submission.Receipt.Kind == ChallengeActionKind.Queue
+                ? "activate"
+                : submission.Receipt.Kind.ToString();
             result["before"] = State(submission.Receipt.Before);
             result["after"] = State(submission.Receipt.After);
         }

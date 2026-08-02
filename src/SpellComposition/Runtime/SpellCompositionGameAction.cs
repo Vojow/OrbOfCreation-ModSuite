@@ -17,7 +17,6 @@ internal sealed class SpellCompositionGameAction : IDisposable
     private readonly int _mainThreadId;
     private SpellCompositionNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
-    private string _quarantineReason = string.Empty;
 
     internal SpellCompositionGameAction(
         Func<long> readLifecycleEpoch,
@@ -38,7 +37,6 @@ internal sealed class SpellCompositionGameAction : IDisposable
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal bool IsQuarantined => _quarantineReason.Length != 0;
 
     internal SpellCompositionSubmission Submit(in SpellCompositionAction action)
     {
@@ -47,10 +45,6 @@ internal sealed class SpellCompositionGameAction : IDisposable
                 SpellCompositionPreflight.WrongThread,
                 "Spell composition is bound to Unity thread " + _mainThreadId +
                 ", not thread " + Environment.CurrentManagedThreadId + ".");
-        if (_quarantineReason.Length != 0)
-            return SpellCompositionSubmission.Reject(
-                SpellCompositionPreflight.Quarantined,
-                _quarantineReason);
         if (_bindings is not { } native)
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.ContractUnavailable,
@@ -96,7 +90,6 @@ internal sealed class SpellCompositionGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
         BindLifecycle();
     }
 
@@ -104,7 +97,6 @@ internal sealed class SpellCompositionGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
     }
 
     private SpellCompositionSubmission SetOutputLevel(
@@ -140,7 +132,7 @@ internal sealed class SpellCompositionGameAction : IDisposable
             var after = Capture(native, null);
             return after.OutputLevel == action.OutputLevel
                 ? Verified(in before, in after, "The global spell output level is now " + action.OutputLevel + ".")
-                : Quarantine(
+                : FaultAfterCommit(
                     in action,
                     SpellCompositionPreflight.VerificationFailed,
                     SpellCompositionNativeStage.Verification,
@@ -157,7 +149,7 @@ internal sealed class SpellCompositionGameAction : IDisposable
                     in before,
                     in after,
                     "The output-level setter threw after the requested value became observable.");
-            return Quarantine(
+            return FaultAfterCommit(
                 in action,
                 SpellCompositionPreflight.PostCommitFault,
                 SpellCompositionNativeStage.OutputLevel,
@@ -244,7 +236,7 @@ internal sealed class SpellCompositionGameAction : IDisposable
             return Same(after.AugmentGlyphs, requested) &&
                 after.SpellInstanceId == action.SpellInstanceId
                 ? Verified(in before, in after, "The exact augment composition is now applied to the requested spell instance.")
-                : Quarantine(
+                : FaultAfterCommit(
                     in action,
                     SpellCompositionPreflight.VerificationFailed,
                     SpellCompositionNativeStage.Verification,
@@ -262,7 +254,7 @@ internal sealed class SpellCompositionGameAction : IDisposable
                     in before,
                     in after,
                     "The augment setter threw after the requested composition became observable.");
-            return Quarantine(
+            return FaultAfterCommit(
                 in action,
                 SpellCompositionPreflight.PostCommitFault,
                 SpellCompositionNativeStage.AugmentComposition,
@@ -414,7 +406,7 @@ internal sealed class SpellCompositionGameAction : IDisposable
             reason);
     }
 
-    private SpellCompositionSubmission Quarantine(
+    private static SpellCompositionSubmission FaultAfterCommit(
         in SpellCompositionAction action,
         SpellCompositionPreflight preflight,
         SpellCompositionNativeStage stage,
@@ -426,8 +418,8 @@ internal sealed class SpellCompositionGameAction : IDisposable
         var target = action.Kind == SpellCompositionActionKind.SetOutputLevel
             ? "the global output level"
             : "spell " + EntityIdentityFormatter.Format(action.SpellInstanceId);
-        _quarantineReason = "Spell composition is quarantined for this lifecycle after " +
-            stage + " on " + target + ": " + reason;
+        var exactReason = "Spell composition faulted after " + stage + " on " +
+            target + ": " + reason;
         var evidence = new SpellCompositionEvidence(true, in before, in after);
         return new SpellCompositionSubmission(
             preflight,
@@ -435,7 +427,7 @@ internal sealed class SpellCompositionGameAction : IDisposable
             outcome,
             new NativeMutationCallOutcome(1, 1, 0),
             in evidence,
-            _quarantineReason);
+            exactReason);
     }
 
     private bool TryCapturePermit(out string reason)

@@ -12,11 +12,10 @@ internal static class GameMcpTargetingProjection
         if (submission.Verified && submission.Evidence.SubmittedTarget != Guid.Empty)
             result["submittedTargetUuid"] = submission.Evidence.SubmittedTarget.ToString("D");
         if (submission.Verified) return result.Freeze();
-        result["preflight"] = GameMcpEntityWireNormalizer.Snake(submission.Preflight.ToString());
         if (submission.Evidence.Available)
         {
-            result["nativeStage"] = GameMcpEntityWireNormalizer.Snake(submission.Stage.ToString());
-            result["outcome"] = GameMcpEntityWireNormalizer.Snake(submission.Outcome.ToString());
+            result["nativeStage"] = submission.Stage.ToString();
+            result["outcome"] = submission.Outcome.ToString();
             if (submission.Evidence.RequestedTarget != Guid.Empty)
                 result["requestedTargetUuid"] = submission.Evidence.RequestedTarget.ToString("D");
             if (submission.Evidence.SubmittedTarget != Guid.Empty)

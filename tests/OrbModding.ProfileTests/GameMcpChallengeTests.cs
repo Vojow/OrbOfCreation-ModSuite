@@ -24,7 +24,7 @@ public sealed class GameMcpChallengeTests
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         var schema = tool["inputSchema"]!;
         Assert.Equal(new[] { "mode" }, schema["required"]!.Values<string>());
-        Assert.Equal(new[] { "select", "queue", "abandon", "fetch_time", "fetch_prestige" },
+        Assert.Equal(new[] { "select", "activate", "abandon", "fetch_time", "fetch_prestige" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>());
         Assert.NotNull(schema["properties"]!["uuid"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
@@ -74,7 +74,7 @@ public sealed class GameMcpChallengeTests
         Assert.Equal("Prismatic Trial", (string?)first["name"]);
         Assert.Equal("queued", (string?)first["state"]);
         Assert.True((bool)first["select"]!["available"]!);
-        Assert.True((bool)first["queue"]!["available"]!);
+        Assert.True((bool)first["activate"]!["available"]!);
         Assert.Equal("1.2e1", (string?)first["nextDifficulty"]);
         Assert.Equal("3e1", (string?)first["nextReward"]);
         Assert.Null(first["receipt"]);
@@ -116,7 +116,7 @@ public sealed class GameMcpChallengeTests
         var committed = Json(GameMcpChallengeProjection.Project(in success), World());
 
         Assert.Null(failed["preflight"]);
-        Assert.Equal("queue", (string?)failed["requestedMode"]);
+        Assert.Equal("activate", (string?)failed["requestedMode"]);
         Assert.Equal("Prismatic Trial", (string?)failed["before"]!["timeOffers"]![0]!["name"]);
         Assert.Null(failed["quarantined"]);
         Assert.Empty(committed.Properties());

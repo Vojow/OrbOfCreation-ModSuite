@@ -10,17 +10,14 @@ internal static class GameMcpSpellLoadoutProjection
     internal static GameMcpValue Project(in SpellLoadoutSubmission submission)
     {
         if (submission.Verified) return new JObject().Freeze();
-        var result = new JObject
-        {
-            ["preflight"] = GameMcpEntityWireNormalizer.Snake(submission.Preflight.ToString()),
-        };
+        var result = new JObject();
         if (submission.Evidence.Available)
         {
-            result["nativeStage"] = GameMcpEntityWireNormalizer.Snake(submission.Stage.ToString());
-            result["outcome"] = GameMcpEntityWireNormalizer.Snake(submission.Outcome.ToString());
+            result["nativeStage"] = submission.Stage.ToString();
+            result["outcome"] = submission.Outcome.ToString();
             result["sourceSlot"] = submission.Evidence.SourceSlot;
             if (submission.Evidence.DestinationSlot >= 0)
-                result["destinationSlot"] = submission.Evidence.DestinationSlot;
+                result["destination"] = submission.Evidence.DestinationSlot;
             var before = submission.Evidence.Before;
             var after = submission.Evidence.After;
             result["before"] = State(in before);

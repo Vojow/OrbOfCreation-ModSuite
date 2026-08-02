@@ -264,11 +264,7 @@ internal sealed class GameMcpProtocolRouter
                 builder.Uuid = RequireUuid(arguments, "recipeUuid");
                 builder.SecondaryUuid = OptionalUuid(arguments, "replacementUuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
-                builder.Mode = RequireOneOf(
-                    arguments, "mode", "add", "remove_owned", "rotate_out");
-                if (builder.Mode == "rotate_out" && builder.SecondaryUuid == Guid.Empty)
-                    throw new GameMcpInvalidParamsException(
-                        "replacementUuid is required for rotate_out");
+                builder.Mode = RequireOneOf(arguments, "mode", "add", "remove_owned");
                 builder.Amount = OptionalIntInRange(
                     arguments, "amount", 1, 1, 1_000_000);
                 break;
@@ -277,50 +273,31 @@ internal sealed class GameMcpProtocolRouter
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
             case "game_spell_level":
-                builder.Uuid = RequireUuid(arguments, "spellRecipeUuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "single", "all");
+                builder.Uuid = builder.Mode == "single"
+                    ? RequireUuid(arguments, "spellRecipeUuid")
+                    : Guid.Empty;
                 break;
-            case "game_discovery_offer":
-                builder.Uuid = RequireUuid(arguments, "treeUuid");
-                builder.SecondaryUuid = OptionalUuid(arguments, "offerUuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
-                builder.Mode = RequireOneOf(
-                    arguments, "mode", "initiate", "select", "confirm", "reroll");
-                if (builder.Mode is "select" or "confirm" &&
-                    builder.SecondaryUuid == Guid.Empty)
-                    throw new GameMcpInvalidParamsException(
-                        "offerUuid is required for " + builder.Mode);
-                if (builder.Mode is "initiate" or "reroll" &&
-                    builder.SecondaryUuid != Guid.Empty)
-                    throw new GameMcpInvalidParamsException(
-                        "offerUuid is accepted only for select or confirm");
-                break;
-            case "game_spell_workbench":
-                builder.Uuid = RequireUuid(arguments, "spellRecipeUuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
-                builder.Mode = RequireOneOf(arguments, "mode", "select", "discover", "create");
-                break;
-            case "game_spell_composition":
-                builder.Mode = RequireOneOf(arguments, "mode", "set_output_level", "set_augments");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
-                if (builder.Mode == "set_output_level")
-                    builder.Amount = RequiredInt(arguments, "outputLevel", 1, int.MaxValue);
-                else
-                {
-                    builder.Uuid = RequireUuid(arguments, "spellInstanceUuid");
-                    builder.UuidCounts = RequireUuidCountArray(arguments, "augmentGlyphs", 64);
-                }
+            case "game_casting_dial":
+                builder.Key = RequireOneOf(arguments, "dial", "output", "reserve");
+                builder.Mode = builder.Key == "output" ? "set_output_level" : "set_reserve_level";
+                builder.Amount = RequiredInt(arguments, "value", 1, int.MaxValue);
                 break;
             case "game_spell_loadout":
-                builder.Mode = RequireOneOf(arguments, "mode", "remove", "move");
-                builder.Uuid = RequireUuid(arguments, "spellInstanceUuid");
+                builder.Mode = RequireOneOf(arguments, "mode", "add", "remove", "move");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                if (builder.Mode == "add")
+                {
+                    builder.Uuid = RequireUuid(arguments, "spellRecipeUuid");
+                    builder.UuidCounts = RequireUuidCountArray(arguments, "glyphs", 64);
+                }
+                else builder.Uuid = RequireUuid(arguments, "spellInstanceUuid");
                 if (builder.Mode == "move")
-                    builder.SlotIndex = RequiredInt(arguments, "destinationSlot", 0, 255);
+                    builder.SlotIndex = RequiredInt(arguments, "destination", 0, 255);
                 break;
             case "game_targeting":
-                builder.Mode = RequireOneOf(arguments, "mode", "submit", "randomize", "cancel");
+                builder.Mode = RequireOneOf(arguments, "mode", "submit", "randomize");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode == "submit") builder.Uuid = RequireUuid(arguments, "targetUuid");
                 break;
@@ -353,9 +330,20 @@ internal sealed class GameMcpProtocolRouter
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
             case "game_discover":
-                builder.Mode = "discover";
-                builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                builder.Mode = RequireOneOf(arguments, "mode", "preview", "confirm",
+                    "offer_initiate", "offer_select", "offer_confirm", "offer_reroll");
+                if (builder.Mode is "preview" or "confirm")
+                {
+                    builder.Key = RequireOneOf(arguments, "surface",
+                        "spellcraft", "glyphcraft", "devote", "runecraft", "alchemy", "artifacts");
+                    builder.UuidCounts = RequireUuidCountArray(arguments, "components", 64);
+                }
+                else
+                {
+                    builder.Uuid = RequireUuid(arguments, "treeUuid");
+                    builder.SecondaryUuid = OptionalUuid(arguments, "offerUuid");
+                }
                 break;
             case "game_equipment":
                 builder.Mode = RequireOneOf(arguments, "mode", "equip", "unequip");
@@ -364,13 +352,14 @@ internal sealed class GameMcpProtocolRouter
                 break;
             case "game_challenge":
                 builder.Mode = RequireOneOf(arguments, "mode",
-                    "select", "queue", "abandon", "fetch_time", "fetch_prestige");
+                    "select", "activate", "abandon", "fetch_time", "fetch_prestige");
                 builder.Uuid = OptionalUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
-                if (builder.Mode is "select" or "queue" or "abandon" && builder.Uuid == Guid.Empty)
+                if (builder.Mode is "select" or "activate" or "abandon" && builder.Uuid == Guid.Empty)
                     throw new GameMcpInvalidParamsException("uuid is required for " + builder.Mode);
                 if (builder.Mode is "fetch_time" or "fetch_prestige" && builder.Uuid != Guid.Empty)
-                    throw new GameMcpInvalidParamsException("uuid is accepted only for select, queue, or abandon");
+                    throw new GameMcpInvalidParamsException(
+                        "uuid is accepted only for select, activate, or abandon");
                 break;
             case "game_prestige":
                 builder.Mode = "reset";
@@ -459,10 +448,10 @@ internal sealed class GameMcpProtocolRouter
         GameMcpOperationRequestBuilder request) => name switch
     {
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
-            "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
+            "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
-            "game_challenge" or "game_prestige" or "game_research" =>
+            "game_challenge" or "game_prestige" or "game_research" when
+                !(name == "game_discover" && request.Mode == "preview") =>
                 GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
@@ -487,8 +476,7 @@ internal sealed class GameMcpProtocolRouter
         "trace_health" => GameMcpFrameData.TraceWriterHealth,
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
-            "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
+            "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
@@ -606,9 +594,8 @@ internal sealed class GameMcpProtocolRouter
                 ActionSchema(
                     new JObject
                     {
-                        ["mode"] = EnumSchema("add", "remove_owned", "rotate_out"),
+                        ["mode"] = EnumSchema("add", "remove_owned"),
                         ["recipeUuid"] = StringSchema("Alchemy recipe UUID."),
-                        ["replacementUuid"] = StringSchema("Required only for rotate_out."),
                         ["amount"] = IntegerSchema(1, 1_000_000),
                     },
                     "mode", "recipeUuid")),
@@ -632,80 +619,49 @@ internal sealed class GameMcpProtocolRouter
                         ["mode"] = EnumSchema("single", "all"),
                         ["spellRecipeUuid"] = StringSchema("Published spell-recipe UUID."),
                     },
-                    "mode", "spellRecipeUuid")),
+                    "mode")),
             Tool(
-                "game_discovery_offer",
-                "Drive a Discovery Tree offer",
-                "Initiate a paid discovery, select or confirm one exact live offer, or reroll. Success returns the newer named tree state; failures retain the decomposed receipt.",
-                ActionSchema(
+                "game_casting_dial",
+                "Set a global casting dial",
+                "Set the global Output Level or Reserve Level shown together on the Casting screen.",
+                ActionSchemaWithoutIdentity(
                     new JObject
                     {
-                        ["mode"] = EnumSchema("initiate", "select", "confirm", "reroll"),
-                        ["treeUuid"] = StringSchema("Published DiscoveryTreeSO UUID."),
-                        ["offerUuid"] = StringSchema("Required for select and confirm; must be in the current live native offer set."),
+                        ["dial"] = EnumSchema("output", "reserve"),
+                        ["value"] = IntegerSchema(1, int.MaxValue),
                     },
-                    "mode", "treeUuid"),
+                    "dial", "value"),
                 readOnly: false,
                 idempotent: false),
             Tool(
-                "game_spell_workbench",
-                "Select, discover, or create a spell",
-                "Drive the native base-recipe workbench. Success returns the newer named recipe state with costs, holdings, selection, and next action inline.",
+                "game_spell_loadout",
+                "Add, remove, or move a spell",
+                "Add a discovered recipe with its glyph layout baked in, remove one exact runtime spell, or move it to another loadout slot. Success returns the complete newer loadout.",
                 ActionSchema(
                     new JObject
                     {
-                        ["mode"] = EnumSchema("select", "discover", "create"),
-                        ["spellRecipeUuid"] = StringSchema("Published SpellRecipeSO UUID."),
-                    },
-                    "mode", "spellRecipeUuid"),
-                readOnly: false,
-                idempotent: false),
-            Tool(
-                "game_spell_composition",
-                "Set spell output level or augments",
-                "Set the global spell output level or replace one equipped spell instance's exact augment stacks. Success returns the newer named composition state inline.",
-                ActionSchema(
-                    new JObject
-                    {
-                        ["mode"] = EnumSchema("set_output_level", "set_augments"),
-                        ["outputLevel"] = IntegerSchema(1, int.MaxValue),
-                        ["spellInstanceUuid"] = StringSchema("Runtime spell-instance UUID published inline under an equipped spell recipe."),
-                        ["augmentGlyphs"] = ArraySchema(
-                            ObjectSchema(
-                                new JObject
-                                {
-                                    ["uuid"] = StringSchema("Published GlyphSO UUID."),
-                                    ["count"] = IntegerSchema(1, int.MaxValue),
-                                },
-                                "uuid", "count"),
-                            0,
-                            64),
+                        ["mode"] = EnumSchema("add", "remove", "move"),
+                        ["spellRecipeUuid"] = StringSchema("Required for add; a discovered SpellRecipeSO UUID."),
+                        ["spellInstanceUuid"] = StringSchema("Required for remove and move; an equipped runtime spell UUID."),
+                        ["glyphs"] = ArraySchema(
+                            ObjectSchema(new JObject
+                            {
+                                ["uuid"] = StringSchema("Published augment GlyphSO UUID."),
+                                ["count"] = IntegerSchema(1, int.MaxValue),
+                            }, "uuid", "count"), 0, 64),
+                        ["destination"] = IntegerSchema(0, 255),
                     },
                     "mode"),
                 readOnly: false,
                 idempotent: false),
             Tool(
-                "game_spell_loadout",
-                "Remove or move an equipped spell",
-                "Remove one exact runtime spell or move it to another native loadout slot. Success returns the complete newer named loadout and every next move/remove option inline.",
-                ActionSchema(
-                    new JObject
-                    {
-                        ["mode"] = EnumSchema("remove", "move"),
-                        ["spellInstanceUuid"] = StringSchema("Runtime spell-instance UUID published by spell-slots or an equipped spell row."),
-                        ["destinationSlot"] = IntegerSchema(0, 255),
-                    },
-                    "mode", "spellInstanceUuid"),
-                readOnly: false,
-                idempotent: false),
-            Tool(
                 "game_targeting",
-                "Submit, randomize, or cancel the pending target",
+                "Submit or randomize the pending target",
                 "Resolve the game's one current target request. Success returns the exact submitted structure and the complete next pending request inline.",
                 ActionSchema(
                     new JObject
                     {
-                        ["mode"] = EnumSchema("submit", "randomize", "cancel"),
+                        ["mode"] = EnumSchema("submit", "randomize"),
                         ["targetUuid"] = StringSchema("Required only for submit; use an eligible named targeting candidate UUID."),
                     },
                     "mode"),
@@ -743,14 +699,23 @@ internal sealed class GameMcpProtocolRouter
                 idempotent: false),
             Tool(
                 "game_discover",
-                "Discover one entity",
-                "Pay and discover one exact published generic discoverable. Success returns the newer named entity row with its resulting state and next decisions inline.",
+                "Preview or confirm discovery",
+                "Compose the components shown by a discovery screen, or drive a transient Discovery Tree offer. Component modes resolve the output; they never accept an output UUID.",
                 ActionSchema(
                     new JObject
                     {
-                        ["uuid"] = StringSchema("Published AlchemyRecipeSO, EquipmentSO, GlyphSO, RitualSO, or TimeRuneSO UUID."),
+                        ["mode"] = EnumSchema("preview", "confirm", "offer_initiate", "offer_select", "offer_confirm", "offer_reroll"),
+                        ["surface"] = EnumSchema("spellcraft", "glyphcraft", "devote", "runecraft", "alchemy", "artifacts"),
+                        ["components"] = ArraySchema(
+                            ObjectSchema(new JObject
+                            {
+                                ["uuid"] = StringSchema("A component UUID selected on the discovery screen."),
+                                ["count"] = IntegerSchema(1, int.MaxValue),
+                            }, "uuid", "count"), 1, 64),
+                        ["treeUuid"] = StringSchema("Required for offer modes; a published DiscoveryTreeSO UUID."),
+                        ["offerUuid"] = StringSchema("Required for offer_select and offer_confirm."),
                     },
-                    "uuid"),
+                    "mode"),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -773,8 +738,8 @@ internal sealed class GameMcpProtocolRouter
                 ActionSchema(
                     new JObject
                     {
-                        ["mode"] = EnumSchema("select", "queue", "abandon", "fetch_time", "fetch_prestige"),
-                        ["uuid"] = StringSchema("Required for select, queue, and abandon; a published ChallengeSO UUID."),
+                        ["mode"] = EnumSchema("select", "activate", "abandon", "fetch_time", "fetch_prestige"),
+                        ["uuid"] = StringSchema("Required for select, activate, and abandon; a published ChallengeSO UUID."),
                     },
                     "mode"),
                 readOnly: false,
@@ -783,7 +748,7 @@ internal sealed class GameMcpProtocolRouter
                 "game_prestige",
                 "Reset the persistent world",
                 "Commit the irreversible native persistent reset after the world cycle and challenge choices are ready. Success waits for a fresh post-reset world and returns its named prestige and challenge decisions inline.",
-                ActionSchema(
+                ActionSchemaWithoutIdentity(
                     new JObject
                     {
                         ["confirm"] = BooleanSchema("Must be true to confirm the irreversible persistent reset."),
@@ -977,24 +942,39 @@ internal sealed class GameMcpProtocolRouter
                 "field '" + supplied.Name + "' is not accepted by " + name));
         }
 
-        if (string.Equals(name, "game_discovery_offer", StringComparison.Ordinal) &&
+        if (string.Equals(name, "game_discover", StringComparison.Ordinal) &&
             arguments["mode"]?.Type == JTokenType.String)
         {
             var mode = (string?)arguments["mode"];
+            var hasSurface = arguments.ContainsKey("surface");
+            var hasComponents = arguments.ContainsKey("components");
+            var hasTree = arguments.ContainsKey("treeUuid");
             var hasOffer = arguments.ContainsKey("offerUuid");
-            if (mode is "select" or "confirm" && !hasOffer)
+            if (mode is "preview" or "confirm")
             {
-                errors.Add(ValidationError(
-                    "missing_required",
-                    "offerUuid",
-                    "required field 'offerUuid' is missing for mode '" + mode + "'"));
+                if (!hasSurface) errors.Add(ValidationError("missing_required", "surface",
+                    "required field 'surface' is missing for mode '" + mode + "'"));
+                if (!hasComponents) errors.Add(ValidationError("missing_required", "components",
+                    "required field 'components' is missing for mode '" + mode + "'"));
+                if (hasTree) errors.Add(ValidationError("unexpected_for_mode", "treeUuid",
+                    "field 'treeUuid' is accepted only for offer modes"));
+                if (hasOffer) errors.Add(ValidationError("unexpected_for_mode", "offerUuid",
+                    "field 'offerUuid' is accepted only for offer_select or offer_confirm"));
             }
-            else if (mode is "initiate" or "reroll" && hasOffer)
+            else
             {
-                errors.Add(ValidationError(
-                    "unexpected_for_mode",
-                    "offerUuid",
-                    "field 'offerUuid' is not accepted for mode '" + mode + "'"));
+                if (!hasTree) errors.Add(ValidationError("missing_required", "treeUuid",
+                    "required field 'treeUuid' is missing for mode '" + mode + "'"));
+                if (hasSurface) errors.Add(ValidationError("unexpected_for_mode", "surface",
+                    "field 'surface' is accepted only for preview or confirm"));
+                if (hasComponents) errors.Add(ValidationError("unexpected_for_mode", "components",
+                    "field 'components' is accepted only for preview or confirm"));
+                if (mode is "offer_select" or "offer_confirm" && !hasOffer)
+                    errors.Add(ValidationError("missing_required", "offerUuid",
+                        "required field 'offerUuid' is missing for mode '" + mode + "'"));
+                if (mode is "offer_initiate" or "offer_reroll" && hasOffer)
+                    errors.Add(ValidationError("unexpected_for_mode", "offerUuid",
+                        "field 'offerUuid' is not accepted for mode '" + mode + "'"));
             }
         }
 
@@ -1003,7 +983,7 @@ internal sealed class GameMcpProtocolRouter
         {
             var mode = (string?)arguments["mode"];
             var hasUuid = arguments.ContainsKey("uuid");
-            if (mode is "select" or "queue" or "abandon" && !hasUuid)
+            if (mode is "select" or "activate" or "abandon" && !hasUuid)
                 errors.Add(ValidationError("missing_required", "uuid",
                     "required field 'uuid' is missing for mode '" + mode + "'"));
             else if (mode is "fetch_time" or "fetch_prestige" && hasUuid)
@@ -1011,54 +991,51 @@ internal sealed class GameMcpProtocolRouter
                     "field 'uuid' is not accepted for mode '" + mode + "'"));
         }
 
-        if (string.Equals(name, "game_spell_composition", StringComparison.Ordinal) &&
+        if (string.Equals(name, "game_spell_level", StringComparison.Ordinal) &&
             arguments["mode"]?.Type == JTokenType.String)
         {
             var mode = (string?)arguments["mode"];
-            var output = arguments.ContainsKey("outputLevel");
-            var spell = arguments.ContainsKey("spellInstanceUuid");
-            var augments = arguments.ContainsKey("augmentGlyphs");
-            if (mode == "set_output_level")
-            {
-                if (!output) errors.Add(ValidationError(
-                    "missing_required", "outputLevel",
-                    "required field 'outputLevel' is missing for mode 'set_output_level'"));
-                if (spell) errors.Add(ValidationError(
-                    "unexpected_for_mode", "spellInstanceUuid",
-                    "field 'spellInstanceUuid' is not accepted for mode 'set_output_level'"));
-                if (augments) errors.Add(ValidationError(
-                    "unexpected_for_mode", "augmentGlyphs",
-                    "field 'augmentGlyphs' is not accepted for mode 'set_output_level'"));
-            }
-            else if (mode == "set_augments")
-            {
-                if (!spell) errors.Add(ValidationError(
-                    "missing_required", "spellInstanceUuid",
-                    "required field 'spellInstanceUuid' is missing for mode 'set_augments'"));
-                if (!augments) errors.Add(ValidationError(
-                    "missing_required", "augmentGlyphs",
-                    "required field 'augmentGlyphs' is missing for mode 'set_augments'"));
-                if (output) errors.Add(ValidationError(
-                    "unexpected_for_mode", "outputLevel",
-                    "field 'outputLevel' is not accepted for mode 'set_augments'"));
-            }
+            var hasRecipe = arguments.ContainsKey("spellRecipeUuid");
+            if (mode == "single" && !hasRecipe)
+                errors.Add(ValidationError("missing_required", "spellRecipeUuid",
+                    "required field 'spellRecipeUuid' is missing for mode 'single'"));
+            if (mode == "all" && hasRecipe)
+                errors.Add(ValidationError("unexpected_for_mode", "spellRecipeUuid",
+                    "field 'spellRecipeUuid' is not accepted for mode 'all'"));
         }
 
         if (string.Equals(name, "game_spell_loadout", StringComparison.Ordinal) &&
             arguments["mode"]?.Type == JTokenType.String)
         {
             var mode = (string?)arguments["mode"];
-            var destination = arguments.ContainsKey("destinationSlot");
+            var recipe = arguments.ContainsKey("spellRecipeUuid");
+            var spell = arguments.ContainsKey("spellInstanceUuid");
+            var glyphs = arguments.ContainsKey("glyphs");
+            var destination = arguments.ContainsKey("destination");
+            if (mode == "add")
+            {
+                if (!recipe) errors.Add(ValidationError("missing_required", "spellRecipeUuid",
+                    "required field 'spellRecipeUuid' is missing for mode 'add'"));
+                if (!glyphs) errors.Add(ValidationError("missing_required", "glyphs",
+                    "required field 'glyphs' is missing for mode 'add'"));
+                if (spell) errors.Add(ValidationError("unexpected_for_mode", "spellInstanceUuid",
+                    "field 'spellInstanceUuid' is not accepted for mode 'add'"));
+            }
+            else
+            {
+                if (!spell) errors.Add(ValidationError("missing_required", "spellInstanceUuid",
+                    "required field 'spellInstanceUuid' is missing for mode '" + mode + "'"));
+                if (recipe) errors.Add(ValidationError("unexpected_for_mode", "spellRecipeUuid",
+                    "field 'spellRecipeUuid' is accepted only for mode 'add'"));
+                if (glyphs) errors.Add(ValidationError("unexpected_for_mode", "glyphs",
+                    "field 'glyphs' is accepted only for mode 'add'"));
+            }
             if (mode == "move" && !destination)
-                errors.Add(ValidationError(
-                    "missing_required",
-                    "destinationSlot",
-                    "required field 'destinationSlot' is missing for mode 'move'"));
-            else if (mode == "remove" && destination)
-                errors.Add(ValidationError(
-                    "unexpected_for_mode",
-                    "destinationSlot",
-                    "field 'destinationSlot' is not accepted for mode 'remove'"));
+                errors.Add(ValidationError("missing_required", "destination",
+                    "required field 'destination' is missing for mode 'move'"));
+            else if (mode != "move" && destination)
+                errors.Add(ValidationError("unexpected_for_mode", "destination",
+                    "field 'destination' is accepted only for mode 'move'"));
         }
 
         if (string.Equals(name, "game_targeting", StringComparison.Ordinal) &&
@@ -1069,7 +1046,7 @@ internal sealed class GameMcpProtocolRouter
             if (mode == "submit" && !target)
                 errors.Add(ValidationError("missing_required", "targetUuid",
                     "required field 'targetUuid' is missing for mode 'submit'"));
-            else if (mode is "randomize" or "cancel" && target)
+            else if (mode == "randomize" && target)
                 errors.Add(ValidationError("unexpected_for_mode", "targetUuid",
                     "field 'targetUuid' is not accepted for mode '" + mode + "'"));
         }
@@ -1141,10 +1118,13 @@ internal sealed class GameMcpProtocolRouter
         return ObjectSchema(properties, required);
     }
 
+    private static JObject ActionSchemaWithoutIdentity(
+        JObject properties,
+        params string[] required) => ObjectSchema(properties, required);
+
     private static bool IsActionTool(string name) => name is
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-        "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
-        "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
+        "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
         "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
         "game_challenge" or "game_prestige" or "game_research";
 

@@ -12,7 +12,7 @@ public sealed class GameMcpFrameRoutingContractTests
     public void EveryAdvertisedToolBuildsOneImmutableOperationForTheSoleInbox()
     {
         var tools = GameMcpAcceptanceFixture.Tools();
-        Assert.Equal(36, tools.Count);
+        Assert.Equal(34, tools.Count);
         var inbox = new GameMcpFrameInbox();
         var operations = tools
             .Select(tool => GameMcpProtocolRouter.BuildOperation(
@@ -105,8 +105,12 @@ public sealed class GameMcpFrameRoutingContractTests
         Assert.Equal(GameMcpFrameData.Configuration, administration.RequiredData);
 
         var gameplay = GameMcpProtocolRouter.BuildOperation(
-            "game_discovery_offer",
-            Arguments("game_discovery_offer"));
+            "game_discover",
+            new JObject
+            {
+                ["mode"] = "offer_initiate",
+                ["treeUuid"] = Guid.NewGuid().ToString("D"),
+            });
         Assert.Equal(GameMcpOperationClass.Gameplay, gameplay.Classification);
         Assert.Equal(
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
@@ -176,14 +180,15 @@ public sealed class GameMcpFrameRoutingContractTests
             ["spellRecipeUuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "single",
         },
-        "game_discovery_offer" => new JObject
-        {
-            ["treeUuid"] = Guid.NewGuid().ToString("D"),
-            ["mode"] = "initiate",
-        },
         "game_discover" => new JObject
         {
-            ["uuid"] = Guid.NewGuid().ToString("D"),
+            ["mode"] = "preview",
+            ["surface"] = "spellcraft",
+            ["components"] = new JArray(new JObject
+            {
+                ["uuid"] = Guid.NewGuid().ToString("D"),
+                ["count"] = 1,
+            }),
         },
         "game_equipment" => new JObject
         {
@@ -212,15 +217,10 @@ public sealed class GameMcpFrameRoutingContractTests
         {
             ["recipeUuid"] = Guid.NewGuid().ToString("D"),
         },
-        "game_spell_workbench" => new JObject
+        "game_casting_dial" => new JObject
         {
-            ["spellRecipeUuid"] = Guid.NewGuid().ToString("D"),
-            ["mode"] = "select",
-        },
-        "game_spell_composition" => new JObject
-        {
-            ["outputLevel"] = 2,
-            ["mode"] = "set_output_level",
+            ["dial"] = "output",
+            ["value"] = 2,
         },
         "game_spell_loadout" => new JObject
         {
@@ -229,7 +229,7 @@ public sealed class GameMcpFrameRoutingContractTests
         },
         "game_targeting" => new JObject
         {
-            ["mode"] = "cancel",
+            ["mode"] = "randomize",
         },
         "suite_config_set" => new JObject
         {

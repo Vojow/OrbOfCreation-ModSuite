@@ -100,6 +100,14 @@ public sealed class SpellWorkbenchContractTests
             "UICreateSpellButton", "Render", "ResourceCostList", "HasEnough"));
         Assert.True(assembly.MethodReferencesMethod(
             "UIGlyphList", "SelectGlyph", "IdScriptableObject", "GetGuid"));
+        Assert.True(assembly.MethodReferencesMethod(
+            "UISpellRecipeButton", "AttachSpell", "Spell", "SetAugmentGlyphs"));
+        var payment = assembly.MethodReferenceOffset(
+            "UICostButton", "OnClick", "ResourceCostList", "PerformCost");
+        var invoke = assembly.MethodReferenceOffset(
+            "UICostButton", "OnClick", "UnityEngine.Events.UnityEvent", "Invoke");
+        Assert.True(payment >= 0, "The visible cost button must own the spell-add payment.");
+        Assert.True(invoke > payment, "The cost button must pay before invoking the serialized create event.");
     }
 
     private static string[] References(

@@ -25,28 +25,29 @@ public sealed class GameMcpSpellCompositionTests
         Guid.Parse("13b37dd5-44f7-4eb5-af6b-168454578466");
 
     [Fact]
-    public void ToolIsOneTwoModeMutationWithoutGenerationOrReceiptKnobs()
+    public void ToolIsOneGlobalCastingDialWithoutPerSpellAugmentMutation()
     {
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
-            candidate => (string?)candidate["name"] == "game_spell_composition");
+            candidate => (string?)candidate["name"] == "game_casting_dial");
 
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         var schema = tool["inputSchema"]!;
-        Assert.Equal(new[] { "mode" }, schema["required"]!.Values<string>().ToArray());
+        Assert.Equal(new[] { "dial", "value" }, schema["required"]!.Values<string>().ToArray());
         Assert.Equal(
-            new[] { "set_output_level", "set_augments" },
-            schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
-        Assert.NotNull(schema["properties"]!["outputLevel"]);
-        Assert.NotNull(schema["properties"]!["spellInstanceUuid"]);
-        Assert.NotNull(schema["properties"]!["augmentGlyphs"]);
+            new[] { "output", "reserve" },
+            schema["properties"]!["dial"]!["enum"]!.Values<string>().ToArray());
+        Assert.NotNull(schema["properties"]!["value"]);
+        Assert.Null(schema["properties"]!["spellInstanceUuid"]);
+        Assert.Null(schema["properties"]!["augmentGlyphs"]);
+        Assert.Null(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
         Assert.Null(schema["properties"]!["detail"]);
         Assert.Null(schema["properties"]!["verbosity"]);
     }
 
     [Fact]
-    public void ConditionalArgumentsNameEveryMissingField()
+    public void MissingDialValueIsNamedAtSchemaValidation()
     {
         var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
         var response = router.Handle(GameMcpAcceptanceFixture.Request(
@@ -54,21 +55,21 @@ public sealed class GameMcpSpellCompositionTests
             "tools/call",
             new JObject
             {
-                ["name"] = "game_spell_composition",
-                ["arguments"] = new JObject { ["mode"] = "set_augments" },
+                ["name"] = "game_casting_dial",
+                ["arguments"] = new JObject { ["dial"] = "output" },
             }));
 
         Assert.Equal(-32602, (int)response.Body!["error"]!["code"]!);
         var errors = response.Body["error"]!["data"]!["validationErrors"]!
             .Values<JObject>()
             .ToArray();
-        Assert.Equal(new[] { "spellInstanceUuid", "augmentGlyphs" },
+        Assert.Equal(new[] { "value" },
             errors.Select(error => (string?)error!["field"]));
         Assert.All(errors, error => Assert.Equal("missing_required", (string?)error!["code"]));
     }
 
     [Fact]
-    public void SpellRecipeReadCarriesCompleteNamedCompositionDecisionState()
+    public void GlobalDialAndBakedGlyphLayoutArePublishedInTheirOwningSurfaces()
     {
         var context = GameMcpTestHarness.Context(World());
 
@@ -79,26 +80,30 @@ public sealed class GameMcpSpellCompositionTests
             "SpellRecipeSO"));
         var row = (JObject)response["row"]!;
         var equipped = Assert.Single(row["equipped"]!.Values<JObject>())!;
+        var overview = GameMcpTestHarness.Json(GameMcpWorldQuery.Overview(context));
 
-        Assert.Equal("4", (string?)row["outputLevel"]!["current"]);
-        Assert.Equal("12", (string?)row["outputLevel"]!["maximum"]);
+        Assert.Equal(4, (int)overview["casting"]!["output"]!["current"]!);
+        Assert.Equal(12, (int)overview["casting"]!["output"]!["maximum"]!);
+        Assert.Equal("contract_unavailable",
+            (string?)overview["casting"]!["reserve"]!["reasonCode"]);
+        Assert.Null(row["outputLevel"]);
         Assert.Equal("Gather Knowledge", (string?)equipped["spellRecipe"]!["name"]);
         Assert.Equal(SpellInstanceId.ToString("D"), (string?)equipped["spellInstance"]!["uuid"]);
         Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
-        Assert.Equal("4", (string?)equipped["outputLevel"]);
+        Assert.Null(equipped["outputLevel"]);
         Assert.Equal(6, (int)equipped["effectiveLevel"]!);
         Assert.Equal(3, (int)equipped["requiredMasteryLevel"]!);
         Assert.Equal(5, (int)equipped["recipeMasteryLevel"]!);
         Assert.True((bool)equipped["duration"]!);
         Assert.False((bool)equipped["usageRequirementsMet"]!);
 
-        var applied = Assert.Single(equipped["augmentGlyphs"]!.Values<JObject>())!;
+        var applied = Assert.Single(equipped["glyphs"]!.Values<JObject>())!;
         Assert.Equal("Brew", (string?)applied["glyph"]!["name"]);
         Assert.Equal(2, (int)applied["count"]!);
         var options = response["augmentOptions"]!.Values<JObject>().ToArray();
         Assert.Equal(new[] { "Insight", "Brew" },
             options.Select(option => (string?)option!["glyph"]!["name"]));
-        Assert.Equal(new[] { 2, 3 }, options.Select(option => (int)option!["maximumUses"]!));
+        Assert.Equal(new[] { 2, 3 }, options.Select(option => (int)option!["usableCount"]!));
         Assert.All(options, option => Assert.Null(option!["currentUses"]));
 
         var cast = Assert.Single(equipped["castCosts"]!.Values<JObject>())!;
@@ -115,11 +120,9 @@ public sealed class GameMcpSpellCompositionTests
     public void CommittedMutationReturnsOnlyTheCompleteNamedPostState()
     {
         var before = new SpellCompositionState(
-            4, 12, SpellInstanceId, RecipeId,
-            new[] { new SpellCompositionGlyphStack(FirstGlyphId, 1) });
+            4, 12, Guid.Empty, Guid.Empty, Array.Empty<SpellCompositionGlyphStack>());
         var after = new SpellCompositionState(
-            4, 12, SpellInstanceId, RecipeId,
-            new[] { new SpellCompositionGlyphStack(FirstGlyphId, 2) });
+            5, 12, Guid.Empty, Guid.Empty, Array.Empty<SpellCompositionGlyphStack>());
         var evidence = new SpellCompositionEvidence(true, in before, in after);
         var submission = new SpellCompositionSubmission(
             SpellCompositionPreflight.Proceeded,
@@ -127,9 +130,9 @@ public sealed class GameMcpSpellCompositionTests
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(1, 1, 1),
             in evidence,
-            "the exact augment composition is observable on the requested spell");
+            "the global output level is observable");
         var mapped = SpellCompositionActionResultMapper.Map(in submission);
-        var command = Command("set_augments");
+        var command = Command("set_output_level");
         var terminal = GameMcpCommandResult.FromAction(
             in mapped,
             command.Kind,
@@ -144,13 +147,13 @@ public sealed class GameMcpSpellCompositionTests
         var success = GameMcpTestHarness.Json(terminal.Project(command));
 
         Assert.Equal(
-            new[] { "status", "outputLevel", "equipped", "augmentOptions", "moveDestinations" },
+            new[] { "status", "casting", "equipped", "augmentOptions", "moveDestinations" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
         var equipped = Assert.Single(success["equipped"]!.Values<JObject>())!;
         Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
         Assert.Equal(2, (int)Assert.Single(
-            equipped["augmentGlyphs"]!.Values<JObject>())!["count"]!);
+            equipped["glyphs"]!.Values<JObject>())!["count"]!);
         Assert.NotNull(success["augmentOptions"]);
         Assert.NotNull(equipped["castCosts"]);
         Assert.NotNull(equipped["drainCostsPerSecond"]);
@@ -163,14 +166,12 @@ public sealed class GameMcpSpellCompositionTests
     }
 
     [Fact]
-    public void FailureKeepsNamedOutcomeEvidenceAndQuarantineState()
+    public void FailureKeepsNamedOutcomeEvidenceWithoutPersistentQuarantine()
     {
         var before = new SpellCompositionState(
-            4, 12, SpellInstanceId, RecipeId,
-            new[] { new SpellCompositionGlyphStack(FirstGlyphId, 1) });
+            4, 12, Guid.Empty, Guid.Empty, Array.Empty<SpellCompositionGlyphStack>());
         var after = new SpellCompositionState(
-            4, 12, SpellInstanceId, RecipeId,
-            new[] { new SpellCompositionGlyphStack(FirstGlyphId, 1) });
+            4, 12, Guid.Empty, Guid.Empty, Array.Empty<SpellCompositionGlyphStack>());
         var evidence = new SpellCompositionEvidence(true, in before, in after);
         var submission = new SpellCompositionSubmission(
             SpellCompositionPreflight.VerificationFailed,
@@ -185,13 +186,12 @@ public sealed class GameMcpSpellCompositionTests
 
         Assert.Equal(new[]
             {
-                "nativeStage", "outcome", "before", "after", "quarantined",
+                "nativeStage", "outcome", "before", "after",
             },
             failure.Properties().Select(property => property.Name));
         Assert.Null(failure["preflight"]);
-        Assert.Equal("Gather Knowledge", (string?)failure["before"]!["spellRecipe"]!["name"]);
-        Assert.Equal("Brew", (string?)failure["before"]!["augmentGlyphs"]![0]!["glyph"]!["name"]);
-        Assert.True((bool)failure["quarantined"]!);
+        Assert.Equal(4, (int)failure["before"]!["outputLevel"]!);
+        Assert.Null(failure["quarantined"]);
         Assert.DoesNotContain("payment", failure.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -204,11 +204,6 @@ public sealed class GameMcpSpellCompositionTests
             Guid.Empty,
             GameMcpCommandKind.SpellComposition,
             out var outputReason), outputReason);
-        Assert.True(GameMcpEntityCapabilityMap.Contains(
-            world,
-            SpellInstanceId,
-            GameMcpCommandKind.SpellComposition,
-            out var spellReason), spellReason);
         Assert.True(GameMcpEntityCapabilityMap.Supports(
             "spell-slots", GameMcpCommandKind.SpellComposition));
 
@@ -219,7 +214,7 @@ public sealed class GameMcpSpellCompositionTests
         Assert.False(ownership.TryCaptureSpellCompositionMutationPermit());
         Assert.True(ownership.TryBeginGameMcpOperation(
             GameMcpCommandKind.SpellComposition,
-            "set_augments",
+            "set_output_level",
             out var scope,
             out var reason), reason);
         using (scope)
@@ -233,16 +228,15 @@ public sealed class GameMcpSpellCompositionTests
         9,
         3,
         mode,
-        SpellInstanceId,
         Guid.Empty,
-        "Spell",
+        Guid.Empty,
+        "IntVariable",
         string.Empty,
-        1,
+        5,
         string.Empty,
         string.Empty,
         false,
-        false,
-        uuidCounts: new[] { new GameMcpUuidCount(FirstGlyphId, 2) });
+        false);
 
     private static GameWorldState World()
     {

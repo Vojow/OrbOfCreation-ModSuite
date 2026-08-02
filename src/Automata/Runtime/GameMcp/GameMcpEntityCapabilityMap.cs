@@ -52,7 +52,7 @@ internal static class GameMcpEntityCapabilityMap
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
         if (target == Guid.Empty && capability is not (
-                GameMcpCommandKind.SpellComposition or GameMcpCommandKind.Targeting or
+                GameMcpCommandKind.SpellLevel or GameMcpCommandKind.SpellComposition or GameMcpCommandKind.Targeting or
                 GameMcpCommandKind.Challenge or GameMcpCommandKind.Prestige))
         {
             reason = "a non-empty stable UUID is required";
@@ -62,6 +62,8 @@ internal static class GameMcpEntityCapabilityMap
         return capability switch
         {
             GameMcpCommandKind.Purchase => PurchaseTarget(world, target, out reason),
+            GameMcpCommandKind.SpellLevel when target == Guid.Empty =>
+                AvailableGlobal(world.SpellRecipes.Count > 0, "spell recipe catalog", out reason),
             GameMcpCommandKind.Cast or GameMcpCommandKind.SpellLevel or GameMcpCommandKind.SpellWorkbench =>
                 Entity(
                     world.EntityIdentities,
