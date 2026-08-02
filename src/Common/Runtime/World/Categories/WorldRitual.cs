@@ -32,7 +32,8 @@ internal readonly struct WorldRitual : IWorldEntity
         int baseWaves,
         int maxWaves,
         double baseWeight,
-        int minimumEffectLevel)
+        int minimumEffectLevel,
+        WorldDiscoverableDecision discovery = default)
     {
         RitualId = ritualId;
         Discovered = discovered;
@@ -57,6 +58,7 @@ internal readonly struct WorldRitual : IWorldEntity
         MaxWaves = maxWaves;
         BaseWeight = baseWeight;
         MinimumEffectLevel = minimumEffectLevel;
+        Discovery = discovery;
     }
 
     internal Guid RitualId { get; }
@@ -133,6 +135,8 @@ internal readonly struct WorldRitual : IWorldEntity
     internal double BaseWeight { get; }
 
     internal int MinimumEffectLevel { get; }
+
+    internal WorldDiscoverableDecision Discovery { get; }
 }
 
 /// <summary>A ritual's cached modifier records — what a run at the chosen level is worth.</summary>
@@ -236,6 +240,7 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
     private Func<object, int>? _maxWaves;
     private Func<object, double>? _baseWeight;
     private Func<object, int>? _minimumEffectLevel;
+    private WorldDiscoverableBinding? _discovery;
 
     internal override string Category => "rituals";
 
@@ -282,7 +287,8 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
         _maxWaves = bind.Field<int>("maxWaves");
         _baseWeight = bind.Field<double>("baseWeight");
         _minimumEffectLevel = bind.Field<int>("minimumEffectLevel");
-        return bind.Failure;
+        _discovery = new WorldDiscoverableBinding(type, TypeName);
+        return Join(bind.Failure, _discovery.Failure);
     }
 
     internal override WorldRitual Read(object entity) =>
@@ -322,5 +328,9 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
             _baseWaves!(entity),
             _maxWaves!(entity),
             _baseWeight!(entity),
-            _minimumEffectLevel!(entity));
+            _minimumEffectLevel!(entity),
+            _discovery!.Read(entity));
+
+    private static string Join(string left, string right) =>
+        left.Length == 0 ? right : right.Length == 0 ? left : left + "; " + right;
 }

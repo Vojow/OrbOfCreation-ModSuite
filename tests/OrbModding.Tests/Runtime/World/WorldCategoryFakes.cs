@@ -632,7 +632,7 @@ internal sealed class FakeModifierRecord
     }
 }
 
-internal sealed class FakeAlchemyRecipe
+internal sealed class FakeAlchemyRecipe : global::IDiscoverable
 {
     public static readonly List<FakeAlchemyRecipe> All = new();
 
@@ -670,12 +670,23 @@ internal sealed class FakeAlchemyRecipe
     public BigDouble cachedRequiredXp;
     public FakeExperienceContainer experienceContainer = new();
     public FakeSpellCostList drainCost = new();
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
     public FakeAlchemyType coreType = new();
 
     public FakeAlchemyType GetCoreType() => coreType;
 
     public BigDouble GetRequiredExperience() =>
         experienceContainer.GetRequiredExperience();
+
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => discovered;
+    bool global::IDiscoverable.IsDiscoverRequired() => isRequiredDiscovery;
+    void global::IDiscoverable.Discover() => discovered = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
 
     public int GetMaxUsageSlots()
     {
@@ -901,7 +912,7 @@ internal struct FakeSpellCostEntry
     }
 }
 
-internal sealed class FakeSpellRecipe
+internal sealed class FakeSpellRecipe : global::IDiscoverable
 {
     public static readonly List<FakeSpellRecipe> All = new();
 
@@ -926,12 +937,34 @@ internal sealed class FakeSpellRecipe
     public bool hasAlertedThisMastery;
     public List<FakeGlyph> coreRecipe = new();
     public FakeSpellWorkbenchCostList discoveryCost = new();
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
 
     public Guid GetGuid() => Identity;
 
     public bool IsReadyToLevelMastery() => readyToLevel;
     public List<FakeGlyph> GetGlyphRecipe() => new(coreRecipe);
     public FakeSpellWorkbenchCostList GetDiscoverCost() => discoveryCost;
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost()
+    {
+        if (genericDiscoveryCost.costs.Count > 0 || discoveryCost.costs.Count == 0)
+            return genericDiscoveryCost;
+        var translated = new global::ResourceCostList { affordable = discoveryCost.affordable };
+        foreach (var cost in discoveryCost.costs)
+        {
+            var resource = new global::ResourceSO { quantity = cost.resource.amount };
+            resource.SetGuid(cost.resource.Identity);
+            translated.costs.Add(new global::ResourceTuple(resource, cost.amount));
+        }
+        return translated;
+    }
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => discovered;
+    bool global::IDiscoverable.IsDiscoverRequired() => isRequiredDiscovery;
+    void global::IDiscoverable.Discover() => discovered = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
 }
 
 internal sealed class FakeGlyphList
@@ -1018,7 +1051,7 @@ internal sealed class FakeSpellType
     public Guid GetGuid() => Identity;
 }
 
-internal sealed class FakeEquipment
+internal sealed class FakeEquipment : global::IDiscoverable
 {
     public static readonly List<FakeEquipment> All = new();
 
@@ -1035,8 +1068,18 @@ internal sealed class FakeEquipment
     public int attuningLevel;
     public double attunementTimeLeft;
     public BigDouble baseXpRate;
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
 
     public Guid GetGuid() => Identity;
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => isCreated;
+    bool global::IDiscoverable.IsDiscoverRequired() => isRequiredDiscovery;
+    void global::IDiscoverable.Discover() => isCreated = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
 }
 
 internal sealed class FakeEquipmentType
@@ -1235,7 +1278,7 @@ internal sealed class FakeHarvestElement
     public Guid GetGuid() => Identity;
 }
 
-internal sealed class FakeTimeRune
+internal sealed class FakeTimeRune : global::IDiscoverable
 {
     public static readonly List<FakeTimeRune> All = new();
 
@@ -1251,11 +1294,21 @@ internal sealed class FakeTimeRune
     public FakeModifierRecord power = new(0d);
     public FakeModifierRecord powerScalingMod = new(0d);
     public FakeModifierRecord masteryXpMod = new(0d);
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
 
     public Guid GetGuid() => Identity;
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => discovered;
+    bool global::IDiscoverable.IsDiscoverRequired() => isDiscoverRequired;
+    void global::IDiscoverable.Discover() => discovered = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
 }
 
-internal sealed class FakeGlyph
+internal sealed class FakeGlyph : global::IDiscoverable
 {
     public static readonly List<FakeGlyph> All = new();
 
@@ -1275,10 +1328,20 @@ internal sealed class FakeGlyph
     public FakeModifierRecord freeUsages = new(0d);
     public FakeModifierRecord freeLoadoutUsages = new(0d);
     public FakeModifierRecord maxUsages = new(0d);
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
 
     public bool NativeAvailable = true;
     public bool IsAvailable() => NativeAvailable;
     public int GetMaxUsages() => (int)maxUsages.GetValue().ToDouble();
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => discovered;
+    bool global::IDiscoverable.IsDiscoverRequired() => discoveryRequired;
+    void global::IDiscoverable.Discover() => discovered = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
 }
 
 internal sealed class FakeConsumable
@@ -1375,7 +1438,7 @@ internal sealed class FakeConsumableCount
     public int GetQuantity() => Quantity;
 }
 
-internal sealed class FakeRitual
+internal sealed class FakeRitual : global::IDiscoverable
 {
     public static readonly List<FakeRitual> All = new();
 
@@ -1390,6 +1453,9 @@ internal sealed class FakeRitual
     public int critLevel;
     public int echoLevel;
     public int chainLevel;
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
 
     /// <summary>Left null unless a test fills it, so the null-reads-as-zero path stays exercised.</summary>
     public List<object>? ritualInstances;
@@ -1411,6 +1477,13 @@ internal sealed class FakeRitual
     public ValueModifierRecord completionRateMod = new(new BigDouble(0.0, 0));
 
     public Guid GetGuid() => Identity;
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => discovered;
+    bool global::IDiscoverable.IsDiscoverRequired() => isDiscoverRequired;
+    void global::IDiscoverable.Discover() => discovered = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
     public bool hideEndScreenResults;
     public bool isDiscoverRequired;
     public bool forceLevel;

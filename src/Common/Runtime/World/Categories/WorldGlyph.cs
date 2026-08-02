@@ -16,7 +16,8 @@ internal readonly struct WorldGlyph : IWorldEntity
         BigDouble freeLoadoutUsages,
         BigDouble maxUsages,
         bool available = false,
-        int maximumUsages = 0)
+        int maximumUsages = 0,
+        WorldDiscoverableDecision discovery = default)
     {
         GlyphId = glyphId;
         Level = level;
@@ -34,6 +35,7 @@ internal readonly struct WorldGlyph : IWorldEntity
         MaxUsages = maxUsages;
         Available = available;
         MaximumUsages = maximumUsages;
+        Discovery = discovery;
     }
 
     internal Guid GlyphId { get; }
@@ -73,6 +75,8 @@ internal readonly struct WorldGlyph : IWorldEntity
 
     /// <summary>The native picker clamp for this glyph, after active modifiers.</summary>
     internal int MaximumUsages { get; }
+
+    internal WorldDiscoverableDecision Discovery { get; }
 }
 
 internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
@@ -93,6 +97,7 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
     private Func<object, BigDouble>? _maxUsages;
     private Func<object, bool>? _available;
     private Func<object, int>? _maximumUsages;
+    private WorldDiscoverableBinding? _discovery;
 
     internal override string Category => "glyphs";
 
@@ -117,7 +122,8 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
         _maxUsages = bind.ModifierRecord("maxUsages");
         _available = bind.Call<bool>("IsAvailable");
         _maximumUsages = bind.Call<int>("GetMaxUsages");
-        return bind.Failure;
+        _discovery = new WorldDiscoverableBinding(type, TypeName);
+        return Join(bind.Failure, _discovery.Failure);
     }
 
     internal override WorldGlyph Read(object entity) =>
@@ -137,5 +143,9 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
             _freeLoadoutUsages!(entity),
             _maxUsages!(entity),
             _available!(entity),
-            _maximumUsages!(entity));
+            _maximumUsages!(entity),
+            _discovery!.Read(entity));
+
+    private static string Join(string left, string right) =>
+        left.Length == 0 ? right : right.Length == 0 ? left : left + "; " + right;
 }

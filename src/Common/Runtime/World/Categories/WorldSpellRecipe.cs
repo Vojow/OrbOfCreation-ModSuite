@@ -48,8 +48,9 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
             spellXpMod,
             hasAlertedThisMastery,
             PublicationTable<WorldSpellRecipeGlyph>.Empty,
-            PublicationTable<WorldSpellRecipeCost>.Empty,
-            false)
+            PublicationTable<WorldDiscoverableCost>.Empty,
+            false,
+            default)
     {
     }
 
@@ -74,8 +75,9 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         BigDouble spellXpMod,
         bool hasAlertedThisMastery,
         PublicationTable<WorldSpellRecipeGlyph> coreGlyphs,
-        PublicationTable<WorldSpellRecipeCost> discoveryCosts,
-        bool discoveryAffordable)
+        PublicationTable<WorldDiscoverableCost> discoveryCosts,
+        bool discoveryAffordable,
+        WorldDiscoverableDecision discovery = default)
     {
         SpellRecipeId = spellRecipeId;
         Discovered = discovered;
@@ -99,6 +101,7 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         CoreGlyphs = coreGlyphs ?? throw new ArgumentNullException(nameof(coreGlyphs));
         DiscoveryCosts = discoveryCosts ?? throw new ArgumentNullException(nameof(discoveryCosts));
         DiscoveryAffordable = discoveryAffordable;
+        Discovery = discovery;
     }
 
     internal Guid SpellRecipeId { get; }
@@ -154,10 +157,12 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
     internal PublicationTable<WorldSpellRecipeGlyph> CoreGlyphs { get; }
 
     /// <summary>The game's exact next discovery price, with the current spendable amount beside it.</summary>
-    internal PublicationTable<WorldSpellRecipeCost> DiscoveryCosts { get; }
+    internal PublicationTable<WorldDiscoverableCost> DiscoveryCosts { get; }
 
     /// <summary>The native <c>ResourceCostList.HasEnough()</c> verdict for this discovery price.</summary>
     internal bool DiscoveryAffordable { get; }
+
+    internal WorldDiscoverableDecision Discovery { get; }
 }
 
 internal readonly struct WorldSpellRecipeGlyph
@@ -170,20 +175,6 @@ internal readonly struct WorldSpellRecipeGlyph
 
     internal int Position { get; }
     internal Guid GlyphId { get; }
-}
-
-internal readonly struct WorldSpellRecipeCost
-{
-    internal WorldSpellRecipeCost(Guid resourceId, BigDouble cost, BigDouble availableAmount)
-    {
-        ResourceId = resourceId;
-        Cost = cost;
-        AvailableAmount = availableAmount;
-    }
-
-    internal Guid ResourceId { get; }
-    internal BigDouble Cost { get; }
-    internal BigDouble AvailableAmount { get; }
 }
 
 internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe>
@@ -208,14 +199,8 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
     private Func<object, BigDouble>? _spellXpMod;
     private Func<object, bool>? _hasAlertedThisMastery;
     private Func<object, IList?>? _coreGlyphs;
-    private Func<object, object?>? _discoveryCost;
-    private Func<object, bool>? _costAffordable;
-    private Func<object, IList?>? _costEntries;
     private Func<object, Guid>? _glyphId;
-    private Func<object, Guid>? _costResourceId;
-    private Func<object, BigDouble>? _costValue;
-    private Func<object, object?>? _costResource;
-    private Func<object, BigDouble>? _resourceAmount;
+    private WorldDiscoverableBinding? _discovery;
 
     internal override string Category => "spell recipes";
 
@@ -254,28 +239,13 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
         _coreGlyphs = bind.CallList("GetGlyphRecipe", glyphType);
         _glyphId = NativeAccessorBinder.Call<Guid>(glyphType, "GetGuid");
 
-        var costMethod = type.GetMethod("GetDiscoverCost", instance, null, Type.EmptyTypes, null);
-        var costType = costMethod?.ReturnType;
-        _discoveryCost = bind.CallObject("GetDiscoverCost", costType);
-        _costAffordable = NativeAccessorBinder.Call<bool>(costType, "HasEnough");
-        var entryMethod = costType?.GetMethod("GetEntries", instance, null, Type.EmptyTypes, null);
-        var entryType = entryMethod?.ReturnType is { IsGenericType: true } entryList
-            ? entryList.GetGenericArguments()[0]
-            : null;
-        _costEntries = NativeAccessorBinder.CallList(costType, "GetEntries", entryType);
-        _costResourceId = NativeAccessorBinder.ReferenceGuid(entryType, "resource");
-        _costValue = NativeAccessorBinder.Call<BigDouble>(entryType, "GetValue");
-        var resourceType = entryType?.GetField("resource", instance)?.FieldType;
-        _costResource = NativeAccessorBinder.Reference(entryType, "resource", resourceType);
-        _resourceAmount = NativeAccessorBinder.Call<BigDouble>(resourceType, "GetTrueQuantity");
-
-        if (_glyphId is null || _costAffordable is null || _costEntries is null ||
-            _costResourceId is null || _costValue is null || _costResource is null ||
-            _resourceAmount is null)
+        _discovery = new WorldDiscoverableBinding(type, TypeName);
+        if (_glyphId is null || _discovery.Failure.Length != 0)
         {
-            return bind.Failure.Length == 0
+            var failure = bind.Failure.Length == 0 ? _discovery.Failure : bind.Failure;
+            return failure.Length == 0
                 ? "SpellRecipeSO decision members did not expose their complete nested identity and cost shape on this build"
-                : bind.Failure;
+                : failure;
         }
         return bind.Failure;
     }
@@ -292,19 +262,7 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
                 glyph is null ? Guid.Empty : _glyphId!(glyph));
         }
 
-        var cost = _discoveryCost!(entity);
-        var entries = cost is null ? null : _costEntries!(cost);
-        var costs = new WorldSpellRecipeCost[entries?.Count ?? 0];
-        for (var index = 0; index < costs.Length; index++)
-        {
-            var entry = entries![index];
-            if (entry is null) continue;
-            var resource = _costResource!(entry);
-            costs[index] = new WorldSpellRecipeCost(
-                _costResourceId!(entry),
-                _costValue!(entry),
-                resource is null ? default : _resourceAmount!(resource));
-        }
+        var discovery = _discovery!.Read(entity);
 
         return new WorldSpellRecipe(
             _id!(entity),
@@ -327,7 +285,8 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
             _spellXpMod!(entity),
             _hasAlertedThisMastery!(entity),
             PublicationTable<WorldSpellRecipeGlyph>.Create(glyphs),
-            PublicationTable<WorldSpellRecipeCost>.Create(costs),
-            cost is not null && _costAffordable!(cost));
+            discovery.Costs,
+            discovery.Affordable,
+            discovery);
     }
 }

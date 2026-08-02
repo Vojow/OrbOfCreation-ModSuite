@@ -20,6 +20,7 @@ public enum AutomationActionFamily
     SpellComposition = 504,
     SpellLoadout = 505,
     Targeting = 506,
+    GenericDiscovery = 507,
     SpellMasteryExperienceGrant = 600,
     ArtifactMasteryExperienceGrant = 601,
     AlchemyMasteryExperienceGrant = 602,

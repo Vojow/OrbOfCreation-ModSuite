@@ -18,7 +18,8 @@ internal readonly struct WorldEquipment : IWorldEntity
         int equippedLevel,
         int attuningLevel,
         double attunementTimeLeft,
-        BigDouble baseXpRate)
+        BigDouble baseXpRate,
+        WorldDiscoverableDecision discovery = default)
     {
         EquipmentId = equipmentId;
         IsCreated = isCreated;
@@ -33,6 +34,7 @@ internal readonly struct WorldEquipment : IWorldEntity
         AttuningLevel = attuningLevel;
         AttunementTimeLeft = attunementTimeLeft;
         BaseXpRate = baseXpRate;
+        Discovery = discovery;
     }
 
     internal Guid EquipmentId { get; }
@@ -62,6 +64,8 @@ internal readonly struct WorldEquipment : IWorldEntity
     internal double AttunementTimeLeft { get; }
 
     internal BigDouble BaseXpRate { get; }
+
+    internal WorldDiscoverableDecision Discovery { get; }
 }
 
 internal sealed class WorldEquipmentBinder : WorldPlainBinder<WorldEquipment>
@@ -79,6 +83,7 @@ internal sealed class WorldEquipmentBinder : WorldPlainBinder<WorldEquipment>
     private Func<object, int>? _attuningLevel;
     private Func<object, double>? _attunementTimeLeft;
     private Func<object, BigDouble>? _baseXpRate;
+    private WorldDiscoverableBinding? _discovery;
 
     internal override string Category => "equipment";
 
@@ -100,7 +105,8 @@ internal sealed class WorldEquipmentBinder : WorldPlainBinder<WorldEquipment>
         _attuningLevel = bind.Field<int>("attuningLevel");
         _attunementTimeLeft = bind.Field<double>("attunementTimeLeft");
         _baseXpRate = bind.Field<BigDouble>("baseXpRate");
-        return bind.Failure;
+        _discovery = new WorldDiscoverableBinding(type, TypeName);
+        return Join(bind.Failure, _discovery.Failure);
     }
 
     internal override WorldEquipment Read(object entity) =>
@@ -117,5 +123,9 @@ internal sealed class WorldEquipmentBinder : WorldPlainBinder<WorldEquipment>
             _equippedLevel!(entity),
             _attuningLevel!(entity),
             _attunementTimeLeft!(entity),
-            _baseXpRate!(entity));
+            _baseXpRate!(entity),
+            _discovery!.Read(entity));
+
+    private static string Join(string left, string right) =>
+        left.Length == 0 ? right : right.Length == 0 ? left : left + "; " + right;
 }

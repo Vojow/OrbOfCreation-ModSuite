@@ -30,6 +30,7 @@ internal enum GameMcpCommandKind
     Targeting = 19,
     Consumable = 20,
     Crafting = 21,
+    GenericDiscovery = 22,
 }
 
 internal static class GameMcpCommandKinds
@@ -39,7 +40,7 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.DiscoveryTreeOffer or GameMcpCommandKind.SpellWorkbench or
             GameMcpCommandKind.SpellComposition or GameMcpCommandKind.SpellLoadout or
             GameMcpCommandKind.Targeting or GameMcpCommandKind.Consumable or
-            GameMcpCommandKind.Crafting;
+            GameMcpCommandKind.Crafting or GameMcpCommandKind.GenericDiscovery;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -55,6 +56,7 @@ internal static class GameMcpCommandKinds
         "game_targeting" => GameMcpCommandKind.Targeting,
         "game_consumable" => GameMcpCommandKind.Consumable,
         "game_craft" => GameMcpCommandKind.Crafting,
+        "game_discover" => GameMcpCommandKind.GenericDiscovery,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -431,6 +433,9 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.Crafting)
             return "the one-shot crafting boundary returned " + disposition +
                 " with exact preflight code " + exact;
+        if (commandKind == GameMcpCommandKind.GenericDiscovery)
+            return "the generic discovery boundary returned " + disposition +
+                " with exact preflight code " + exact;
         return "the native action boundary returned " + disposition +
             " with exact result code " + exact;
     }
@@ -595,6 +600,21 @@ internal static class GameMcpActionResultCodeNames
             if (code == CraftingPlayerActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == CraftingPlayerActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == CraftingPlayerActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.GenericDiscovery)
+        {
+            if (code == GenericDiscoveryActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == GenericDiscoveryActionResultCodes.Quarantined) return "quarantined";
+            if (code == GenericDiscoveryActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == GenericDiscoveryActionResultCodes.IdentityUnavailable) return "identity_unavailable";
+            if (code == GenericDiscoveryActionResultCodes.UnsupportedType) return "unsupported_type";
+            if (code == GenericDiscoveryActionResultCodes.NotVisible) return "not_visible";
+            if (code == GenericDiscoveryActionResultCodes.AlreadyDiscovered) return "already_discovered";
+            if (code == GenericDiscoveryActionResultCodes.DiscoveryUnavailable) return "discovery_unavailable";
+            if (code == GenericDiscoveryActionResultCodes.Unaffordable) return "unaffordable";
+            if (code == GenericDiscoveryActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == GenericDiscoveryActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == GenericDiscoveryActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

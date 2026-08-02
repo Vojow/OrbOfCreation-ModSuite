@@ -551,6 +551,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .TargetingOwnershipFailure)
+                    , createGenericDiscovery: () => new GenericDiscoveryGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureGenericDiscoveryMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .GenericDiscoveryOwnershipFailure)
 #endif
                     );
             },
@@ -1544,6 +1552,15 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandKind.Targeting => "targeting",
         GameMcpCommandKind.Consumable => "consumables",
         GameMcpCommandKind.Crafting => "crafting-recipes",
+        GameMcpCommandKind.GenericDiscovery => command.DerivedNativeType switch
+        {
+            "AlchemyRecipeSO" => "alchemy-recipes",
+            "EquipmentSO" => "equipment",
+            "GlyphSO" => "glyphs",
+            "RitualSO" => "rituals",
+            "TimeRuneSO" => "time-runes",
+            _ => throw new ArgumentOutOfRangeException(nameof(command.DerivedNativeType)),
+        },
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 
@@ -1752,6 +1769,14 @@ public sealed class Plugin : BaseUnityPlugin
             payloadKey = request.Key;
             payloadValue = request.SerializedValue;
             if (request.Mode == "move") amount = checked(request.SlotIndex + 1);
+        }
+        else if (kind == GameMcpCommandKind.GenericDiscovery && context.World is not null)
+        {
+            GameMcpEntityCapabilityMap.TryResolveGenericDiscoveryType(
+                context.World.Snapshot,
+                request.Uuid,
+                out nativeType,
+                out _);
         }
         else if (kind == GameMcpCommandKind.ConfigurationSet)
         {

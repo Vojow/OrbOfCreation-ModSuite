@@ -290,7 +290,7 @@ public sealed class GameMcpSpellCompositionTests
                     BigDouble.One,
                     false,
                     recipeGlyphs,
-                    PublicationTable<WorldSpellRecipeCost>.Empty,
+                    PublicationTable<WorldDiscoverableCost>.Empty,
                     true),
             }),
             Glyphs = PublicationTable<WorldGlyph>.Create(new[]

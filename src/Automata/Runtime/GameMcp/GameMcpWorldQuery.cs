@@ -851,6 +851,16 @@ internal static class GameMcpWorldQuery
             ? ProjectDiscoveryTree(world, in tree)
             : row is WorldSpellRecipe spellRecipe
             ? ProjectSpellRecipe(world, in spellRecipe)
+            : row is WorldAlchemyRecipe alchemyRecipe
+            ? ProjectAlchemyRecipe(in alchemyRecipe)
+            : row is WorldEquipment equipment
+            ? ProjectEquipment(in equipment)
+            : row is WorldGlyph glyph
+            ? ProjectGlyph(in glyph)
+            : row is WorldRitual ritual
+            ? ProjectRitual(in ritual)
+            : row is WorldTimeRune timeRune
+            ? ProjectTimeRune(in timeRune)
             : row is WorldSpellSlot spellSlot
             ? ProjectSpellSlot(world, in spellSlot)
             : row is WorldTargetingRequest targeting
@@ -1609,7 +1619,7 @@ internal static class GameMcpWorldQuery
         return result;
     }
 
-    private static JArray ProjectSpellCosts(PublicationTable<WorldSpellRecipeCost> values)
+    private static JArray ProjectSpellCosts(PublicationTable<WorldDiscoverableCost> values)
     {
         var result = new JArray();
         for (var index = 0; index < values.Count; index++)
@@ -1667,6 +1677,126 @@ internal static class GameMcpWorldQuery
         result["netRatePerSecond"] = new GameMcpDomainValue(resource.TrueRate);
         if (resource.IsCapped) result["atCapacity"] = resource.IsAtCapacity;
         return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectAlchemyRecipe(in WorldAlchemyRecipe recipe)
+    {
+        var result = new JObject
+        {
+            ["entityId"] = recipe.EntityId.ToString("D"),
+            ["category"] = "alchemy-recipes",
+            ["nativeType"] = "AlchemyRecipeSO",
+            ["discovered"] = recipe.Discovered,
+            ["maximumLevel"] = recipe.MaxLevel,
+            ["masteryLevel"] = recipe.MasteryLevel,
+        };
+        AddDiscoveryDecision(result, recipe.Discovery);
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectEquipment(in WorldEquipment equipment)
+    {
+        var result = new JObject
+        {
+            ["entityId"] = equipment.EntityId.ToString("D"),
+            ["category"] = "equipment",
+            ["nativeType"] = "EquipmentSO",
+            ["created"] = equipment.IsCreated,
+            ["masteryLevel"] = equipment.MasteryLevel,
+            ["equippedLevel"] = equipment.EquippedLevel,
+            ["attuningLevel"] = equipment.AttuningLevel,
+        };
+        if (equipment.AttunementTimeLeft > 0d)
+            result["attunementTimeLeft"] = equipment.AttunementTimeLeft;
+        AddDiscoveryDecision(result, equipment.Discovery);
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectGlyph(in WorldGlyph glyph)
+    {
+        var result = new JObject
+        {
+            ["entityId"] = glyph.EntityId.ToString("D"),
+            ["category"] = "glyphs",
+            ["nativeType"] = "GlyphSO",
+            ["discovered"] = glyph.Discovered,
+            ["level"] = glyph.Level,
+            ["available"] = glyph.Available,
+            ["maximumUsages"] = glyph.MaximumUsages,
+        };
+        if (glyph.FreeLevels != 0) result["bonusLevel"] = glyph.FreeLevels;
+        AddDiscoveryDecision(result, glyph.Discovery);
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectRitual(in WorldRitual ritual)
+    {
+        var result = new JObject
+        {
+            ["entityId"] = ritual.EntityId.ToString("D"),
+            ["category"] = "rituals",
+            ["nativeType"] = "RitualSO",
+            ["discovered"] = ritual.Discovered,
+            ["inBattle"] = ritual.InBattle,
+            ["activeInstances"] = ritual.ActiveInstances,
+            ["reachedLevel"] = ritual.ReachedLevel,
+            ["selectedLevel"] = ritual.SelectedLevel,
+        };
+        AddDiscoveryDecision(result, ritual.Discovery);
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectTimeRune(in WorldTimeRune rune)
+    {
+        var result = new JObject
+        {
+            ["entityId"] = rune.EntityId.ToString("D"),
+            ["category"] = "time-runes",
+            ["nativeType"] = "TimeRuneSO",
+            ["discovered"] = rune.Discovered,
+            ["level"] = rune.Level,
+            ["masteryLevel"] = rune.MasteryLevel,
+            ["seen"] = rune.Seen,
+        };
+        AddDiscoveryDecision(result, rune.Discovery);
+        return result.Freeze();
+    }
+
+    private static void AddDiscoveryDecision(
+        JObject result,
+        WorldDiscoverableDecision decision)
+    {
+        var available = decision.Visible && decision.CanDiscover &&
+            !decision.Discovered && decision.Affordable;
+        var discover = new JObject { ["available"] = available };
+        if (!available)
+        {
+            discover["reasonCode"] = decision.Discovered
+                ? "already_discovered"
+                : !decision.Visible
+                    ? "not_visible"
+                    : !decision.CanDiscover
+                        ? "native_discovery_refused"
+                        : "unaffordable";
+        }
+        if (decision.Costs.Count > 0)
+        {
+            var costs = new JArray();
+            for (var index = 0; index < decision.Costs.Count; index++)
+            {
+                var cost = decision.Costs[index];
+                costs.Add(new JObject
+                {
+                    ["resourceId"] = cost.ResourceId.ToString("D"),
+                    ["cost"] = new GameMcpDomainValue(cost.Cost),
+                    ["amount"] = new GameMcpDomainValue(cost.Amount),
+                    ["affordable"] = cost.Affordable,
+                });
+            }
+            discover["costs"] = costs;
+        }
+        if (decision.Required) discover["required"] = true;
+        result["discover"] = discover;
     }
 
     internal static GameMcpValue ProjectPurchaseCost(in WorldPurchaseCost cost)
@@ -1997,6 +2127,16 @@ internal static class GameMcpWorldQuery
             ? ProjectDiscoveryTree(world, in tree)
             : row is WorldSpellRecipe spellRecipe
             ? ProjectSpellRecipe(world, in spellRecipe)
+            : row is WorldAlchemyRecipe alchemyRecipe
+            ? ProjectAlchemyRecipe(in alchemyRecipe)
+            : row is WorldEquipment equipment
+            ? ProjectEquipment(in equipment)
+            : row is WorldGlyph glyph
+            ? ProjectGlyph(in glyph)
+            : row is WorldRitual ritual
+            ? ProjectRitual(in ritual)
+            : row is WorldTimeRune timeRune
+            ? ProjectTimeRune(in timeRune)
             : row is WorldSpellSlot spellSlot
             ? ProjectSpellSlot(world, in spellSlot)
             : row is WorldTargetingRequest targeting

@@ -343,7 +343,7 @@ public sealed class HarvestElementSO : IdScriptableObject
 }
 
 
-public sealed class TimeRuneSO : IdScriptableObject
+public sealed class TimeRuneSO : IdScriptableObject, IDiscoverable
 {
     public static List<TimeRuneSO> All = new List<TimeRuneSO>();
     public bool discovered;
@@ -353,14 +353,36 @@ public sealed class TimeRuneSO : IdScriptableObject
     public int masteryLevel;
     public bool isDiscoverRequired;
     public bool seen;
+    public ResourceCostList discoveryCost = new ResourceCostList();
+    public bool NativeDiscoverVisible { get; set; } = true;
+    public bool NativeCanDiscover { get; set; } = true;
+    public bool SuppressDiscovery { get; set; }
+    public bool ThrowBeforeDiscovery { get; set; }
+    public bool ThrowAfterDiscovery { get; set; }
+    public int DiscoverCalls { get; private set; }
     public ValueModifierRecord freeUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord power = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord powerScalingMod = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord masteryXpMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+
+    public ResourceCostList GetDiscoverCost() => discoveryCost;
+    public bool IsDiscoverVisible() => NativeDiscoverVisible;
+    public bool CanDiscover() => NativeCanDiscover;
+    public bool IsDiscovered() => discovered;
+    public bool IsDiscoverRequired() => isDiscoverRequired;
+    public void Discover()
+    {
+        DiscoverCalls++;
+        if (ThrowBeforeDiscovery)
+            throw new InvalidOperationException("injected failure before discovery");
+        if (!SuppressDiscovery) discovered = true;
+        if (ThrowAfterDiscovery)
+            throw new InvalidOperationException("injected failure after discovery");
+    }
 }
 
 
-public sealed class GlyphSO : IdScriptableObject, ITooltipable
+public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable
 {
     public static List<GlyphSO> All = new List<GlyphSO>();
     public string DisplayName = string.Empty;
@@ -375,6 +397,13 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable
     public bool requiresDuration;
     public bool requiresToggleable;
     public bool NativeAvailable { get; set; } = true;
+    public ResourceCostList discoveryCost = new ResourceCostList();
+    public bool NativeDiscoverVisible { get; set; } = true;
+    public bool NativeCanDiscover { get; set; } = true;
+    public bool SuppressDiscovery { get; set; }
+    public bool ThrowBeforeDiscovery { get; set; }
+    public bool ThrowAfterDiscovery { get; set; }
+    public int DiscoverCalls { get; private set; }
     public int masteryReqCount;
     public ValueModifierRecord freeUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord freeLoadoutUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
@@ -382,6 +411,20 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable
 
     public string GetName() => DisplayName;
     public bool IsAvailable() => NativeAvailable;
+    public ResourceCostList GetDiscoverCost() => discoveryCost;
+    public bool IsDiscoverVisible() => NativeDiscoverVisible;
+    public bool CanDiscover() => NativeCanDiscover;
+    public bool IsDiscovered() => discovered;
+    public bool IsDiscoverRequired() => discoveryRequired;
+    public void Discover()
+    {
+        DiscoverCalls++;
+        if (ThrowBeforeDiscovery)
+            throw new InvalidOperationException("injected failure before discovery");
+        if (!SuppressDiscovery) discovered = true;
+        if (ThrowAfterDiscovery)
+            throw new InvalidOperationException("injected failure after discovery");
+    }
     public bool IsSpellAugment() => augmentsSpells;
     public int GetMaxUsages() => (int)maxUsages.GetValue().ToDouble();
     public static bool MeetsNonLvRequirements(List<GlyphSO> glyphs, Spell spell)
@@ -644,7 +687,7 @@ public sealed class ConsumableRefListVariable : GenericListVariable<ConsumableSO
 {
 }
 
-public sealed class RitualSO : IdScriptableObject
+public sealed class RitualSO : IdScriptableObject, IDiscoverable
 {
     public static List<RitualSO> All = new List<RitualSO>();
     public bool discovered;
@@ -654,6 +697,13 @@ public sealed class RitualSO : IdScriptableObject
     public int wavesCompleted;
     public int selectedLevel;
     public int discRarityLevel;
+    public ResourceCostList discoveryCost = new ResourceCostList();
+    public bool NativeDiscoverVisible { get; set; } = true;
+    public bool NativeCanDiscover { get; set; } = true;
+    public bool SuppressDiscovery { get; set; }
+    public bool ThrowBeforeDiscovery { get; set; }
+    public bool ThrowAfterDiscovery { get; set; }
+    public int DiscoverCalls { get; private set; }
 
     /// <summary>
     /// Left null by default on purpose: the game leaves these null before first use, and the count
@@ -681,6 +731,21 @@ public sealed class RitualSO : IdScriptableObject
     private int critLevel;
     private int echoLevel;
     private int chainLevel;
+
+    public ResourceCostList GetDiscoverCost() => discoveryCost;
+    public bool IsDiscoverVisible() => NativeDiscoverVisible;
+    public bool CanDiscover() => NativeCanDiscover;
+    public bool IsDiscovered() => discovered;
+    public bool IsDiscoverRequired() => isDiscoverRequired;
+    public void Discover()
+    {
+        DiscoverCalls++;
+        if (ThrowBeforeDiscovery)
+            throw new InvalidOperationException("injected failure before discovery");
+        if (!SuppressDiscovery) discovered = true;
+        if (ThrowAfterDiscovery)
+            throw new InvalidOperationException("injected failure after discovery");
+    }
 
     public void SetRunState(int critLevelN, int echoLevelN, int chainLevelN, BigDouble totalWeight)
     {

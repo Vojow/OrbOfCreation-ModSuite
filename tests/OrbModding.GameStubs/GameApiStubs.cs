@@ -138,7 +138,7 @@ public static class AutoBuyManager
     public static int GetRemainingRoom() => RemainingRoom;
 }
 
-public class SpellRecipeSO : IdScriptableObject
+public class SpellRecipeSO : IdScriptableObject, IDiscoverable
 {
     public static List<SpellRecipeSO> All = new List<SpellRecipeSO>();
     private string stableUuid;
@@ -173,6 +173,12 @@ public class SpellRecipeSO : IdScriptableObject
     public ResourceCostList baseDiscoveryCost = new ResourceCostList();
     public ResourceCostList baseUsageCost = new ResourceCostList();
     public bool NativeCanDiscover { get; set; } = true;
+    public bool NativeDiscoverVisible { get; set; } = true;
+    public bool NativeDiscoveryRequired { get; set; }
+    public bool SuppressDiscovery { get; set; }
+    public bool ThrowBeforeDiscovery { get; set; }
+    public bool ThrowAfterDiscovery { get; set; }
+    public int DiscoverCalls { get; private set; }
     public bool NativeIsCreatable { get; set; } = true;
     public void GainMasteryExp(BigDouble exp)
     {
@@ -185,6 +191,8 @@ public class SpellRecipeSO : IdScriptableObject
     public new Guid GetId() => GetGuid();
     public bool IsDiscovered() => discovered;
     public bool CanDiscover() => NativeCanDiscover;
+    public bool IsDiscoverVisible() => NativeDiscoverVisible;
+    public bool IsDiscoverRequired() => NativeDiscoveryRequired;
     public bool IsCreatable() => NativeIsCreatable;
     public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(coreRecipe);
     public ResourceCostList GetDiscoverCost() => baseDiscoveryCost;
@@ -192,8 +200,13 @@ public class SpellRecipeSO : IdScriptableObject
     public Spell CreateEmpty(int _) => new Spell(this);
     public void Discover()
     {
-        discovered = true;
+        DiscoverCalls++;
+        if (ThrowBeforeDiscovery)
+            throw new InvalidOperationException("injected failure before discovery");
+        if (!SuppressDiscovery) discovered = true;
         SpellManager.instance?.PostDiscoverRecipe(this);
+        if (ThrowAfterDiscovery)
+            throw new InvalidOperationException("injected failure after discovery");
     }
     public bool IsReadyToLevelMastery() => readyToLevel;
     public ResourceCostList GetLevelCost() => levelCost;
@@ -318,7 +331,7 @@ public sealed class AlchemyTypeSO : IdScriptableObject
     }
 }
 
-public sealed class AlchemyRecipeSO : IdScriptableObject
+public sealed class AlchemyRecipeSO : IdScriptableObject, IDiscoverable
 {
     public static List<AlchemyRecipeSO> All = new List<AlchemyRecipeSO>();
     private readonly ExperienceContainer experienceContainer = new ExperienceContainer();
@@ -350,6 +363,14 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
     public BigDouble recipeTime;
     public readonly List<AlchemyTypeSO> alchemyTypes = new List<AlchemyTypeSO>();
     public ConceptCostVector drainCost = new ConceptCostVector();
+    public ResourceCostList baseDiscoveryCost = new ResourceCostList();
+    public bool NativeDiscoverVisible { get; set; } = true;
+    public bool NativeCanDiscover { get; set; } = true;
+    public bool NativeDiscoveryRequired { get; set; }
+    public bool SuppressDiscovery { get; set; }
+    public bool ThrowBeforeDiscovery { get; set; }
+    public bool ThrowAfterDiscovery { get; set; }
+    public int DiscoverCalls { get; private set; }
     public AlchemyTypeSO coreType = new AlchemyTypeSO("scholar-slot");
     public List<BigDouble> GrantedMasteryExperience { get; } = new List<BigDouble>();
 
@@ -361,6 +382,10 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
         uuid = guid.ToString();
     }
     public bool IsDiscovered() => discovered;
+    public ResourceCostList GetDiscoverCost() => baseDiscoveryCost;
+    public bool IsDiscoverVisible() => NativeDiscoverVisible;
+    public bool CanDiscover() => NativeCanDiscover;
+    public bool IsDiscoverRequired() => NativeDiscoveryRequired;
     public bool IsAvailable() => discovered;
     public int GetExperienceLevel() => masteryLevel;
     public BigDouble GetExperience() => masteryXp;
@@ -368,7 +393,15 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
     public int GetMaxUsageSlots() => maxUsageSlots.GetValue().ToInt();
     public AlchemyTypeSO GetCoreType() => coreType;
     public string GetName() => name;
-    public void Discover() => discovered = true;
+    public void Discover()
+    {
+        DiscoverCalls++;
+        if (ThrowBeforeDiscovery)
+            throw new InvalidOperationException("injected failure before discovery");
+        if (!SuppressDiscovery) discovered = true;
+        if (ThrowAfterDiscovery)
+            throw new InvalidOperationException("injected failure after discovery");
+    }
     public void ApplyMastery() => masteryLevel++;
 
     public void GainMasteryXp(BigDouble amount)
@@ -1759,7 +1792,7 @@ namespace Stacked
     }
 }
 
-public sealed class EquipmentSO : IdScriptableObject
+public sealed class EquipmentSO : IdScriptableObject, IDiscoverable
 {
     public static List<EquipmentSO> All = new List<EquipmentSO>();
     private readonly ExperienceContainer experienceContainer = new ExperienceContainer();
@@ -1778,10 +1811,31 @@ public sealed class EquipmentSO : IdScriptableObject
     public BigDouble masteryXp;
     public int discRarityLevel;
     public bool isCreated = true;
+    public ResourceCostList createCost = new ResourceCostList();
+    public bool NativeDiscoverVisible { get; set; } = true;
+    public bool NativeCanDiscover { get; set; } = true;
+    public bool SuppressDiscovery { get; set; }
+    public bool ThrowBeforeDiscovery { get; set; }
+    public bool ThrowAfterDiscovery { get; set; }
+    public int DiscoverCalls { get; private set; }
     public new Guid GetGuid() => Guid.Parse(uuid);
     public new Guid GetId() => GetGuid();
     public string GetName() => name;
     public bool IsCreated() => isCreated;
+    public ResourceCostList GetDiscoverCost() => createCost;
+    public bool IsDiscoverVisible() => NativeDiscoverVisible;
+    public bool CanDiscover() => NativeCanDiscover;
+    public bool IsDiscovered() => isCreated;
+    public bool IsDiscoverRequired() => isRequiredDiscovery;
+    public void Discover()
+    {
+        DiscoverCalls++;
+        if (ThrowBeforeDiscovery)
+            throw new InvalidOperationException("injected failure before discovery");
+        if (!SuppressDiscovery) isCreated = true;
+        if (ThrowAfterDiscovery)
+            throw new InvalidOperationException("injected failure after discovery");
+    }
     public ExperienceContainer GetExperienceElement() => experienceContainer;
     public void IncrementActive(double deltaTime)
     {

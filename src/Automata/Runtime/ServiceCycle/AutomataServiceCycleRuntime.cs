@@ -29,6 +29,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly SpellCompositionGameAction? _spellComposition;
     private readonly SpellLoadoutGameAction? _spellLoadout;
     private readonly TargetingGameAction? _targeting;
+    private readonly GenericDiscoveryGameAction? _genericDiscovery;
     private bool _disposed;
 #if SERVICE_CYCLE_PROFILE
     private ulong _nextGameMcpActionIdentity;
@@ -44,7 +45,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         SpellWorkbenchGameAction? spellWorkbench = null,
         SpellCompositionGameAction? spellComposition = null,
         SpellLoadoutGameAction? spellLoadout = null,
-        TargetingGameAction? targeting = null)
+        TargetingGameAction? targeting = null,
+        GenericDiscoveryGameAction? genericDiscovery = null)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _configurationPublication = configurationPublication ??
@@ -57,6 +59,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _spellComposition = spellComposition;
         _spellLoadout = spellLoadout;
         _targeting = targeting;
+        _genericDiscovery = genericDiscovery;
     }
 
     internal SuiteRuntimeConfiguration CurrentConfiguration => _configurationPublication.ReadLatest().Snapshot;
@@ -119,6 +122,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _spellComposition?.InvalidateLifecycle();
         _spellLoadout?.InvalidateLifecycle();
         _targeting?.InvalidateLifecycle();
+        _genericDiscovery?.InvalidateLifecycle();
     }
 
 #if SERVICE_CYCLE_PROFILE
@@ -170,6 +174,11 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteConsumable(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Crafting)
                 return ExecuteCrafting(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.GenericDiscovery)
+                return ExecuteGenericDiscovery(
+                    command,
+                    lifecycle,
+                    configuration.Generation.Value);
             var service = ServiceForGameMcp(command.Kind);
             var context = CreateGameMcpContext(
                 registry,
@@ -376,6 +385,33 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             configurationGeneration,
             submission.Reason,
             GameMcpCraftingProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecuteGenericDiscovery(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_genericDiscovery is null)
+            return GameMcpCommandResult.Rejected(
+                "contract_unavailable",
+                "the shared generic discovery GameAction was not composed",
+                lifecycle,
+                configurationGeneration);
+        GameMcpNativeActionAdmission.AssertNativeType(command, command.DerivedNativeType);
+        var action = new GenericDiscoveryAction(
+            command.TargetId,
+            command.DerivedNativeType,
+            command.ExpectedLifecycleGeneration);
+        var submission = _genericDiscovery.Submit(in action);
+        var result = GenericDiscoveryActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(
+            in result,
+            command.Kind,
+            lifecycle,
+            configurationGeneration,
+            submission.Reason,
+            GameMcpGenericDiscoveryProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteSpellWorkbench(
@@ -709,6 +745,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _spellComposition?.Dispose();
             _spellLoadout?.Dispose();
             _targeting?.Dispose();
+            _genericDiscovery?.Dispose();
             if (!_host.EmergencyStopEngaged)
                 _host.SetEmergencyStop(true, EmergencyStopReason.SuiteShutdown);
         }

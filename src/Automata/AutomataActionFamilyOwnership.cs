@@ -41,6 +41,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.SpellLoadout };
     private static readonly AutomationActionFamily[] TargetingFamilies =
         { AutomationActionFamily.Targeting };
+    private static readonly AutomationActionFamily[] GenericDiscoveryFamilies =
+        { AutomationActionFamily.GenericDiscovery };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -143,6 +145,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.SpellLoadout);
     public bool TryCaptureTargetingMutationPermit() =>
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.Targeting);
+    public bool TryCaptureGenericDiscoveryMutationPermit() =>
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.GenericDiscovery);
     public string ItemsOwnershipFailure =>
         _itemsClaimFailure.Length != 0
             ? _itemsClaimFailure
@@ -163,6 +167,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         "The current MCP operation does not hold SpellLoadout.";
     public string TargetingOwnershipFailure =>
         "The current MCP operation does not hold Targeting.";
+    public string GenericDiscoveryOwnershipFailure =>
+        "The current MCP operation does not hold GenericDiscovery.";
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -451,6 +457,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.Targeting => TargetingFamilies,
         GameMcpCommandKind.Consumable => ConsumableFamilies,
         GameMcpCommandKind.Crafting => ScribeFamilies,
+        GameMcpCommandKind.GenericDiscovery => GenericDiscoveryFamilies,
         _ => Array.Empty<AutomationActionFamily>(),
     };
 
@@ -488,6 +495,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         AutomationActionFamily.SpellComposition => false,
         AutomationActionFamily.SpellLoadout => false,
         AutomationActionFamily.Targeting => false,
+        AutomationActionFamily.GenericDiscovery => false,
         _ => false,
     };
 

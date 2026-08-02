@@ -105,8 +105,63 @@ internal static class GameMcpEntityCapabilityMap
                     "crafting-recipes",
                     capability,
                     out reason),
+            GameMcpCommandKind.GenericDiscovery =>
+                TryResolveGenericDiscoveryType(world, target, out _, out reason),
             _ => Unsupported(capability, out reason),
         };
+    }
+
+    internal static bool TryResolveGenericDiscoveryType(
+        GameWorldState world,
+        Guid target,
+        out string nativeType,
+        out string reason)
+    {
+        if (world is null) throw new ArgumentNullException(nameof(world));
+        nativeType = string.Empty;
+        var matches = 0;
+        if (Supports("alchemy-recipes", GameMcpCommandKind.GenericDiscovery) &&
+            WorldLookup.TryFind(world.AlchemyRecipes, target, out _))
+        {
+            matches++;
+            nativeType = "AlchemyRecipeSO";
+        }
+        if (Supports("equipment", GameMcpCommandKind.GenericDiscovery) &&
+            WorldLookup.TryFind(world.Equipment, target, out _))
+        {
+            matches++;
+            nativeType = "EquipmentSO";
+        }
+        if (Supports("glyphs", GameMcpCommandKind.GenericDiscovery) &&
+            WorldLookup.TryFind(world.Glyphs, target, out _))
+        {
+            matches++;
+            nativeType = "GlyphSO";
+        }
+        if (Supports("rituals", GameMcpCommandKind.GenericDiscovery) &&
+            WorldLookup.TryFind(world.Rituals, target, out _))
+        {
+            matches++;
+            nativeType = "RitualSO";
+        }
+        if (Supports("time-runes", GameMcpCommandKind.GenericDiscovery) &&
+            WorldLookup.TryFind(world.TimeRunes, target, out _))
+        {
+            matches++;
+            nativeType = "TimeRuneSO";
+        }
+        if (matches == 1)
+        {
+            reason = string.Empty;
+            return true;
+        }
+        reason = matches == 0
+            ? "Identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
+              " is absent from published generic-discoverable categories"
+            : "Identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
+              " is ambiguous across " + matches + " generic-discoverable categories";
+        nativeType = string.Empty;
+        return false;
     }
 
     private static bool TargetingTarget(GameWorldState world, Guid target, out string reason)
@@ -289,22 +344,23 @@ internal static class GameMcpEntityCapabilityMap
         D("bool-variables", "BoolVariable"),
         D("modifier-variables", "ValueModifierVariable"),
         D("purchase-costs", "StructureSO|UpgradeSO"),
-        D("alchemy-recipes", "AlchemyRecipeSO", GameMcpCommandKind.Concept),
+        D("alchemy-recipes", "AlchemyRecipeSO", GameMcpCommandKind.Concept,
+            GameMcpCommandKind.GenericDiscovery),
         D("alchemy-types", "AlchemyTypeSO"),
         D("spell-recipes", "SpellRecipeSO", GameMcpCommandKind.Cast, GameMcpCommandKind.SpellLevel,
             GameMcpCommandKind.SpellWorkbench),
         D("spell-types", "SpellTypeSO"),
-        D("equipment", "EquipmentSO"),
+        D("equipment", "EquipmentSO", GameMcpCommandKind.GenericDiscovery),
         D("equipment-types", "EquipmentTypeSO"),
         D("resource-types", "ResourceTypeSO"),
         D("crafting-recipe-types", "CraftingRecipeTypeSO"),
         D("crafting-recipes", "CraftingRecipeSO", GameMcpCommandKind.Crafting),
         D("harvest-elements", "HarvestElementSO"),
         D("harvest-resources", "HarvestElementSO"),
-        D("time-runes", "TimeRuneSO"),
-        D("glyphs", "GlyphSO"),
+        D("time-runes", "TimeRuneSO", GameMcpCommandKind.GenericDiscovery),
+        D("glyphs", "GlyphSO", GameMcpCommandKind.GenericDiscovery),
         D("consumables", "ConsumableSO", GameMcpCommandKind.Consumable),
-        D("rituals", "RitualSO"),
+        D("rituals", "RitualSO", GameMcpCommandKind.GenericDiscovery),
         D("achievements", "AchievementSO"),
         D("advancements", "AdvancementSO"),
         D("challenges", "ChallengeSO"),

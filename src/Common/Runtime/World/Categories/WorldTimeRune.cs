@@ -17,7 +17,8 @@ internal readonly struct WorldTimeRune : IWorldEntity
         BigDouble freeUsages,
         BigDouble power,
         BigDouble powerScalingMod,
-        BigDouble masteryXpMod)
+        BigDouble masteryXpMod,
+        WorldDiscoverableDecision discovery = default)
     {
         TimeRuneId = timeRuneId;
         Discovered = discovered;
@@ -31,6 +32,7 @@ internal readonly struct WorldTimeRune : IWorldEntity
         Power = power;
         PowerScalingMod = powerScalingMod;
         MasteryXpMod = masteryXpMod;
+        Discovery = discovery;
     }
 
     internal Guid TimeRuneId { get; }
@@ -58,6 +60,8 @@ internal readonly struct WorldTimeRune : IWorldEntity
     internal BigDouble PowerScalingMod { get; }
 
     internal BigDouble MasteryXpMod { get; }
+
+    internal WorldDiscoverableDecision Discovery { get; }
 }
 
 internal sealed class WorldTimeRuneBinder : WorldPlainBinder<WorldTimeRune>
@@ -74,6 +78,7 @@ internal sealed class WorldTimeRuneBinder : WorldPlainBinder<WorldTimeRune>
     private Func<object, BigDouble>? _power;
     private Func<object, BigDouble>? _powerScalingMod;
     private Func<object, BigDouble>? _masteryXpMod;
+    private WorldDiscoverableBinding? _discovery;
 
     internal override string Category => "time runes";
 
@@ -94,7 +99,8 @@ internal sealed class WorldTimeRuneBinder : WorldPlainBinder<WorldTimeRune>
         _power = bind.ModifierRecord("power");
         _powerScalingMod = bind.ModifierRecord("powerScalingMod");
         _masteryXpMod = bind.ModifierRecord("masteryXpMod");
-        return bind.Failure;
+        _discovery = new WorldDiscoverableBinding(type, TypeName);
+        return Join(bind.Failure, _discovery.Failure);
     }
 
     internal override WorldTimeRune Read(object entity) =>
@@ -110,5 +116,9 @@ internal sealed class WorldTimeRuneBinder : WorldPlainBinder<WorldTimeRune>
             _freeUsages!(entity),
             _power!(entity),
             _powerScalingMod!(entity),
-            _masteryXpMod!(entity));
+            _masteryXpMod!(entity),
+            _discovery!.Read(entity));
+
+    private static string Join(string left, string right) =>
+        left.Length == 0 ? right : right.Length == 0 ? left : left + "; " + right;
 }

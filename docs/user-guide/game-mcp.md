@@ -117,6 +117,7 @@ does not refresh it by hidden navigation.
 | `game_harvest` | Harvest an audited pair derived from a plot UUID |
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
 | `game_discovery_offer` | Initiate, select, confirm, or reroll one Discovery Tree offer lifecycle |
+| `game_discover` | Discover one published alchemy recipe, equipment asset, glyph, ritual, or time rune |
 | `game_spell_workbench` | Select an authored spell recipe, discover it, or create another equipped instance |
 | `game_spell_composition` | Set the global spell output level or replace one equipped spell's augment stack |
 | `game_spell_loadout` | Remove one exact equipped runtime spell or move it to another loadout slot |
@@ -242,6 +243,20 @@ recipe, or time rune. If it does not, only the implicated tree read returns
 `discovery_offer_read_incomplete` with `implicatedOffers`; the UUID is never silently omitted.
 Current offers are also resolvable through `world_get` and `explain_entity`, including authored
 metadata and applicable discovery predicates.
+
+### Generic discovery decisions
+
+Every `alchemy-recipes`, `equipment`, `glyphs`, `rituals`, `spell-recipes`, and `time-runes` row
+has one `discover` decision from the native `IDiscoverable` evaluator. It names whether the entity
+is visible, already discovered, required for downstream play, currently discoverable, and
+affordable. Its ordered `costs` pair each named resource's scientific-string `cost` with the same
+canonical spendable `amount` used everywhere else. Failed decision axes carry a stable reason;
+attempting a mutation is never required to learn affordability.
+
+`game_discover` owns alchemy recipes, equipment, glyphs, rituals, and time runes. Spell recipes use
+`game_spell_workbench`, because selection, discovery, and equipped-instance creation are one
+native workbench lifecycle. Discovery trees use `game_discovery_offer`. This capability split is
+validated from the UUID's published category before any native call.
 
 The MCP-only decision/action sequence is seven calls when two offers need explanations:
 
@@ -581,6 +596,14 @@ permit last. Direct recipes invoke native `CraftingRecipeSO.Execute`; page recip
 audited stack/new/instant `UICraftingPage.QueueCraft` sequence. Queue success is the exact recipe
 quantity and instance outcome. Payment accounting never gates success. A committed result is the
 newer full crafting decision row.
+
+`game_discover` requires one `uuid`; optional `expectedNativeType` is an exact assertion, not a
+selector. The boundary re-resolves the entity and repeats native visibility, already-discovered,
+`CanDiscover`, exact cost, and affordability checks on Unity's main thread. It captures the shared
+family permit last, then preserves the UI's `PerformCost`-before-`Discover` ordering. Success is the
+exact target becoming discovered and returns its complete newer named world row inline. It carries
+no receipt or payment stanza. A refusal occurs before payment; a fault after native work keeps the
+named before/after evidence and quarantines only when the requested target outcome is absent.
 
 CLI play commands therefore need no generation option:
 
