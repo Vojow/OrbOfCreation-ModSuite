@@ -1,8 +1,8 @@
 # Carry limits
 
 Carry capacity is a **single global value, enforced separately for each exact item**. Every distinct
-consumable independently gets the same limit. It is **not** a shared pool across a family and **not**
-per level row.
+[consumable](consumables.md) independently gets the same limit. It is **not** a shared pool across a
+family and **not** per level row.
 
 Each unit you hold has a **level**. When a new unit arrives while you are at capacity, it is compared
 against the **weakest unit you own**, on level alone:

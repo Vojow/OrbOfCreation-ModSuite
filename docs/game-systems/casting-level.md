@@ -2,8 +2,9 @@
 
 Casting Level is a global proficiency track, fed by **all** casts.
 
-- **Casting XP is itself a resource with a passive +1/s rate**, so idle time feeds the track with no
-  casting at all, and it carries its own "Maxed in" clock like any other resource.
+- **Casting XP is itself a resource** and carries its own "Maxed in" clock like any other resource.
+  The `+1/s` it displays is an observation, and may be the average of XP gained over a recent window
+  rather than a true passive rate — whether idle time feeds the track at all is not established.
 - **Per level: ×1.04 Cantrip Spell Power and ×1.004 Charm Spell Power**, both compounding — a slow
   global multiplier on the primitives rather than a one-off.
 - Higher-level spells generate significantly more Casting XP per cast.

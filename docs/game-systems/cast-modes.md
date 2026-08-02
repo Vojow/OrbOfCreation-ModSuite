@@ -1,4 +1,11 @@
-# Charms, channels and charging
+# Cantrips, charms, channels and charging
+
+## Cantrips
+
+Cantrips are the plain one-shot spells: cast once, the effect lands, the cooldown runs. "Cantrip"
+is also a targetable category in its own right — many effects name "all Cantrips", and the global
+tracks carry per-level Cantrip multipliers (see [casting-level.md](casting-level.md) and
+[output-and-reserve.md](output-and-reserve.md)).
 
 ## Charms
 

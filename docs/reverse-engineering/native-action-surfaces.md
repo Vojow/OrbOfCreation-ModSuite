@@ -223,6 +223,17 @@ carries that count's scaling through the effect. Read `GetStrongestLevel()`, `Ge
 
 ---
 
+## Harvest availability
+
+Plot and action availability on the Agromancy screen is cached behind the interface: the plot
+list's own render pass is what re-evaluates it, and a passed check latches on rather than being
+re-tested. Growth and timers advance with the screen closed; only the availability evaluation is
+screen-bound. An actually-available action can therefore read unavailable until the screen has
+been opened once — the reason a published prerequisite latch is evidence only, and the exact
+current action still gets one live validation at the action boundary.
+
+---
+
 ## Crafting and scribing
 
 ### Identities

@@ -44,11 +44,12 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 - [effect-grammar.md](effect-grammar.md) — every effect is term + statistic + keyword-target.
 - [spell-loadout.md](spell-loadout.md) — spots and weight bind independently; a weight-0 spell still
   costs a lane.
-- [cast-modes.md](cast-modes.md) — charms open buff windows, channels block casting and drain,
-  charging trades time for power.
+- [cast-modes.md](cast-modes.md) — cantrips fire once, charms open buff windows, channels block
+  casting and drain, charging trades time for power.
 - [output-and-reserve.md](output-and-reserve.md) — two global dials: Output prices the active cast,
   Reserve prices the passive economy.
-- [casting-level.md](casting-level.md) — a global track fed by every cast plus a passive trickle.
+- [casting-level.md](casting-level.md) — a global track fed by every cast; the displayed +1/s may
+  be a windowed average.
 - [spell-mastery.md](spell-mastery.md) — per-spell XP that only casting fills, plus the three
   spell-type tracks.
 - [spell-levels.md](spell-levels.md) — cost curve 3.3^(L(1+0.007L)); levelling raises output and XP
@@ -60,8 +61,8 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 
 - [pool-unlockers.md](pool-unlockers.md) — glyphs, a.k.a. recipe books, expand what future rolls can
   contain.
-- [augments.md](augments.md) — per-spell sockets, loadout-wide copies, weight per copy, and global
-  per-level passives.
+- [augments.md](augments.md) — per-spell-slot sockets and usable copies, weight per copy, and
+  global per-level passives.
 
 ## Discovery
 
@@ -100,7 +101,7 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 ## Systems
 
 - [concepts.md](concepts.md) — slotted passive scalers that level over time and drain continuously.
-- [agromancy.md](agromancy.md) — plots and nodes; harvest state only refreshes while the page is open.
+- [agromancy.md](agromancy.md) — plots, nodes and growth phases; growth runs with the screen closed.
 - [aspects.md](aspects.md) — three pedestals through which Workshop, Alchemy and Rituals arrive.
 - [disciplines.md](disciplines.md) — which tab each attribute category feeds, and which are unplayed.
 - [crafting.md](crafting.md) — Workshop rows and the Scribe drop slot; crafts pay at submission.

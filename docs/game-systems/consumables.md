@@ -45,7 +45,7 @@ runs a preparation period first:
    are done.
 
 Some items **replenish**: after firing, the cost is refunded and a unit is granted back for free.
-That grant goes through the carry rules like any other gain.
+That grant goes through the [carry rules](carry-limits.md) like any other gain.
 
 The player's multi-buy setting governs consumables too: it decides how many units a single use action
 collects.

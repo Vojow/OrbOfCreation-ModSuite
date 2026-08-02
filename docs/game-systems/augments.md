@@ -23,17 +23,15 @@ layout.
 ## Usable copies, not slots
 
 The Augment Glyphs panel's "1/1" reading is a **usable-copy count**, not a slot count and not an
-on/off state. Each purchased augment level grants **+1 Max Usage** and **+1 Free Usage per six
-levels**; e.g., an augment starting at Max Usage 1 and Free Usage 0 has Max Usage `1 + L` and Free
-Usage `floor(L / 6)` at level `L`, absent outside modifiers.
+on/off state, and everything it counts is **per spell slot**. Each purchased augment level grants
+**+1 Max Usage** and **+1 Free Usage per six levels**; e.g., an augment starting at Max Usage 1 and
+Free Usage 0 has Max Usage `1 + L` and Free Usage `floor(L / 6)` at level `L`, absent outside
+modifiers.
 
-- **Max Usage is loadout-wide** — the total copies of that augment available across the equipped
-  loadout, enforced after subtracting copies already equipped.
-- **Free Usage is per spell** — that many copies *in each spell* do not charge the augment's usage
-  cost. Every non-free copy costs **one Spell Weight**, and copies are never merged into a single
-  weight charge.
-- A third waiver, **loadout-wide free usages**, waives copies across the whole loadout rather than
-  per spell.
+- **Max Usage** — how many copies of that augment one spell can socket.
+- **Free Usage** — that many copies in the spell do not charge the augment's usage cost. Every
+  non-free copy costs **one Spell Weight**, and copies are never merged into a single weight
+  charge.
 
 ## The layout is chosen before the spell is added
 

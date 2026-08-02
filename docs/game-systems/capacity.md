@@ -4,6 +4,9 @@ When a price exceeds your capacity for the resource it is priced in, the purchas
 not slow: time-to-afford is infinite under the current cap, and the price renders red. The set of
 things you can buy is bounded by capacity, not by stock.
 
+The stock itself is softer than the price gate: you can push a resource **above** its capacity
+temporarily, and the excess then decays back on a timer — see [overcap.md](overcap.md).
+
 The game teaches this in the opening minutes. Infuse Orb costs 25 → 50 → 100 → 200 mana, doubling
 each level, against a starting mana capacity of 100, so the fourth level is priced above the ceiling
 and the purchase list forces you elsewhere.
