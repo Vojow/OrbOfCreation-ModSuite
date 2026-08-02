@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using OrbModding;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.World;
 #if SERVICE_CYCLE_PROFILE
@@ -26,7 +27,6 @@ internal enum AutoBuyPurchasePreflight
     OwningViewUnavailable,
     OwningViewRelationMissing,
     OwningViewRelationUnreadable,
-    OwningViewRelationAmbiguous,
     OwningViewRelationContradictory,
     StructureUnavailable,
     DestinationCapacityFull,
@@ -153,14 +153,25 @@ internal interface IAutoBuyNativePurchasePort
     AutoBuyPurchaseSubmission Submit(
         AutoBuyCandidateKind kind,
         Guid uuid,
-        int count
+        int count,
+        long lifecycleEpoch
 #if SERVICE_CYCLE_PROFILE
         , in ServiceActionContext context
 #endif
         );
 }
 
-internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
+internal interface IAutoBuyPurchaseTopologyPort
+{
+    void InvalidateTopology();
+#if SERVICE_CYCLE_PROFILE
+    bool EmitRouteDiagnostic(long lifecycleEpoch);
+#endif
+}
+
+internal sealed class AutoBuyNativePurchaseAdapter :
+    IAutoBuyNativePurchasePort,
+    IAutoBuyPurchaseTopologyPort
 {
     private readonly System.Collections.Generic.Dictionary<Type, PurchaseAccessors?> _accessors =
         new System.Collections.Generic.Dictionary<Type, PurchaseAccessors?>();
@@ -173,25 +184,59 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
     {
         _profileOperations = profileOperations ??
             throw new ArgumentNullException(nameof(profileOperations));
-        NativePurchaseViewAdmissionResolver.TryCreate(
+        NativePurchaseViewAdmissionResolver.TryCreateProduction(
             ReflectionUtil.FindLoadedType,
             out _viewAdmission,
             out _);
+    }
+
+    internal AutoBuyNativePurchaseAdapter(
+        AutomataProfileOperations profileOperations,
+        NativePurchaseViewAdmissionResolver viewAdmission)
+    {
+        _profileOperations = profileOperations ??
+            throw new ArgumentNullException(nameof(profileOperations));
+        _viewAdmission = viewAdmission ?? throw new ArgumentNullException(nameof(viewAdmission));
     }
 #else
     public AutoBuyNativePurchaseAdapter()
     {
-        NativePurchaseViewAdmissionResolver.TryCreate(
+        NativePurchaseViewAdmissionResolver.TryCreateProduction(
             ReflectionUtil.FindLoadedType,
             out _viewAdmission,
             out _);
     }
+
+    internal AutoBuyNativePurchaseAdapter(NativePurchaseViewAdmissionResolver viewAdmission) =>
+        _viewAdmission = viewAdmission ?? throw new ArgumentNullException(nameof(viewAdmission));
+#endif
+
+    public void InvalidateTopology() => _viewAdmission?.Invalidate();
+
+#if SERVICE_CYCLE_PROFILE
+    public bool EmitRouteDiagnostic(long lifecycleEpoch)
+    {
+        if (_viewAdmission is null) return false;
+        var rows = _viewAdmission.DescribeCaptured(lifecycleEpoch);
+        if (rows.Length == 0) return false;
+        for (var index = 0; index < rows.Length; index++)
+            Plugin.Log?.LogAutomataInfo("Auto Buy route topology: " + rows[index]);
+        return true;
+    }
+#endif
+
+#if !SERVICE_CYCLE_PROFILE
+    internal AutoBuyPurchaseSubmission Submit(
+        AutoBuyCandidateKind kind,
+        Guid uuid,
+        int count) => Submit(kind, uuid, count, _viewAdmission?.CapturedEpoch ?? 0);
 #endif
 
     public AutoBuyPurchaseSubmission Submit(
         AutoBuyCandidateKind kind,
         Guid uuid,
-        int count
+        int count,
+        long lifecycleEpoch
 #if SERVICE_CYCLE_PROFILE
         , in ServiceActionContext context
 #endif
@@ -229,7 +274,7 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
         try
         {
 #endif
-        var gate = ReadLiveGate(kind, uuid, source, accessors);
+        var gate = ReadLiveGate(kind, uuid, lifecycleEpoch, source, accessors);
         if (gate != AutoBuyPurchasePreflight.Proceeded)
             return AutoBuyPurchaseSubmission.Rejected(gate);
 
@@ -289,7 +334,7 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
             }
 #endif
         return kind == AutoBuyCandidateKind.Structure
-            ? SubmitStructure(uuid, source, accessors, count, in liveCosts)
+            ? SubmitStructure(uuid, lifecycleEpoch, source, accessors, count, in liveCosts)
             : SubmitUpgrade(uuid, source, accessors, count, in liveCosts);
 #if SERVICE_CYCLE_PROFILE
         }
@@ -300,6 +345,7 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
     private AutoBuyPurchasePreflight ReadLiveGate(
         AutoBuyCandidateKind kind,
         Guid uuid,
+        long lifecycleEpoch,
         object source,
         PurchaseAccessors accessors)
     {
@@ -309,21 +355,20 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
             if (_viewAdmission is null)
                 return AutoBuyPurchasePreflight.OwningViewRelationUnreadable;
 
-            var resolution = _viewAdmission.ResolveProfiled(
+            if (!_viewAdmission.TryGetCaptured(
                 kind == AutoBuyCandidateKind.Structure
                     ? WorldPurchaseCandidateKind.Structure
                     : WorldPurchaseCandidateKind.Upgrade,
                 uuid,
-                source,
-                ref reads);
+                lifecycleEpoch,
+                out var resolution))
+                return AutoBuyPurchasePreflight.OwningViewRelationUnreadable;
             switch (resolution.Relation.Status)
             {
                 case WorldPurchaseViewRelationStatus.Missing:
                     return AutoBuyPurchasePreflight.OwningViewRelationMissing;
                 case WorldPurchaseViewRelationStatus.Unreadable:
                     return AutoBuyPurchasePreflight.OwningViewRelationUnreadable;
-                case WorldPurchaseViewRelationStatus.Ambiguous:
-                    return AutoBuyPurchasePreflight.OwningViewRelationAmbiguous;
                 case WorldPurchaseViewRelationStatus.Contradictory:
                     return AutoBuyPurchasePreflight.OwningViewRelationContradictory;
                 case WorldPurchaseViewRelationStatus.Resolved:
@@ -376,6 +421,7 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
     /// </remarks>
     private AutoBuyPurchaseSubmission SubmitStructure(
         Guid uuid,
+        long lifecycleEpoch,
         object source,
         PurchaseAccessors accessors,
         int count,
@@ -393,7 +439,7 @@ internal sealed class AutoBuyNativePurchaseAdapter : IAutoBuyNativePurchasePort
                 accessors.InvokePurchase(source);
                 for (var level = 1; level < count; level++)
                 {
-                    if (ReadLiveGate(AutoBuyCandidateKind.Structure, uuid, source, accessors) !=
+                    if (ReadLiveGate(AutoBuyCandidateKind.Structure, uuid, lifecycleEpoch, source, accessors) !=
                             AutoBuyPurchasePreflight.Proceeded ||
                         !accessors.TryReadAdmission(source, out var admitted) || !admitted)
                         break;

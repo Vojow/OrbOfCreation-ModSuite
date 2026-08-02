@@ -26,11 +26,12 @@ namespace OrbAutomata;
 /// penalty. Then the action-family lease for this candidate kind is re-read, because another plugin
 /// can take it mid-cycle and a purchase submitted without it is this suite acting on content it has
 /// stood down from. Then the native world epoch is re-read and compared to the epoch the snapshot this
-/// purchase was planned from was collected under, which the action carries by value — nothing
-/// re-checks live native state after capture, so this adapter is the only place that closes the
-/// game-reload race (a stale <c>StructureSO.All</c>/<c>UpgradeSO.All</c> rebuilt under a new epoch).
+/// purchase was planned from was collected under, which the action carries by value. This closes the
+/// game-reload race before the submission re-resolves candidate identity and reads current queue,
+/// view-availability, affordability, and configuration facts against that lifecycle's static route
+/// snapshot.
 /// A mismatch is a penalty-free <see cref="CommonActionResultCodes.LifecycleReplaced"/> rejection.
-/// The submission itself re-resolves the candidate by UUID and submits through the audited
+/// The submission re-resolves the candidate by UUID and submits through the audited
 /// <see cref="AutoBuyNativePurchaseAdapter"/>. A verified mutation commits, while an attempted
 /// call with a zero queued-level delta skips so the remaining batch can still be considered.
 /// </remarks>
@@ -45,6 +46,7 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
     private readonly List<AutoBuyEarlierPurchase> _batchPurchases = new(16);
     private ulong _journalBatch;
 #if SERVICE_CYCLE_PROFILE
+    private long _diagnosedTopologyEpoch;
     private readonly AutomataProfileOperations _profileOperations;
     private readonly Func<AutoBuyCandidateKind, bool> _gameMcpOwnership;
 #endif
@@ -76,6 +78,25 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         _gameMcpOwnership = gameMcpOwnership ?? (_ => false);
 #endif
     }
+
+    internal void InvalidateTopology()
+    {
+#if SERVICE_CYCLE_PROFILE
+        _diagnosedTopologyEpoch = 0;
+#endif
+        if (_purchases is IAutoBuyPurchaseTopologyPort topology) topology.InvalidateTopology();
+    }
+
+#if SERVICE_CYCLE_PROFILE
+    internal void EmitRouteDiagnostic(long lifecycleEpoch)
+    {
+        if (lifecycleEpoch <= 0 || _diagnosedTopologyEpoch == lifecycleEpoch ||
+            _purchases is not IAutoBuyPurchaseTopologyPort topology)
+            return;
+        if (topology.EmitRouteDiagnostic(lifecycleEpoch))
+            _diagnosedTopologyEpoch = lifecycleEpoch;
+    }
+#endif
 
     public ServiceActionResult TryExecute(
         in AutoBuyCycleAction action,
@@ -182,7 +203,8 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
             submission = _purchases.Submit(
                 action.Kind,
                 action.Uuid,
-                levels
+                levels,
+                action.CollectedAtEpoch
 #if SERVICE_CYCLE_PROFILE
                 , in context
 #endif
@@ -372,8 +394,6 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
                 return ServiceActionResult.Rejected(AutoBuyActionResultCodes.OwningViewRelationMissing);
             case AutoBuyPurchasePreflight.OwningViewRelationUnreadable:
                 return ServiceActionResult.Rejected(AutoBuyActionResultCodes.OwningViewRelationUnreadable);
-            case AutoBuyPurchasePreflight.OwningViewRelationAmbiguous:
-                return ServiceActionResult.Rejected(AutoBuyActionResultCodes.OwningViewRelationAmbiguous);
             case AutoBuyPurchasePreflight.OwningViewRelationContradictory:
                 return ServiceActionResult.Rejected(AutoBuyActionResultCodes.OwningViewRelationContradictory);
             case AutoBuyPurchasePreflight.StructureUnavailable:

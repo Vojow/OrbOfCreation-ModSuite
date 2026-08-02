@@ -131,8 +131,7 @@ public sealed class AutoBuyServiceCompositionTests
             structureId,
             WorldPurchaseCandidateKind.Structure,
             structureTypeId,
-            listId,
-            viewId,
+            1,
             WorldPurchaseViewRelationStatus.Resolved);
         return new GameWorldState
         {
@@ -145,6 +144,9 @@ public sealed class AutoBuyServiceCompositionTests
             Views = WorldTable.Create(new[] { new WorldView(viewId, false, false, true) }),
             PurchaseViewRelations = PublicationTable<WorldPurchaseViewRelation>.Create(
                 new[] { relation },
+                1),
+            PurchaseViewRoutes = PublicationTable<WorldPurchaseViewRoute>.Create(
+                new[] { new WorldPurchaseViewRoute(structureId, listId, viewId) },
                 1),
             Resources = WorldTable.Create(
                 new[]

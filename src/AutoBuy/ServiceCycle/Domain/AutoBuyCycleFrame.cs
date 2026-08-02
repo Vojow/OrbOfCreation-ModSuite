@@ -10,7 +10,6 @@ internal enum AutoBuyOwningViewStatus
     Unavailable,
     RelationMissing,
     RelationUnreadable,
-    RelationAmbiguous,
     RelationContradictory,
 }
 
@@ -138,8 +137,8 @@ internal readonly struct AutoBuyCandidateRow
     public Guid Uuid { get; }
 
     /// <summary>
-    /// The exact owning-view/list relation and the owning view's published availability. Every
-    /// non-available member maps one-to-one to a planner exclusion reason.
+    /// The candidate's authored view/list route set intersected with the views' published
+    /// availability. Every non-available member maps one-to-one to a planner exclusion reason.
     /// </summary>
     public AutoBuyOwningViewStatus OwningView { get; }
     public bool IsAvailable { get; }

@@ -5,6 +5,7 @@ using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.World;
 using Xunit;
 
 namespace OrbModding.Tests.Services.AutoBuy.Runtime.ServiceCycle;
@@ -273,7 +274,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         upgrade.purchaseCost.costs.Add(new global::ResourceTuple(spark, new BigDouble(2.0, 1)));
         global::UpgradeSO.All.Add(upgrade);
 
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Upgrade, Guid.Parse(upgrade.uuid), count: 1);
 
         Assert.Equal(AutoBuyPurchasePreflight.NotAdmissible, submission.Preflight);
@@ -372,7 +373,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         global::UpgradeSO.All.Add(second);
         var refusals = new RecordingRefusals();
         var adapter = new AutoBuyCycleActionAdapter(
-            new AutoBuyNativePurchaseAdapter(),
+            NativeAdapter(),
             new FakeQueueRoom(64, readable: true),
             () => PlannedEpoch,
             () => AutoBuyCandidateKinds.All,
@@ -423,7 +424,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
         global::StructureSO.All.Add(structure);
 
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), count: 1);
 
         Assert.Equal(AutoBuyPurchasePreflight.StructureUnavailable, submission.Preflight);
@@ -485,7 +486,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
-    public void Execute_AmbiguousOwningViewRelation_RefusesWithNamedCode()
+    public void Execute_TwoVisibleOwningViewRoutes_AdmitsExactlyOnePurchase()
     {
         var secondList = new global::StructureListVariable { value = global::StructureSO.All };
         var secondView = new global::ViewSO { available = true };
@@ -499,8 +500,60 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             Guid.Parse(structure.uuid),
             nativeEpoch: PlannedEpoch);
 
-        Assert.Equal(AutoBuyActionResultCodes.OwningViewRelationAmbiguous, result.Code);
+        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
+        Assert.Equal(1, structure.queuedQuantity);
+    }
+
+    [Fact]
+    public void Execute_OneOfTwoOwningViewRoutesVisible_AdmitsExactlyOnePurchase()
+    {
+        global::ViewSO.All[0].available = false;
+        var secondList = new global::StructureListVariable { value = global::StructureSO.All };
+        var secondView = new global::ViewSO { available = true };
+        secondView.availableLists.Add(secondList);
+        global::ViewSO.All.Add(secondView);
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        global::StructureSO.All.Add(structure);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Structure,
+            Guid.Parse(structure.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
+        Assert.Equal(1, structure.queuedQuantity);
+    }
+
+    [Fact]
+    public void Execute_NoVisibleOwningViewRoute_RefusesWithoutPayment()
+    {
+        global::ViewSO.All[0].available = false;
+        var secondList = new global::StructureListVariable { value = global::StructureSO.All };
+        var secondView = new global::ViewSO { available = false };
+        secondView.availableLists.Add(secondList);
+        global::ViewSO.All.Add(secondView);
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        global::StructureSO.All.Add(structure);
+
+        var result = Execute(
+            AutoBuyCandidateKind.Structure,
+            Guid.Parse(structure.uuid),
+            nativeEpoch: PlannedEpoch);
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.OwningViewUnavailable, result.Code);
         Assert.Equal(0, structure.queuedQuantity);
+        Assert.Equal(0, structure.purchaseCost.PerformCalls);
     }
 
     [Fact]
@@ -583,7 +636,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
         global::UpgradeSO.All.Add(upgrade);
 
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Upgrade, Guid.Parse(upgrade.uuid), count: 1);
 
         Assert.Equal(AutoBuyPurchasePreflight.NotAdmissible, submission.Preflight);
@@ -608,7 +661,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
         global::StructureSO.All.Add(structure);
 
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), count: 1);
 
         Assert.Equal(AutoBuyPurchasePreflight.NotAdmissible, submission.Preflight);
@@ -793,7 +846,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
         global::UpgradeSO.All.Add(upgrade);
 
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Upgrade, Guid.Parse(upgrade.uuid), count: 3);
 
         Assert.True(submission.Verified);
@@ -817,7 +870,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         global::UpgradeSO.All.Add(upgrade);
 
         // The multiplier requests three levels but the upgrade caps at two: "bought 2 of 3".
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Upgrade, Guid.Parse(upgrade.uuid), count: 3);
 
         Assert.True(submission.Verified);
@@ -839,7 +892,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
         global::UpgradeSO.All.Add(upgrade);
 
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Upgrade, Guid.Parse(upgrade.uuid), count: 1);
 
         Assert.True(submission.Verified);
@@ -869,7 +922,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
         global::StructureSO.All.Add(structure);
 
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), count: 5);
 
         Assert.True(submission.Verified);
@@ -890,7 +943,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
         global::StructureSO.All.Add(structure);
 
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), count: 1);
 
         Assert.True(submission.Verified);
@@ -921,7 +974,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         structure.purchaseCost.AffordableLevels = 3;
         global::StructureSO.All.Add(structure);
 
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), count: 6);
 
         Assert.True(submission.Verified);
@@ -943,7 +996,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
         global::UpgradeSO.All.Add(upgrade);
 
-        var submission = new AutoBuyNativePurchaseAdapter()
+        var submission = NativeAdapter()
             .Submit(AutoBuyCandidateKind.Upgrade, Guid.Parse(upgrade.uuid), count);
 
         Assert.False(submission.Verified);
@@ -1045,7 +1098,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         AutoBuyPlanBelief belief = default)
     {
         var adapter = new AutoBuyCycleActionAdapter(
-            new AutoBuyNativePurchaseAdapter(),
+            NativeAdapter(plannedEpoch),
             new FakeQueueRoom(remainingRoom, roomReadable),
             () => nativeEpoch,
             () => owned,
@@ -1178,28 +1231,14 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         };
 
     [Fact]
-    public void Execute_ReusedAdapter_ResolvesCandidateAddedAfterTheIndexWasBuilt()
+    public void Execute_CandidateAddedAfterStaticCapture_IsNotReEnumeratedAtActionTime()
     {
         var adapter = new AutoBuyCycleActionAdapter(
-            new AutoBuyNativePurchaseAdapter(),
+            NativeAdapter(),
             new FakeQueueRoom(64, readable: true),
             () => PlannedEpoch,
             () => AutoBuyCandidateKinds.All,
             IgnoreRefusals.Instance);
-        var first = new global::StructureSO
-        {
-            uuid = Guid.NewGuid().ToString(),
-            available = true,
-            purchasable = true,
-            queuedQuantity = 1,
-        };
-        global::StructureSO.All.Add(first);
-        var warmup = adapter.TryExecute(
-            new AutoBuyCycleAction(AutoBuyCandidateKind.Structure, Guid.Parse(first.uuid), PlannedEpoch),
-            Config(structures: true, upgrades: true),
-            Context());
-        Assert.Equal(ServiceActionDisposition.Committed, warmup.Disposition);
-
         var added = new global::StructureSO
         {
             uuid = Guid.NewGuid().ToString(),
@@ -1214,19 +1253,14 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             Config(structures: true, upgrades: true),
             Context());
 
-        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
-        Assert.Equal(6, added.queuedQuantity);
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.OwningViewRelationUnreadable, result.Code);
+        Assert.Equal(5, added.queuedQuantity);
     }
 
     [Fact]
-    public void Execute_ReusedAdapter_SelfHealsWhenTheNativeListIsRebuiltInPlace()
+    public void Execute_RebuiltNativeListCannotReusePriorLifecycleRouteEvidence()
     {
-        var adapter = new AutoBuyCycleActionAdapter(
-            new AutoBuyNativePurchaseAdapter(),
-            new FakeQueueRoom(64, readable: true),
-            () => PlannedEpoch,
-            () => AutoBuyCandidateKinds.All,
-            IgnoreRefusals.Instance);
         var original = new global::StructureSO
         {
             uuid = Guid.NewGuid().ToString(),
@@ -1235,14 +1269,20 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             queuedQuantity = 1,
         };
         global::StructureSO.All.Add(original);
+        var adapter = new AutoBuyCycleActionAdapter(
+            NativeAdapter(),
+            new FakeQueueRoom(64, readable: true),
+            () => PlannedEpoch,
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance);
         var warmup = adapter.TryExecute(
             new AutoBuyCycleAction(AutoBuyCandidateKind.Structure, Guid.Parse(original.uuid), PlannedEpoch),
             Config(structures: true, upgrades: true),
             Context());
         Assert.Equal(ServiceActionDisposition.Committed, warmup.Disposition);
 
-        // Same list reference and count, entirely new membership — the stale index must
-        // miss and rebuild instead of failing the action.
+        // Same list reference and count, entirely new membership. The candidate index may recover,
+        // but the authored route snapshot is lifecycle evidence and may not be rebuilt here.
         global::StructureSO.All.Clear();
         var replacement = new global::StructureSO
         {
@@ -1258,8 +1298,9 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             Config(structures: true, upgrades: true),
             Context());
 
-        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
-        Assert.Equal(4, replacement.queuedQuantity);
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.OwningViewRelationUnreadable, result.Code);
+        Assert.Equal(3, replacement.queuedQuantity);
     }
 
     [Fact]
@@ -1329,7 +1370,11 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     {
         internal int LastCount { get; private set; }
 
-        public AutoBuyPurchaseSubmission Submit(AutoBuyCandidateKind kind, Guid uuid, int count)
+        public AutoBuyPurchaseSubmission Submit(
+            AutoBuyCandidateKind kind,
+            Guid uuid,
+            int count,
+            long lifecycleEpoch)
         {
             LastCount = count;
             return AutoBuyPurchaseSubmission.Rejected(AutoBuyPurchasePreflight.CandidateUnavailable);
@@ -1346,7 +1391,11 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
 
     private sealed class ThrowingPurchasePort : IAutoBuyNativePurchasePort
     {
-        public AutoBuyPurchaseSubmission Submit(AutoBuyCandidateKind kind, Guid uuid, int count) =>
+        public AutoBuyPurchaseSubmission Submit(
+            AutoBuyCandidateKind kind,
+            Guid uuid,
+            int count,
+            long lifecycleEpoch) =>
             throw new InvalidOperationException("native purchase threw");
     }
 
@@ -1416,5 +1465,22 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
         global::ViewSO.All.Add(owningView);
         global::GlobalVariables.MultiBuy = new global::IntVariable();
         NativeMultiBuyScope.ResetQuarantineForTests();
+    }
+
+    private static AutoBuyNativePurchaseAdapter NativeAdapter(long lifecycleEpoch = PlannedEpoch)
+    {
+        Assert.True(
+            NativePurchaseViewAdmissionResolver.TryCreate(
+                OrbModding.Common.Runtime.World.WorldNativeTypes.Resolve,
+                out var topology,
+                out var topologyFailure),
+            topologyFailure);
+        topology!.ReadAll(
+            lifecycleEpoch,
+            new OrbModding.Common.Runtime.World.WorldRelationBuffer<WorldPurchaseViewRelation>(),
+            new OrbModding.Common.Runtime.World.WorldRelationBuffer<WorldPurchaseViewRoute>(),
+            out _,
+            out _);
+        return new AutoBuyNativePurchaseAdapter(topology);
     }
 }
