@@ -81,8 +81,8 @@ World reads contain one decision-relevant `worldGeneration`, status/refusal evid
 requested data. They do not repeat lifecycle/configuration generations, request fields,
 capture/respond timestamps, or mailbox internals. Gameplay
 operations re-resolve UUID/native type and invoke the same canonical GameAction as features/tests,
-including current lifecycle/configuration/emergency/ownership/native admission and exact mutation
-receipts. Save deletion, save import/export, run reset, arbitrary clicks, arbitrary keys,
+including current lifecycle/configuration/emergency/ownership/native admission and one observable
+outcome sentinel. Save deletion, save import/export, run reset, arbitrary clicks, arbitrary keys,
 caller-supplied reflection/native invocation, and progression unlocking are absent. The complete
 frame and data-lifetime contract is in
 [Game MCP frame operations](../runtime-architecture/game-mcp-frame-operations.md).
@@ -497,7 +497,7 @@ identity/room/current quantity, outputs, and blockers. The MCP-only sequence is:
 Success returns the complete newer named recipe decision, including the next cost and queue state.
 It has no receipt, payment stanza, world-generation argument, or read-back requirement. A timed
 recipe without one stable loaded authored page refuses rather than guessing a queue; failure after
-native work retains decomposed route and queue evidence. Auto Scribe calls the same GameAction with
+native work names the one missing direct, instant-stock, or queued-recipe outcome. Auto Scribe calls the same GameAction with
 its own existing planner, so MCP crafting does not create a second Scribe implementation.
 
 ### Entity explanation
@@ -561,10 +561,11 @@ independent `subtabStrips[{active,labels}]` state. A tab/subtab match refusal re
 candidates it compared. It carries no static mutation-scope label or counter ceremony. Navigation
 never authorizes a gameplay or save mutation.
 
-`suite_health` has no arguments or detail mode. It is one structured shape: `scene`, `runtime`,
-`nativeContracts`, and `emergencyStop`, followed by `featureGroups` and `serviceGroups` that list
-names grouped by state and reason code. Seven identical NotReady features therefore occupy one
-group, not seven objects. It reads those owners only for the requested operation and reports no MCP
+`suite_health` has no arguments or detail mode. It is compact text: scene, runtime availability,
+native-contract availability, emergency STOP, then feature and service names grouped by state and
+reason code. Seven identical NotReady features therefore occupy one line, not seven objects. It
+returns no structured payload because none of those labels is a handle for another call. It reads
+those owners only for the requested operation and reports no MCP
 queue internals.
 
 An empty clean category means the save has no rows. A skipped native row normally makes exact
@@ -596,11 +597,10 @@ not a timeout to lengthen.
 
 A successful read uses `available`; an unavailable domain read uses `unavailable`. A successful
 mutation uses `committed`; a refused mutation uses `refused`; infrastructure or native divergence
-uses `faulted`. Success carries the data requested or the live post-state and no restating `code`,
-explanatory reason, counters, request echo, generation pair, or payment stanza. Refusals and faults
-keep their reason, target identity, native outcome, lifecycle/configuration mismatch when real, and
-decomposed action receipt when native evidence was captured. A preflight refusal without native
-evidence has no zeroed receipt body. There is one canonical shape per tool and no verbosity option.
+uses `faulted`. Mutations carry a stable `code`; success adds only the live post-state. Refusals and
+faults add one actionable `reason` and only the identity, admission, or missing-outcome facts that
+made it true. Counters, request echoes, generations, payment stanzas, and decomposed receipts are
+absent. There is one canonical shape per tool and no verbosity option.
 
 JSON tool data is emitted once in `structuredContent`; `content` appears only for actual inline media
 such as screenshots, and success omits the false `isError` default. The server does not repeat the
@@ -609,11 +609,11 @@ and text-channel truncation. Invalid arguments return all detected schema
 shape errors together under `error.data.validationErrors`, with distinct `missing_required` and
 `unexpected_field` codes.
 
-A faulted GameAction is still a completed MCP tool invocation: it omits `isError`
-and its domain `status`, stable `reasonCode`, reason, native evidence, and receipt remain in
-`structuredContent`. `isError=true` is reserved for infrastructure failures that happen before a
-canonical action terminal exists. This distinction prevents clients from replacing an exact action
-receipt with an opaque generic tool error.
+A faulted GameAction is still a completed MCP tool invocation: it omits `isError`, and its domain
+`status`, stable `code`, actionable reason, and one relevant fact remain in `structuredContent`.
+`isError=true` is reserved for infrastructure failures that happen before a canonical action
+terminal exists. This distinction prevents clients from replacing the domain result with an opaque
+generic tool error.
 
 The server waits up to 2,000 ms for Unity to claim a request. If the request is still pending, it is
 atomically canceled as `request_canceled_before_claim` and can never execute. Once Unity has claimed
@@ -622,10 +622,8 @@ cannot precede a hidden later mutation. There is no pending fallback.
 
 Action schemas accept no `worldGeneration` argument. Generations advance independently every
 250 ms, so an action revalidates live identity and mutable facts at its GameAction boundary instead
-of accepting an inevitably stale caller generation. Results still stamp exactly one generation, and
-it always identifies a world that really answered: a committed mutation stamps the strictly newer
-settled world that observed its post-state, a refusal stamps the immutable world used for
-admission, and a read stamps the world that answered it.
+of accepting an inevitably stale caller generation. Action results carry no generation; reads alone
+stamp the immutable world that answered them.
 
 Where a target UUID is supplied, the server derives its native type and action kind from that UUID;
 where components are supplied, it derives the target from the live resolver instead:
@@ -655,13 +653,12 @@ are rejected for every offer mode, and `treeUuid`/`offerUuid` are rejected for `
 `confirm`. Initiate and reroll verify the exact tree/type and immediate transition to Crafting;
 select verifies the requested offered UUID became selected; confirm verifies that exact UUID became
 discovered. Payment deltas, reroll values, counters, flags, timers, list cleanup, and selection
-cleanup are evidence, never outcome gates. This matters when a cost is below the ULP of a
+cleanup are neither outcome gates nor response data. This matters when a cost is below the ULP of a
 very large `BigDouble` amount: an unchanged amount cannot disprove a transition the game visibly
 performed. On success, payment is presumed and completely omitted. Initiate/reroll wait for the
 ordinary collector to publish the resulting Choice state and return its named ordered offers;
 select returns the selected state; confirm returns Idle plus the next initiate costs. Failures
-retain the full before/after and payment evidence when capture reached native evidence; a preflight
-refusal omits the receipt.
+name only the failed admission or missing transition and the fact that explains it.
 
 `game_casting_dial` requires `dial` plus a positive `value` and takes no UUID at all, because both
 Output Level and Reserve Level are single global variables. The boundary reads the exact global
@@ -678,14 +675,14 @@ requested loadout outcome. Remove rechecks the game's live `Spell.CanRemove()` v
 re-resolves the source slot and invokes the same native swap-plus-notify path as the spellbook.
 Success is the exact added instance, exact target absence with survivor order preserved, or the
 complete slot sequence with exactly source and destination exchanged. A committed result is the
-complete newer named loadout; failure evidence is retained only after native execution was reached.
+complete newer named loadout; a failure names only the unmet admission or missing outcome.
 
 `game_targeting` has two conditional shapes. `submit` requires one `targetUuid`; `randomize` rejects
 it. Submit re-resolves that UUID within the live native candidate list and reruns the request's
 native target verdict immediately before mutation. Randomize invokes the game's own random choice
 and immediately submits that result; it is not a candidate-only shuffle. Success is exact
 submitted-object identity plus retirement of the original request. A committed result includes the
-complete newer target state; failures retain native outcome evidence only after mutation began.
+complete newer target state; a failure names only the rejected target or missing submission.
 
 `game_consumable` has five conditional shapes. `use` and `cancel` require only a
 `consumableUuid`; `discard` also requires positive `amount`; `set_randomization` requires
@@ -714,8 +711,8 @@ already-discovered, `CanDiscover`, exact cost, and affordability checks on Unity
 captures the shared family permit last, then preserves the UI's `PerformCost`-before-`Discover`
 ordering. Success is the exact resolved target becoming discovered and returns its complete newer
 named world row inline. It carries no receipt or payment stanza. A refusal occurs before payment and
-restores any temporary UI selection staged for native resolution; a fault after native work keeps
-the named before/after evidence. A composition that resolves differently than the caller expected is
+restores any temporary UI selection staged for native resolution. A fault names the single missing
+discovery outcome. A composition that resolves differently than the caller expected is
 preview or refusal evidence, never a wrong-target mutation.
 
 `game_equipment` requires `mode` and one published equipment `uuid`; optional
@@ -736,7 +733,7 @@ verifies exact membership inversion; activate verifies the exact idle/queued tog
 verifies the exact
 target becomes failed. A fetch verifies that its requested ordered offer surface materialized and
 every offer entered the native queued state. Rerolls, fetched flags, rewards, effects, and other
-accounting remain evidence rather than success gates. Committed target modes return the complete
+accounting are neither success gates nor response data. Committed target modes return the complete
 newer named challenge row plus shared challenge state; fetch returns the shared state. No success
 receipt or follow-up read is required.
 
@@ -800,8 +797,8 @@ STOP are not generic writable settings.
 
 `game_screenshot` has no required parameters and returns an MCP `image` content block with
 `mimeType: image/png`. `maxWidth` bounds the encoded image between 320 and 4,096 pixels and defaults
-to 1,280, which is the control for response size. The response reports the encoded `width` and
-`height`, the `scene`, and the `worldGeneration` it was taken against, and echoes nothing else.
+to 1,280, which is the control for response size. The response reports the encoded `width`,
+`height`, and `scene`, and echoes nothing else.
 `{"save":true}` additionally writes a server-generated, collision-resistant name under the current
 trace folder. The caller supplies no basename, and there is no per-process filename cap.
 
@@ -884,7 +881,8 @@ authored descriptions for `explain_entity` when the resolved entity implements t
 `trace_health` answers operational questions that the strategist cannot answer from a world
 snapshot: is the writer healthy, how many segments and records are retained, how many bytes are
 being produced, and is retention or a writer fault active? It deliberately does not stream
-individual automation decisions. Those belong to the trace folder and offline analysis, where
+individual automation decisions. The answer is compact text because it exposes no follow-up
+handle. Individual decisions belong to the trace folder and offline analysis, where
 high-volume repeated decisions can be filtered without spending strategist context.
 
 `game_probe` has exactly three names:

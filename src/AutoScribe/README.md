@@ -48,13 +48,14 @@ and queue-or-instant admission sequence. Affordability search is bounded, uses o
 `CanBuyAt(BigDouble)` predicate, and the chosen level is revalidated for target, competing supply,
 and exact cost before payment.
 
-The action receipts the exact resource charge, `maxStartingLevel` transition, and exclusive queue
-or instant-stock outcome. A native failure after payment or an ambiguous postcondition records the
-observed partial commit, names the exact stage, and quarantines this GameAction until lifecycle
-replacement. Nothing attempts rollback of game-owned irreversible effects.
+The action verifies one outcome: either the exact recipe entered the native queue or the exact
+Scroll stock increased through the instant path. It does not reread resource balances, reconstruct
+payment deltas, or assemble a receipt. After a native exception it rereads that same sentinel;
+an observable outcome commits, while an absent transition faults and quarantines this GameAction
+until lifecycle replacement. Nothing attempts rollback of game-owned irreversible effects.
 
 The same `AutoScribeOneShotCraftGameAction` also owns the manual one-shot player capability exposed
-as `game_craft`. Its player overload leaves the Auto Scribe planner and receipts unchanged, but
+as `game_craft`. Its player overload leaves the Auto Scribe planner and mutation boundary unchanged, but
 widens exact live revalidation to every concrete `CraftingRecipeSO`: native direct `Execute`, or the
 authored page's stack/new/instant queue route. MCP success returns the newer named recipe decision
 with next costs, holdings, affordability, and queue state; payment accounting is not a player-action

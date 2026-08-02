@@ -163,11 +163,11 @@ claimed operation on Unity's main thread; it is never retained as an MCP snapsho
 | Discovery decision state: tree UUID, visibility, mode, rerolls/used flag, remaining/immediate-required state, ordered current offer UUIDs, selected UUID, exact next-item cost components, resource true quantities, and native `HasEnough` | 250-ms dynamic | The lifecycle-bound `WorldDiscoveryTreeBinder` copies only native-free values during the ordinary world capture. MCP derives initiate/reroll verdicts and resolves offers against the same immutable generation; it performs no direct or speculative read. |
 | Entity explanation envelope and predicates: world/lifecycle generations; visible, available, canDevelop, canPurchase, canDiscover, canUse; stable false reason codes; queue/cap/leeway/discovery/bandwidth/drain blockers | 250-ms dynamic | Pure typed evaluation over one pinned world, plus the structural tables retained in that world. No snapshot token crosses calls. |
 | World row/list/search/batch fields, resource quantities/rates/capacities, levels/quantities, queue/slot occupancy, discovery state, recipe state, affordability and collection-category status | 250-ms dynamic | Existing shared world collector and worker deriver. MCP only selects/projects requested rows. |
-| Feature health fields: feature ID/name/state/reason; service health fields: service ID/name/runner phase/fault; emergency state; scene; native-contract health | Request-time | One requested `suite_health` operation reads `FeatureStatusRegistry` and the ServiceCycle frame facts already owned by the pump. Scene and native-contract facts are read only because this operation declares them. No MCP registry/revision exists. |
-| Trace health fields: writer state/result, accepted/written/discarded records, bytes, written/retained segments, pending/peak blocks, artifact, fault site/message, writer revision | Request-time | One `trace_health` operation reads `DecisionJournalStatusRegistry`; scope is writer health only. No event stream or gameplay trace is mirrored. |
+| Feature health fields: feature name/state/reason; service name/runner phase/fault; emergency state; scene; native-contract health | Request-time | One requested `suite_health` operation reads `FeatureStatusRegistry` and the ServiceCycle frame facts already owned by the pump, then renders grouped compact text because it exposes no reusable handle. Scene and native-contract facts are read only because this operation declares them. No MCP registry/revision exists. |
+| Trace health fields: writer state/result, accepted/written/discarded records, bytes, written/retained segments, pending/peak blocks, artifact, fault site/message, writer revision | Request-time | One `trace_health` operation reads `DecisionJournalStatusRegistry` and renders compact text; scope is writer health only. No event stream or gameplay trace is mirrored. |
 | Tooltip catalog paths; compact typed `TooltipNode` kind/text/children; semantic alternate-tree deltas; nested/computed/inspected panels | Request-time | `game_tooltips`/`game_tooltip` only, through lifecycle-bound tooltip accessors on Unity. Rich-text and projection ceremony are removed after the one requested read; unrelated operations make zero tooltip calls. |
 | Screen tab/subtab catalog, independent subtab-strip active states, navigation destination/candidates, exact probe value, Continue scene/runtime result, framebuffer PNG and optional generated save path | Request-time | Only the matching screen/navigation/probe/continue/screenshot operation. These are UI/diagnostic facts, never shared-world state. |
-| Response status, one read generation, requested rows or mutation post-state, and exact failure evidence | Request-time | Typed terminal document on Unity; encoded once by the waiting HTTP worker. A committed mutation stamps only the strictly newer world generation that supplied its post-state. Success codes/reasons, payment stanzas, counters, null/default fields, timestamps, and mailbox fields are not protocol data; explicitly written empty decision collections remain present. |
+| Response status, one read generation, requested rows or mutation post-state, stable mutation code, and exact failure reason | Request-time | Typed terminal document on Unity; encoded once by the waiting HTTP worker. Reads name the immutable world that answered; action results carry no generation. Success omits reasons, payment stanzas, counters, null/default fields, timestamps, and mailbox fields. Failure adds only the facts that explain its reason; explicitly written empty decision collections remain present. |
 
 ### Why authored collection is no longer ordinary work
 
@@ -191,18 +191,18 @@ configured on. UUID category and expected native type come from the one
 
 ## Minimal terminal protocol
 
-Reads use `available`/`unavailable`, one `worldGeneration`, and the requested rows/evidence.
-Mutations use `committed`/`refused`/`faulted`; success returns the newer post-state with the generation
-that supplied it and omits payment evidence, request echoes, and counters, while failure keeps named
-target, concrete reason, a pointer to the owning read surface, mismatches that actually occurred,
-and decomposed receipt evidence. The exceptional case where a committed outcome cannot be observed
-in a newer publication within one second retains `committed` plus only
+Reads use `available`/`unavailable`, one `worldGeneration`, and the requested rows. Mutations use
+`committed`/`refused`/`faulted` plus a stable `code`. Success returns only the newer settled
+post-state. Failure adds one actionable `reason` and only the identity or outcome fact that made
+that reason true; it does not assemble a general-purpose receipt. Action results never expose a
+world generation. The exceptional case where a committed outcome cannot be observed in a newer
+publication within one second retains `committed` plus only
 `postStateUnavailable / post_state_timeout`; it never substitutes the older world. `content` is
 reserved for text-first tools and actual image media; structured data appears once in
-`structuredContent`. Committed, refused, and faulted GameAction results are all successful MCP tool executions:
-their domain `status`/`reasonCode` carries the outcome and `isError` stays false so an MCP client cannot
-replace a decomposed fault receipt with a generic transport error. `isError` is reserved for failures that
-occur before a canonical domain result exists, such as frame-operation dispatch failure.
+`structuredContent`. Committed, refused, and faulted GameAction results are all successful MCP tool
+executions, so `isError` stays false and the domain result reaches the client. `isError` is reserved
+for failures that occur before a canonical domain result exists, such as frame-operation dispatch
+failure.
 
 The protocol does not expose submission/processing/responded/captured timestamps, queue occupancy,
 queue capacity, priority, operation sequence, pending handles, receipt IDs, or snapshot tokens.
@@ -229,7 +229,7 @@ The replacement removed, rather than deprecated, the following old mechanisms:
 | `ObserveEmergencyStop` command-bus admission and general priority scheduling | Emergency stop executes at submission position and synchronously closes later admission. |
 | `RefreshForGameMcp`, `allowManualMcpActions` | One exact per-operation family scope. |
 | Router `ReadLatest()`/shadow fast paths and state parse-back | Every stateful tool submits one typed operation. |
-| `submittedAtUtc`, `processedAtUtc`, `respondedAtUtc`, `collectedAtUtc`, `structuralEpoch`, `collectedEpoch`, queue/capacity response fields | One read generation or mutation post-state plus requested/failure evidence. |
+| `submittedAtUtc`, `processedAtUtc`, `respondedAtUtc`, `collectedAtUtc`, `structuralEpoch`, `collectedEpoch`, queue/capacity response fields | One read generation or a settled mutation post-state plus one exact failure reason. |
 
 ## Hard boundary
 
