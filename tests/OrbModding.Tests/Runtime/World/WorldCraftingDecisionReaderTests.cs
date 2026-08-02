@@ -1,0 +1,157 @@
+using System;
+using System.Collections.Generic;
+using OrbModding.Common;
+using OrbModding.Common.Runtime.World;
+using Xunit;
+
+namespace OrbModding.Tests.Runtime.World;
+
+public sealed class WorldCraftingDecisionReaderTests : IDisposable
+{
+    public WorldCraftingDecisionReaderTests()
+    {
+        CraftingRecipeSO.All.Clear();
+        UnityEngine.Resources.Objects.Clear();
+    }
+
+    public void Dispose()
+    {
+        CraftingRecipeSO.All.Clear();
+        UnityEngine.Resources.Objects.Clear();
+    }
+
+    [Fact]
+    public void DirectRecipePublishesExactNextCostHoldingAndAffordability()
+    {
+        var resource = Resource(amount: 19);
+        var recipe = Recipe();
+        recipe.useQuantityAsLevel = true;
+        recipe.StartingQuantity = new BigDouble(2, 0);
+        recipe.recipeCost.costs.Add(new ResourceTuple(resource, new BigDouble(4, 0)));
+        CraftingRecipeSO.All.Add(recipe);
+        var reader = Reader();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 7 };
+
+        var report = reader.Collect(new HashSet<Guid>(), frame);
+
+        Assert.Equal(WorldCategoryOutcome.Collected, report.Outcome);
+        Assert.Equal(1, report.Sampled);
+        Assert.Equal(0, report.Skipped);
+        ref readonly var decision = ref frame.CraftingDecisions[0];
+        Assert.Equal(recipe.GetGuid(), decision.RecipeId);
+        Assert.Equal(WorldCraftingPipeline.Direct, decision.Pipeline);
+        Assert.Equal(new BigDouble(2, 0), decision.PurchaseAmount);
+        Assert.True(decision.CanStart);
+        Assert.Equal("ready", decision.ReasonCode);
+        ref readonly var cost = ref frame.CraftingDecisionCosts[0];
+        Assert.Equal(resource.GetGuid(), cost.ResourceId);
+        Assert.Equal(new BigDouble(8, 0), cost.Cost);
+        Assert.Equal(new BigDouble(19, 0), cost.Amount);
+        Assert.True(cost.Affordable);
+    }
+
+    [Fact]
+    public void StackModePublishesQueueIdentityOccupancyAndExistingQuantity()
+    {
+        var recipe = Recipe();
+        CraftingRecipeSO.All.Add(recipe);
+        var page = Page(recipe, mode: 0, maximum: 1);
+        page.craftingQueueInstances.value.Add(
+            new CraftingInstance(recipe, new BigDouble(6, 0)));
+        var reader = Reader();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 7 };
+
+        var report = reader.Collect(new HashSet<Guid>(), frame);
+
+        Assert.Equal(1, report.Sampled);
+        ref readonly var decision = ref frame.CraftingDecisions[0];
+        Assert.Equal(WorldCraftingPipeline.QueueStack, decision.Pipeline);
+        Assert.Equal(new BigDouble(6, 0), decision.QueuedAmount);
+        Assert.Equal(page.craftingQueueInstances.GetGuid(), decision.QueueId);
+        Assert.Equal(1, decision.QueueUsed);
+        Assert.Equal(1, decision.QueueMaximum);
+        Assert.True(decision.CanStart);
+    }
+
+    [Fact]
+    public void AuthoredPageRoutingIsPinnedForLifecycleAndRecapturedAfterEpochChanges()
+    {
+        var recipe = Recipe();
+        recipe.timeToComplete = 2d;
+        CraftingRecipeSO.All.Add(recipe);
+        var reader = Reader();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 7 };
+
+        reader.Collect(new HashSet<Guid>(), frame);
+        Assert.Equal(WorldCraftingPipeline.Unknown, frame.CraftingDecisions[0].Pipeline);
+
+        Page(recipe, mode: 1, maximum: 2);
+        reader.Collect(new HashSet<Guid>(), frame);
+        Assert.Equal(WorldCraftingPipeline.Unknown, frame.CraftingDecisions[0].Pipeline);
+
+        frame.CollectedAtEpoch = 8;
+        reader.Collect(new HashSet<Guid>(), frame);
+        Assert.Equal(WorldCraftingPipeline.QueueNew, frame.CraftingDecisions[0].Pipeline);
+    }
+
+    [Fact]
+    public void DuplicatePageRelationSkipsOnlyImplicatedRecipe()
+    {
+        var implicated = Recipe();
+        var unaffected = Recipe();
+        CraftingRecipeSO.All.Add(implicated);
+        CraftingRecipeSO.All.Add(unaffected);
+        Page(implicated, mode: 0, maximum: 2);
+        Page(implicated, mode: 1, maximum: 2);
+        var reader = Reader();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 7 };
+
+        var report = reader.Collect(new HashSet<Guid>(), frame);
+
+        Assert.Equal(1, report.Sampled);
+        Assert.Equal(1, report.Skipped);
+        Assert.Contains("more than one crafting page", report.FirstFailure);
+        Assert.Equal(unaffected.GetGuid(), frame.CraftingDecisions[0].RecipeId);
+    }
+
+    private static WorldCraftingDecisionReader Reader() =>
+        new(name => typeof(CraftingRecipeSO).Assembly.GetType(name, throwOnError: false));
+
+    private static CraftingRecipeSO Recipe() =>
+        new()
+        {
+            uuid = Guid.NewGuid(),
+            visible = true,
+            BuyAllowed = true,
+            TotalCost = new ResourceCostList { affordable = true },
+            MainType = new CraftingRecipeTypeSO { isLevelType = false },
+        };
+
+    private static ResourceSO Resource(int amount)
+    {
+        var resource = new ResourceSO
+        {
+            quantity = new BigDouble(amount, 0),
+            quality = new ValueModifierRecord(new BigDouble(100, 0)),
+        };
+        resource.SetGuid(Guid.NewGuid());
+        return resource;
+    }
+
+    private static UICraftingPage Page(CraftingRecipeSO recipe, int mode, int maximum)
+    {
+        var page = new UICraftingPage
+        {
+            mainCraftType = recipe.MainType,
+            craftMode = new IntVariable { Value = mode },
+            craftingQueueInstances = new CraftingInstanceListVariable
+            {
+                uuid = Guid.NewGuid(),
+                Maximum = maximum,
+            },
+        };
+        page.availableRecipes.value.Add(recipe);
+        UnityEngine.Resources.Objects.Add(page);
+        return page;
+    }
+}

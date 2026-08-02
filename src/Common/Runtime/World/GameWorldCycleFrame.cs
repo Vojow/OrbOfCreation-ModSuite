@@ -129,6 +129,8 @@ internal sealed class GameWorldCycleFrame
     internal WorldRelationBuffer<RawCraftingRecipeResource> CraftingRecipeResources { get; } = new();
     internal WorldRelationBuffer<WorldCraftingRecipeConsumableOutput> CraftingRecipeConsumableOutputs { get; } = new();
     internal WorldRelationBuffer<WorldCraftingRecipeDrainBlock> CraftingRecipeDrainBlocks { get; } = new();
+    internal WorldRelationBuffer<WorldCraftingDecision> CraftingDecisions { get; } = new();
+    internal WorldRelationBuffer<WorldCraftingDecisionCost> CraftingDecisionCosts { get; } = new();
     internal WorldSampleBuffer<WorldHarvestElement, WorldHarvestElement> HarvestElements { get; } = new();
     internal WorldSampleBuffer<RawHarvestResourceSample, WorldHarvestResource> HarvestResources { get; } = new();
     internal WorldSampleBuffer<WorldTimeRune, WorldTimeRune> TimeRunes { get; } = new();
@@ -298,6 +300,16 @@ internal static class GameWorldFrameDeriver
                 frame.CraftingRecipeConsumableOutputs,
                 frame.CraftingRecipeDrainBlocks,
                 resources),
+            CraftingDecisions = WorldScribeRelationDeriver.Build(
+                frame.CraftingDecisions,
+                static (left, right) => left.RecipeId.CompareTo(right.RecipeId)),
+            CraftingDecisionCosts = WorldScribeRelationDeriver.Build(
+                frame.CraftingDecisionCosts,
+                static (left, right) =>
+                {
+                    var recipe = left.RecipeId.CompareTo(right.RecipeId);
+                    return recipe != 0 ? recipe : left.ResourceId.CompareTo(right.ResourceId);
+                }),
             HarvestElements = frame.HarvestElements.Build(WorldIdentityDeriver<WorldHarvestElement>.Shared),
             HarvestResources = frame.HarvestResources.Build(new WorldHarvestResourceDeriver(frame.FrameGlobals)),
             TimeRunes = frame.TimeRunes.Build(WorldIdentityDeriver<WorldTimeRune>.Shared),

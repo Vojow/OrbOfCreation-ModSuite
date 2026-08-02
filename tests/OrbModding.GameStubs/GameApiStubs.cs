@@ -1097,6 +1097,20 @@ public class ResourceCostList
         return true;
     }
     public List<ResourceTuple> GetEntries() => costs;
+    public ResourceCostList Multiply(BigDouble factor)
+    {
+        var result = new ResourceCostList
+        {
+            WithinCapacity = WithinCapacity,
+            affordable = affordable,
+            AffordableLevels = AffordableLevels,
+        };
+        for (var index = 0; index < costs.Count; index++)
+            result.costs.Add(new ResourceTuple(
+                costs[index].resource,
+                costs[index].GetValue() * factor));
+        return result;
+    }
     public void PerformCost()
     {
         PerformCalls++;
@@ -3077,7 +3091,9 @@ namespace UnityEngine
 
     public static class Resources
     {
-        public static Object[] FindObjectsOfTypeAll(Type type) => Array.Empty<Object>();
+        public static List<Object> Objects { get; } = new List<Object>();
+        public static Object[] FindObjectsOfTypeAll(Type type) =>
+            Objects.Where(type.IsInstanceOfType).ToArray();
     }
 
     public readonly struct Rect

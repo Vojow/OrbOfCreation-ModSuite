@@ -1543,6 +1543,7 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandKind.SpellLoadout => "spell-slots",
         GameMcpCommandKind.Targeting => "targeting",
         GameMcpCommandKind.Consumable => "consumables",
+        GameMcpCommandKind.Crafting => "crafting-recipes",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 

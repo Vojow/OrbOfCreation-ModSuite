@@ -168,6 +168,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteTargeting(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Consumable)
                 return ExecuteConsumable(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.Crafting)
+                return ExecuteCrafting(command, lifecycle, configuration.Generation.Value);
             var service = ServiceForGameMcp(command.Kind);
             var context = CreateGameMcpContext(
                 registry,
@@ -352,6 +354,28 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             configurationGeneration,
             submission.Reason,
             GameMcpConsumableProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecuteCrafting(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        GameMcpNativeActionAdmission.AssertNativeType(command, "CraftingRecipeSO");
+        var feature = FindFeature(command.Kind);
+        var action = new CraftingPlayerAction(
+            command.TargetId,
+            command.ExpectedLifecycleGeneration);
+        var submission = ((AutoScribeServiceCycleFeature.Runtime)feature)
+            .TryExecuteGameMcp(in action);
+        var result = CraftingPlayerActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(
+            in result,
+            command.Kind,
+            lifecycle,
+            configurationGeneration,
+            submission.Reason,
+            GameMcpCraftingProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteSpellWorkbench(
@@ -616,7 +640,9 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 kind == GameMcpCommandKind.Concept && feature is AutoConceptFeatureRuntime ||
                 kind == GameMcpCommandKind.Harvest && feature is AutoHarvestFeatureRuntime ||
                 kind == GameMcpCommandKind.SpellLevel && feature is SpellLevelFeatureRuntime) ||
-                kind == GameMcpCommandKind.Consumable && feature is AutoItemsFeatureRuntime)
+                kind == GameMcpCommandKind.Consumable && feature is AutoItemsFeatureRuntime ||
+                kind == GameMcpCommandKind.Crafting &&
+                    feature is AutoScribeServiceCycleFeature.Runtime)
                 return feature;
         }
         throw new InvalidOperationException(

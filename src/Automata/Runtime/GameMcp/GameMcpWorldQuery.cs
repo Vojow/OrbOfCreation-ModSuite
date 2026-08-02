@@ -846,7 +846,7 @@ internal static class GameMcpWorldQuery
             : row is WorldPurchaseCost purchaseCost
             ? ProjectPurchaseCost(in purchaseCost)
             : row is WorldCraftingRecipe craftingRecipe
-            ? ProjectCraftingRecipe(in craftingRecipe)
+            ? ProjectCraftingRecipe(world, in craftingRecipe)
             : row is WorldDiscoveryTree tree
             ? ProjectDiscoveryTree(world, in tree)
             : row is WorldSpellRecipe spellRecipe
@@ -1712,9 +1712,17 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
-    private static GameMcpValue ProjectCraftingRecipe(in WorldCraftingRecipe recipe)
+    private static GameMcpValue ProjectCraftingRecipe(
+        GameWorldState world,
+        in WorldCraftingRecipe recipe)
     {
         var reading = recipe.Reading;
+        var hasDecision = WorldCraftingDecisionLookup.TryFind(
+            world.CraftingDecisions,
+            recipe.EntityId,
+            out var decision);
+        var canStart = reading.Visible && reading.OutputWithinCapacity &&
+            (hasDecision ? decision.CanStart : reading.CanBuyAtStartingQuantity);
         var result = new JObject
         {
             ["entityId"] = recipe.EntityId.ToString("D"),
@@ -1723,18 +1731,54 @@ internal static class GameMcpWorldQuery
             ["visible"] = reading.Visible,
             ["startingAmount"] = new GameMcpDomainValue(reading.StartingQuantity),
             ["craftTimeSeconds"] = reading.TimeToComplete,
-            ["canStart"] = reading.Visible &&
-                reading.CanBuyAtStartingQuantity && reading.OutputWithinCapacity,
+            ["canStart"] = canStart,
         };
         if (reading.UseQuantityAsLevel) result["amountActsAsLevel"] = true;
-        if (!reading.Visible || !reading.CanBuyAtStartingQuantity || !reading.OutputWithinCapacity)
+        var blockers = new JArray();
+        if (!reading.Visible) blockers.Add("hidden_or_undiscovered");
+        if (hasDecision)
         {
-            var blockers = new JArray();
-            if (!reading.Visible) blockers.Add("hidden_or_undiscovered");
-            if (!reading.CanBuyAtStartingQuantity) blockers.Add("native_purchase_refused");
-            if (!reading.OutputWithinCapacity) blockers.Add("output_capacity_blocked");
-            result["blockers"] = blockers;
+            result["execution"] = CraftingPipeline(decision.Pipeline);
+            result["purchaseAmount"] = new GameMcpDomainValue(decision.PurchaseAmount);
+            if (decision.Pipeline is WorldCraftingPipeline.QueueStack or
+                WorldCraftingPipeline.QueueNew)
+            {
+                result["queuedAmount"] = new GameMcpDomainValue(decision.QueuedAmount);
+                result["queue"] = new JObject
+                {
+                    ["queueId"] = decision.QueueId.ToString("D"),
+                    ["used"] = decision.QueueUsed,
+                    ["maximum"] = decision.QueueMaximum,
+                };
+            }
+            if (!decision.CanStart && decision.ReasonCode.Length > 0 &&
+                decision.ReasonCode != "hidden_or_undiscovered" &&
+                decision.ReasonCode != "output_capacity_blocked")
+                blockers.Add(decision.ReasonCode);
+            if (WorldCraftingDecisionLookup.TryFindCostRange(
+                    world.CraftingDecisionCosts,
+                    recipe.EntityId,
+                    out var costStart,
+                    out var costCount))
+            {
+                var exactCosts = new JArray();
+                for (var index = 0; index < costCount; index++)
+                {
+                    var cost = world.CraftingDecisionCosts[costStart + index];
+                    exactCosts.Add(new JObject
+                    {
+                        ["resourceId"] = cost.ResourceId.ToString("D"),
+                        ["cost"] = new GameMcpDomainValue(cost.Cost),
+                        ["amount"] = new GameMcpDomainValue(cost.Amount),
+                        ["affordable"] = cost.Affordable,
+                    });
+                }
+                result["nextCosts"] = exactCosts;
+            }
         }
+        else if (!reading.CanBuyAtStartingQuantity) blockers.Add("native_purchase_refused");
+        if (!reading.OutputWithinCapacity) blockers.Add("output_capacity_blocked");
+        if (blockers.Count > 0) result["blockers"] = blockers;
         if (recipe.Types.Count > 0)
         {
             var types = new JArray();
@@ -1801,6 +1845,14 @@ internal static class GameMcpWorldQuery
         if (drainBlockers.Count > 0) result["drainBlockers"] = drainBlockers;
         return result.Freeze();
     }
+
+    private static string CraftingPipeline(WorldCraftingPipeline pipeline) => pipeline switch
+    {
+        WorldCraftingPipeline.Direct => "direct",
+        WorldCraftingPipeline.QueueStack => "queue_stack",
+        WorldCraftingPipeline.QueueNew => "queue_new",
+        _ => "unknown",
+    };
 
     private static string DiscoveryMode(int mode) => mode switch
     {
@@ -1940,7 +1992,7 @@ internal static class GameMcpWorldQuery
             : row is WorldPurchaseCost purchaseCost
             ? ProjectPurchaseCost(in purchaseCost)
             : row is WorldCraftingRecipe craftingRecipe
-            ? ProjectCraftingRecipe(in craftingRecipe)
+            ? ProjectCraftingRecipe(world, in craftingRecipe)
             : row is WorldDiscoveryTree tree
             ? ProjectDiscoveryTree(world, in tree)
             : row is WorldSpellRecipe spellRecipe
@@ -2148,6 +2200,7 @@ internal static class GameMcpWorldQuery
         {
             "crafting-recipes",
             "crafting-recipe-state",
+            "crafting-decisions",
             "resources",
         },
         "requirement-native-verdicts" => new[] { "requirement-native-verdicts" },

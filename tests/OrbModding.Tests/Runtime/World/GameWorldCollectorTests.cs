@@ -84,6 +84,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             ["EffectResultInfo"] = typeof(FakeTargetingResultInfo),
             ["Inventory"] = typeof(FakeConsumableInventory),
             ["ConsumableRefListVariable"] = typeof(FakeConsumableRefListVariable),
+            ["UICraftingPage"] = typeof(FakeCraftingPage),
         };
 
         foreach (var pair in WorldCategoryFakes.ByTypeName) byName[pair.Key] = pair.Value;
@@ -335,15 +336,15 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Fifty-three passes: the four categories
+        // The scope claim, asserted rather than described. Fifty-four passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
         // lists, the authored effects, each plot's authoring and each action's completion blocks,
         // each purchasable entity's lifecycle-authored per-level conditions plus their separately
         // refreshed live native verdicts, prerequisite links' volatile native gates, and crafting
-        // recipes' separately refreshed live state, which are second walks of cached lifecycle
-        // bindings rather than registries of their own, the
+        // recipes' separately refreshed live state and player-action decisions, which are second
+        // walks of cached lifecycle bindings rather than registries of their own, the
         // plot-and-action pairs, which belong to neither side, and
         // the two that belong to no per-type registry at all and are reached by uuid: the action
         // queues, the equipped spell loadout, the paired Concept registries, and the current
@@ -352,13 +353,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(53, report.Categories.Length);
+        Assert.Equal(54, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "concept instances", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "concept instances", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -1603,7 +1604,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         public Guid GetGuid() => Identity;
     }
 
-    private sealed class FakeCount
+    internal sealed class FakeCount
     {
         public static readonly List<FakeCount> All = new();
 
@@ -1619,6 +1620,14 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         public Guid GetGuid() => Identity;
         public int AsInt() => (int)value.GetValue().ToDouble();
+    }
+
+    internal sealed class FakeCraftingPage : UnityEngine.Object
+    {
+        public FakeScribeRecipeList availableRecipes = new();
+        public FakeScribeInstanceList craftingQueueInstances = new();
+        public FakeCount craftMode = new(0);
+        public FakeCraftingRecipeType mainCraftType = new();
     }
 
     private sealed class FakeFlag

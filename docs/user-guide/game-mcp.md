@@ -122,6 +122,7 @@ does not refresh it by hidden navigation.
 | `game_spell_loadout` | Remove one exact equipped runtime spell or move it to another loadout slot |
 | `game_targeting` | Submit a specific eligible target, submit a native random target, or cancel the current request |
 | `game_consumable` | Use, cancel, discard, randomize, or reorder one published consumable |
+| `game_craft` | Execute one published direct or queued crafting recipe |
 | `suite_config_set` | Commit one allowlisted setting through the configuration store |
 | `suite_emergency_stop` | Engage or resume the suite's shared emergency stop |
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
@@ -199,9 +200,15 @@ research modifiers are included in the native effective result but are not misat
 members of the research row.
 
 `crafting-recipe-types` describes the game's crafting families; `crafting-recipes` contains the
-actual recipes. A recipe row leads with `visible`, `startingAmount`, `craftTimeSeconds`, and
-`canStart`; when false, `blockers` names the failed native visibility, purchase, or output-capacity
-axis. Named `types`, `inputs`, `outputs`, and `consumableOutputs` preserve authored order. An input
+actual recipes and is the pre-decision surface for `game_craft`. A recipe row leads with `visible`,
+`startingAmount`, `craftTimeSeconds`, and `canStart`; when false, `blockers` names the failed native
+visibility, purchase, queue, page-relation, or output-capacity axis. `execution` identifies the
+direct, existing-stack, or new-instance route. Page routes include current `queuedAmount` and the
+named queue's used/maximum slots. `purchaseAmount` and named `nextCosts` carry the exact next cost,
+canonical spendable resource `amount`, and affordability before any mutation. Direct costs use the
+same `recipeCost.Multiply(purchaseAmount)` lineage as native `Execute`; page costs use the same
+`GetTotalCost(previous,purchaseAmount)` lineage as native `QueueCraft`. Named `types`, `inputs`,
+`outputs`, and `consumableOutputs` preserve authored order. An input
 uses `cost` for the recipe requirement and canonical `amount` for what is spendable now (bandwidth
 headroom for a bandwidth resource); outputs use `yield`. Only failed engagement-drain evidence is
 emitted in `drainBlockers`. The category is unavailable unless both recipe and resource collectors
@@ -363,6 +370,22 @@ The MCP-only consumable sequence is:
 Every committed mode returns the newer named target row, the complete newer named inventory and
 hotbar, and all next decisions. Use also returns targeting state if it opened a request. There is no
 payment stanza, receipt, world-generation argument, catalog join, or post-mutation read-back.
+
+### One-shot crafting decision loop
+
+`crafting-recipes` carries everything needed to choose a one-shot craft: player-facing identity,
+native route, purchase amount, exact named costs and current holdings, affordability, queue
+identity/room/current quantity, outputs, and blockers. The MCP-only sequence is:
+
+1. Read `world_list(category="crafting-recipes")` or batch exact recipes through `world_get`.
+2. Choose a row whose `canStart` is true after comparing `nextCosts`, outputs, and queue state.
+3. Call `game_craft(recipeUuid=...)`.
+
+Success returns the complete newer named recipe decision, including the next cost and queue state.
+It has no receipt, payment stanza, world-generation argument, or read-back requirement. A timed
+recipe without one stable loaded authored page refuses rather than guessing a queue; failure after
+native work retains decomposed route and queue evidence. Auto Scribe calls the same GameAction with
+its own existing planner, so MCP crafting does not create a second Scribe implementation.
 
 ### Entity explanation
 
@@ -550,6 +573,14 @@ and the current list/source/destination on the Unity main thread, then captures 
 ConsumableUse/MultiBuy permit last. Success is the requested queue, exact usage cancellation,
 clamped holding removal, randomization flag, or complete same-list order. Payment and downstream
 effect accounting do not gate success; a committed result is the full newer decision state.
+
+`game_craft` requires one `recipeUuid`; `expectedNativeType`, when supplied, must be
+`CraftingRecipeSO`. The boundary re-resolves the exact recipe, authored page/queue route, native
+purchase amount, affordability, and room on Unity's main thread, then captures the shared crafting
+permit last. Direct recipes invoke native `CraftingRecipeSO.Execute`; page recipes re-drive the
+audited stack/new/instant `UICraftingPage.QueueCraft` sequence. Queue success is the exact recipe
+quantity and instance outcome. Payment accounting never gates success. A committed result is the
+newer full crafting decision row.
 
 CLI play commands therefore need no generation option:
 

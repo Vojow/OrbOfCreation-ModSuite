@@ -1033,6 +1033,7 @@ public sealed class GameMcpWorldEnvelopeTests
                 "structure-costs",
                 "upgrade-costs",
                 "crafting-recipe-state",
+                "crafting-decisions",
                 "concept-instances",
                 "consumable-inventory",
             })
@@ -1164,6 +1165,7 @@ public sealed class GameMcpWorldEnvelopeTests
                 "structure-costs",
                 "upgrade-costs",
                 "crafting-recipe-state",
+                "crafting-decisions",
                 "concept-instances",
                 "consumable-inventory",
             })
@@ -1540,6 +1542,7 @@ public sealed class GameMcpWorldEnvelopeTests
                 {
                     Clean("crafting-recipes"),
                     Clean("crafting-recipe-state"),
+                    Clean("crafting-decisions"),
                     Clean("resources"),
                 }),
             CollectedAtEpoch = 25,

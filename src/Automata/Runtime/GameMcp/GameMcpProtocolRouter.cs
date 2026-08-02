@@ -344,6 +344,11 @@ internal sealed class GameMcpProtocolRouter
                     builder.SlotIndex = RequiredInt(arguments, "destination", 0, int.MaxValue);
                 }
                 break;
+            case "game_craft":
+                builder.Mode = "craft";
+                builder.Uuid = RequireUuid(arguments, "recipeUuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                break;
             case "suite_config_set":
                 builder.ConfigurationGeneration = RequiredUlong(
                     arguments, "configurationGeneration");
@@ -413,7 +418,7 @@ internal sealed class GameMcpProtocolRouter
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
             "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
-            "game_consumable" =>
+            "game_consumable" or "game_craft" =>
                 GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
@@ -440,7 +445,7 @@ internal sealed class GameMcpProtocolRouter
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
             "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
-            "game_consumable" =>
+            "game_consumable" or "game_craft" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
@@ -675,6 +680,18 @@ internal sealed class GameMcpProtocolRouter
                         ["destination"] = IntegerSchema(0, int.MaxValue),
                     },
                     "mode", "consumableUuid"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_craft",
+                "Craft one recipe",
+                "Execute the exact published direct or queued one-shot recipe. Success returns the newer named recipe, exact next cost and holdings, queue state, and next decision inline.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["recipeUuid"] = StringSchema("Published CraftingRecipeSO UUID."),
+                    },
+                    "recipeUuid"),
                 readOnly: false,
                 idempotent: false),
             Tool(

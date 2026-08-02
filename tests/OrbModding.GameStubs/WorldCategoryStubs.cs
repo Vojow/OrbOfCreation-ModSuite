@@ -157,10 +157,12 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     public bool ThrowDuringConstruction;
     public bool ThrowAfterInitiation;
     public bool ThrowAfterInstantAdmission;
+    public bool ThrowAfterExecute;
     public int PurchaseCalls;
     public int VisibilityCalls;
     public int StartingQuantityCalls;
     public int CanBuyCalls;
+    public int ExecuteCalls;
 
     public bool IsVisible()
     {
@@ -175,6 +177,9 @@ public sealed class CraftingRecipeSO : IdScriptableObject
             quantity.ToDouble() <= MaximumAffordableLevel &&
             TotalCost.HasEnough();
     }
+    public bool CanBuy() => IsVisible() && CanBuyAt(GetPurchaseQuantity(BigDouble.One));
+    public BigDouble GetPurchaseQuantity(BigDouble previousQuantity) =>
+        useQuantityAsLevel ? GetStartingQuantity() : BigDouble.One;
     public BigDouble GetStartingQuantity()
     {
         StartingQuantityCalls++;
@@ -183,6 +188,15 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     public ResourceCostList GetTotalCost(BigDouble previousQuantity, BigDouble purchasedQuantity) =>
         TotalCost;
     public CraftingRecipeTypeSO GetMainType() => MainType;
+
+    public void Execute()
+    {
+        ExecuteCalls++;
+        if (!CanBuy()) return;
+        recipeCost.Multiply(GetPurchaseQuantity(BigDouble.One)).PerformCost();
+        if (ThrowAfterExecute)
+            throw new InvalidOperationException("injected failure after direct execution");
+    }
 
     public void PurchaseQuantity(BigDouble purchasedQuantity, BigDouble previousQuantity)
     {
@@ -200,6 +214,22 @@ public sealed class CraftingRecipeSO : IdScriptableObject
 public sealed class CraftingInstanceListVariable : GenericListVariable<CraftingInstance>
 {
     public bool isAutoList;
+
+    public BigDouble GetQuantity(CraftingRecipeSO recipe)
+    {
+        var total = BigDouble.Zero;
+        for (var index = 0; index < value.Count; index++)
+            if (ReferenceEquals(value[index].reference, recipe)) total += value[index].Quantity;
+        return total;
+    }
+}
+
+public sealed class UICraftingPage : UnityEngine.Object
+{
+    public CraftingRecipeListVariable availableRecipes = new CraftingRecipeListVariable();
+    public CraftingInstanceListVariable craftingQueueInstances = new CraftingInstanceListVariable();
+    public IntVariable craftMode = new IntVariable();
+    public CraftingRecipeTypeSO mainCraftType = new CraftingRecipeTypeSO();
 }
 
 public sealed class CraftingInstance : AbstractRefInstance<CraftingRecipeSO>
@@ -208,6 +238,8 @@ public sealed class CraftingInstance : AbstractRefInstance<CraftingRecipeSO>
     public bool Automatic;
     public bool Expired;
     public bool Initiated;
+    public bool SuppressAddQuantity;
+    public bool ThrowAfterAddQuantity;
 
     public CraftingInstance()
     {
@@ -229,6 +261,13 @@ public sealed class CraftingInstance : AbstractRefInstance<CraftingRecipeSO>
     }
 
     public bool CheckInstantCraft() => reference.InstantCraftEnabled;
+
+    public void AddQuantity(BigDouble quantity)
+    {
+        if (!SuppressAddQuantity) Quantity += quantity;
+        if (ThrowAfterAddQuantity)
+            throw new InvalidOperationException("injected failure after quantity addition");
+    }
 
     public void InstantCraft()
     {

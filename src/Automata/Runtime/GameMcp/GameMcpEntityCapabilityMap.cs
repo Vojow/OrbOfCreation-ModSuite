@@ -97,6 +97,14 @@ internal static class GameMcpEntityCapabilityMap
                     "consumables",
                     capability,
                     out reason),
+            GameMcpCommandKind.Crafting =>
+                Entity(
+                    world.EntityIdentities,
+                    world.CraftingRecipes,
+                    target,
+                    "crafting-recipes",
+                    capability,
+                    out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -290,7 +298,7 @@ internal static class GameMcpEntityCapabilityMap
         D("equipment-types", "EquipmentTypeSO"),
         D("resource-types", "ResourceTypeSO"),
         D("crafting-recipe-types", "CraftingRecipeTypeSO"),
-        D("crafting-recipes", "CraftingRecipeSO"),
+        D("crafting-recipes", "CraftingRecipeSO", GameMcpCommandKind.Crafting),
         D("harvest-elements", "HarvestElementSO"),
         D("harvest-resources", "HarvestElementSO"),
         D("time-runes", "TimeRuneSO"),

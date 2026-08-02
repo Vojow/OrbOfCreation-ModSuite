@@ -29,6 +29,7 @@ internal enum GameMcpCommandKind
     SpellLoadout = 18,
     Targeting = 19,
     Consumable = 20,
+    Crafting = 21,
 }
 
 internal static class GameMcpCommandKinds
@@ -37,7 +38,8 @@ internal static class GameMcpCommandKinds
         kind is >= GameMcpCommandKind.Purchase and <= GameMcpCommandKind.SpellLevel or
             GameMcpCommandKind.DiscoveryTreeOffer or GameMcpCommandKind.SpellWorkbench or
             GameMcpCommandKind.SpellComposition or GameMcpCommandKind.SpellLoadout or
-            GameMcpCommandKind.Targeting or GameMcpCommandKind.Consumable;
+            GameMcpCommandKind.Targeting or GameMcpCommandKind.Consumable or
+            GameMcpCommandKind.Crafting;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -52,6 +54,7 @@ internal static class GameMcpCommandKinds
         "game_spell_loadout" => GameMcpCommandKind.SpellLoadout,
         "game_targeting" => GameMcpCommandKind.Targeting,
         "game_consumable" => GameMcpCommandKind.Consumable,
+        "game_craft" => GameMcpCommandKind.Crafting,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -425,6 +428,9 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.Consumable)
             return "the consumable boundary returned " + disposition +
                 " with exact preflight code " + exact;
+        if (commandKind == GameMcpCommandKind.Crafting)
+            return "the one-shot crafting boundary returned " + disposition +
+                " with exact preflight code " + exact;
         return "the native action boundary returned " + disposition +
             " with exact result code " + exact;
     }
@@ -574,6 +580,21 @@ internal static class GameMcpActionResultCodeNames
             if (code == ConsumablePlayerActionResultCodes.MultiBuyUnavailable) return "multi_buy_unavailable";
             if (code == ConsumablePlayerActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == ConsumablePlayerActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.Crafting)
+        {
+            if (code == CraftingPlayerActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == CraftingPlayerActionResultCodes.Quarantined) return "quarantined";
+            if (code == CraftingPlayerActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == CraftingPlayerActionResultCodes.RecipeUnavailable) return "recipe_unavailable";
+            if (code == CraftingPlayerActionResultCodes.NotVisible) return "not_visible";
+            if (code == CraftingPlayerActionResultCodes.PageRelationAmbiguous) return "page_relation_ambiguous";
+            if (code == CraftingPlayerActionResultCodes.InvalidPurchaseAmount) return "invalid_purchase_amount";
+            if (code == CraftingPlayerActionResultCodes.QueueFull) return "queue_full";
+            if (code == CraftingPlayerActionResultCodes.Unaffordable) return "unaffordable";
+            if (code == CraftingPlayerActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == CraftingPlayerActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == CraftingPlayerActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

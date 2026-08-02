@@ -53,6 +53,14 @@ or instant-stock outcome. A native failure after payment or an ambiguous postcon
 observed partial commit, names the exact stage, and quarantines this GameAction until lifecycle
 replacement. Nothing attempts rollback of game-owned irreversible effects.
 
+The same `AutoScribeOneShotCraftGameAction` also owns the manual one-shot player capability exposed
+as `game_craft`. Its player overload leaves the Auto Scribe planner and receipts unchanged, but
+widens exact live revalidation to every concrete `CraftingRecipeSO`: native direct `Execute`, or the
+authored page's stack/new/instant queue route. MCP success returns the newer named recipe decision
+with next costs, holdings, affordability, and queue state; payment accounting is not a player-action
+success gate. The installed mechanism and live checklist are documented in the
+[one-shot crafting native pipeline](../../docs/reverse-engineering/one-shot-crafting-native-pipeline.md).
+
 Configuration is additive:
 
 - `AutoScribe.Mode` defaults to `Disabled`;

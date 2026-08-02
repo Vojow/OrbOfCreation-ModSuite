@@ -131,7 +131,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         return TryCaptureGameMcpOperationPermit(family);
     }
     public bool TryCaptureScribeMutationPermit() =>
-        _scribe?.TryCaptureMutationPermit() == true;
+        _scribe?.TryCaptureMutationPermit() == true ||
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.CraftingQueueSubmission);
     public bool TryCaptureDiscoveryTreeOfferMutationPermit() =>
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.DiscoveryTreeOfferLifecycle);
     public bool TryCaptureSpellWorkbenchMutationPermit() =>
@@ -449,6 +450,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.SpellLoadout => SpellLoadoutFamilies,
         GameMcpCommandKind.Targeting => TargetingFamilies,
         GameMcpCommandKind.Consumable => ConsumableFamilies,
+        GameMcpCommandKind.Crafting => ScribeFamilies,
         _ => Array.Empty<AutomationActionFamily>(),
     };
 
@@ -480,6 +482,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         AutomationActionFamily.SpellLevelPurchase => _spellLevel?.IsHeld == true,
         AutomationActionFamily.HarvestAction => _harvest?.IsHeld == true,
         AutomationActionFamily.ConsumableUse => _items?.IsHeld == true,
+        AutomationActionFamily.CraftingQueueSubmission => _scribe?.IsHeld == true,
         AutomationActionFamily.DiscoveryTreeOfferLifecycle => false,
         AutomationActionFamily.SpellWorkbenchLifecycle => false,
         AutomationActionFamily.SpellComposition => false,

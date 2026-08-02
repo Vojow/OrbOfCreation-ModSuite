@@ -301,6 +301,7 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         return new AutoScribeOneShotCraftGameAction(
             resolver,
             _profile,
+            static () => 1,
             static () => true,
             static () => string.Empty);
     }

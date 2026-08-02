@@ -40,6 +40,8 @@ internal static class WorldCategoryFakes
         ["CraftingRecipeListVariable"] = typeof(FakeScribeRecipeList),
         ["CraftingInstanceListVariable"] = typeof(FakeScribeInstanceList),
         ["CraftingInstance"] = typeof(FakeScribeInstance),
+        ["ResourceCostList"] = typeof(FakeCraftingResourceCostList),
+        ["ResourceTuple"] = typeof(FakeCraftingResourceTuple),
         ["HarvestElementSO"] = typeof(FakeHarvestElement),
         ["TimeRuneSO"] = typeof(FakeTimeRune),
         ["GlyphSO"] = typeof(FakeGlyph),
@@ -125,6 +127,7 @@ internal static class WorldCategoryFakes
         FakeTreasurePool.All.Clear();
         FakeModifierVariable.All.Clear();
         FakeIdRegistry.RuntimeLookup.Clear();
+        UnityEngine.Resources.Objects.Clear();
         SeedScribeRelations();
     }
 
@@ -207,12 +210,20 @@ internal sealed class FakeScribeRecipe
     public bool visible = true;
     public bool canBuy = true;
     public BigDouble startingQuantity = BigDouble.One;
+    public FakeCraftingRecipeType MainType = new();
 
     public Guid GetGuid() => Identity;
     public bool IsVisible() => visible;
     public BigDouble GetStartingQuantity() => startingQuantity;
+    public bool CanBuy() => visible && canBuy;
     public bool CanBuyAt(BigDouble quantity) =>
         canBuy && quantity.CompareTo(BigDouble.Zero) > 0;
+    public BigDouble GetPurchaseQuantity(BigDouble previousQuantity) =>
+        useQuantityAsLevel ? startingQuantity : BigDouble.One;
+    public FakeCraftingResourceCostList GetTotalCost(
+        BigDouble previousQuantity,
+        BigDouble purchasedQuantity) => recipeCost;
+    public FakeCraftingRecipeType GetMainType() => MainType;
 }
 
 internal sealed class FakeCraftingResourceCostList
@@ -221,6 +232,20 @@ internal sealed class FakeCraftingResourceCostList
     public bool withinCapacity = true;
 
     public bool IsWithinCapacity() => withinCapacity;
+    public bool HasEnough() => true;
+    public List<FakeCraftingResourceTuple> GetEntries() => costs;
+
+    public FakeCraftingResourceCostList Multiply(BigDouble factor)
+    {
+        var result = new FakeCraftingResourceCostList { withinCapacity = withinCapacity };
+        for (var index = 0; index < costs.Count; index++)
+            result.costs.Add(new FakeCraftingResourceTuple
+            {
+                resource = costs[index].resource,
+                valueBig = costs[index].valueBig * factor,
+            });
+        return result;
+    }
 
     internal FakeCraftingResourceCostList With(FakeResource resource, BigDouble amount)
     {
@@ -233,6 +258,8 @@ internal sealed class FakeCraftingResourceTuple
 {
     public FakeResource? resource;
     public BigDouble valueBig;
+
+    public BigDouble GetValue() => valueBig;
 }
 
 internal class FakeCraftingEffectBlock
@@ -248,11 +275,22 @@ internal sealed class FakeCraftingEngagementBlock : FakeCraftingEffectBlock
 
 internal sealed class FakeScribeInstanceList
 {
+    public Guid Identity = Guid.NewGuid();
     public List<FakeScribeInstance> value = new();
     public bool isAutoList;
     public int Maximum = 4;
 
     public int GetMax() => Maximum;
+    public Guid GetGuid() => Identity;
+    public bool HasEmptySpot() => value.Count < Maximum;
+
+    public BigDouble GetQuantity(FakeScribeRecipe recipe)
+    {
+        var quantity = BigDouble.Zero;
+        for (var index = 0; index < value.Count; index++)
+            if (value[index].RecipeId == recipe.Identity) quantity += value[index].Quantity;
+        return quantity;
+    }
 }
 
 internal sealed class FakeScribeInstance

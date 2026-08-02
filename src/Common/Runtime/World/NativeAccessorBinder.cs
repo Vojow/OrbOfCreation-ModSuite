@@ -159,6 +159,121 @@ internal static class NativeAccessorBinder
         }
     }
 
+    /// <summary>Binds a two-argument instance evaluator with exact managed argument types.</summary>
+    internal static Func<object, TFirst, TSecond, TValue>? Call<TFirst, TSecond, TValue>(
+        Type? owner,
+        string name)
+    {
+        if (owner is null) return null;
+        var method = owner.GetMethod(
+            name,
+            Instance,
+            null,
+            new[] { typeof(TFirst), typeof(TSecond) },
+            null);
+        if (method is null || method.ReturnType != typeof(TValue)) return null;
+        var source = Expression.Parameter(typeof(object), "source");
+        var first = Expression.Parameter(typeof(TFirst), "first");
+        var second = Expression.Parameter(typeof(TSecond), "second");
+        var call = Expression.Call(Expression.Convert(source, owner), method, first, second);
+        try
+        {
+            return Expression.Lambda<Func<object, TFirst, TSecond, TValue>>(
+                call, source, first, second).Compile();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Binds a one-argument evaluator returning an exact runtime reference type.</summary>
+    internal static Func<object, TArgument, object?>? CallObject<TArgument>(
+        Type? owner,
+        string name,
+        Type? exactReturnType)
+    {
+        if (owner is null || exactReturnType is null || exactReturnType.IsValueType) return null;
+        var method = owner.GetMethod(
+            name,
+            Instance,
+            null,
+            new[] { typeof(TArgument) },
+            null);
+        if (method is null || method.ReturnType != exactReturnType) return null;
+        var source = Expression.Parameter(typeof(object), "source");
+        var argument = Expression.Parameter(typeof(TArgument), "argument");
+        var call = Expression.Convert(
+            Expression.Call(Expression.Convert(source, owner), method, argument),
+            typeof(object));
+        try
+        {
+            return Expression.Lambda<Func<object, TArgument, object?>>(
+                call, source, argument).Compile();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Binds a two-argument evaluator returning an exact runtime reference type.</summary>
+    internal static Func<object, TFirst, TSecond, object?>? CallObject<TFirst, TSecond>(
+        Type? owner,
+        string name,
+        Type? exactReturnType)
+    {
+        if (owner is null || exactReturnType is null || exactReturnType.IsValueType) return null;
+        var method = owner.GetMethod(
+            name,
+            Instance,
+            null,
+            new[] { typeof(TFirst), typeof(TSecond) },
+            null);
+        if (method is null || method.ReturnType != exactReturnType) return null;
+        var source = Expression.Parameter(typeof(object), "source");
+        var first = Expression.Parameter(typeof(TFirst), "first");
+        var second = Expression.Parameter(typeof(TSecond), "second");
+        var call = Expression.Convert(
+            Expression.Call(Expression.Convert(source, owner), method, first, second),
+            typeof(object));
+        try
+        {
+            return Expression.Lambda<Func<object, TFirst, TSecond, object?>>(
+                call, source, first, second).Compile();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Binds a method whose exact game-object argument type is known only at runtime.</summary>
+    internal static Func<object, object, TValue>? CallWithObjectArgument<TValue>(
+        Type? owner,
+        string name,
+        Type? argumentType)
+    {
+        if (owner is null || argumentType is null) return null;
+        var method = owner.GetMethod(name, Instance, null, new[] { argumentType }, null);
+        if (method is null || method.ReturnType != typeof(TValue)) return null;
+        var source = Expression.Parameter(typeof(object), "source");
+        var argument = Expression.Parameter(typeof(object), "argument");
+        var call = Expression.Call(
+            Expression.Convert(source, owner),
+            method,
+            Expression.Convert(argument, argumentType));
+        try
+        {
+            return Expression.Lambda<Func<object, object, TValue>>(
+                call, source, argument).Compile();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Binds a one-argument method whose argument is a native value type constructed from one
     /// <see cref="long"/>. The native type never crosses the binding boundary: callers supply the

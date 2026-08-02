@@ -290,8 +290,8 @@ public sealed class WorldStructuralEpochTests : IDisposable
         Assert.Equal(2, firstRow.Resources.Count);
         Assert.Equal(1, firstRow.ConsumableOutputs.Count);
         Assert.Equal(1, firstRow.DrainBlocks.Count);
-        Assert.Equal(1, recipe.VisibilityCalls);
-        Assert.Equal(1, recipe.StartingQuantityCalls);
+        Assert.Equal(2, recipe.VisibilityCalls);
+        Assert.Equal(2, recipe.StartingQuantityCalls);
         Assert.Equal(1, recipe.CanBuyCalls);
 
         // Destroy every authored edge and independently move every live verdict. A second ordinary
@@ -319,8 +319,11 @@ public sealed class WorldStructuralEpochTests : IDisposable
         Assert.Equal(1, secondRow.ConsumableOutputs.Count);
         var drain = Assert.Single(secondRow.DrainBlocks.AsSpan().ToArray());
         Assert.Equal(0.5d, drain.NecessaryRatio.ToDouble());
-        Assert.Equal(2, recipe.VisibilityCalls);
-        Assert.Equal(2, recipe.StartingQuantityCalls);
+        // The lifecycle-cached crafting graph still refreshes this recipe. The player-decision pass
+        // walks the live recipe registry, which this test deliberately emptied above, so it sampled
+        // the recipe only on the first capture.
+        Assert.Equal(3, recipe.VisibilityCalls);
+        Assert.Equal(3, recipe.StartingQuantityCalls);
         Assert.Equal(2, recipe.CanBuyCalls);
     }
 

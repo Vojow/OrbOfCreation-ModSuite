@@ -418,6 +418,27 @@ internal sealed class WorldMemberBinding
     internal Func<object, TArgument, TValue>? Call<TArgument, TValue>(string name) =>
         Record(name, NativeAccessorBinder.Call<TArgument, TValue>(_type, name));
 
+    internal Func<object, TFirst, TSecond, TValue>? Call<TFirst, TSecond, TValue>(string name) =>
+        Record(name, NativeAccessorBinder.Call<TFirst, TSecond, TValue>(_type, name));
+
+    internal Func<object, TArgument, object?>? CallObject<TArgument>(
+        string name,
+        Type? exactReturnType) =>
+        Record(name, NativeAccessorBinder.CallObject<TArgument>(
+            _type, name, exactReturnType));
+
+    internal Func<object, TFirst, TSecond, object?>? CallObject<TFirst, TSecond>(
+        string name,
+        Type? exactReturnType) =>
+        Record(name, NativeAccessorBinder.CallObject<TFirst, TSecond>(
+            _type, name, exactReturnType));
+
+    internal Func<object, object, TValue>? CallWithObjectArgument<TValue>(
+        string name,
+        Type? argumentType) =>
+        Record(name, NativeAccessorBinder.CallWithObjectArgument<TValue>(
+            _type, name, argumentType));
+
     internal Func<object, int>? EnumField(string name) =>
         Record(name, NativeAccessorBinder.EnumField(_type, name));
 
@@ -517,6 +538,26 @@ internal sealed class WorldMemberBinding
         {
             var owner = root(source);
             return owner is null ? default! : accessor(owner, argument);
+        };
+    }
+
+    private Func<object, TFirst, TSecond, TValue>? Record<TFirst, TSecond, TValue>(
+        string name,
+        Func<object, TFirst, TSecond, TValue>? accessor)
+    {
+        if (accessor is null)
+        {
+            _failures.Add(Qualify(name));
+            return null;
+        }
+
+        var root = _root;
+        if (root is null) return accessor;
+
+        return (source, first, second) =>
+        {
+            var owner = root(source);
+            return owner is null ? default! : accessor(owner, first, second);
         };
     }
 

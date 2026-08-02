@@ -26,6 +26,7 @@ internal sealed class AutoScribeServiceAdapterComposition
         var gameAction = new AutoScribeOneShotCraftGameAction(
             dependencies.RegistryResolver,
             dependencies.Profile,
+            dependencies.ReadLifecycleEpoch,
             dependencies.TryCaptureMutationPermit,
             dependencies.ReadOwnershipFailure);
         var actionPort = new AutoScribeCycleActionAdapter(

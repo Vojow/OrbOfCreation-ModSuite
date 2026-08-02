@@ -10,28 +10,36 @@ namespace OrbAutomata;
 /// decisions finish before payment; after payment every stage is receipted and any ambiguity
 /// quarantines this GameAction for the lifecycle.
 /// </summary>
-internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
+internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
 {
     private readonly TypedRegistryResolver _registry;
     private readonly AutoScribeIdentityProfile _profile;
+    private readonly Func<long> _readLifecycleEpoch;
     private readonly Func<bool> _tryCaptureMutationPermit;
     private readonly Func<string> _readOwnershipFailure;
+    private readonly int _mainThreadId;
     private AutoScribeNativeBindings? _bindings;
+    private CraftingPlayerNativeBindings? _playerBindings;
     private string _bindingFailure = string.Empty;
+    private string _playerBindingFailure = string.Empty;
     private string _quarantineReason = string.Empty;
 
     internal AutoScribeOneShotCraftGameAction(
         TypedRegistryResolver registry,
         AutoScribeIdentityProfile profile,
+        Func<long> readLifecycleEpoch,
         Func<bool> tryCaptureMutationPermit,
         Func<string> readOwnershipFailure)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
+        _readLifecycleEpoch = readLifecycleEpoch ??
+            throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _tryCaptureMutationPermit = tryCaptureMutationPermit ??
             throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
         _readOwnershipFailure = readOwnershipFailure ??
             throw new ArgumentNullException(nameof(readOwnershipFailure));
+        _mainThreadId = Environment.CurrentManagedThreadId;
         BindLifecycle();
     }
 
@@ -137,7 +145,9 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
     internal void InvalidateLifecycle()
     {
         _bindings = null;
+        _playerBindings = null;
         _bindingFailure = string.Empty;
+        _playerBindingFailure = string.Empty;
         _quarantineReason = string.Empty;
         BindLifecycle();
     }
@@ -145,7 +155,9 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
     public void Dispose()
     {
         _bindings = null;
+        _playerBindings = null;
         _bindingFailure = string.Empty;
+        _playerBindingFailure = string.Empty;
         _quarantineReason = string.Empty;
     }
 
@@ -926,10 +938,22 @@ internal sealed class AutoScribeOneShotCraftGameAction : IDisposable
         {
             _bindings = bindings;
             _bindingFailure = string.Empty;
-            return;
         }
-        _bindings = null;
-        _bindingFailure = reason;
+        else
+        {
+            _bindings = null;
+            _bindingFailure = reason;
+        }
+        if (CraftingPlayerNativeBindings.TryCreate(out var player, out var playerReason))
+        {
+            _playerBindings = player;
+            _playerBindingFailure = string.Empty;
+        }
+        else
+        {
+            _playerBindings = null;
+            _playerBindingFailure = playerReason;
+        }
     }
 
     private static string FirstFailure(params TypedRegistryResolution[] resolutions)

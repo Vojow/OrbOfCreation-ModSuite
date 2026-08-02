@@ -136,6 +136,13 @@ public sealed record GameWorldState
     internal PublicationTable<WorldCraftingRecipe> CraftingRecipes { get; init; } =
         PublicationTable<WorldCraftingRecipe>.Empty;
 
+    /// <summary>Exact next manual-craft decision and authored queue routing per recipe.</summary>
+    internal PublicationTable<WorldCraftingDecision> CraftingDecisions { get; init; } =
+        PublicationTable<WorldCraftingDecision>.Empty;
+
+    internal PublicationTable<WorldCraftingDecisionCost> CraftingDecisionCosts { get; init; } =
+        PublicationTable<WorldCraftingDecisionCost>.Empty;
+
     internal PublicationTable<WorldHarvestElement> HarvestElements { get; init; } =
         PublicationTable<WorldHarvestElement>.Empty;
 
