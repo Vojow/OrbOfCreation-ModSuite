@@ -6,6 +6,9 @@ traces/
 # .NET build output
 bin/
 obj/
+__pycache__/
+*.py[cod]
+.venv/
 bin-stubs/
 obj-stubs/
 bin-profile/
