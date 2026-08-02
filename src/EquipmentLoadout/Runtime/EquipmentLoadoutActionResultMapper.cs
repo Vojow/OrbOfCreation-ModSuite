@@ -21,7 +21,6 @@ internal static class EquipmentLoadoutActionResultMapper
     {
         EquipmentLoadoutPreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
         EquipmentLoadoutPreflight.ContractUnavailable => EquipmentLoadoutActionResultCodes.ContractUnavailable,
-        EquipmentLoadoutPreflight.Quarantined => EquipmentLoadoutActionResultCodes.Quarantined,
         EquipmentLoadoutPreflight.WrongThread => EquipmentLoadoutActionResultCodes.WrongThread,
         EquipmentLoadoutPreflight.IdentityUnavailable => EquipmentLoadoutActionResultCodes.IdentityUnavailable,
         EquipmentLoadoutPreflight.NotCreated => EquipmentLoadoutActionResultCodes.NotCreated,

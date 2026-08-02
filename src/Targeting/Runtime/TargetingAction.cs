@@ -26,7 +26,7 @@ internal readonly struct TargetingAction
 
 internal enum TargetingPreflight
 {
-    Proceeded = 0, LifecycleReplaced = 1, ContractUnavailable = 2, Quarantined = 3,
+    Proceeded = 0, LifecycleReplaced = 1, ContractUnavailable = 2,
     WrongThread = 4, NoPendingRequest = 5, TargetUnavailable = 6,
     NativeTargetRefused = 7, CancelUnavailable = 8, MutationPermitUnavailable = 9,
     PostCommitFault = 10, VerificationFailed = 11,
@@ -72,7 +72,6 @@ internal readonly struct TargetingSubmission
 internal static class TargetingActionResultCodes
 {
     internal static readonly ServiceActionResultCode ContractUnavailable = new(7501);
-    internal static readonly ServiceActionResultCode Quarantined = new(7502);
     internal static readonly ServiceActionResultCode WrongThread = new(7503);
     internal static readonly ServiceActionResultCode NoPendingRequest = new(7504);
     internal static readonly ServiceActionResultCode TargetUnavailable = new(7505);

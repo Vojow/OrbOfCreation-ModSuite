@@ -13,11 +13,6 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 in action,
                 CraftingPlayerPreflight.WrongThread,
                 "Crafting actions are bound to Unity thread " + _mainThreadId + ".");
-        if (_quarantineReason.Length != 0)
-            return CraftingPlayerSubmission.Reject(
-                in action,
-                CraftingPlayerPreflight.Quarantined,
-                _quarantineReason);
         if (_playerBindings is not { } native)
             return CraftingPlayerSubmission.Reject(
                 in action,
@@ -112,7 +107,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            return QuarantinePlayerCrafting(
+            return PlayerCraftingFault(
                 in action,
                 CraftingPlayerPreflight.PostCommitFault,
                 CraftingPlayerNativeStage.DirectExecute,
@@ -274,7 +269,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                     "The exact queued outcome was observed after native code threw: " +
                     ex.GetBaseException().Message);
             }
-            return QuarantinePlayerCrafting(
+            return PlayerCraftingFault(
                 in action,
                 CraftingPlayerPreflight.PostCommitFault,
                 stage,
@@ -302,7 +297,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         var verified = after.QueuedAmount == expected &&
             ContainsExactInstance(native, queue, instance, action.RecipeId);
         if (!verified)
-            return QuarantinePlayerCrafting(
+            return PlayerCraftingFault(
                 in action,
                 CraftingPlayerPreflight.VerificationFailed,
                 CraftingPlayerNativeStage.Verification,
@@ -447,7 +442,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         return false;
     }
 
-    private CraftingPlayerSubmission QuarantinePlayerCrafting(
+    private static CraftingPlayerSubmission PlayerCraftingFault(
         in CraftingPlayerAction action,
         CraftingPlayerPreflight preflight,
         CraftingPlayerNativeStage stage,
@@ -457,8 +452,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         in CraftingPlayerState after,
         string reason)
     {
-        _quarantineReason =
-            "One-shot crafting is quarantined for this lifecycle after " + stage + " on " +
+        var exactReason = "One-shot crafting " + stage + " failed on " +
             EntityIdentityFormatter.Format(action.RecipeId) + ": " + reason;
         var evidence = new CraftingPlayerEvidence(true, in before, in after);
         return new CraftingPlayerSubmission(
@@ -468,6 +462,6 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
             outcome,
             new NativeMutationCallOutcome(calls, 1, 0),
             in evidence,
-            _quarantineReason);
+            exactReason);
     }
 }

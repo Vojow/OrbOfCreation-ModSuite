@@ -39,7 +39,6 @@ internal enum SpellLoadoutPreflight
     Proceeded = 0,
     LifecycleReplaced = 1,
     ContractUnavailable = 2,
-    Quarantined = 3,
     WrongThread = 4,
     IdentityUnavailable = 5,
     NativeRemoveRefused = 6,
@@ -132,7 +131,6 @@ internal readonly struct SpellLoadoutSubmission
 internal static class SpellLoadoutActionResultCodes
 {
     internal static readonly ServiceActionResultCode ContractUnavailable = new(7401);
-    internal static readonly ServiceActionResultCode Quarantined = new(7402);
     internal static readonly ServiceActionResultCode WrongThread = new(7403);
     internal static readonly ServiceActionResultCode IdentityUnavailable = new(7404);
     internal static readonly ServiceActionResultCode NativeRemoveRefused = new(7405);

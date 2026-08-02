@@ -20,7 +20,6 @@ internal sealed class SpellLoadoutGameAction : IDisposable
     private readonly int _mainThreadId;
     private SpellLoadoutNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
-    private string _quarantineReason = string.Empty;
 
     internal SpellLoadoutGameAction(
         Func<long> readLifecycleEpoch,
@@ -41,7 +40,6 @@ internal sealed class SpellLoadoutGameAction : IDisposable
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal bool IsQuarantined => _quarantineReason.Length != 0;
 
     internal SpellLoadoutSubmission Submit(in SpellLoadoutAction action)
     {
@@ -50,10 +48,6 @@ internal sealed class SpellLoadoutGameAction : IDisposable
                 SpellLoadoutPreflight.WrongThread,
                 "Spell loadout actions are bound to Unity thread " + _mainThreadId +
                 ", not thread " + Environment.CurrentManagedThreadId + ".");
-        if (_quarantineReason.Length != 0)
-            return SpellLoadoutSubmission.Reject(
-                SpellLoadoutPreflight.Quarantined,
-                _quarantineReason);
         if (_bindings is not { } native)
             return SpellLoadoutSubmission.Reject(
                 SpellLoadoutPreflight.ContractUnavailable,
@@ -98,7 +92,6 @@ internal sealed class SpellLoadoutGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
         BindLifecycle();
     }
 
@@ -106,7 +99,6 @@ internal sealed class SpellLoadoutGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
     }
 
     private SpellLoadoutSubmission Remove(
@@ -138,7 +130,7 @@ internal sealed class SpellLoadoutGameAction : IDisposable
                     in after,
                     new NativeMutationCallOutcome(1, 1, 1),
                     "The exact runtime spell is absent and every surviving spell remains in order.")
-                : Quarantine(
+                : Fault(
                     in action,
                     SpellLoadoutPreflight.VerificationFailed,
                     SpellLoadoutNativeStage.Verification,
@@ -161,7 +153,7 @@ internal sealed class SpellLoadoutGameAction : IDisposable
                     in after,
                     new NativeMutationCallOutcome(1, 1, 1),
                     "SpellManager.RemoveSpell threw after the requested removal became observable.");
-            return Quarantine(
+            return Fault(
                 in action,
                 SpellLoadoutPreflight.PostCommitFault,
                 SpellLoadoutNativeStage.Remove,
@@ -216,7 +208,7 @@ internal sealed class SpellLoadoutGameAction : IDisposable
                     in after,
                     new NativeMutationCallOutcome(2, 1, 1),
                     "The exact ordered loadout now contains the requested two-position swap.")
-                : Quarantine(
+                : Fault(
                     in action,
                     SpellLoadoutPreflight.VerificationFailed,
                     SpellLoadoutNativeStage.Verification,
@@ -239,7 +231,7 @@ internal sealed class SpellLoadoutGameAction : IDisposable
                     in after,
                     new NativeMutationCallOutcome(nativeCalls, 1, 1),
                     "The native reorder pipeline threw after the requested slot order became observable.");
-            return Quarantine(
+            return Fault(
                 in action,
                 SpellLoadoutPreflight.PostCommitFault,
                 stage,
@@ -418,7 +410,7 @@ internal sealed class SpellLoadoutGameAction : IDisposable
             reason);
     }
 
-    private SpellLoadoutSubmission Quarantine(
+    private static SpellLoadoutSubmission Fault(
         in SpellLoadoutAction action,
         SpellLoadoutPreflight preflight,
         SpellLoadoutNativeStage stage,
@@ -430,8 +422,8 @@ internal sealed class SpellLoadoutGameAction : IDisposable
         NativeMutationCallOutcome callOutcome,
         string reason)
     {
-        _quarantineReason = "Spell loadout is quarantined for this lifecycle after " + stage +
-            " on " + EntityIdentityFormatter.Format(action.SpellInstanceId) + ": " + reason;
+        var exactReason = "Spell loadout " + stage + " failed on " +
+            EntityIdentityFormatter.Format(action.SpellInstanceId) + ": " + reason;
         var evidence = new SpellLoadoutEvidence(
             true, sourceSlot, destinationSlot, in before, in after);
         return new SpellLoadoutSubmission(
@@ -440,7 +432,7 @@ internal sealed class SpellLoadoutGameAction : IDisposable
             outcome,
             callOutcome,
             in evidence,
-            _quarantineReason);
+            exactReason);
     }
 
     private bool TryCapturePermit(out string reason)

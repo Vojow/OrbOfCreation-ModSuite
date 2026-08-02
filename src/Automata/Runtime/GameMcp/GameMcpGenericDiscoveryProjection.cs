@@ -18,12 +18,6 @@ internal static class GameMcpGenericDiscoveryProjection
             result["nativeStage"] = GameMcpEntityWireNormalizer.Snake(submission.Stage.ToString());
             result["outcome"] = GameMcpEntityWireNormalizer.Snake(submission.Outcome.ToString());
         }
-        if (submission.Preflight is GenericDiscoveryPreflight.Quarantined or
-            GenericDiscoveryPreflight.PostCommitFault or
-            GenericDiscoveryPreflight.VerificationFailed)
-        {
-            result["quarantined"] = true;
-        }
         if (submission.Receipt.EvidenceAvailable)
             result["receipt"] = Receipt(submission.Receipt);
         return result.Freeze();

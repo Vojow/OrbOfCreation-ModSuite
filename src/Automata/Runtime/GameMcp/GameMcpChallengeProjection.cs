@@ -21,9 +21,6 @@ internal static class GameMcpChallengeProjection
             result["before"] = State(submission.Receipt.Before);
             result["after"] = State(submission.Receipt.After);
         }
-        if (submission.Preflight is ChallengePreflight.Quarantined or
-            ChallengePreflight.PostCommitFault or ChallengePreflight.VerificationFailed)
-            result["quarantined"] = true;
         return result.Freeze();
     }
 

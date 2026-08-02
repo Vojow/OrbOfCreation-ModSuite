@@ -22,9 +22,6 @@ internal static class GameMcpEquipmentLoadoutProjection
             result["before"] = State(submission.Receipt.Before);
             result["after"] = State(submission.Receipt.After);
         }
-        if (submission.Preflight is EquipmentLoadoutPreflight.Quarantined or
-            EquipmentLoadoutPreflight.PostCommitFault or EquipmentLoadoutPreflight.VerificationFailed)
-            result["quarantined"] = true;
         return result.Freeze();
     }
 

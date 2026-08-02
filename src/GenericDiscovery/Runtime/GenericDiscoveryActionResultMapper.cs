@@ -27,7 +27,6 @@ internal static class GenericDiscoveryActionResultMapper
     {
         GenericDiscoveryPreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
         GenericDiscoveryPreflight.ContractUnavailable => GenericDiscoveryActionResultCodes.ContractUnavailable,
-        GenericDiscoveryPreflight.Quarantined => GenericDiscoveryActionResultCodes.Quarantined,
         GenericDiscoveryPreflight.WrongThread => GenericDiscoveryActionResultCodes.WrongThread,
         GenericDiscoveryPreflight.IdentityUnavailable => GenericDiscoveryActionResultCodes.IdentityUnavailable,
         GenericDiscoveryPreflight.UnsupportedType => GenericDiscoveryActionResultCodes.UnsupportedType,

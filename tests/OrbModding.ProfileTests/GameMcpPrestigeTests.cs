@@ -120,7 +120,7 @@ public sealed class GameMcpPrestigeTests
         Assert.Equal("post_commit_fault", (string?)failure["preflight"]);
         Assert.Equal("4e0", (string?)failure["before"]!["resetCount"]);
         Assert.Equal(21, (long?)failure["observedLifecycleGeneration"]);
-        Assert.True((bool)failure["quarantined"]!);
+        Assert.Null(failure["quarantined"]);
         Assert.Empty(committed.Properties());
     }
 

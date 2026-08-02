@@ -159,7 +159,7 @@ public sealed class GameMcpCraftingTests
         Assert.Equal("verification", (string?)failure["nativeStage"]);
         Assert.Equal("4e0", (string?)failure["before"]!["queuedAmount"]);
         Assert.NotNull(failure["after"]);
-        Assert.True((bool)failure["quarantined"]!);
+        Assert.Null(failure["quarantined"]);
         Assert.Empty(success.Properties());
     }
 

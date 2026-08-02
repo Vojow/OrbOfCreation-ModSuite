@@ -15,7 +15,6 @@ internal sealed class PrestigeGameAction : IDisposable
     private readonly int _mainThreadId;
     private PrestigeNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
-    private string _quarantineReason = string.Empty;
 
     internal PrestigeGameAction(Func<long> readLifecycleEpoch,
         Func<bool> tryCaptureMutationPermit, Func<string> readOwnershipFailure,
@@ -32,15 +31,12 @@ internal sealed class PrestigeGameAction : IDisposable
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal bool IsQuarantined => _quarantineReason.Length != 0;
 
     internal PrestigeSubmission Submit(in PrestigeAction action)
     {
         if (Environment.CurrentManagedThreadId != _mainThreadId)
             return PrestigeSubmission.Reject(PrestigePreflight.WrongThread,
                 "Prestige is bound to Unity thread " + _mainThreadId + ".");
-        if (_quarantineReason.Length != 0)
-            return PrestigeSubmission.Reject(PrestigePreflight.Quarantined, _quarantineReason);
         if (_bindings is not { } native)
             return PrestigeSubmission.Reject(PrestigePreflight.ContractUnavailable, _bindingFailure);
         long epoch;
@@ -84,7 +80,6 @@ internal sealed class PrestigeGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
         BindLifecycle();
     }
 
@@ -92,7 +87,6 @@ internal sealed class PrestigeGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
     }
 
     private PrestigeSubmission Execute(PrestigeNativeBindings native, object manager,
@@ -112,7 +106,7 @@ internal sealed class PrestigeGameAction : IDisposable
                 return new PrestigeSubmission(PrestigePreflight.Proceeded, stage,
                     NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1),
                     in receipt, "Verified the exact persistent-reset lifecycle transition.");
-            return Quarantine(PrestigePreflight.VerificationFailed, stage,
+            return Fault(PrestigePreflight.VerificationFailed, stage,
                 NativeMutationOutcome.PostconditionFailed, in receipt,
                 "The native reset transaction did not replace the lifecycle exactly once.");
         }
@@ -123,7 +117,7 @@ internal sealed class PrestigeGameAction : IDisposable
             catch (Exception) { observedEpoch = before.LifecycleEpoch; }
             var after = new PrestigeState(false, observedEpoch, false, false, 0);
             var receipt = new PrestigeReceipt(in before, in after);
-            return Quarantine(PrestigePreflight.PostCommitFault, stage,
+            return Fault(PrestigePreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew, in receipt,
                 "The native reset transaction threw after invocation; full reset completion is unproven: " +
                 exception.GetBaseException().Message);
@@ -148,13 +142,13 @@ internal sealed class PrestigeGameAction : IDisposable
         return true;
     }
 
-    private PrestigeSubmission Quarantine(PrestigePreflight preflight,
+    private static PrestigeSubmission Fault(PrestigePreflight preflight,
         PrestigeNativeStage stage, NativeMutationOutcome outcome,
         in PrestigeReceipt receipt, string reason)
     {
-        _quarantineReason = "Prestige is quarantined for this lifecycle after " + stage + ": " + reason;
+        var exactReason = "Prestige " + stage + " failed: " + reason;
         return new PrestigeSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, _quarantineReason);
+            new NativeMutationCallOutcome(1, 1, 0), in receipt, exactReason);
     }
 
     private void BindLifecycle()

@@ -328,6 +328,15 @@ internal sealed class GameMcpCommandResult
         {
             ["status"] = status,
         };
+        if (command.SourceOperation?.Request.Classification is
+                GameMcpOperationClass.Gameplay or GameMcpOperationClass.UiState &&
+            command.FrameContext?.World is { } actionWorld)
+        {
+            // Mutation responses name the world used for admission. A later post-state
+            // projection deliberately overwrites this with the strictly newer world that
+            // observed the transition.
+            projected["worldGeneration"] = actionWorld.Generation.Value;
+        }
         var succeeded = status is "committed" or "available";
         if (!succeeded)
         {
@@ -345,6 +354,7 @@ internal sealed class GameMcpCommandResult
     private void AddGenerationMismatch(GameMcpObjectBuilder projected, GameMcpCommand command)
     {
         if (command.ExpectedLifecycleGeneration > 0 &&
+            ObservedLifecycleGeneration > 0 &&
             command.ExpectedLifecycleGeneration != ObservedLifecycleGeneration)
         {
             projected["lifecycleGenerationMismatch"] = new GameMcpObjectBuilder
@@ -354,6 +364,7 @@ internal sealed class GameMcpCommandResult
             };
         }
         if (command.ExpectedConfigurationGeneration > 0 &&
+            ObservedConfigurationGeneration > 0 &&
             command.ExpectedConfigurationGeneration != ObservedConfigurationGeneration)
         {
             projected["configurationGenerationMismatch"] = new GameMcpObjectBuilder
@@ -496,7 +507,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.DiscoveryTreeOffer)
         {
             if (code == DiscoveryTreeOfferActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == DiscoveryTreeOfferActionResultCodes.Quarantined) return "quarantined";
             if (code == DiscoveryTreeOfferActionResultCodes.WrongThread) return "wrong_thread";
             if (code == DiscoveryTreeOfferActionResultCodes.IdentityUnavailable) return "identity_unavailable";
             if (code == DiscoveryTreeOfferActionResultCodes.TreeUnavailable) return "tree_unavailable";
@@ -551,7 +561,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.SpellLoadout)
         {
             if (code == SpellLoadoutActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == SpellLoadoutActionResultCodes.Quarantined) return "quarantined";
             if (code == SpellLoadoutActionResultCodes.WrongThread) return "wrong_thread";
             if (code == SpellLoadoutActionResultCodes.IdentityUnavailable) return "identity_unavailable";
             if (code == SpellLoadoutActionResultCodes.NativeRemoveRefused) return "native_remove_refused";
@@ -564,7 +573,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.Targeting)
         {
             if (code == TargetingActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == TargetingActionResultCodes.Quarantined) return "quarantined";
             if (code == TargetingActionResultCodes.WrongThread) return "wrong_thread";
             if (code == TargetingActionResultCodes.NoPendingRequest) return "no_pending_request";
             if (code == TargetingActionResultCodes.TargetUnavailable) return "target_unavailable";
@@ -577,7 +585,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.Consumable)
         {
             if (code == ConsumablePlayerActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == ConsumablePlayerActionResultCodes.Quarantined) return "quarantined";
             if (code == ConsumablePlayerActionResultCodes.WrongThread) return "wrong_thread";
             if (code == ConsumablePlayerActionResultCodes.ItemUnavailable) return "item_unavailable";
             if (code == ConsumablePlayerActionResultCodes.NotVisible) return "not_visible";
@@ -599,7 +606,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.Crafting)
         {
             if (code == CraftingPlayerActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == CraftingPlayerActionResultCodes.Quarantined) return "quarantined";
             if (code == CraftingPlayerActionResultCodes.WrongThread) return "wrong_thread";
             if (code == CraftingPlayerActionResultCodes.RecipeUnavailable) return "recipe_unavailable";
             if (code == CraftingPlayerActionResultCodes.NotVisible) return "not_visible";
@@ -614,7 +620,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.GenericDiscovery)
         {
             if (code == GenericDiscoveryActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == GenericDiscoveryActionResultCodes.Quarantined) return "quarantined";
             if (code == GenericDiscoveryActionResultCodes.WrongThread) return "wrong_thread";
             if (code == GenericDiscoveryActionResultCodes.IdentityUnavailable) return "identity_unavailable";
             if (code == GenericDiscoveryActionResultCodes.UnsupportedType) return "unsupported_type";
@@ -629,7 +634,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.EquipmentLoadout)
         {
             if (code == EquipmentLoadoutActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == EquipmentLoadoutActionResultCodes.Quarantined) return "quarantined";
             if (code == EquipmentLoadoutActionResultCodes.WrongThread) return "wrong_thread";
             if (code == EquipmentLoadoutActionResultCodes.IdentityUnavailable) return "identity_unavailable";
             if (code == EquipmentLoadoutActionResultCodes.NotCreated) return "not_created";
@@ -645,7 +649,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.Challenge)
         {
             if (code == ChallengeActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == ChallengeActionResultCodes.Quarantined) return "quarantined";
             if (code == ChallengeActionResultCodes.WrongThread) return "wrong_thread";
             if (code == ChallengeActionResultCodes.IdentityUnavailable) return "identity_unavailable";
             if (code == ChallengeActionResultCodes.OfferUnavailable) return "offer_unavailable";
@@ -661,7 +664,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.Prestige)
         {
             if (code == PrestigeActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == PrestigeActionResultCodes.Quarantined) return "quarantined";
             if (code == PrestigeActionResultCodes.WrongThread) return "wrong_thread";
             if (code == PrestigeActionResultCodes.WorldCycleIncomplete) return "world_cycle_incomplete";
             if (code == PrestigeActionResultCodes.ChallengesNotFetched) return "challenges_not_fetched";
@@ -672,7 +674,6 @@ internal static class GameMcpActionResultCodeNames
         if (commandKind == GameMcpCommandKind.Research)
         {
             if (code == ResearchActionResultCodes.ContractUnavailable) return "contract_unavailable";
-            if (code == ResearchActionResultCodes.Quarantined) return "quarantined";
             if (code == ResearchActionResultCodes.WrongThread) return "wrong_thread";
             if (code == ResearchActionResultCodes.IdentityUnavailable) return "identity_unavailable";
             if (code == ResearchActionResultCodes.DevelopUnavailable) return "develop_unavailable";

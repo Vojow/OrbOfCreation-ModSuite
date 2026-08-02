@@ -26,10 +26,6 @@ internal static class GameMcpConsumableProjection
             result["before"] = State(in before);
             result["after"] = State(in after);
         }
-        if (submission.Preflight is ConsumablePlayerPreflight.Quarantined or
-            ConsumablePlayerPreflight.PostCommitFault or
-            ConsumablePlayerPreflight.VerificationFailed)
-            result["quarantined"] = true;
         return result.Freeze();
     }
 

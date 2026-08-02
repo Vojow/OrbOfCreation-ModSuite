@@ -5,7 +5,6 @@ namespace OrbAutomata;
 internal static class EquipmentLoadoutActionResultCodes
 {
     internal static ServiceActionResultCode ContractUnavailable => new(5100);
-    internal static ServiceActionResultCode Quarantined => new(5101);
     internal static ServiceActionResultCode WrongThread => new(5102);
     internal static ServiceActionResultCode IdentityUnavailable => new(5103);
     internal static ServiceActionResultCode NotCreated => new(5104);

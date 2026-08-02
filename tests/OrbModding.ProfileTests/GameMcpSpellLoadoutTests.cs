@@ -185,7 +185,7 @@ public sealed class GameMcpSpellLoadoutTests
         Assert.Equal("verification_failed", (string?)failure["preflight"]);
         Assert.Equal("Gather Knowledge", (string?)failure["before"]!["slots"]![0]!["spellInstance"]!["name"]);
         Assert.Equal("Whirling Sorcery", (string?)failure["after"]!["slots"]![1]!["spellInstance"]!["name"]);
-        Assert.True((bool)failure["quarantined"]!);
+        Assert.Null(failure["quarantined"]);
     }
 
     [Fact]

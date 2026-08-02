@@ -32,7 +32,6 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
         Assert.Equal(new[] { first.guidContainer.guid, target.guidContainer.guid, last.guidContainer.guid },
             result.Evidence.Before.Slots);
         Assert.DoesNotContain(target.guidContainer.guid, result.Evidence.After.Slots);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -64,11 +63,10 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.DoesNotContain(spell.guidContainer.guid, result.Evidence.After.Slots);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
-    public void MissingRemoveOutcomeQuarantinesOnlyTheLifecycle()
+    public void MissingRemoveOutcomeFaultsEachAttemptWithoutPersistentActionState()
     {
         var spell = Spell("Stuck");
         SpellManager.instance!.activeSpells.value.Add(spell);
@@ -79,7 +77,7 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
         var retry = action.Submit(Remove(spell));
 
         Assert.Equal(SpellLoadoutPreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(SpellLoadoutPreflight.Quarantined, retry.Preflight);
+        Assert.Equal(SpellLoadoutPreflight.VerificationFailed, retry.Preflight);
         Assert.True(failed.Evidence.Available);
         Assert.Contains(spell.guidContainer.guid, failed.Evidence.After.Slots);
     }
@@ -136,11 +134,10 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(new[] { second, first }, list.value);
         Assert.Equal(0, list.UpdateObservableCalls);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
-    public void MissingSwapOutcomeQuarantinesAndPreservesFailureEvidence()
+    public void MissingSwapOutcomeFaultsEachAttemptAndPreservesFailureEvidence()
     {
         var first = Spell("First");
         var second = Spell("Second");
@@ -153,7 +150,7 @@ public sealed class SpellLoadoutGameActionTests : IDisposable
         var retry = action.Submit(Move(first, 1));
 
         Assert.Equal(SpellLoadoutPreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(SpellLoadoutPreflight.Quarantined, retry.Preflight);
+        Assert.Equal(SpellLoadoutPreflight.VerificationFailed, retry.Preflight);
         Assert.Equal(failed.Evidence.Before.Slots, failed.Evidence.After.Slots);
     }
 

@@ -28,7 +28,6 @@ internal static class ConsumablePlayerActionResultMapper
         {
             ConsumablePlayerPreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
             ConsumablePlayerPreflight.ContractUnavailable => ConsumablePlayerActionResultCodes.ContractUnavailable,
-            ConsumablePlayerPreflight.Quarantined => ConsumablePlayerActionResultCodes.Quarantined,
             ConsumablePlayerPreflight.WrongThread => ConsumablePlayerActionResultCodes.WrongThread,
             ConsumablePlayerPreflight.ItemUnavailable => ConsumablePlayerActionResultCodes.ItemUnavailable,
             ConsumablePlayerPreflight.NotVisible => ConsumablePlayerActionResultCodes.NotVisible,

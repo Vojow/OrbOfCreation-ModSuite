@@ -239,7 +239,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Equal("faulted", (string?)structured["status"]);
         Assert.Equal("verification_failed", (string?)structured["reasonCode"]);
         Assert.Equal(reason, (string?)structured["reason"]);
-        Assert.Null(structured["worldGeneration"]);
+        Assert.Equal(77UL, (ulong)structured["worldGeneration"]!);
         Assert.Null(structured["mutationScope"]);
         Assert.Null(structured["nativeCallsAttempted"]);
         Assert.Null(structured["mutationAttempts"]);

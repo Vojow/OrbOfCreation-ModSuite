@@ -5,7 +5,6 @@ namespace OrbAutomata;
 internal static class GenericDiscoveryActionResultCodes
 {
     internal static ServiceActionResultCode ContractUnavailable => new(5000);
-    internal static ServiceActionResultCode Quarantined => new(5001);
     internal static ServiceActionResultCode WrongThread => new(5002);
     internal static ServiceActionResultCode IdentityUnavailable => new(5003);
     internal static ServiceActionResultCode UnsupportedType => new(5004);

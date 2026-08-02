@@ -28,7 +28,6 @@ internal static class DiscoveryTreeOfferActionResultMapper
     {
         DiscoveryTreeOfferPreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
         DiscoveryTreeOfferPreflight.ContractUnavailable => DiscoveryTreeOfferActionResultCodes.ContractUnavailable,
-        DiscoveryTreeOfferPreflight.Quarantined => DiscoveryTreeOfferActionResultCodes.Quarantined,
         DiscoveryTreeOfferPreflight.WrongThread => DiscoveryTreeOfferActionResultCodes.WrongThread,
         DiscoveryTreeOfferPreflight.IdentityUnavailable => DiscoveryTreeOfferActionResultCodes.IdentityUnavailable,
         DiscoveryTreeOfferPreflight.TreeUnavailable => DiscoveryTreeOfferActionResultCodes.TreeUnavailable,

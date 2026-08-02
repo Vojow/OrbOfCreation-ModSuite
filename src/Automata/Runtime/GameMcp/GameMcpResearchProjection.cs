@@ -20,9 +20,6 @@ internal static class GameMcpResearchProjection
             result["before"] = State(submission.Receipt.Before);
             result["after"] = State(submission.Receipt.After);
         }
-        if (submission.Preflight is ResearchPreflight.Quarantined or
-            ResearchPreflight.PostCommitFault or ResearchPreflight.VerificationFailed)
-            result["quarantined"] = true;
         return result.Freeze();
     }
 

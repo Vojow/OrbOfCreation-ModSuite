@@ -101,7 +101,7 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Missing_outcome_quarantines_the_family_until_lifecycle_invalidation()
+    public void Missing_outcome_revalidates_on_the_next_call()
     {
         var target = Equipment();
         Register(target);
@@ -109,18 +109,18 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
         using var boundary = Boundary();
 
         var failed = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
-        var quarantined = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
+        var secondFailure = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
         EquipmentManager.instance.SuppressMutation = false;
         boundary.InvalidateLifecycle();
         var retry = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
 
         Assert.Equal(EquipmentLoadoutPreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(EquipmentLoadoutPreflight.Quarantined, quarantined.Preflight);
+        Assert.Equal(EquipmentLoadoutPreflight.VerificationFailed, secondFailure.Preflight);
         Assert.True(retry.Verified, retry.Reason);
     }
 
     [Fact]
-    public void Exception_after_the_requested_stack_transition_commits_without_quarantine()
+    public void Exception_after_the_requested_stack_transition_commits()
     {
         var target = Equipment();
         Register(target);
@@ -130,7 +130,6 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
         var result = Submit(boundary, target, EquipmentLoadoutActionKind.Equip);
 
         Assert.True(result.Verified, result.Reason);
-        Assert.False(boundary.IsQuarantined);
         Assert.Equal(2, EquipmentManager.instance.equippedEquipment.GetStacks(target));
     }
 
@@ -149,7 +148,6 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
         Assert.Equal(EquipmentLoadoutPreflight.PostCommitFault, result.Preflight);
         Assert.False(result.Verified);
         Assert.False(result.Receipt.EvidenceAvailable);
-        Assert.True(boundary.IsQuarantined);
         Assert.Equal(0, EquipmentManager.instance.equippedEquipment.GetStacks(target));
     }
 

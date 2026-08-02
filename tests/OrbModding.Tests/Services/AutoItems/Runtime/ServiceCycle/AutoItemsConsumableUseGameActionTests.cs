@@ -529,7 +529,7 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
     }
 
     [Fact]
-    public void WrongOutcomeQuarantinesTheWholeFamilyUntilLifecycleRebind()
+    public void WrongPlayerOutcomeDoesNotBlockTheNextPlayerAction()
     {
         var first = Item(AutoItemsConsumableFamily.Scroll);
         var second = Item(AutoItemsConsumableFamily.Relic);
@@ -549,15 +549,11 @@ public sealed class AutoItemsConsumableUseGameActionTests : IDisposable
             lifecycleEpoch: 1);
 
         var faulted = gameAction.Submit(in move);
-        var blocked = gameAction.Submit(in discard);
-        Inventory.Current.allConsumables.SuppressSwap = false;
-        gameAction.InvalidateLifecycle();
-        var recovered = gameAction.Submit(in discard);
+        var next = gameAction.Submit(in discard);
 
         Assert.Equal(ConsumablePlayerPreflight.VerificationFailed, faulted.Preflight);
         Assert.True(faulted.Evidence.Available);
-        Assert.Equal(ConsumablePlayerPreflight.Quarantined, blocked.Preflight);
-        Assert.True(recovered.Verified, recovered.Reason);
+        Assert.True(next.Verified, next.Reason);
     }
 
     private AutoItemsConsumableUseGameAction GameAction(

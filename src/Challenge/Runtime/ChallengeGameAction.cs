@@ -18,7 +18,6 @@ internal sealed class ChallengeGameAction : IDisposable
     private readonly int _mainThreadId;
     private ChallengeNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
-    private string _quarantineReason = string.Empty;
 
     internal ChallengeGameAction(Func<long> readLifecycleEpoch,
         Func<bool> tryCaptureMutationPermit, Func<string> readOwnershipFailure,
@@ -39,15 +38,12 @@ internal sealed class ChallengeGameAction : IDisposable
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal bool IsQuarantined => _quarantineReason.Length != 0;
 
     internal ChallengeSubmission Submit(in ChallengeAction action)
     {
         if (Environment.CurrentManagedThreadId != _mainThreadId)
             return ChallengeSubmission.Reject(ChallengePreflight.WrongThread,
                 "Challenge actions are bound to Unity thread " + _mainThreadId + ".");
-        if (_quarantineReason.Length != 0)
-            return ChallengeSubmission.Reject(ChallengePreflight.Quarantined, _quarantineReason);
         if (_bindings is not { } native)
             return ChallengeSubmission.Reject(ChallengePreflight.ContractUnavailable, _bindingFailure);
         long epoch;
@@ -95,7 +91,6 @@ internal sealed class ChallengeGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
         BindLifecycle();
     }
 
@@ -103,7 +98,6 @@ internal sealed class ChallengeGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
     }
 
     private ChallengeSubmission Execute(in ChallengeAction action, ChallengeNativeBindings native,
@@ -144,7 +138,7 @@ internal sealed class ChallengeGameAction : IDisposable
             var receipt = new ChallengeReceipt(action.Kind, in before, in after);
             return OutcomeMatches(action.Kind, in before, in after)
                 ? Verified(in receipt)
-                : Quarantine(in action, ChallengePreflight.VerificationFailed, stage,
+                : Fault(in action, ChallengePreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed, in receipt,
                     "The requested challenge identity/outcome transition was not observable.");
         }
@@ -156,7 +150,7 @@ internal sealed class ChallengeGameAction : IDisposable
             var receipt = new ChallengeReceipt(action.Kind, in before, in after);
             if (after.EvidenceAvailable && OutcomeMatches(action.Kind, in before, in after))
                 return Verified(in receipt);
-            return Quarantine(in action, ChallengePreflight.PostCommitFault, stage,
+            return Fault(in action, ChallengePreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew, in receipt,
                 "The native challenge pipeline threw before the requested outcome was observable: " +
                 exception.GetBaseException().Message);
@@ -247,15 +241,14 @@ internal sealed class ChallengeGameAction : IDisposable
             NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1),
             in receipt, "Verified the exact requested challenge identity/outcome transition.");
 
-    private ChallengeSubmission Quarantine(in ChallengeAction action,
+    private static ChallengeSubmission Fault(in ChallengeAction action,
         ChallengePreflight preflight, ChallengeNativeStage stage, NativeMutationOutcome outcome,
         in ChallengeReceipt receipt, string reason)
     {
         var target = action.HasTarget ? EntityIdentityFormatter.Format(action.TargetId) : action.Kind.ToString();
-        _quarantineReason = "Challenge actions are quarantined for this lifecycle after " + stage +
-            " on " + target + ": " + reason;
+        var exactReason = "Challenge action " + stage + " failed on " + target + ": " + reason;
         return new ChallengeSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, _quarantineReason);
+            new NativeMutationCallOutcome(1, 1, 0), in receipt, exactReason);
     }
 
     private static bool TryContext(ChallengeNativeBindings native, out NativeContext context, out string reason)

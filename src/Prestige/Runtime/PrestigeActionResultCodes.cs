@@ -5,7 +5,6 @@ namespace OrbAutomata;
 internal static class PrestigeActionResultCodes
 {
     internal static ServiceActionResultCode ContractUnavailable => new(5301);
-    internal static ServiceActionResultCode Quarantined => new(5302);
     internal static ServiceActionResultCode WrongThread => new(5303);
     internal static ServiceActionResultCode WorldCycleIncomplete => new(5304);
     internal static ServiceActionResultCode ChallengesNotFetched => new(5305);

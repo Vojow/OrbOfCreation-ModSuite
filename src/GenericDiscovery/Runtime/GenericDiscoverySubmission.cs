@@ -7,7 +7,6 @@ internal enum GenericDiscoveryPreflight
 {
     Proceeded = 0,
     ContractUnavailable = 1,
-    Quarantined = 2,
     WrongThread = 3,
     LifecycleReplaced = 4,
     IdentityUnavailable = 5,

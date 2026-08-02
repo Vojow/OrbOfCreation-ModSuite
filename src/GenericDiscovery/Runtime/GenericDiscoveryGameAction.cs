@@ -20,7 +20,6 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
     private readonly int _mainThreadId;
     private GenericDiscoveryNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
-    private string _quarantineReason = string.Empty;
 
     internal GenericDiscoveryGameAction(
         Func<long> readLifecycleEpoch,
@@ -49,8 +48,6 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal bool IsQuarantined => _quarantineReason.Length != 0;
-    internal string QuarantineReason => _quarantineReason;
 
     internal GenericDiscoverySubmission Submit(in GenericDiscoveryAction action)
     {
@@ -59,10 +56,6 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
                 GenericDiscoveryPreflight.WrongThread,
                 "Generic discovery is bound to Unity thread " + _mainThreadId +
                 ", not thread " + Environment.CurrentManagedThreadId + ".");
-        if (_quarantineReason.Length != 0)
-            return GenericDiscoverySubmission.Reject(
-                GenericDiscoveryPreflight.Quarantined,
-                _quarantineReason);
         if (_bindings is not { } native)
             return GenericDiscoverySubmission.Reject(
                 GenericDiscoveryPreflight.ContractUnavailable,
@@ -156,7 +149,6 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
         BindLifecycle();
     }
 
@@ -164,7 +156,6 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
     }
 
     private GenericDiscoverySubmission Execute(
@@ -192,7 +183,7 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
                 native, in before, in after, costs, paymentInvoked, after.Discovered);
             return after.Discovered
                 ? Verified(nativeCalls, in receipt)
-                : Quarantine(
+                : Fault(
                     in action,
                     GenericDiscoveryPreflight.VerificationFailed,
                     stage,
@@ -212,7 +203,7 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
                 paymentInvoked);
             if (receipt.EvidenceAvailable && receipt.After.Discovered)
                 return Verified(nativeCalls, in receipt);
-            return Quarantine(
+            return Fault(
                 in action,
                 GenericDiscoveryPreflight.PostCommitFault,
                 stage,
@@ -235,7 +226,7 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
             in receipt,
             "Verified that the exact requested UUID became discovered; payment observations are evidence only.");
 
-    private GenericDiscoverySubmission Quarantine(
+    private static GenericDiscoverySubmission Fault(
         in GenericDiscoveryAction action,
         GenericDiscoveryPreflight preflight,
         GenericDiscoveryNativeStage stage,
@@ -244,8 +235,7 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
         in GenericDiscoveryMutationReceipt receipt,
         string reason)
     {
-        _quarantineReason =
-            "Generic discovery is quarantined for this lifecycle after " + stage + " on " +
+        var exactReason = "Generic discovery " + stage + " failed on " +
             EntityIdentityFormatter.Format(action.TargetId) + ": " + reason;
         return new GenericDiscoverySubmission(
             preflight,
@@ -253,7 +243,7 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
             outcome,
             new NativeMutationCallOutcome(nativeCalls, 1, 0),
             in receipt,
-            _quarantineReason);
+            exactReason);
     }
 
     private static GenericDiscoveryState CaptureState(

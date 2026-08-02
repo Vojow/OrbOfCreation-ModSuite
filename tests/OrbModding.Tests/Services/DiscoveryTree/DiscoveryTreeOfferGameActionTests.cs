@@ -70,7 +70,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.All(result.Receipt.Costs, cost => Assert.Equal(0, cost.Charged.CompareTo(BigDouble.Zero)));
         Assert.True(result.Receipt.OffersPendingNativeIncrement);
         Assert.True(result.Receipt.PostconditionMatched);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -87,7 +86,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(0, tree.rerollsLeft);
         Assert.Equal(0, result.Receipt.After.Rerolls);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -106,7 +104,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.True(result.Receipt.After.UsedRerollsLastDiscover);
         Assert.NotEmpty(result.Receipt.After.CurrentChoices);
         Assert.Equal(3, result.Receipt.After.TotalDiscovered);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -122,11 +119,10 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.True(result.Verified, result.Reason);
         Assert.True(result.Receipt.PostconditionMatched);
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
-    public void Initiate_that_returns_idle_without_offers_still_quarantines_with_exact_mode_evidence()
+    public void Initiate_that_returns_idle_without_offers_faults_with_exact_mode_evidence()
     {
         var tree = Tree();
         tree.suppressInitiate = true;
@@ -143,7 +139,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.False(result.Receipt.ResourcesCharged);
         Assert.Contains("expected Crafting mode", result.Reason, StringComparison.Ordinal);
         Assert.Contains("observed 0", result.Reason, StringComparison.Ordinal);
-        Assert.True(action.IsQuarantined);
     }
 
     [Fact]
@@ -179,7 +174,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Idle, tree.actionMode);
         Assert.Empty(result.Receipt.After.CurrentChoices);
         Assert.Equal(2, result.Receipt.After.TotalDiscovered);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -194,7 +188,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(item.GetGuid(), result.Receipt.After.SelectedChoice);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -249,7 +242,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Choice, tree.actionMode);
         Assert.NotEmpty(result.Receipt.After.CurrentChoices);
         Assert.Equal(5, result.Receipt.After.TotalDiscovered);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -265,7 +257,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.True(result.Receipt.After.TargetDiscovered);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -312,7 +303,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.NotEmpty(result.Receipt.After.CurrentChoices);
         Assert.Empty(result.Receipt.After.NextExclusions);
         Assert.Equal(2, result.Receipt.After.TotalDiscovered);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -328,7 +318,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(DiscoveryTreeSO.DiscoveryTreeModes.Crafting, tree.actionMode);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
@@ -475,7 +464,7 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Partial_payment_is_receipted_and_quarantines_lifecycle()
+    public void Partial_payment_is_receipted_and_the_next_call_revalidates()
     {
         var first = Resource();
         var second = Resource();
@@ -491,15 +480,14 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.Equal(DiscoveryTreeOfferPreflight.PostCommitFault, result.Preflight);
         Assert.True(result.Receipt.PaymentInvoked);
         Assert.True(result.Receipt.ResourcesCharged);
-        Assert.True(action.IsQuarantined);
         Assert.Equal(0, result.CallOutcome.MutationsCommitted);
         var next = action.Submit(new DiscoveryTreeOfferAction(
             DiscoveryTreeOfferActionKind.Initiate, tree.GetGuid(), Guid.Empty, Epoch));
-        Assert.Equal(DiscoveryTreeOfferPreflight.Quarantined, next.Preflight);
+        Assert.Equal(DiscoveryTreeOfferPreflight.PostCommitFault, next.Preflight);
     }
 
     [Fact]
-    public void Confirm_fault_after_native_reset_preserves_partial_evidence_and_quarantines()
+    public void Confirm_fault_after_native_reset_preserves_partial_evidence()
     {
         var (tree, item) = ChoiceTree();
         tree.selectedChoiceId = new GuidContainer(item.GetGuid());
@@ -513,7 +501,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.True(result.Receipt.EvidenceAvailable);
         Assert.Equal(1, result.Receipt.After.TotalDiscovered);
         Assert.False(result.Receipt.After.TargetDiscovered);
-        Assert.True(action.IsQuarantined);
     }
 
     [Fact]
@@ -532,11 +519,10 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.Equal(DiscoveryTreeOfferNativeStage.Verification, result.Stage);
         Assert.Equal(Guid.Empty, result.Receipt.After.SelectedChoice);
         Assert.Equal(0, result.Receipt.After.Rerolls);
-        Assert.False(action.IsQuarantined);
     }
 
     [Fact]
-    public void Native_postcondition_mismatch_is_partial_and_quarantines()
+    public void Native_postcondition_mismatch_is_partial_without_persistent_blocking()
     {
         var (tree, item) = ChoiceTree();
         tree.suppressSelect = true;
@@ -551,11 +537,10 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         Assert.False(result.Receipt.PostconditionMatched);
         Assert.Equal(1, result.CallOutcome.NativeCallsAttempted);
         Assert.Equal(0, result.CallOutcome.MutationsCommitted);
-        Assert.True(action.IsQuarantined);
     }
 
     [Fact]
-    public void Lifecycle_invalidation_clears_quarantine_but_stale_action_still_refuses()
+    public void Lifecycle_invalidation_rebinds_and_stale_action_still_refuses()
     {
         var (tree, item) = ChoiceTree();
         tree.throwAfterSelect = true;
@@ -571,7 +556,6 @@ public sealed class DiscoveryTreeOfferGameActionTests : IDisposable
         tree.suppressSelect = false;
         action.InvalidateLifecycle();
 
-        Assert.False(action.IsQuarantined);
         Assert.Equal(DiscoveryTreeOfferPreflight.LifecycleReplaced, action.Submit(stale).Preflight);
         var fresh = new DiscoveryTreeOfferAction(
             DiscoveryTreeOfferActionKind.Select, tree.GetGuid(), item.GetGuid(), epoch);

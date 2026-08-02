@@ -14,11 +14,6 @@ internal sealed partial class AutoItemsConsumableUseGameAction
                 in action,
                 ConsumablePlayerPreflight.WrongThread,
                 "Consumable actions are bound to Unity thread " + _mainThreadId + ".");
-        if (_quarantineReason.Length != 0)
-            return ConsumablePlayerSubmission.Reject(
-                in action,
-                ConsumablePlayerPreflight.Quarantined,
-                _quarantineReason);
         if (_playerBindings is not { } native)
             return ConsumablePlayerSubmission.Reject(
                 in action,
@@ -361,7 +356,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction
         return SequenceEqual(after.OrderedList, expected)
             ? Verified(in action, in before, in after, calls,
                 "The exact consumable moved to the requested list position.")
-            : Quarantine(
+            : PlayerFault(
                 in action,
                 ConsumablePlayerPreflight.VerificationFailed,
                 ConsumablePlayerNativeStage.Verification,
@@ -401,7 +396,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction
         var after = Capture(item, native);
         return postcondition(before, after)
             ? Verified(in action, in before, in after, calls, reason)
-            : Quarantine(
+            : PlayerFault(
                 in action,
                 ConsumablePlayerPreflight.VerificationFailed,
                 stage,
@@ -426,7 +421,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction
         return postcondition(before, after)
             ? Verified(in action, in before, in after, calls,
                 reason + " The requested outcome was nevertheless observable.")
-            : Quarantine(
+            : PlayerFault(
                 in action,
                 ConsumablePlayerPreflight.PostCommitFault,
                 stage,
@@ -450,7 +445,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction
         var removed = !Contains(after.UsageIds, usageId);
         return removed && after.Queued == before.Queued - 1 && native.IsCancelled(resultInfo)
             ? Verified(in action, in before, in after, 1, reason)
-            : Quarantine(
+            : PlayerFault(
                 in action,
                 ConsumablePlayerPreflight.VerificationFailed,
                 ConsumablePlayerNativeStage.Verification,
@@ -480,7 +475,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction
                 in after,
                 1,
                 reason + " The requested cancellation was nevertheless observable.");
-        return Quarantine(
+        return PlayerFault(
             in action,
             ConsumablePlayerPreflight.PostCommitFault,
             ConsumablePlayerNativeStage.Cancel,
@@ -509,7 +504,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction
                 in after,
                 calls,
                 reason + " The requested order was nevertheless observable.")
-            : Quarantine(
+            : PlayerFault(
                 in action,
                 ConsumablePlayerPreflight.PostCommitFault,
                 ConsumablePlayerNativeStage.Reorder,
@@ -539,7 +534,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction
             reason);
     }
 
-    private ConsumablePlayerSubmission Quarantine(
+    private static ConsumablePlayerSubmission PlayerFault(
         in ConsumablePlayerAction action,
         ConsumablePlayerPreflight preflight,
         ConsumablePlayerNativeStage stage,
@@ -549,8 +544,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction
         int calls,
         string reason)
     {
-        _quarantineReason =
-            "Consumable actions are quarantined for this lifecycle after " + action.Kind +
+        var exactReason = "Consumable " + action.Kind +
             " could not prove the exact requested outcome: " + reason;
         var evidence = new ConsumablePlayerEvidence(true, in before, in after);
         return new ConsumablePlayerSubmission(
@@ -561,7 +555,7 @@ internal sealed partial class AutoItemsConsumableUseGameAction
             outcome,
             new NativeMutationCallOutcome(calls, 1, 0),
             in evidence,
-            _quarantineReason);
+            exactReason);
     }
 
     private static ConsumablePlayerState Capture(

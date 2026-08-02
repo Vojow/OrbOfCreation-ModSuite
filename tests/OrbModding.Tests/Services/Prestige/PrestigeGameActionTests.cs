@@ -59,7 +59,7 @@ public sealed class PrestigeGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Returned_transaction_without_lifecycle_replacement_faults_and_quarantines()
+    public void Returned_transaction_without_lifecycle_replacement_faults_and_revalidates()
     {
         PersistentResetManager.PersistentResetSignal = null;
         using var boundary = Boundary();
@@ -68,8 +68,7 @@ public sealed class PrestigeGameActionTests : IDisposable
         var retry = Submit(boundary);
 
         Assert.Equal(PrestigePreflight.VerificationFailed, first.Preflight);
-        Assert.True(boundary.IsQuarantined);
-        Assert.Equal(PrestigePreflight.Quarantined, retry.Preflight);
+        Assert.Equal(PrestigePreflight.WorldCycleIncomplete, retry.Preflight);
         Assert.Equal(1, PersistentResetManager.instance.ResetCalls);
     }
 
@@ -82,7 +81,6 @@ public sealed class PrestigeGameActionTests : IDisposable
         var submission = Submit(boundary);
 
         Assert.Equal(PrestigePreflight.VerificationFailed, submission.Preflight);
-        Assert.True(boundary.IsQuarantined);
         Assert.Equal(12, _epoch);
     }
 
@@ -96,7 +94,6 @@ public sealed class PrestigeGameActionTests : IDisposable
 
         Assert.Equal(PrestigePreflight.PostCommitFault, submission.Preflight);
         Assert.Equal(NativeMutationOutcome.ExecutionThrew, submission.Outcome);
-        Assert.True(boundary.IsQuarantined);
         Assert.Equal(11, _epoch);
     }
 

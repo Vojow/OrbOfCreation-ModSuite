@@ -32,7 +32,6 @@ internal enum CraftingPlayerPreflight
     Proceeded = 0,
     LifecycleReplaced = 1,
     ContractUnavailable = 2,
-    Quarantined = 3,
     WrongThread = 4,
     RecipeUnavailable = 5,
     NotVisible = 6,
@@ -144,7 +143,6 @@ internal readonly struct CraftingPlayerSubmission
 internal static class CraftingPlayerActionResultCodes
 {
     internal static readonly ServiceActionResultCode ContractUnavailable = new(7701);
-    internal static readonly ServiceActionResultCode Quarantined = new(7702);
     internal static readonly ServiceActionResultCode WrongThread = new(7703);
     internal static readonly ServiceActionResultCode RecipeUnavailable = new(7704);
     internal static readonly ServiceActionResultCode NotVisible = new(7705);

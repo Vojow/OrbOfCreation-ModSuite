@@ -5,7 +5,6 @@ namespace OrbAutomata;
 internal static class DiscoveryTreeOfferActionResultCodes
 {
     internal static ServiceActionResultCode ContractUnavailable => new(4300);
-    internal static ServiceActionResultCode Quarantined => new(4301);
     internal static ServiceActionResultCode WrongThread => new(4302);
     internal static ServiceActionResultCode IdentityUnavailable => new(4303);
     internal static ServiceActionResultCode TreeUnavailable => new(4304);

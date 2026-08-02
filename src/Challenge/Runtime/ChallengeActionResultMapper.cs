@@ -23,7 +23,6 @@ internal static class ChallengeActionResultMapper
     {
         ChallengePreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
         ChallengePreflight.ContractUnavailable => ChallengeActionResultCodes.ContractUnavailable,
-        ChallengePreflight.Quarantined => ChallengeActionResultCodes.Quarantined,
         ChallengePreflight.WrongThread => ChallengeActionResultCodes.WrongThread,
         ChallengePreflight.IdentityUnavailable => ChallengeActionResultCodes.IdentityUnavailable,
         ChallengePreflight.OfferUnavailable => ChallengeActionResultCodes.OfferUnavailable,

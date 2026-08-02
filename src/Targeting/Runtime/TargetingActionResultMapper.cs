@@ -20,7 +20,6 @@ internal static class TargetingActionResultMapper
     {
         TargetingPreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
         TargetingPreflight.ContractUnavailable => TargetingActionResultCodes.ContractUnavailable,
-        TargetingPreflight.Quarantined => TargetingActionResultCodes.Quarantined,
         TargetingPreflight.WrongThread => TargetingActionResultCodes.WrongThread,
         TargetingPreflight.NoPendingRequest => TargetingActionResultCodes.NoPendingRequest,
         TargetingPreflight.TargetUnavailable => TargetingActionResultCodes.TargetUnavailable,

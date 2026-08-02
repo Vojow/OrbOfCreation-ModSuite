@@ -162,7 +162,7 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
     }
 
     [Fact]
-    public void MissingQueuedOutcomeQuarantinesUntilLifecycleInvalidation()
+    public void MissingQueuedOutcomeFaultsWithoutPersistentPlayerState()
     {
         var recipe = Register(Recipe());
         var page = Page(recipe, mode: 0, maximum: 1);
@@ -181,7 +181,7 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
 
         Assert.Equal(CraftingPlayerPreflight.VerificationFailed, failed.Preflight);
         Assert.Equal(NativeMutationOutcome.PostconditionFailed, failed.Outcome);
-        Assert.Equal(CraftingPlayerPreflight.Quarantined, blocked.Preflight);
+        Assert.Equal(CraftingPlayerPreflight.VerificationFailed, blocked.Preflight);
         Assert.True(retried.Verified, retried.Reason);
     }
 

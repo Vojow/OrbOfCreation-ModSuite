@@ -28,7 +28,6 @@ internal static class CraftingPlayerActionResultMapper
         {
             CraftingPlayerPreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
             CraftingPlayerPreflight.ContractUnavailable => CraftingPlayerActionResultCodes.ContractUnavailable,
-            CraftingPlayerPreflight.Quarantined => CraftingPlayerActionResultCodes.Quarantined,
             CraftingPlayerPreflight.WrongThread => CraftingPlayerActionResultCodes.WrongThread,
             CraftingPlayerPreflight.RecipeUnavailable => CraftingPlayerActionResultCodes.RecipeUnavailable,
             CraftingPlayerPreflight.NotVisible => CraftingPlayerActionResultCodes.NotVisible,

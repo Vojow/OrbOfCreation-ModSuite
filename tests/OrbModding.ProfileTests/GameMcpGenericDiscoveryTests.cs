@@ -144,7 +144,7 @@ public sealed class GameMcpGenericDiscoveryTests
         var committed = Json(GameMcpGenericDiscoveryProjection.Project(in success));
 
         Assert.Equal("verification_failed", (string?)failed["preflight"]);
-        Assert.True((bool)failed["quarantined"]!);
+        Assert.Null(failed["quarantined"]);
         var cost = Assert.Single(failed["receipt"]!["costs"]!).Value<JObject>()!;
         Assert.Equal("Arcane Dust", (string?)cost["resource"]!["name"]);
         Assert.Equal("5e0", (string?)cost["observedDelta"]);

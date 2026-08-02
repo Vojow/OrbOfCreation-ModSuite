@@ -25,10 +25,6 @@ internal static class GameMcpCraftingProjection
             result["before"] = State(in before);
             result["after"] = State(in after);
         }
-        if (submission.Preflight is CraftingPlayerPreflight.Quarantined or
-            CraftingPlayerPreflight.PostCommitFault or
-            CraftingPlayerPreflight.VerificationFailed)
-            result["quarantined"] = true;
         return result.Freeze();
     }
 

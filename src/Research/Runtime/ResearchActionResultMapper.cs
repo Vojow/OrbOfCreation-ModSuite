@@ -22,7 +22,6 @@ internal static class ResearchActionResultMapper
     {
         ResearchPreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
         ResearchPreflight.ContractUnavailable => ResearchActionResultCodes.ContractUnavailable,
-        ResearchPreflight.Quarantined => ResearchActionResultCodes.Quarantined,
         ResearchPreflight.WrongThread => ResearchActionResultCodes.WrongThread,
         ResearchPreflight.IdentityUnavailable => ResearchActionResultCodes.IdentityUnavailable,
         ResearchPreflight.DevelopUnavailable => ResearchActionResultCodes.DevelopUnavailable,

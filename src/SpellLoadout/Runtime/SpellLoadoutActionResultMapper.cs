@@ -27,7 +27,6 @@ internal static class SpellLoadoutActionResultMapper
     {
         SpellLoadoutPreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
         SpellLoadoutPreflight.ContractUnavailable => SpellLoadoutActionResultCodes.ContractUnavailable,
-        SpellLoadoutPreflight.Quarantined => SpellLoadoutActionResultCodes.Quarantined,
         SpellLoadoutPreflight.WrongThread => SpellLoadoutActionResultCodes.WrongThread,
         SpellLoadoutPreflight.IdentityUnavailable => SpellLoadoutActionResultCodes.IdentityUnavailable,
         SpellLoadoutPreflight.NativeRemoveRefused => SpellLoadoutActionResultCodes.NativeRemoveRefused,

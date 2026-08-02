@@ -16,7 +16,6 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
     private readonly int _mainThreadId;
     private EquipmentLoadoutNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
-    private string _quarantineReason = string.Empty;
 
     internal EquipmentLoadoutGameAction(Func<long> readLifecycleEpoch,
         Func<bool> tryCaptureMutationPermit, Func<string> readOwnershipFailure,
@@ -36,15 +35,12 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal bool IsQuarantined => _quarantineReason.Length != 0;
 
     internal EquipmentLoadoutSubmission Submit(in EquipmentLoadoutAction action)
     {
         if (Environment.CurrentManagedThreadId != _mainThreadId)
             return EquipmentLoadoutSubmission.Reject(EquipmentLoadoutPreflight.WrongThread,
                 "Equipment loadout is bound to Unity thread " + _mainThreadId + ".");
-        if (_quarantineReason.Length != 0)
-            return EquipmentLoadoutSubmission.Reject(EquipmentLoadoutPreflight.Quarantined, _quarantineReason);
         if (_bindings is not { } native)
             return EquipmentLoadoutSubmission.Reject(EquipmentLoadoutPreflight.ContractUnavailable, _bindingFailure);
         long epoch;
@@ -119,7 +115,6 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
         BindLifecycle();
     }
 
@@ -127,7 +122,6 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
     }
 
     private EquipmentLoadoutSubmission Execute(in EquipmentLoadoutAction action,
@@ -144,7 +138,7 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
             var receipt = new EquipmentLoadoutReceipt(true, action.Kind, requested, in before, in after);
             return OutcomeMatches(action.Kind, in before, in after, requested)
                 ? Verified(in receipt)
-                : Quarantine(in action, EquipmentLoadoutPreflight.VerificationFailed, stage,
+                : Fault(in action, EquipmentLoadoutPreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed, in receipt,
                     "The exact requested artifact stack did not make the audited native transition.");
         }
@@ -157,7 +151,7 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
             var receipt = new EquipmentLoadoutReceipt(evidenceAvailable, action.Kind, requested, in before, in after);
             if (evidenceAvailable && OutcomeMatches(action.Kind, in before, in after, requested))
                 return Verified(in receipt);
-            return Quarantine(in action, EquipmentLoadoutPreflight.PostCommitFault, stage,
+            return Fault(in action, EquipmentLoadoutPreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew, in receipt,
                 "The native equipment callback threw before the requested target outcome was observable: " +
                 exception.GetBaseException().Message);
@@ -190,14 +184,14 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
             NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1), in receipt,
             "Verified the exact requested artifact stack transition; usage reservations are evidence only.");
 
-    private EquipmentLoadoutSubmission Quarantine(in EquipmentLoadoutAction action,
+    private static EquipmentLoadoutSubmission Fault(in EquipmentLoadoutAction action,
         EquipmentLoadoutPreflight preflight, EquipmentLoadoutNativeStage stage,
         NativeMutationOutcome outcome, in EquipmentLoadoutReceipt receipt, string reason)
     {
-        _quarantineReason = "Equipment loadout is quarantined for this lifecycle after " + stage + " on " +
+        var exactReason = "Equipment loadout " + stage + " failed on " +
             EntityIdentityFormatter.Format(action.TargetId) + ": " + reason;
         return new EquipmentLoadoutSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, _quarantineReason);
+            new NativeMutationCallOutcome(1, 1, 0), in receipt, exactReason);
     }
 
     private void BindLifecycle()

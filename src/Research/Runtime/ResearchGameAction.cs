@@ -15,7 +15,6 @@ internal sealed class ResearchGameAction : IDisposable
     private readonly int _mainThreadId;
     private ResearchNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
-    private string _quarantineReason = string.Empty;
 
     internal ResearchGameAction(Func<long> readLifecycleEpoch,
         Func<bool> tryCaptureMutationPermit, Func<string> readOwnershipFailure,
@@ -34,15 +33,12 @@ internal sealed class ResearchGameAction : IDisposable
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal bool IsQuarantined => _quarantineReason.Length != 0;
 
     internal ResearchSubmission Submit(in ResearchAction action)
     {
         if (Environment.CurrentManagedThreadId != _mainThreadId)
             return ResearchSubmission.Reject(ResearchPreflight.WrongThread,
                 "Research actions are bound to Unity thread " + _mainThreadId + ".");
-        if (_quarantineReason.Length != 0)
-            return ResearchSubmission.Reject(ResearchPreflight.Quarantined, _quarantineReason);
         if (_bindings is not { } native)
             return ResearchSubmission.Reject(ResearchPreflight.ContractUnavailable, _bindingFailure);
         long epoch;
@@ -79,10 +75,10 @@ internal sealed class ResearchGameAction : IDisposable
     }
 
     internal void InvalidateLifecycle()
-    { _bindings = null; _bindingFailure = string.Empty; _quarantineReason = string.Empty; BindLifecycle(); }
+    { _bindings = null; _bindingFailure = string.Empty; BindLifecycle(); }
 
     public void Dispose()
-    { _bindings = null; _bindingFailure = string.Empty; _quarantineReason = string.Empty; }
+    { _bindings = null; _bindingFailure = string.Empty; }
 
     private ResearchSubmission Execute(in ResearchAction action, ResearchNativeBindings native,
         object target, in ResearchState before)
@@ -96,7 +92,7 @@ internal sealed class ResearchGameAction : IDisposable
             var receipt = new ResearchReceipt(action.Kind, before, after);
             return OutcomeMatches(action.Kind, in before, in after)
                 ? Verified(in receipt)
-                : Quarantine(in action, ResearchPreflight.VerificationFailed, stage,
+                : Fault(in action, ResearchPreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed, in receipt,
                     "The exact research target did not make the requested state transition.");
         }
@@ -108,7 +104,7 @@ internal sealed class ResearchGameAction : IDisposable
             var receipt = new ResearchReceipt(action.Kind, before, after);
             if (after.EvidenceAvailable && OutcomeMatches(action.Kind, in before, in after))
                 return Verified(in receipt);
-            return Quarantine(in action, ResearchPreflight.PostCommitFault, stage,
+            return Fault(in action, ResearchPreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew, in receipt,
                 "The native research callback threw before the requested outcome was observable: " +
                 exception.GetBaseException().Message);
@@ -233,14 +229,14 @@ internal sealed class ResearchGameAction : IDisposable
             NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1),
             in receipt, "Verified the exact requested research identity/outcome transition.");
 
-    private ResearchSubmission Quarantine(in ResearchAction action, ResearchPreflight preflight,
+    private static ResearchSubmission Fault(in ResearchAction action, ResearchPreflight preflight,
         ResearchNativeStage stage, NativeMutationOutcome outcome, in ResearchReceipt receipt,
         string reason)
     {
-        _quarantineReason = "Research actions are quarantined for this lifecycle after " + stage +
-            " on " + EntityIdentityFormatter.Format(action.TargetId) + ": " + reason;
+        var exactReason = "Research " + stage + " failed on " +
+            EntityIdentityFormatter.Format(action.TargetId) + ": " + reason;
         return new ResearchSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(1, 1, 0), in receipt, _quarantineReason);
+            new NativeMutationCallOutcome(1, 1, 0), in receipt, exactReason);
     }
 
     private void BindLifecycle()

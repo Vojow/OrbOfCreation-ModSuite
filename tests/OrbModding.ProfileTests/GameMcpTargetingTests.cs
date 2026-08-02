@@ -105,7 +105,7 @@ public sealed class GameMcpTargetingTests
         Assert.Equal("verification_failed", (string?)failure["preflight"]);
         Assert.Equal(First.ToString("D"), (string?)failure["requestedTarget"]!["uuid"]);
         Assert.True((bool)failure["requestPendingAfter"]!);
-        Assert.True((bool)failure["quarantined"]!);
+        Assert.Null(failure["quarantined"]);
     }
 
     [Fact]

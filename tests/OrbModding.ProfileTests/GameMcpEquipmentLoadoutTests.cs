@@ -73,7 +73,7 @@ public sealed class GameMcpEquipmentLoadoutTests
         Assert.Equal("verification_failed", (string?)failed["preflight"]);
         Assert.Equal("equip", (string?)failed["requestedMode"]);
         Assert.Equal("2e0", (string?)failed["requestedAmount"]);
-        Assert.True((bool)failed["quarantined"]!);
+        Assert.Null(failed["quarantined"]);
         Assert.Null(failed["payment"]);
         Assert.Null(failed["receipt"]);
         Assert.Empty(committed.Properties());

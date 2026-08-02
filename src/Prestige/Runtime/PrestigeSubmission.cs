@@ -8,7 +8,6 @@ internal enum PrestigePreflight
     WrongThread = 1,
     LifecycleReplaced = 2,
     ContractUnavailable = 3,
-    Quarantined = 4,
     WorldCycleIncomplete = 5,
     ChallengesNotFetched = 6,
     MutationPermitUnavailable = 7,

@@ -21,7 +21,6 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
     private readonly int _mainThreadId;
     private DiscoveryTreeOfferNativeBindings? _bindings;
     private string _bindingFailure = string.Empty;
-    private string _quarantineReason = string.Empty;
 
     internal DiscoveryTreeOfferGameAction(
         Func<long> readLifecycleEpoch,
@@ -41,8 +40,6 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
-    internal bool IsQuarantined => _quarantineReason.Length != 0;
-    internal string QuarantineReason => _quarantineReason;
 
     internal DiscoveryTreeOfferSubmission Submit(in DiscoveryTreeOfferAction action)
     {
@@ -50,8 +47,6 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
             return DiscoveryTreeOfferSubmission.Reject(
                 DiscoveryTreeOfferPreflight.WrongThread,
                 $"Discovery Tree offers are bound to Unity thread {_mainThreadId}, not thread {Environment.CurrentManagedThreadId}.");
-        if (_quarantineReason.Length != 0)
-            return DiscoveryTreeOfferSubmission.Reject(DiscoveryTreeOfferPreflight.Quarantined, _quarantineReason);
         if (_bindings is not { } native)
             return DiscoveryTreeOfferSubmission.Reject(
                 DiscoveryTreeOfferPreflight.ContractUnavailable,
@@ -107,7 +102,6 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
         BindLifecycle();
     }
 
@@ -115,7 +109,6 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
     {
         _bindings = null;
         _bindingFailure = string.Empty;
-        _quarantineReason = string.Empty;
     }
 
     private DiscoveryTreeOfferSubmission SubmitInitiate(
@@ -165,7 +158,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
             return verified
                 ? Verified(stage, nativeCalls, in receipt,
                     "Verified the requested transition to Crafting; payment, rerolls, counters, flags, timer, and pending offers are receipt evidence.")
-                : Quarantine(in action, DiscoveryTreeOfferPreflight.VerificationFailed, stage,
+                : Fault(in action, DiscoveryTreeOfferPreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed, nativeCalls, in receipt,
                     $"Initiate expected Crafting mode for tree {EntityIdentityFormatter.Format(action.TreeId)}, observed {after.Mode}.");
         }
@@ -179,7 +172,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
                 return Verified(DiscoveryTreeOfferNativeStage.Verification, nativeCalls, in receipt,
                     "The native call threw after the requested Crafting transition landed; the exception and all accounting observations remain receipt evidence.");
             }
-            return Quarantine(in action, DiscoveryTreeOfferPreflight.PostCommitFault, stage,
+            return Fault(in action, DiscoveryTreeOfferPreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew, nativeCalls, in receipt,
                 "Native initiate threw before the requested Crafting transition was observable: " +
                 ex.GetBaseException().Message);
@@ -276,7 +269,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
                 ? Verified(stage, nativeCalls, in receipt,
                     "Verified the requested reroll transition to Crafting; debit, exclusions, selection cleanup, flags, timer, and counts are evidence." +
                     (reason.Length == 0 ? string.Empty : " " + reason))
-                : Quarantine(in action, DiscoveryTreeOfferPreflight.VerificationFailed, stage,
+                : Fault(in action, DiscoveryTreeOfferPreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed, nativeCalls, in receipt,
                     $"Reroll expected Crafting mode for tree {EntityIdentityFormatter.Format(action.TreeId)}, observed {after.Mode}.");
         }
@@ -290,7 +283,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
                 return Verified(DiscoveryTreeOfferNativeStage.Verification, nativeCalls, in receipt,
                     "The native call threw after the requested Crafting transition landed; the exception and accounting observations remain receipt evidence.");
             }
-            return Quarantine(in action, DiscoveryTreeOfferPreflight.PostCommitFault, stage,
+            return Fault(in action, DiscoveryTreeOfferPreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew, nativeCalls, in receipt,
                 "Native reroll threw before the requested Crafting transition was observable: " +
                 ex.GetBaseException().Message);
@@ -317,7 +310,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
                 Array.Empty<DiscoveryTreeCostReceipt>());
             return matched
                 ? Verified(DiscoveryTreeOfferNativeStage.Verification, 1, in receipt, success)
-                : Quarantine(in action, DiscoveryTreeOfferPreflight.VerificationFailed,
+                : Fault(in action, DiscoveryTreeOfferPreflight.VerificationFailed,
                     DiscoveryTreeOfferNativeStage.Verification, NativeMutationOutcome.PostconditionFailed,
                     1, in receipt, $"{action.Kind} postconditions did not match the audited native transition.");
         }
@@ -331,7 +324,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
                 return Verified(DiscoveryTreeOfferNativeStage.Verification, 1, in receipt,
                     $"The native {action.Kind} call threw after the requested outcome landed; the exception and accounting observations remain receipt evidence.");
             }
-            return Quarantine(in action, DiscoveryTreeOfferPreflight.PostCommitFault, stage,
+            return Fault(in action, DiscoveryTreeOfferPreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew, 1, in receipt,
                 $"Native {action.Kind} threw before the requested outcome was observable: {ex.GetBaseException().Message}");
         }
@@ -345,7 +338,7 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
         new(DiscoveryTreeOfferPreflight.Proceeded, stage, NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(nativeCalls, 1, 1), in receipt, reason);
 
-    private DiscoveryTreeOfferSubmission Quarantine(
+    private static DiscoveryTreeOfferSubmission Fault(
         in DiscoveryTreeOfferAction action,
         DiscoveryTreeOfferPreflight preflight,
         DiscoveryTreeOfferNativeStage stage,
@@ -354,11 +347,10 @@ internal sealed class DiscoveryTreeOfferGameAction : IDisposable
         in DiscoveryTreeOfferMutationReceipt receipt,
         string reason)
     {
-        _quarantineReason =
-            $"Discovery Tree offers are quarantined for this lifecycle after {stage} on " +
-            $"tree {EntityIdentityFormatter.Format(action.TreeId)}: {reason}";
+        var exactReason = $"Discovery Tree offer {stage} failed on tree " +
+            $"{EntityIdentityFormatter.Format(action.TreeId)}: {reason}";
         return new DiscoveryTreeOfferSubmission(preflight, stage, outcome,
-            new NativeMutationCallOutcome(nativeCalls, 1, 0), in receipt, _quarantineReason);
+            new NativeMutationCallOutcome(nativeCalls, 1, 0), in receipt, exactReason);
     }
 
     private static DiscoveryTreeOfferSubmission WrongMode(

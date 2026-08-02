@@ -153,7 +153,7 @@ public sealed class GameMcpConsumableTests
         var success = Json(GameMcpConsumableProjection.Project(in committed));
 
         Assert.Equal("verification_failed", (string?)failure["preflight"]);
-        Assert.True((bool)failure["quarantined"]!);
+        Assert.Null(failure["quarantined"]);
         Assert.Equal("Swift Thread",
             (string?)failure["before"]!["orderedList"]![0]!["consumable"]!["name"]);
         Assert.NotNull(failure["after"]);

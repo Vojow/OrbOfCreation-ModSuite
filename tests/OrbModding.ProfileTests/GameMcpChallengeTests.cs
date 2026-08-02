@@ -118,7 +118,7 @@ public sealed class GameMcpChallengeTests
         Assert.Equal("verification_failed", (string?)failed["preflight"]);
         Assert.Equal("queue", (string?)failed["requestedMode"]);
         Assert.Equal("Prismatic Trial", (string?)failed["before"]!["timeOffers"]![0]!["name"]);
-        Assert.True((bool)failed["quarantined"]!);
+        Assert.Null(failed["quarantined"]);
         Assert.Empty(committed.Properties());
     }
 

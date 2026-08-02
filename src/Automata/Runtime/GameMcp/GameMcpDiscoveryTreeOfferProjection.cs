@@ -25,12 +25,6 @@ internal static class GameMcpDiscoveryTreeOfferProjection
             result["nativeStage"] = GameMcpEntityWireNormalizer.Snake(submission.Stage.ToString());
             result["outcome"] = GameMcpEntityWireNormalizer.Snake(submission.Outcome.ToString());
         }
-        if (submission.Preflight is DiscoveryTreeOfferPreflight.Quarantined or
-            DiscoveryTreeOfferPreflight.PostCommitFault or
-            DiscoveryTreeOfferPreflight.VerificationFailed)
-        {
-            result["quarantined"] = true;
-        }
         if (receipt.EvidenceAvailable)
         {
             var before = receipt.Before;

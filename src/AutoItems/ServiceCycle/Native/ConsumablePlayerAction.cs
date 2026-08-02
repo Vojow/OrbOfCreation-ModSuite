@@ -68,7 +68,6 @@ internal enum ConsumablePlayerPreflight
     Proceeded = 0,
     LifecycleReplaced = 1,
     ContractUnavailable = 2,
-    Quarantined = 3,
     WrongThread = 4,
     ItemUnavailable = 5,
     NotVisible = 6,
@@ -191,7 +190,6 @@ internal readonly struct ConsumablePlayerSubmission
 internal static class ConsumablePlayerActionResultCodes
 {
     internal static readonly ServiceActionResultCode ContractUnavailable = new(7601);
-    internal static readonly ServiceActionResultCode Quarantined = new(7602);
     internal static readonly ServiceActionResultCode WrongThread = new(7603);
     internal static readonly ServiceActionResultCode ItemUnavailable = new(7604);
     internal static readonly ServiceActionResultCode NotVisible = new(7605);

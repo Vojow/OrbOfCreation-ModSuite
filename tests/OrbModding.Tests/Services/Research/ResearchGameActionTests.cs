@@ -137,7 +137,7 @@ public sealed class ResearchGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Missing_outcome_quarantines_but_throw_after_requested_outcome_commits()
+    public void Missing_outcome_revalidates_but_throw_after_requested_outcome_commits()
     {
         var target = Research();
         Register(target);
@@ -145,16 +145,15 @@ public sealed class ResearchGameActionTests : IDisposable
         using var boundary = Boundary();
 
         var failed = Submit(boundary, target, ResearchActionKind.Develop);
-        var quarantined = Submit(boundary, target, ResearchActionKind.Develop);
+        var retry = Submit(boundary, target, ResearchActionKind.Develop);
         target.SuppressAction = false;
         boundary.InvalidateLifecycle();
         target.ThrowAfterAction = true;
         var committed = Submit(boundary, target, ResearchActionKind.Develop);
 
         Assert.Equal(ResearchPreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(ResearchPreflight.Quarantined, quarantined.Preflight);
+        Assert.Equal(ResearchPreflight.VerificationFailed, retry.Preflight);
         Assert.True(committed.Verified, committed.Reason);
-        Assert.False(boundary.IsQuarantined);
     }
 
     [Fact]

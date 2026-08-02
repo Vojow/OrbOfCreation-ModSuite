@@ -86,6 +86,21 @@ public sealed class GameMcpResearchTests
     }
 
     [Fact]
+    public void Research_cost_uses_spendable_amount_while_native_affordability_remains_authoritative()
+    {
+        var world = World(developmentCostAffordable: false, spendableAmount: 1);
+        var response = Json(GameMcpWorldQuery.GetRow(GameMcpTestHarness.Context(world, 2803),
+            "research", ResearchId.ToString("D"), "ResearchSO").Freeze(), world);
+        var develop = response["row"]!["develop"]!;
+        var cost = Assert.Single(develop["costs"]!).Value<JObject>()!;
+
+        Assert.Equal("1e0", (string?)cost["amount"]);
+        Assert.False((bool)develop["affordable"]!);
+        Assert.Equal("unaffordable", (string?)develop["reasonCode"]);
+        Assert.Null(cost["lifetimeAmount"]);
+    }
+
+    [Fact]
     public void Failure_keeps_decomposed_state_while_success_yields_to_fresh_world_poststate()
     {
         var before = State(active: false, developing: false, queued: 0, selfBonus: 0);
@@ -103,7 +118,7 @@ public sealed class GameMcpResearchTests
 
         Assert.Equal("verification_failed", (string?)failure["preflight"]);
         Assert.Equal("develop", (string?)failure["requestedMode"]);
-        Assert.True((bool)failure["quarantined"]!);
+        Assert.Null(failure["quarantined"]);
         Assert.NotNull(failure["before"]);
         Assert.Null(failure["payment"]);
         Assert.Null(failure["receipt"]);
@@ -129,13 +144,24 @@ public sealed class GameMcpResearchTests
         new(true, true, 3, 1, 0, queued, 0, selfBonus, active, developing,
             1, 0, 1, 1, new BigDouble(0.5), true, true, true, 2, true, 10, 2);
 
-    private static GameWorldState World()
+    private static GameWorldState World(
+        bool developmentCostAffordable = true,
+        double spendableAmount = 80)
     {
-        var decision = new WorldResearchDecision(true, 3, 3, 2, 1,
-            new BigDouble(30), new BigDouble(30), new BigDouble(0.5), true, 2, true,
+        var decision = new WorldResearchDecision(
+            true,
+            3,
+            3,
+            developmentCostAffordable ? 2 : 0,
+            1,
+            new BigDouble(30), new BigDouble(30), new BigDouble(0.5), true, 2,
+            developmentCostAffordable,
             PublicationTable<WorldResearchCost>.Create(new[]
             {
-                new WorldResearchCost(ResourceId, new BigDouble(20), new BigDouble(80)),
+                new WorldResearchCost(
+                    ResourceId,
+                    new BigDouble(20),
+                    new BigDouble(spendableAmount)),
             }),
             PublicationTable<WorldResearchInvestment>.Create(new[]
             {

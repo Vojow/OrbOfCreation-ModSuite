@@ -23,7 +23,6 @@ internal static class PrestigeActionResultMapper
     {
         PrestigePreflight.LifecycleReplaced => CommonActionResultCodes.LifecycleReplaced,
         PrestigePreflight.ContractUnavailable => PrestigeActionResultCodes.ContractUnavailable,
-        PrestigePreflight.Quarantined => PrestigeActionResultCodes.Quarantined,
         PrestigePreflight.WrongThread => PrestigeActionResultCodes.WrongThread,
         PrestigePreflight.WorldCycleIncomplete => PrestigeActionResultCodes.WorldCycleIncomplete,
         PrestigePreflight.ChallengesNotFetched => PrestigeActionResultCodes.ChallengesNotFetched,

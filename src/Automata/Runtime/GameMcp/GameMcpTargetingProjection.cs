@@ -24,9 +24,6 @@ internal static class GameMcpTargetingProjection
             result["requestPendingBefore"] = submission.Evidence.RequestPendingBefore;
             result["requestPendingAfter"] = submission.Evidence.RequestPendingAfter;
         }
-        if (submission.Preflight is TargetingPreflight.Quarantined or
-            TargetingPreflight.PostCommitFault or TargetingPreflight.VerificationFailed)
-            result["quarantined"] = true;
         return result.Freeze();
     }
 

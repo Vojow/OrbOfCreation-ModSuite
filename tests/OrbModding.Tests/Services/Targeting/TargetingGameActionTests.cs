@@ -113,7 +113,7 @@ public sealed class TargetingGameActionTests : IDisposable
     }
 
     [Fact]
-    public void WrongOutcomeQuarantinesUntilLifecycleInvalidation()
+    public void WrongOutcomeFaultsEachAttemptWithoutPersistentActionState()
     {
         var target = Target();
         Open(target);
@@ -124,8 +124,7 @@ public sealed class TargetingGameActionTests : IDisposable
         var retry = action.Submit(new TargetingAction(TargetingActionKind.Submit, target.GetGuid(), Epoch));
 
         Assert.Equal(TargetingPreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(TargetingPreflight.Quarantined, retry.Preflight);
-        Assert.True(action.IsQuarantined);
+        Assert.Equal(TargetingPreflight.VerificationFailed, retry.Preflight);
     }
 
     [Fact]

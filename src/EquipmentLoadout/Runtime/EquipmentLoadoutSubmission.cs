@@ -4,7 +4,7 @@ namespace OrbAutomata;
 
 internal enum EquipmentLoadoutPreflight
 {
-    Proceeded = 0, ContractUnavailable = 1, Quarantined = 2, WrongThread = 3,
+    Proceeded = 0, ContractUnavailable = 1, WrongThread = 3,
     LifecycleReplaced = 4, IdentityUnavailable = 5, NotCreated = 6,
     AlreadyInRequestedState = 7, LoadoutFull = 8, EquipmentTypeFull = 9,
     UsageUnaffordable = 10, MultiBuyUnavailable = 11, MutationPermitUnavailable = 12,

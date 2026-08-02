@@ -26,10 +26,6 @@ internal static class GameMcpSpellLoadoutProjection
             result["before"] = State(in before);
             result["after"] = State(in after);
         }
-        if (submission.Preflight is SpellLoadoutPreflight.Quarantined or
-            SpellLoadoutPreflight.PostCommitFault or
-            SpellLoadoutPreflight.VerificationFailed)
-            result["quarantined"] = true;
         return result.Freeze();
     }
 

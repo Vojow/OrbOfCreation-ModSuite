@@ -114,12 +114,12 @@ public sealed class ChallengeGameActionTests : IDisposable
         using var boundary = Boundary();
 
         var failed = Submit(boundary, ChallengeActionKind.FetchTime);
-        var quarantined = Submit(boundary, ChallengeActionKind.FetchTime);
+        var retry = Submit(boundary, ChallengeActionKind.FetchTime);
 
         Assert.Equal(new[] { target.GetGuid() }, failed.Receipt.After.TimeOffers);
         Assert.False(failed.Receipt.After.TimeOffersQueued);
         Assert.Equal(ChallengePreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(ChallengePreflight.Quarantined, quarantined.Preflight);
+        Assert.Equal(ChallengePreflight.VerificationFailed, retry.Preflight);
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public sealed class ChallengeGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Missing_target_outcome_quarantines_but_throw_after_observable_outcome_commits()
+    public void Missing_target_outcome_revalidates_but_throw_after_observable_outcome_commits()
     {
         var target = Register(Challenge());
         ChallengeManager.instance.activeChallenges.value.Add(target);
@@ -148,7 +148,7 @@ public sealed class ChallengeGameActionTests : IDisposable
         using var failedBoundary = Boundary();
 
         var failed = Submit(failedBoundary, ChallengeActionKind.Queue, target);
-        var quarantined = Submit(failedBoundary, ChallengeActionKind.Queue, target);
+        var retry = Submit(failedBoundary, ChallengeActionKind.Queue, target);
         failedBoundary.Dispose();
         target.SuppressQueueToggle = false;
         target.ThrowAfterQueueToggle = true;
@@ -156,9 +156,8 @@ public sealed class ChallengeGameActionTests : IDisposable
         var committed = Submit(committedBoundary, ChallengeActionKind.Queue, target);
 
         Assert.Equal(ChallengePreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(ChallengePreflight.Quarantined, quarantined.Preflight);
+        Assert.Equal(ChallengePreflight.VerificationFailed, retry.Preflight);
         Assert.True(committed.Verified, committed.Reason);
-        Assert.False(committedBoundary.IsQuarantined);
     }
 
     [Fact]

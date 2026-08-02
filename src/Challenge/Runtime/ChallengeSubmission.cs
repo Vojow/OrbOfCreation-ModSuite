@@ -9,7 +9,6 @@ internal enum ChallengePreflight
     WrongThread = 1,
     LifecycleReplaced = 2,
     ContractUnavailable = 3,
-    Quarantined = 4,
     IdentityUnavailable = 5,
     OfferUnavailable = 6,
     SelectionFull = 7,

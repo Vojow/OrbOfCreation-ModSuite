@@ -19,9 +19,6 @@ internal static class GameMcpPrestigeProjection
             result["before"] = State(submission.Receipt.Before);
             result["observedLifecycleGeneration"] = submission.Receipt.After.LifecycleEpoch;
         }
-        if (submission.Preflight is PrestigePreflight.Quarantined or
-            PrestigePreflight.PostCommitFault or PrestigePreflight.VerificationFailed)
-            result["quarantined"] = true;
         return result.Freeze();
     }
 

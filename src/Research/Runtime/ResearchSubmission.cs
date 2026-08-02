@@ -5,7 +5,7 @@ namespace OrbAutomata;
 internal enum ResearchPreflight
 {
     Proceeded = 0, WrongThread = 1, LifecycleReplaced = 2, ContractUnavailable = 3,
-    Quarantined = 4, IdentityUnavailable = 5, DevelopUnavailable = 6,
+    IdentityUnavailable = 5, DevelopUnavailable = 6,
     MultiBuyUnavailable = 7, InvalidMode = 8, InvalidState = 9,
     BonusUnavailable = 10, MutationPermitUnavailable = 11, PostCommitFault = 12,
     VerificationFailed = 13,

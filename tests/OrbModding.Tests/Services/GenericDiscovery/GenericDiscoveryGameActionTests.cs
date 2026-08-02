@@ -103,7 +103,7 @@ public sealed class GenericDiscoveryGameActionTests
     }
 
     [Fact]
-    public void Missing_outcome_quarantines_until_lifecycle_invalidation()
+    public void Missing_outcome_faults_without_persistent_action_state()
     {
         var target = Target("EquipmentSO");
         SetSuppressDiscovery(target, true);
@@ -111,19 +111,19 @@ public sealed class GenericDiscoveryGameActionTests
         using var boundary = Boundary();
 
         var failed = Submit(boundary, target, "EquipmentSO");
-        var quarantined = Submit(boundary, target, "EquipmentSO");
+        var repeated = Submit(boundary, target, "EquipmentSO");
         SetSuppressDiscovery(target, false);
         boundary.InvalidateLifecycle();
         var retry = Submit(boundary, target, "EquipmentSO");
 
         Assert.Equal(GenericDiscoveryPreflight.VerificationFailed, failed.Preflight);
         Assert.Equal(NativeMutationOutcome.PostconditionFailed, failed.Outcome);
-        Assert.Equal(GenericDiscoveryPreflight.Quarantined, quarantined.Preflight);
+        Assert.Equal(GenericDiscoveryPreflight.VerificationFailed, repeated.Preflight);
         Assert.True(retry.Verified, retry.Reason);
     }
 
     [Fact]
-    public void Exception_after_requested_outcome_commits_without_quarantine()
+    public void Exception_after_requested_outcome_commits()
     {
         var target = Target("RitualSO");
         SetThrowAfterDiscovery(target, true);
@@ -134,11 +134,10 @@ public sealed class GenericDiscoveryGameActionTests
 
         Assert.True(result.Verified, result.Reason);
         Assert.True(Discoverable(target).IsDiscovered());
-        Assert.False(boundary.IsQuarantined);
     }
 
     [Fact]
-    public void Partial_payment_fault_without_discovery_is_evidence_and_quarantines()
+    public void Partial_payment_fault_without_discovery_preserves_evidence_without_persistent_state()
     {
         var target = Target("TimeRuneSO");
         var first = Resource(10);
@@ -158,7 +157,6 @@ public sealed class GenericDiscoveryGameActionTests
         Assert.True(result.Receipt.PaymentInvoked);
         Assert.True(result.Receipt.ResourcesCharged);
         Assert.False(Discoverable(target).IsDiscovered());
-        Assert.True(boundary.IsQuarantined);
     }
 
     [Fact]
