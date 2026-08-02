@@ -28,20 +28,19 @@ even be the same kind of mechanism.
 consumers are enumerable. Playing will not separate them; they fire in exactly the situations
 where numbers are hardest to read.
 
-### Missing-percent fill
+### Missing-percent fill details
 
-**Known.** The description is that effects which "fill a missing percentage" compute against
-**capacity, not current stock**, so multiplying max capacity and then firing a fill produces a
-burst — and that during a burst window you want to be as empty as possible. This is described as
-one of the largest strategic levers in the game.
+**Known.** The mechanic is real and captured: food fruits carry a per-minute fill of a resource
+type's **missing** amount alongside a gain multiplier (Brain Berry: `+65.5 % Mental Missing /
+min` for `12.9` s at `8` Toxicity). Fills measure against capacity, so growing capacity first
+and staying empty during the window maximizes the burst. See
+[consumables-and-items.md](consumables-and-items.md#a-worked-fruit-brain-berry).
 
-**Missing.** Everything else. The effect has never been measured, no source effect has been
-named, and it has not been confirmed whether the fill reads effective or base capacity. The
-description is unverified, from a single source.
+**Missing.** Whether the fill reads effective or base capacity, the tick cadence behind
+"/ min", and the full list of effects that carry the term beyond food fruits.
 
-**How to settle.** Both. Find the effects with this term in the game's data first, then set up a
-before/after with a known capacity multiplier and read the delta. Until then, treat the whole
-mechanic as a hypothesis, not a plan.
+**How to settle.** Read the data for the effect term; confirm with one before/after against a
+known capacity multiplier.
 
 ### Which resources bear Interest
 
@@ -95,19 +94,6 @@ explained or weighted.
 is nonzero.
 
 ## Casting, spells and augments
-
-### What Reserve Lv is
-
-**Known.** The Casting page carries two dials side by side. Output Lv is understood: it raises
-all spell power at a greater spell cost, and it is global to all casting. Its sibling **Reserve
-Lv** (observed 49/49, with its own **Raise Reserve Lv** purchase) sits right next to it in the
-same shape.
-
-**Missing.** What it reserves, and what raising or lowering it does. It has never been explained
-or experimented with.
-
-**How to settle.** Play — step it down one level and watch what changes on the casting bar and
-the resource panel. A tooltip in the calculated-sum mode may answer it outright.
 
 ### The Output Level curve
 
@@ -254,9 +240,8 @@ anywhere. There is nothing to hedge here: they are simply unknown.
 
 | System | What is actually known |
 |---|---|
-| Toxicity | Exists — a research node governs recovering from it. Nothing else. |
 | Zeal | Exists — a research node governs recovering it. Nothing else. |
-| Rituals (the feature) | The screen has Rituals, Discover and Mysticism pages; Discover is a compose-and-confirm surface; Mysticism is a purchase list with a decaying Stability meter. What a ritual *does* is unknown, as is what Stability gates. A research node extends ritual duration. |
+| Rituals (the feature) | The game's combat layer: a ritual is fought in waves of enemies, and Mysticism's Stability meter is your health while one runs. Complex and math-heavy, and **deliberately unmapped** — deferred until the suite can drive a full playthrough. What entering a ritual costs, what passing one grants, and the wave mechanics are all unknown. A research node extends ritual duration. |
 | Alchemy (the feature) | The screen exists with a six-pool loadout, a Materials page and an Alchemy Level dial. What alchemy produces and what the six pools are is unknown. Not to be confused with concepts, which are internally alchemy-named. |
 | Artificer, Construction, Mystic, Shaper | Named disciplines with their own progression tracks and advancement grants. Never played. |
 | Dimensional | A World subtab. Never opened. |
@@ -308,7 +293,8 @@ silently invalidates the pages that quote them.
 
 **Known.** The player-word to internal-name translation in
 [ui-map.md](ui-map.md#vocabulary) is derived from the game's serialized data and is internally
-well evidenced.
+well evidenced. One live confirmation has landed since: the Reserve Lv tooltip is labelled
+**Statistic** on screen, exactly as the table predicts.
 
 **Missing.** Confirmation against the running game. A screen label composed at runtime rather
 than stored with the screen would be absent from the table entirely, and the

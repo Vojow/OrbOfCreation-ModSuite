@@ -45,6 +45,18 @@ production rate by roughly 26 orders of magnitude. How common interest is, and w
 carry it, is unknown. That resource had no Capacity at all; whether interest saturates against
 a cap on a capped resource is unverified.
 
+### Resting rate
+
+Some resources regenerate faster the longer they go **untouched** — leave the stock alone and
+its gain accelerates. Together with interest and missing-percent fills, this is the third of
+the game's unusual growth levers, and the three reward opposite behaviours: **missing-% pays
+you for being empty, interest pays you for being full, and resting rate pays you for not
+transacting.** A constant dribble of automatic spending permanently suppresses a resting
+bonus, so a resource carrying one is a reason to leave it deliberately alone. Toxicity is a
+confirmed carrier (its recovery speeds up when items go unused for a while — see
+[consumables-and-items.md](consumables-and-items.md#toxicity)); which other resources carry a
+resting rate, and the exact shape of the acceleration, have not been pinned down (unverified).
+
 ### Quality and Attribute Cost
 
 Quality never changes the price you see. It changes the payment: **actual spend = displayed
@@ -117,8 +129,13 @@ Two more capacity facts:
   current-stock-to-cap given the current rate.
 - **Some effects fill a fraction of what is *missing*, measured against capacity rather than
   current stock**, so multiplying capacity first and filling afterwards produces very large
-  bursts. This is described but not verified: no formula, effect names, or in-game capture is
-  available (unverified).
+  bursts. Confirmed on food fruits: a captured Brain Berry tooltip reads `+65.5 % Mental
+  Missing / min` for its duration — a per-minute fill of the missing amount, targeted at a
+  resource **type** (see
+  [consumables-and-items.md](consumables-and-items.md#a-worked-fruit-brain-berry)). Because the
+  target is a type, two fruits whose types overlap on a dual-typed resource (Psi is Mental
+  **and** Energetic) stack their fills on it. Whether the fill reads effective or base capacity
+  is still unestablished.
 
 ## Overcap and the loss timer
 

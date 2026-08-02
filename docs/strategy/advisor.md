@@ -59,7 +59,13 @@ dial for all casting: higher output means more per cast at worse resource effici
 cooldowns. It is free to change in either direction at any time, which is exactly what makes it
 safe to automate first. The policy follows the binding constraint: **tune it down when the
 shared input binds** (save resources), **up when the goal or the queue binds** (take the juice).
-Mechanics in [`../game-systems/casting-and-spells.md`](../game-systems/casting-and-spells.md).
+
+Its sibling, the **Reserve dial**, trades active-cast cost for passive generation. In practice
+it sits **maxed** while Output does the continuous tuning: Reserve's resource-rate multipliers
+work all the time, its cost penalty only bites active casts, so Output is the lever that tracks
+the binding constraint and Reserve moves only when the casting economy itself changes shape.
+Mechanics for both in
+[`../game-systems/casting-and-spells.md`](../game-systems/casting-and-spells.md).
 
 Irreversible levers — advancement allocations, pool picks, glyph upgrades — do not graduate.
 They stay advice permanently, because their failure mode is permanent too.
@@ -85,6 +91,9 @@ observed in real play, not a hypothetical.
   that gate milestones and mint cross-run capital — or does it value a cast only by the resource
   it returns?
 - **Yield-blind spending.** Does it spend a stock whose holding effect was load-bearing?
+- **Resting-rate suppression.** Does a standing dribble of automatic activity keep a
+  resting-rate resource permanently un-rested? An auto-buy pointed at a resting stock silently
+  deletes that lever.
 - **Queue serialization.** Does it respect that development is serialized, and leave headroom
   rather than filling the queue to the brim?
 

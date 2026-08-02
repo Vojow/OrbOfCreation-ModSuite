@@ -107,7 +107,7 @@ same shape as Magic's Output Level.
 |---|---|
 | Rituals | Ritual activation. |
 | Discover | The **Devote** compose-and-confirm surface. |
-| Mysticism | An attribute purchase list (observed 40/110) plus a **Stability** meter that visibly decays (4.73e3 at −0.376 %/s). |
+| Mysticism | An attribute purchase list (observed 40/110) plus a **Stability** meter that visibly decays (4.73e3 at −0.376 %/s) — the ritual system's health pool, drained by enemy attacks while a ritual runs. |
 
 ### Time
 
@@ -216,9 +216,10 @@ Three more traps live in ordinary play:
   several milestones further along.
 
 Verification status, honestly: the table above is derived from the game's serialized data, not
-from reading the live screens. It has never been checked against the running UI, so a label
-composed at runtime rather than stored with the screen would not appear here. The
-Attribute/Statistic row is the one worth a deliberate look.
+from reading the live screens, so a label composed at runtime rather than stored with the
+screen would not appear here. One live confirmation has landed — the Reserve Lv tooltip is
+labelled **Statistic** on screen, exactly as the table predicts. The rest of the
+Attribute/Statistic inversion is still worth a deliberate look.
 
 ## Interaction facts
 

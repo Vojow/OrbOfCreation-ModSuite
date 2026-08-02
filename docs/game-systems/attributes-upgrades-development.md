@@ -92,6 +92,10 @@ Two mechanical details worth knowing:
   objects but **131** queued stack units, because a multi-level purchase occupies multiple units.
 - **Bulk Development** is a live game value (observed as `2` on one save and `16` on another).
   Attributes request that many levels per purchase; **upgrades are always one level per action**.
+  It is raised mostly by **research**, and research moves two separate queue knobs that are easy to
+  conflate: some nodes add **parallel development slots** (more different purchases developing at
+  once), while others raise **bulk** (queued levels of the *same* attribute processed together in
+  one slot's pass). Sources outside research may exist.
 
 ## Entities can change category mid-line
 
@@ -217,8 +221,10 @@ next threshold. Observed on one deep save: Wizardry `160/420`, Scholar `82/320`,
 [progression-advancements.md](progression-advancements.md).
 
 **Mysticism additionally carries a decaying Stability meter** — observed at `4.73e3` falling at
-`−0.376%/s`. No other purchase page seen so far has one. *[Unverified: what Stability gates, and
-what restores it, is not established.]*
+`−0.376%/s`. No other purchase page seen so far has one. Stability is the **ritual system's health
+pool**: rituals are the game's combat layer, fought in waves of enemies, and their attacks drain
+Stability while a ritual runs. The ritual system itself is deliberately unmapped — see
+[open-questions.md](open-questions.md).
 
 Finally, a scale fact that explains why these pages feel sparse: on one mid/late save with 409
 purchasable entities (180 attributes + 229 upgrades), **224 were unavailable and roughly 181–184

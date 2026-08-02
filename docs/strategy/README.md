@@ -13,7 +13,7 @@ wrong: fix it in the same change that proves it wrong.
    doors, reservation-shaped advice, binding constraints, commitment points, the watermark
    problem.
 2. [resource-policies.md](resource-policies.md) — the per-resource policy model: lifecycle
-   (scarce → frontier → commodity → meaningless), policy vocabulary, and the three spend modes.
+   (scarce → frontier → commodity → meaningless), policy vocabulary, and the four spend modes.
 3. [run-plan.md](run-plan.md) — planning a run: NG+ start protocol, milestone chains, Time
    Advancement distribution, challenge selection.
 4. [advisor.md](advisor.md) — the advisor-first program: scoring moves, actuators, and the

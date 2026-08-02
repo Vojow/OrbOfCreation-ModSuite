@@ -60,9 +60,16 @@ itself an Investment rune. Rune effects can be **reflexive** (a rune affecting i
 **retroactive** (a class multiplier applying to a rune of that class you already picked
 earlier in the run).
 
-Investment Power tiers stack additively rather than multiplicatively: two `+18 %` tiers give
-`+36 %`, so a base of `225` becomes exactly `306`, not `316`. See
-[value-computation.md](value-computation.md) for why.
+Investment Power stacks additively rather than multiplicatively: Persist Persist grants
+`+12 %` per persist level, so three levels turn a base `225` pick into exactly `306`
+(`×1.36`), not `316`. See [value-computation.md](value-computation.md) for why.
+
+One live tooltip ties the whole model together. Persist Persist at persist level `4` (`169` XP
+banked, next threshold `800`), with its next rune level priced at `7` TA, showed **Gain 407
+XP** per pick — exactly `100 × (1 + 0.25 × 7) × (1 + 0.12 × 4)`: the base pick XP, times the
+rune's `+25 %`-per-level pick bonus at rune level `7`, times its own `+12 %`-per-persist-level
+Investment Power, reflexively applied to itself. The same tooltip read its mastery bar as
+`3.56/6` — rune mastery XP accrues in fractions, and the level-1 threshold is `6`.
 
 ## Time Advancements
 

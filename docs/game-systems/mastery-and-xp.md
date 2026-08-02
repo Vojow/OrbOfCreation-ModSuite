@@ -97,15 +97,17 @@ The `3.3` is a stacking multiplier and the `0.007` a diminishing exponent, both 
 Note that spells draw their level costs from **different resources**. Per-spell affordability is
 genuinely independent — being broke in one currency does not stall the whole spellbook.
 
-### One ladder or two?
+### Level and mastery are one ladder
 
-The game presents "Lv N" on the spell card and "mastery N/M" in requirement rows as if they were
-separate counters, and this documentation follows that presentation. In the decompiled data they are
-not cleanly separable: the level-cost lookup is taken at `masteryLevel + 1`, and the level button on
-the Spells page renders its action only once the mastery XP threshold above is met — so a level
-purchase appears to need **both** the resources and the casts. Whether these are one ladder under two
-labels or two tightly coupled ladders is **not settled**; treat the identification as observed, not
-proven. Tracked in [open-questions.md](open-questions.md).
+The spell card's "Lv N" and the requirement rows' "mastery N/M" are **two labels on the same
+per-spell ladder**. Casting fills the spell's mastery XP; once the XP threshold above is met, the
+level purchase unlocks; paying it advances the level — which is why the decompiled level-cost lookup
+is taken at `masteryLevel + 1`. A spell level therefore always costs both the casts and the
+resources, in that order.
+
+Do not confuse this per-spell ladder with the global one: **Casting Level** is fed a little by every
+cast of any spell and is what gates `Raise Output Lv` purchases — a game-wide counter, not a
+per-spell one. See [casting-and-spells.md](casting-and-spells.md#casting-level).
 
 ### Levelling every spell at once
 

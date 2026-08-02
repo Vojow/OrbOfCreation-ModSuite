@@ -207,10 +207,29 @@ ceiling is raised by the `Raise Output Lv` upgrade (observed requirement: Castin
 
 ### Reserve Level
 
-The Casting page carries a second, structurally identical dial next to Output: **"Reserve Lv 49/49"**
-with its own `Raise Reserve Lv` upgrade. **What Reserve Level does is currently unknown** — it has been
-observed on screen but never explained, tooltipped, or measured here. Do not assume it mirrors Output.
-Tracked in [open-questions.md](open-questions.md).
+The Casting page carries a second dial next to Output: **Reserve Lv**, with its own `Raise Reserve
+Lv` purchase. Its tooltip (labelled a **Statistic**) states the trade outright: *"Increases spell
+cost significantly in exchange for greatly improved passive generation of resources and spell
+power."* Reserve is the **passive counterpart to Output** — Output shapes what an active cast is
+worth, Reserve multiplies the standing economy. Per level (read at Reserve Lv 51):
+
+| Per Reserve Lv | Effect |
+|---|---|
+| ×1.92 | Spell Cost |
+| ×1.92 | Spell Drain Cost |
+| ×1.33 | Infusion Power |
+| ×1.33 | Base All Resource Rate |
+| ×1.17 | Cantrip Spell Power |
+| ×1.04 | Cantrip Cooldown Speed |
+| ×1.02 | Charm Spell Power |
+
+The tooltip's calculated-sum mode confirmed clean per-level compounding — at a displayed level of
+52 the totals matched the 51st power exactly (×1.04⁵¹ = ×7.39, ×1.33⁵¹ ≈ ×2.07e6, ×1.92⁵¹ ≈
+×2.81e14). Whether the exponent is the level or level − 1 has not been pinned down.
+
+The two dials pull the run in opposite directions: Reserve's resource-rate and infusion multipliers
+work all the time, while its spell-cost penalty only bites what you actively cast. Which way to set
+them is a strategy call — see [`../strategy/advisor.md`](../strategy/advisor.md).
 
 The pattern of a **level dial plus a raise-the-cap purchase** recurs across the game (Alchemy Lv, the
 Scribe's Starting Level); see [ui-map.md](ui-map.md).
@@ -228,9 +247,13 @@ Its tooltip describes it as proficiency in casting.
 - A purchasable upgrade raises the maximum Casting Level, and the level can be tuned down again.
 
 Casting Level appears in the requirement graph in its own right — the `Raise Output Lv` upgrade was
-observed requiring Casting Level 2/2. Requirement rows naming "Output Lv" (Scholarism required Gather
-Knowledge mastery 1/2 **and** Output Lv 1/2) read against the dial; the two are separate counters that
-are easy to conflate, and only the Casting Level requirement has been seen tooltipped.
+observed requiring Casting Level 2/2, and Casting Level bumps are what make the next `Raise Output
+Lv` purchasable. Requirement rows naming "Output Lv" read the **dial's raised maximum**, not its
+current setting — tuning the dial up does not satisfy a gate; buying `Raise Output Lv` does. The one
+observed case (Scholarism required Gather Knowledge mastery 1/2 **and** Output Lv 1/2) is an early,
+tutorial-shaped gate that exists to force one `Raise Output Lv` purchase; nothing later in the game
+gates on output level this way — later gates use spell mastery levels instead. Casting Level and
+Output Lv remain separate counters that are easy to conflate.
 
 ## Spell upgrades edit other spells
 

@@ -41,10 +41,13 @@ Say the policy, not the purchase. These are the statements that can bind every a
 - **Direct directives** — "hold 30 of X for Y". The reservation form from
   [principles.md](principles.md); the highest-value statement in the vocabulary.
 
-## Three spend modes, chosen by which growth term dominates
+## Four spend modes, chosen by which growth term dominates
 
 **Name the mode before ranking purchases.** The same candidate list ranks completely differently
-under each, so ranking first and picking a stance afterwards produces incoherent advice.
+under each, so ranking first and picking a stance afterwards produces incoherent advice. The
+three unusual growth levers reward opposite behaviours — missing-% pays you for being empty,
+interest pays you for being full, resting rate pays you for not transacting — so misreading
+which one dominates inverts the right policy.
 
 **HOARD — when interest dominates.** Income proportional to stock means spending directly slows
 compounding. In the observed extreme, a stock's interest income ran ~26 orders of magnitude
@@ -55,7 +58,15 @@ costs about four seconds of progress. Compute the cost; don't treat hoard mode a
 **BURST — when a missing-percent window is open.** Those fills read *capacity*, not current
 stock, so the emptier you are the bigger the fill. Spend everything as fast as you can and keep
 the tank empty until the window closes. This is also the mode at cap: marginal holding is worth
-nothing when income is overflowing.
+nothing when income is overflowing. Food fruits are the confirmed window-openers — type-targeted
+`Missing / min` fills that stack across overlapping types, so line fruit picks up with dual-typed
+targets and charm windows, budgeted against Toxicity.
+
+**REST — when a resting rate is charging.** Some stocks gain faster the longer they go
+untouched, and the bonus dies the moment something transacts. A standing dribble of automatic
+activity — an auto-buy, a scheduled craft — suppresses the lever permanently, so resting a
+resource is an active choice to route activity elsewhere, not neglect. Toxicity is the
+confirmed carrier: waiting for a full drain before an item burst is exactly this mode.
 
 **REINVEST — when rate dominates.** Buy the printer. Early generator levels are effectively
 doublings, because the base addition is additive while each level carries a cumulative

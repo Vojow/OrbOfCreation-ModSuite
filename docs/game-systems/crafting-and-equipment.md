@@ -56,9 +56,8 @@ to a **purchase that raises the maximum**. Values below are from one observed sa
 | Alchemy | `Alchemy Lv 43/43` | Raise Alchemy Level |
 | Scholar > Scribe | `Starting Level 4/4` | (raised by recipe purchases) |
 
-The dial is always freely adjustable downward; the purchase only moves the ceiling. What the
-Reserve level actually governs is unrecorded — see [open-questions.md](open-questions.md).
-Output level is covered in [casting-and-spells.md](casting-and-spells.md).
+The dial is always freely adjustable downward; the purchase only moves the ceiling. Output and
+Reserve levels are both covered in [casting-and-spells.md](casting-and-spells.md).
 
 ## Equipment — Workshop > Artifacts
 

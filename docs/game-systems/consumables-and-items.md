@@ -89,14 +89,34 @@ loss.
 
 ## Toxicity
 
-Some consumables cost **Toxicity** to use. Toxicity is a real resource with its own bar and
-its own cap, and it behaves as a use-cost rather than a stock you spend down: an item's
-immediate cost is checked against the Toxicity headroom you have, and without headroom the
-item will not fire.
+Using items fills a **Toxicity meter**, and items cannot be used while it is full. Toxicity is
+a real resource with a cap and the game's unusual growth levers pointed in reverse:
 
-Research nodes exist for Toxicity recovery, so Toxicity management is a genuine mid-to-late
-game system. Its deeper mechanics are not documented here — see
-[open-questions.md](open-questions.md).
+- Each use adds the item's Toxicity cost to the meter (food fruits observed at `8`).
+- The meter **drains back down over time**, and the drain follows a missing-percent shape in
+  reverse: the fuller the meter, the faster it empties.
+- It also carries a **resting rate**: go a while without using any items and recovery speeds
+  up further.
+- Research nodes modify these aspects separately.
+
+In effect Toxicity is a **rate limiter on item usage**, and it creates a real timing decision:
+drain to empty and burst a stack of items in one window (the natural fit when lining item
+effects up with spells and charm windows), or keep the meter topped and use items steadily as
+headroom appears. The levers themselves are described in
+[resources.md](resources.md#resting-rate).
+
+### A worked fruit: Brain Berry
+
+One captured tooltip shows the whole food-fruit shape at once — **Brain Berry, Lv 9, Fruit
+Food**, costing `8` Toxicity:
+
+> For `12.9` s: `+98.2 %` Total Mental Resources Gained, `+65.5 %` Mental **Missing / min**.
+
+Two effects, both targeted at a resource *type*: a gain multiplier, and a per-minute fill of
+the **missing** amount measured against capacity. Fruits of different types stack, and a
+dual-typed resource sits in both blast radii — eating a Mental fruit and an Energetic fruit
+together hits Psi (Mental + Energetic) with both fills. The item's level raises the numbers;
+the missing-percent mechanics live in [resources.md](resources.md).
 
 ## Using an item
 
@@ -129,4 +149,4 @@ random. An empty eligible list means the scroll has nothing valid to enchant.
 - [resources.md](resources.md) — Toxicity and the other capped resources.
 - [progression-advancements.md](progression-advancements.md) — what Relics that grant
   advancement levels are actually paying into.
-- [open-questions.md](open-questions.md) — Toxicity, Zeal, and unverified item effects.
+- [open-questions.md](open-questions.md) — Zeal and unverified item effects.
