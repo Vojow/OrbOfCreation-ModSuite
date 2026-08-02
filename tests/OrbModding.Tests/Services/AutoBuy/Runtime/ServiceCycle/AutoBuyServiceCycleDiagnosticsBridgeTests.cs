@@ -160,7 +160,7 @@ public sealed class AutoBuyServiceCycleDiagnosticsBridgeTests
     }
 
     [Fact]
-    public void MixedRelationExclusionsDoNotClaimOneExactBlockingReason()
+    public void MixedRelationExclusionsStillCannotReportOperational()
     {
         var exclusions = new AutoBuyExclusionHistogram(
             kindNotSelected: 0,
@@ -177,7 +177,7 @@ public sealed class AutoBuyServiceCycleDiagnosticsBridgeTests
         state.RecordDecision(new AutoBuyDecisionMetrics(2, 0, 0, 0, 0, in exclusions));
 
         Assert.Equal(
-            AutoBuyDecisionBlockReason.None,
+            AutoBuyDecisionBlockReason.MixedPurchaseViewRelations,
             AutoBuyServiceCycleDiagnosticsBridge.TotalRelationBlock(Projection(in state)));
     }
 

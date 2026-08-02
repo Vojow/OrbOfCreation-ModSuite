@@ -26,6 +26,7 @@ internal enum AutoBuyDecisionBlockReason
     OwningViewRelationMissing,
     OwningViewRelationUnreadable,
     OwningViewRelationContradictory,
+    MixedPurchaseViewRelations,
 }
 
 internal static class AutoBuyFeatureStatusProjector
@@ -92,6 +93,12 @@ internal static class AutoBuyFeatureStatusProjector
                     FeatureStatusState.TemporarilyBlocked,
                     FeatureStatusReasonCode.ContractMismatch,
                     "Every captured Auto Buy candidate was excluded by contradictory purchase-view evidence.");
+            case AutoBuyDecisionBlockReason.MixedPurchaseViewRelations:
+                return new AutoBuyFeatureStatus(
+                    FeatureStatusState.Degraded,
+                    FeatureStatusReasonCode.EvidenceUnavailable,
+                    "Every captured Auto Buy candidate was excluded by purchase-view evidence, " +
+                    "with more than one relation reason.");
         }
 
         return new AutoBuyFeatureStatus(

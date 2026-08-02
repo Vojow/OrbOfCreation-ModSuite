@@ -70,6 +70,20 @@ public sealed class AutoBuyFeatureStatusProjectorTests
         Assert.NotEmpty(result.Summary);
     }
 
+    [Fact]
+    public void MixedTotalRelationExclusionReportsDegradedInsteadOfOperational()
+    {
+        var result = AutoBuyFeatureStatusProjector.Project(
+            emergencyDisabled: false,
+            AutoBuyCandidateKinds.All,
+            cycleObserved: true,
+            AutoBuyDecisionBlockReason.MixedPurchaseViewRelations);
+
+        Assert.Equal(FeatureStatusState.Degraded, result.State);
+        Assert.Equal(FeatureStatusReasonCode.EvidenceUnavailable, result.Reason);
+        Assert.Contains("more than one relation reason", result.Summary);
+    }
+
     private static AutoBuyFeatureStatus Project(
         bool emergencyDisabled = false,
         AutoBuyCandidateKinds owned = AutoBuyCandidateKinds.All,

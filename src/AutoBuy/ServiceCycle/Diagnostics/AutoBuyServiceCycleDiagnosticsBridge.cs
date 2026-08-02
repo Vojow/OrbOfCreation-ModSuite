@@ -150,6 +150,13 @@ internal sealed class AutoBuyServiceCycleDiagnosticsBridge
             return AutoBuyDecisionBlockReason.OwningViewRelationUnreadable;
         if (ReadInteger(in projection, AutoBuyServiceProjection.ExcludedOwningViewRelationContradictoryKey) == captured)
             return AutoBuyDecisionBlockReason.OwningViewRelationContradictory;
+        var relationExclusions =
+            ReadInteger(in projection, AutoBuyServiceProjection.ExcludedOwningViewUnavailableKey) +
+            ReadInteger(in projection, AutoBuyServiceProjection.ExcludedOwningViewRelationMissingKey) +
+            ReadInteger(in projection, AutoBuyServiceProjection.ExcludedOwningViewRelationUnreadableKey) +
+            ReadInteger(in projection, AutoBuyServiceProjection.ExcludedOwningViewRelationContradictoryKey);
+        if (relationExclusions == captured)
+            return AutoBuyDecisionBlockReason.MixedPurchaseViewRelations;
         return AutoBuyDecisionBlockReason.None;
     }
 
