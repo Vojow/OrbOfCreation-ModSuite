@@ -56,7 +56,6 @@ carried cross-run bonuses (authored constants do not).
   offers, and how multi-resource roll prices are composed.
 - **The deep-ladder scaling law** — the per-step factor grows with the count, and the formula has not
   been extracted.
-- **The seventh discovery tree** — the data holds seven; six have been matched to screens.
 
 ## Progression and requirements
 

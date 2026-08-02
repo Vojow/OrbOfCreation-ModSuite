@@ -19,7 +19,7 @@ its own fit check before you try. This is the same two-binder shape as
 
 ## Create and Upgrade
 
-**Create** is a compose-and-confirm surface; see [discovery.md](discovery.md).
+**Create** is a discovery surface; see [discovery.md](discovery.md).
 
 **Upgrade** raises per-artifact **levels** and is priced in **two gear currencies** rather than
 ordinary resources. A total **artifact mastery** figure exists alongside the per-artifact levels.

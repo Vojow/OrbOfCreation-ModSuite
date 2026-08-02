@@ -1,35 +1,33 @@
 # Discovery
 
-Discovery is how the game hands you new *things* rather than more of a thing you already have: spell
-recipes, time runes, augment glyphs, rituals, artifacts. It is one mechanism wearing several names —
-you pay a cost, the game rolls, and you must make a choice.
+Discovery is how the game hands you new *things* rather than more of a thing you already have. It is
+one mechanism on **seven trees**:
 
-## One mechanism, several screens
-
-| Screen | Where | Produces |
+| Tree | Where | Produces |
 |---|---|---|
 | Spellcraft | Magic > Spellbook > Unlock | spell recipes |
 | Glyphcraft | Magic > Augments > Glyphcraft | augment glyphs |
+| Concepts | Scholar > Concepts | concepts |
+| Alchemy | Alchemy > Learn | alchemy recipes |
+| Artifacts | Workshop > Artifacts > Create | artifacts |
 | Devote | Rituals > Discover | rituals |
 | Runecraft | Time > Time Runes > Create | time runes |
 
-Alchemy > Learn and Workshop > Artifacts > Create belong to the same family. The game's data holds
-**seven** discovery trees in total, so at least one further surface exists; it has not been matched
-to a screen (see [open-questions.md](open-questions.md)).
+## One button, not a workbench
 
-## The screen is compose-and-confirm, not a catalogue
+A discovery page presents a **single purchase: the next thing**. You do not compose anything and you
+do not pick the output — the game resolves what comes next; you pay, and where a roll offers options
+you choose one. **There is no recipe list anywhere in the game**: no page enumerates what you could
+make and lets you select it.
 
-Every discovery page has the same four parts, top to bottom: a **cost header**, a **component row**,
-a **composition area**, and a **Confirm** button.
+Components are **unlocked, never consumed or slotted**. Once unlocked, a component is active
+permanently, and what you have unlocked defines what can come out: an output becomes reachable once
+all of its pool unlockers are unlocked, which is why unlocker purchases widen future rolls rather
+than doing anything immediately. See [pool-unlockers.md](pool-unlockers.md).
 
-You compose components. **The game resolves which output that composition produces** — you do not
-pick the output. **There is no recipe list anywhere in the game**: no page enumerates what you could
-make and lets you select it. The only lever you have is which components you put in and when you
-press Confirm.
-
-The practical consequence is that **what you own defines what can come out**: an output becomes
-reachable once all of its pool unlockers are unlocked, which is why unlocker purchases widen future
-rolls rather than doing anything immediately. See [pool-unlockers.md](pool-unlockers.md).
+**Code shape:** the data still models discovery as components composing into an output — the shape
+the interface exposed before the game's 1.0 release. Code-level readings that speak of composing
+describe that data model, not anything the player does.
 
 ## Required components versus optional pool picks
 
@@ -37,7 +35,7 @@ rolls rather than doing anything immediately. See [pool-unlockers.md](pool-unloc
 |---|---|---|
 | Marker | exclamation mark | none |
 | Options offered | effectively one | the choice-count statistic |
-| Cost | mana | the tree's pool ladder |
+| Cost | the tree's thematic resources | the tree's pool ladder |
 | Advances the price ladder | no | yes |
 
 Required rolls are the critical path: the game is not gambling with your progression, and you receive
@@ -55,8 +53,8 @@ Discovery Rerolls** (observed at 1), so upgrades and effects can move both.
 
 ## The commitment point
 
-**Paying the cost is the commitment, not the pick.** Pressing Confirm on the cost header rolls the
-dice; once rolled you must choose one of the results, and there is no walking away.
+**Paying the cost is the commitment, not the pick.** Paying rolls the dice; once rolled you must
+choose one of the results, and there is no walking away.
 
 An open choice **blocks the roll queue**: while a discovery choice is unresolved you cannot roll newly
 unlocked required components in that tree, so a pending choice can stall the critical path behind an

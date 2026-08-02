@@ -6,11 +6,11 @@ what turns red, and what the button at the bottom does.
 
 | Pattern | Shape | Where it appears |
 |---|---|---|
-| Compose-and-confirm | cost header, component row, composition area, Confirm | every discovery surface |
+| Discovery surface | one buy-the-next-thing purchase, then a choice among rolled options | every discovery tree |
 | Budgeted loadout | a `used/total` budget, a per-item price against it, red for what will not fit | spell, artifact and alchemy loadouts |
 | Level dial plus raise-cap purchase | a `Lv n/max` stepper with a purchase beside it that raises the max | Output Lv, Reserve Lv, Alchemy Lv, the Scribe's Starting Level |
 | Purchase list | a scrolling list of levelled rows with a progression counter in the header | every discipline subtab |
-| Manual craft rows | a recipe list, each row carrying its full cost line and a craft action | Workshop > Crafting, Scholar > Scribe |
+| Manual craft rows | a recipe list, each row carrying its full cost line and a craft action | Workshop > Crafting |
 | Timed job | a point cost per school, a duration, and an output; starting it runs a timer and drains a resource | Research |
 | Mastery confirm | cost lines plus parallel XP tracks that fill from casting, not from spending | Spellbook > Spells |
 

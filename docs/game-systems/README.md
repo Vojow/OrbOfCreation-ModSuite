@@ -66,8 +66,8 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 
 ## Discovery
 
-- [discovery.md](discovery.md) — you compose components and the game resolves the output; paying is
-  the commitment.
+- [discovery.md](discovery.md) — seven trees, one buy-the-next-thing mechanism; paying is the
+  commitment.
 - [discovery-pricing.md](discovery-pricing.md) — each tree has its own ladder, advanced only by
   optional picks.
 
@@ -132,7 +132,7 @@ All constants are read from game version 1.0.5 and are invalidated by a game upd
 ## Interface
 
 - [screens.md](screens.md) — seven screens, their subtabs, and which page holds what.
-- [ui-patterns.md](ui-patterns.md) — compose-and-confirm, budgeted loadouts, level dials, purchase
+- [ui-patterns.md](ui-patterns.md) — discovery surfaces, budgeted loadouts, level dials, purchase
   lists, timed jobs.
 - [ui-behaviours.md](ui-behaviours.md) — wheel ownership, tab reselect, late top bar, nested tooltips,
   red vs grey.

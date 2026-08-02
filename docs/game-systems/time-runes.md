@@ -1,7 +1,7 @@
 # Time runes
 
-Runes are acquired through **Runecraft** (Time > Time Runes > Create), which uses the same
-compose-and-confirm layout as every other discovery surface. The first rune of a run costs `100` mana
+Runes are acquired through **Runecraft** (Time > Time Runes > Create), one of the seven discovery
+trees (see [discovery.md](discovery.md)). The first rune of a run costs `100` mana
 and is always the Discovery-rarity one. Across a full run you can expect roughly **7 to 10 runes**.
 
 ## Three level systems per rune

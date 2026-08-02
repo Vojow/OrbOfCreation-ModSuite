@@ -1,8 +1,8 @@
 # Spell augments
 
-Augments are the socketable modifiers attached to a spell. They are crafted at **Glyphcraft**, one of
-the compose-and-confirm discovery surfaces (see [discovery.md](discovery.md)), and the **Augment
-Table** upgrade raises your maximum number of augment slots by one each time it is bought.
+Augments are the socketable modifiers attached to a spell. They are crafted at **Glyphcraft**, one
+of the discovery surfaces (see [discovery.md](discovery.md)), and the **Augment Table** upgrade
+raises your maximum number of augment slots by one each time it is bought.
 
 Augments are deliberately double-edged. Two worked examples — not the set; the authored catalogue is
 unknown (see [open-questions.md](open-questions.md)):
