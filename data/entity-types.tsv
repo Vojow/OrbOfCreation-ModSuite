@@ -6,7 +6,7 @@ AdvancementListVariable	1
 AdvancementSO	48
 AlchemyInstanceListVariable	2
 AlchemyRecipeListVariable	3
-AlchemyRecipeSO	124
+AlchemyRecipeSO	125
 AlchemyRecipeVariable	1
 AlchemySnapshotListVariable	1
 AlchemyTypeListVariable	3
@@ -16,9 +16,9 @@ AnimationSO	13
 AttributeGroupListVariable	1
 AttributeGroupSO	24
 AttributeListVariable	1
-AttributeSO	205
+AttributeSO	211
 AutoPurchaseListVariable	1
-BoolVariable	12
+BoolVariable	13
 ChallengeListVariable	3
 ChallengeSO	98
 ChallengeTypeSO	7
@@ -33,7 +33,7 @@ CombatStatusSO	8
 CombatTargetSO	5
 ConditionalTextList	1
 ConsumableRefListVariable	2
-ConsumableSO	67
+ConsumableSO	68
 ConsumableTypeSO	10
 CraftingInstanceListVariable	4
 CraftingRecipeListVariable	3
@@ -47,12 +47,12 @@ DiscoveryTreeListVariable	1
 DiscoveryTreeSO	7
 DisplayEffectSO	10
 DisplayTypeSO	3
-DoubleVariable	80
+DoubleVariable	82
 EnchantmentSO	8
 EngagedEffectListVariable	1
 EquipmentListVariable	2
-EquipmentSnapshotListVariable	1
 EquipmentSO	71
+EquipmentSnapshotListVariable	1
 EquipmentTypeListVariable	3
 EquipmentTypeSO	19
 EventLogListVariable	1
@@ -70,7 +70,7 @@ HarvestElementSO	7
 HarvestTypeListVariable	1
 HarvestTypeSO	3
 InstanceScalingSO	11
-IntVariable	69
+IntVariable	70
 KeyBindingListVariable	4
 KeyBindingVariable	52
 LocalizedStringListVariable	1
@@ -81,7 +81,7 @@ MusicTrackSO	10
 NumberListVariable	1
 PassiveAbilityListVariable	1
 PassiveAbilityRefListVariable	1
-PassiveAbilitySO	61
+PassiveAbilitySO	63
 PassiveAbilityTypeSO	10
 PinnedObjectListVariable	1
 PlayerCharacter	1
@@ -93,7 +93,7 @@ PlotNodeListVariable	2
 PlotNodeSO	14
 PlotNodeTypeListVariable	1
 PlotNodeTypeSO	6
-PrerequisiteLinkSO	40
+PrerequisiteLinkSO	41
 RandomVariable	1
 RasteredThoughtListVariable	1
 RecipeBookListVariable	7
@@ -103,7 +103,7 @@ ResearchSO	148
 ResearchTypeListVariable	1
 ResearchTypeSO	11
 ResearchVariable	1
-ResourceListVariable	18
+ResourceListVariable	20
 ResourceSO	80
 ResourceTypeListVariable	2
 ResourceTypeSO	21
@@ -113,10 +113,10 @@ RitualTypeSO	4
 RitualVariable	3
 RuneStoneListVariable	2
 RuneStoneSO	4
-ScalingWeightSO	54
+ScalingWeightSO	55
 SpellListVariable	1
 SpellRecipeListVariable	1
-SpellRecipeSO	64
+SpellRecipeSO	65
 SpellRecipeVariable	1
 SpellTypeListVariable	1
 SpellTypeSO	15
@@ -134,9 +134,9 @@ TimeRuneSO	62
 TimeRuneTypeSO	6
 TreasurePoolSO	5
 TutorialSO	34
-UpgradeableObjectVariable	1
 UpgradeListVariable	9
-UpgradeSO	223
+UpgradeSO	229
+UpgradeableObjectVariable	1
 ValueModifierVariable	33
 ViewListVariable	24
-ViewSO	97
+ViewSO	98
