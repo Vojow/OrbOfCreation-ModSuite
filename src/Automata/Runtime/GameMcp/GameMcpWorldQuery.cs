@@ -143,6 +143,8 @@ internal static class GameMcpWorldQuery
             if (implicatedOffers.Count > 0) result["implicatedOffers"] = implicatedOffers;
         }
         if (end < count) result["nextOffset"] = end;
+        if (string.Equals(category.Name, "challenges", StringComparison.Ordinal))
+            result["challengeState"] = ProjectChallengeState(world);
         return result;
     }
 
@@ -225,6 +227,8 @@ internal static class GameMcpWorldQuery
                 if (implicated.Count > 0) result["implicatedSkippedRows"] = implicated;
                 if (implicatedOffers.Count > 0) result["implicatedOffers"] = implicatedOffers;
             }
+            if (string.Equals(category.Name, "challenges", StringComparison.Ordinal))
+                result["challengeState"] = ProjectChallengeState(publication.Snapshot);
             return result;
         }
 
@@ -361,6 +365,8 @@ internal static class GameMcpWorldQuery
         var result = Envelope(publication);
         result["status"] = "available";
         result["results"] = results;
+        if (string.Equals(category.Name, "challenges", StringComparison.Ordinal))
+            result["challengeState"] = ProjectChallengeState(publication.Snapshot);
         return result;
     }
 
@@ -389,6 +395,26 @@ internal static class GameMcpWorldQuery
         return PostStateUnavailable(
             "post_state_not_published",
             "the newer world has no " + category.Name + " row for the committed target");
+    }
+
+    internal static GameMcpValue ProjectChallengePostState(
+        GameMcpFrameContext state,
+        Guid targetId)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        var result = new JObject { ["challengeState"] = ProjectChallengeState(world) };
+        if (targetId == Guid.Empty) return result.Freeze();
+        if (WorldLookup.TryFind(world.Challenges, targetId, out var challenge))
+            result["challenge"] = ProjectChallenge(world, in challenge);
+        else
+            result["challengeUnavailable"] = new JObject
+            {
+                ["reasonCode"] = "post_state_not_published",
+                ["reason"] = "the newer world has no challenge row for the committed target",
+            };
+        return result.Freeze();
     }
 
     internal static GameMcpValue ProjectEntityState(
@@ -853,8 +879,10 @@ internal static class GameMcpWorldQuery
             ? ProjectSpellRecipe(world, in spellRecipe)
             : row is WorldAlchemyRecipe alchemyRecipe
             ? ProjectAlchemyRecipe(in alchemyRecipe)
-        : row is WorldEquipment equipment
+            : row is WorldEquipment equipment
             ? ProjectEquipment(world, in equipment)
+            : row is WorldChallenge challenge
+            ? ProjectChallenge(world, in challenge)
             : row is WorldGlyph glyph
             ? ProjectGlyph(in glyph)
             : row is WorldRitual ritual
@@ -1775,6 +1803,128 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
+    private static GameMcpValue ProjectChallenge(GameWorldState world, in WorldChallenge challenge)
+    {
+        var context = world.ChallengeContext;
+        var selected = Contains(context.Selected, challenge.EntityId, out _);
+        var inTime = Contains(context.TimeOffers, challenge.EntityId, out var timeRestricted);
+        var inPrestige = Contains(context.PrestigeOffers, challenge.EntityId, out var prestigeRestricted);
+        var restricted = timeRestricted || prestigeRestricted;
+        var selectionRoom = context.Selected.Count < context.SelectionMaximum;
+        var result = new JObject
+        {
+            ["entityId"] = challenge.EntityId.ToString("D"),
+            ["category"] = "challenges",
+            ["nativeType"] = "ChallengeSO",
+            ["state"] = challenge.State switch
+            {
+                0 => "idle",
+                1 => "queued",
+                2 => "active",
+                3 => "passed",
+                4 => "failed",
+                _ => "unknown",
+            },
+            ["level"] = new GameMcpDomainValue(new BigDouble(challenge.Level)),
+            ["maximumLevel"] = new GameMcpDomainValue(new BigDouble(challenge.MaxLevel)),
+            ["seen"] = challenge.Seen,
+            ["rewardQueued"] = challenge.RewardQueued,
+            ["completedOnce"] = challenge.CompletedOnce,
+            ["maximumLevelReached"] = challenge.MaximumLevelReached,
+            ["availableToRun"] = challenge.AvailableToRun,
+            ["nextDifficulty"] = new GameMcpDomainValue(challenge.NextDifficulty),
+            ["nextReward"] = new GameMcpDomainValue(challenge.NextReward),
+            ["selected"] = selected,
+            ["inTimeOffers"] = inTime,
+            ["inPrestigeOffers"] = inPrestige,
+        };
+        var selectable = context.Available && (selected || inTime || inPrestige) &&
+            (selected || (selectionRoom && !restricted));
+        var select = new JObject { ["available"] = selectable, ["selected"] = selected };
+        if (!selectable)
+            select["reasonCode"] = !context.Available
+                ? "challenge_state_unavailable"
+                : !selected && !inTime && !inPrestige
+                    ? "not_offered"
+                    : !selectionRoom
+                        ? "selection_full"
+                        : "selection_restricted";
+        result["select"] = select;
+        var queueAvailable = context.Available && (inTime || inPrestige) && challenge.State is 0 or 1;
+        var queue = new JObject
+        {
+            ["available"] = queueAvailable,
+            ["queued"] = challenge.State == 1,
+        };
+        if (!queueAvailable)
+            queue["reasonCode"] = !inTime && !inPrestige ? "not_offered" : "invalid_state";
+        result["queue"] = queue;
+        if (challenge.State == 2)
+            result["abandon"] = new JObject { ["available"] = true };
+        return result.Freeze();
+    }
+
+    internal static GameMcpValue ProjectChallengeState(GameWorldState world)
+    {
+        var context = world.ChallengeContext;
+        if (!context.Available)
+            return new JObject
+            {
+                ["available"] = false,
+                ["reasonCode"] = context.UnavailableReason.Length == 0
+                    ? "challenge_state_unavailable"
+                    : context.UnavailableReason,
+            }.Freeze();
+        var fetchAvailable = context.WorldCycleComplete &&
+            (!context.ChallengesFetched || context.RerollsLeft > 0);
+        var result = new JObject
+        {
+            ["available"] = true,
+            ["worldCycleComplete"] = context.WorldCycleComplete,
+            ["challengesFetched"] = context.ChallengesFetched,
+            ["rerollsLeft"] = new GameMcpDomainValue(new BigDouble(context.RerollsLeft)),
+            ["rerollsMaximum"] = new GameMcpDomainValue(new BigDouble(context.RerollsMaximum)),
+            ["selectionMaximum"] = new GameMcpDomainValue(new BigDouble(context.SelectionMaximum)),
+            ["selected"] = ChallengeReferences(context.Selected),
+            ["timeOffers"] = ChallengeReferences(context.TimeOffers),
+            ["prestigeOffers"] = ChallengeReferences(context.PrestigeOffers),
+            ["fetchTime"] = FetchDecision(fetchAvailable, context),
+            ["fetchPrestige"] = FetchDecision(fetchAvailable, context),
+        };
+        return result.Freeze();
+    }
+
+    private static JObject FetchDecision(bool available, in WorldChallengeContext context)
+    {
+        var result = new JObject { ["available"] = available };
+        if (!available)
+            result["reasonCode"] = !context.WorldCycleComplete
+                ? "world_cycle_incomplete"
+                : "no_rerolls";
+        return result;
+    }
+
+    private static JArray ChallengeReferences(PublicationTable<WorldChallengeReference> references)
+    {
+        var result = new JArray();
+        for (var index = 0; index < references.Count; index++)
+            result.Add(references[index].ChallengeId.ToString("D"));
+        return result;
+    }
+
+    private static bool Contains(PublicationTable<WorldChallengeReference> references,
+        Guid id, out bool restricted)
+    {
+        restricted = false;
+        for (var index = 0; index < references.Count; index++)
+        {
+            if (references[index].ChallengeId != id) continue;
+            restricted = references[index].SelectionRestricted;
+            return true;
+        }
+        return false;
+    }
+
     private static GameMcpValue ProjectGlyph(in WorldGlyph glyph)
     {
         var result = new JObject
@@ -2192,8 +2342,10 @@ internal static class GameMcpWorldQuery
             ? ProjectSpellRecipe(world, in spellRecipe)
             : row is WorldAlchemyRecipe alchemyRecipe
             ? ProjectAlchemyRecipe(in alchemyRecipe)
-        : row is WorldEquipment equipment
+            : row is WorldEquipment equipment
             ? ProjectEquipment(world, in equipment)
+            : row is WorldChallenge challenge
+            ? ProjectChallenge(world, in challenge)
             : row is WorldGlyph glyph
             ? ProjectGlyph(in glyph)
             : row is WorldRitual ritual

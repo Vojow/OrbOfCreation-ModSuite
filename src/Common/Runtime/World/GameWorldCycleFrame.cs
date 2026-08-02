@@ -151,6 +151,8 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<WorldAchievement, WorldAchievement> Achievements { get; } = new();
     internal WorldSampleBuffer<WorldAdvancement, WorldAdvancement> Advancements { get; } = new();
     internal WorldSampleBuffer<WorldChallenge, WorldChallenge> Challenges { get; } = new();
+
+    internal WorldChallengeContextBuffer ChallengeContext { get; } = new();
     internal WorldSampleBuffer<WorldThoughtStream, WorldThoughtStream> ThoughtStreams { get; } = new();
     internal WorldSampleBuffer<WorldTutorial, WorldTutorial> Tutorials { get; } = new();
     internal WorldSampleBuffer<WorldView, WorldView> Views { get; } = new();
@@ -368,6 +370,7 @@ internal static class GameWorldFrameDeriver
             Achievements = frame.Achievements.Build(WorldIdentityDeriver<WorldAchievement>.Shared),
             Advancements = frame.Advancements.Build(WorldIdentityDeriver<WorldAdvancement>.Shared),
             Challenges = frame.Challenges.Build(WorldIdentityDeriver<WorldChallenge>.Shared),
+            ChallengeContext = frame.ChallengeContext.Build(),
             ThoughtStreams = frame.ThoughtStreams.Build(WorldIdentityDeriver<WorldThoughtStream>.Shared),
             Tutorials = frame.Tutorials.Build(WorldIdentityDeriver<WorldTutorial>.Shared),
             Views = frame.Views.Build(WorldIdentityDeriver<WorldView>.Shared),

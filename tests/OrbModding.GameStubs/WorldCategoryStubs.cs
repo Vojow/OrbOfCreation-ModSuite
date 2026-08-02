@@ -793,8 +793,10 @@ public sealed class ChallengeSO : IdScriptableObject
     public enum ChallengeState
     {
         None,
-        Active,
-        Completed,
+        QueuedStart,
+        CurrentlyActive,
+        Passed,
+        Failed,
     }
 
     public static List<ChallengeSO> All = new List<ChallengeSO>();
@@ -806,6 +808,79 @@ public sealed class ChallengeSO : IdScriptableObject
     public int weight;
     public double difficulty;
     public double baseReward;
+    public bool NativeAvailableToRun { get; set; } = true;
+    public bool SuppressQueueActivation { get; set; }
+    public bool SuppressQueueToggle { get; set; }
+    public bool SuppressAbandon { get; set; }
+    public bool ThrowAfterQueueToggle { get; set; }
+    public bool ThrowAfterAbandon { get; set; }
+    public int QueueToggleCalls { get; private set; }
+    public int AbandonCalls { get; private set; }
+
+    public bool IsAvailableToRun() => NativeAvailableToRun && !IsMaxLevel();
+    public bool IsCompletedOnce() => state == ChallengeState.Passed || level > 0;
+    public bool IsMaxLevel() => maxLevel >= 0 && level >= maxLevel;
+    public BigDouble GetDifficulty() => new BigDouble(difficulty, 0);
+    public BigDouble GetNextInstanceBaseReward() => new BigDouble(baseReward, 0);
+    public void QueueActivation()
+    {
+        if (!SuppressQueueActivation) state = ChallengeState.QueuedStart;
+        hasBeenSeen = true;
+    }
+    public void EmptyState() { state = ChallengeState.None; }
+    public void ToggleQueueActivation()
+    {
+        QueueToggleCalls++;
+        if (!SuppressQueueToggle)
+        {
+            if (state == ChallengeState.None) QueueActivation();
+            else if (state == ChallengeState.QueuedStart) state = ChallengeState.None;
+        }
+        if (ThrowAfterQueueToggle) throw new InvalidOperationException("injected failure after queue toggle");
+    }
+    public void AbandonChallenge()
+    {
+        AbandonCalls++;
+        if (!SuppressAbandon) state = ChallengeState.Failed;
+        if (ThrowAfterAbandon) throw new InvalidOperationException("injected failure after abandon");
+    }
+}
+
+public sealed class ChallengeListVariable : GenericListVariable<ChallengeSO>
+{
+    public HashSet<ChallengeSO> RestrictedChallenges { get; } = new HashSet<ChallengeSO>();
+    public bool IsChallengeRestricted(ChallengeSO challenge) => RestrictedChallenges.Contains(challenge);
+    public void CycleOut()
+    {
+        foreach (var challenge in value) challenge.EmptyState();
+    }
+    public void Instantiate()
+    {
+        foreach (var challenge in value) challenge.QueueActivation();
+    }
+}
+
+public sealed class ChallengeManager
+{
+    public static ChallengeManager instance = new ChallengeManager();
+    public ChallengeListVariable activeChallenges = new ChallengeListVariable();
+    public ChallengeListVariable preferredChallenges = new ChallengeListVariable();
+    public List<ChallengeSO> NextChallenges { get; } = new List<ChallengeSO>();
+    public bool SuppressFetch { get; set; }
+    public bool ThrowAfterFetch { get; set; }
+    public int FetchCalls { get; private set; }
+
+    public void LoadNewActiveChallenges()
+    {
+        FetchCalls++;
+        if (!SuppressFetch)
+        {
+            activeChallenges.CycleOut();
+            activeChallenges.value = new List<ChallengeSO>(NextChallenges);
+            activeChallenges.Instantiate();
+        }
+        if (ThrowAfterFetch) throw new InvalidOperationException("injected failure after time challenge fetch");
+    }
 }
 
 

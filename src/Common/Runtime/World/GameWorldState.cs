@@ -219,6 +219,9 @@ public sealed record GameWorldState
     internal PublicationTable<WorldChallenge> Challenges { get; init; } =
         PublicationTable<WorldChallenge>.Empty;
 
+    /// <summary>Ordered challenge selections/offers and the next fetch decision from the same frame.</summary>
+    internal WorldChallengeContext ChallengeContext { get; init; }
+
     internal PublicationTable<WorldThoughtStream> ThoughtStreams { get; init; } =
         PublicationTable<WorldThoughtStream>.Empty;
 

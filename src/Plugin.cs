@@ -567,6 +567,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .EquipmentLoadoutOwnershipFailure)
+                    , createChallenges: () => new ChallengeGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureChallengeMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .ChallengeOwnershipFailure)
 #endif
                     );
             },
@@ -1529,6 +1537,8 @@ public sealed class Plugin : BaseUnityPlugin
                         GameMcpTargetingProjection.SubmittedTarget(committed.Details)),
                 GameMcpCommandKind.Consumable =>
                     GameMcpWorldQuery.ProjectConsumablePostState(latest, command.TargetId),
+                GameMcpCommandKind.Challenge =>
+                    GameMcpWorldQuery.ProjectChallengePostState(latest, command.TargetId),
                 _ => GameMcpWorldQuery.ProjectPostState(latest, category, command.TargetId),
             };
         }
@@ -1570,6 +1580,7 @@ public sealed class Plugin : BaseUnityPlugin
             _ => throw new ArgumentOutOfRangeException(nameof(command.DerivedNativeType)),
         },
         GameMcpCommandKind.EquipmentLoadout => "equipment",
+        GameMcpCommandKind.Challenge => "challenges",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
 
@@ -1789,6 +1800,8 @@ public sealed class Plugin : BaseUnityPlugin
         }
         else if (kind == GameMcpCommandKind.EquipmentLoadout)
             nativeType = "EquipmentSO";
+        else if (kind == GameMcpCommandKind.Challenge)
+            nativeType = "ChallengeSO";
         else if (kind == GameMcpCommandKind.ConfigurationSet)
         {
             mode = request.Section;

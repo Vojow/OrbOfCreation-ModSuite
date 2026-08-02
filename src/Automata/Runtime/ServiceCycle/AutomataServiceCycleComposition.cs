@@ -27,7 +27,8 @@ internal static class AutomataServiceCycleComposition
         Func<SpellLoadoutGameAction>? createSpellLoadout = null,
         Func<TargetingGameAction>? createTargeting = null,
         Func<GenericDiscoveryGameAction>? createGenericDiscovery = null,
-        Func<EquipmentLoadoutGameAction>? createEquipmentLoadout = null)
+        Func<EquipmentLoadoutGameAction>? createEquipmentLoadout = null,
+        Func<ChallengeGameAction>? createChallenges = null)
     {
         try
         {
@@ -43,7 +44,8 @@ internal static class AutomataServiceCycleComposition
                 createSpellLoadout,
                 createTargeting,
                 createGenericDiscovery,
-                createEquipmentLoadout);
+                createEquipmentLoadout,
+                createChallenges);
             log.LogAutomataInfo("Automata ServiceCycle runtime registered.");
             return runtime;
         }
@@ -73,7 +75,8 @@ internal static class AutomataServiceCycleComposition
         Func<SpellLoadoutGameAction>? createSpellLoadout = null,
         Func<TargetingGameAction>? createTargeting = null,
         Func<GenericDiscoveryGameAction>? createGenericDiscovery = null,
-        Func<EquipmentLoadoutGameAction>? createEquipmentLoadout = null)
+        Func<EquipmentLoadoutGameAction>? createEquipmentLoadout = null,
+        Func<ChallengeGameAction>? createChallenges = null)
     {
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
         if (hostDependencies is null) throw new ArgumentNullException(nameof(hostDependencies));
@@ -93,6 +96,7 @@ internal static class AutomataServiceCycleComposition
         TargetingGameAction? targeting = null;
         GenericDiscoveryGameAction? genericDiscovery = null;
         EquipmentLoadoutGameAction? equipmentLoadout = null;
+        ChallengeGameAction? challenges = null;
         var featureRuntimes = new List<IAutomataServiceCycleFeatureRuntime>(features.Count);
         try
         {
@@ -150,6 +154,7 @@ internal static class AutomataServiceCycleComposition
             targeting = createTargeting?.Invoke();
             genericDiscovery = createGenericDiscovery?.Invoke();
             equipmentLoadout = createEquipmentLoadout?.Invoke();
+            challenges = createChallenges?.Invoke();
             return new AutomataServiceCycleRuntime(
                 hostDependencies.ReadLifecycleEpoch,
                 configurationPublication,
@@ -162,7 +167,8 @@ internal static class AutomataServiceCycleComposition
                 spellLoadout,
                 targeting,
                 genericDiscovery,
-                equipmentLoadout);
+                equipmentLoadout,
+                challenges);
         }
         catch
         {
@@ -173,6 +179,7 @@ internal static class AutomataServiceCycleComposition
             targeting?.Dispose();
             genericDiscovery?.Dispose();
             equipmentLoadout?.Dispose();
+            challenges?.Dispose();
             DisposeFailedConstruction(featureRuntimes, observability, host, registry);
             throw;
         }

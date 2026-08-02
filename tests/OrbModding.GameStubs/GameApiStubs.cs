@@ -265,6 +265,16 @@ public sealed class BoolVariable
     public bool value;
 
     public Guid GetGuid() => uuid;
+    public bool GetValue() => value;
+    public int SetCalls { get; private set; }
+    public bool SuppressSet { get; set; }
+    public bool ThrowAfterSet { get; set; }
+    public void SetValue(bool next)
+    {
+        SetCalls++;
+        if (!SuppressSet) value = next;
+        if (ThrowAfterSet) throw new InvalidOperationException("injected failure after bool write");
+    }
     public bool initialValue;
     public bool isSaved;
     private int observerId;
@@ -459,6 +469,7 @@ public class AbstractListVariable<T> : AbstractListVariable
     public int Count => value.Count;
     public void Empty() => value.Clear();
     public bool IsAtMax() => value.Count >= GetMax();
+    public bool Contains(T element) => value.Contains(element);
     public bool SuppressSwap { get; set; }
     public bool ThrowBeforeSwap { get; set; }
     public bool ThrowAfterSwap { get; set; }
@@ -516,6 +527,20 @@ public class GenericListVariable<T> : AbstractListVariable<T>
     }
 
     public virtual void Remove(T element) => value.Remove(element);
+
+    public bool SuppressToggle { get; set; }
+    public bool ThrowAfterToggle { get; set; }
+    public int ToggleCalls { get; private set; }
+    public void Toggle(T element)
+    {
+        ToggleCalls++;
+        if (!SuppressToggle)
+        {
+            if (value.Contains(element)) value.Remove(element);
+            else value.Add(element);
+        }
+        if (ThrowAfterToggle) throw new InvalidOperationException("injected failure after list toggle");
+    }
 
     protected virtual bool IsFilledElement(T element) => element is not null;
 
@@ -893,6 +918,29 @@ public class GameManager
 
 public class PersistentResetManager
 {
+    public static PersistentResetManager instance = new PersistentResetManager();
+    public IntVariable challengeRerollsLeft = new IntVariable();
+    public IntVariable challengeRerollsMax = new IntVariable();
+    public BoolVariable hasCompleteWorldCycle = new BoolVariable();
+    public BoolVariable hasFetchedChallenges = new BoolVariable();
+    public ChallengeListVariable activeChallenges = new ChallengeListVariable();
+    public List<ChallengeSO> NextChallenges { get; } = new List<ChallengeSO>();
+    public bool SuppressFetch { get; set; }
+    public bool ThrowAfterFetch { get; set; }
+    public int FetchCalls { get; private set; }
+
+    public void FetchNewChallenges()
+    {
+        FetchCalls++;
+        if (!SuppressFetch)
+        {
+            activeChallenges.CycleOut();
+            activeChallenges.value = new List<ChallengeSO>(NextChallenges);
+            activeChallenges.Instantiate();
+        }
+        if (ThrowAfterFetch) throw new InvalidOperationException("injected failure after prestige challenge fetch");
+    }
+
     private void PersistentResetLogic()
     {
     }

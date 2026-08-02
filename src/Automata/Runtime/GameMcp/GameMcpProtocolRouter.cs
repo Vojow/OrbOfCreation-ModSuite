@@ -359,6 +359,16 @@ internal sealed class GameMcpProtocolRouter
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
+            case "game_challenge":
+                builder.Mode = RequireOneOf(arguments, "mode",
+                    "select", "queue", "abandon", "fetch_time", "fetch_prestige");
+                builder.Uuid = OptionalUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                if (builder.Mode is "select" or "queue" or "abandon" && builder.Uuid == Guid.Empty)
+                    throw new GameMcpInvalidParamsException("uuid is required for " + builder.Mode);
+                if (builder.Mode is "fetch_time" or "fetch_prestige" && builder.Uuid != Guid.Empty)
+                    throw new GameMcpInvalidParamsException("uuid is accepted only for select, queue, or abandon");
+                break;
             case "suite_config_set":
                 builder.ConfigurationGeneration = RequiredUlong(
                     arguments, "configurationGeneration");
@@ -428,7 +438,8 @@ internal sealed class GameMcpProtocolRouter
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
             "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
-            "game_consumable" or "game_craft" or "game_discover" or "game_equipment" =>
+            "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
+            "game_challenge" =>
                 GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
@@ -455,7 +466,8 @@ internal sealed class GameMcpProtocolRouter
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_discovery_offer" or "game_spell_workbench" or
             "game_spell_composition" or "game_spell_loadout" or "game_targeting" or
-            "game_consumable" or "game_craft" or "game_discover" or "game_equipment" =>
+            "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
+            "game_challenge" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_screenshot" or "game_navigate" or "game_probe" or "game_continue" or
@@ -730,6 +742,19 @@ internal sealed class GameMcpProtocolRouter
                 readOnly: false,
                 idempotent: false),
             Tool(
+                "game_challenge",
+                "Select, queue, abandon, or fetch challenges",
+                "Drive the exact native challenge decision. Success returns ordered named selections and offers, rerolls, the target state, and every next decision inline.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("select", "queue", "abandon", "fetch_time", "fetch_prestige"),
+                        ["uuid"] = StringSchema("Required for select, queue, and abandon; a published ChallengeSO UUID."),
+                    },
+                    "mode"),
+                readOnly: false,
+                idempotent: false),
+            Tool(
                 "suite_config_set",
                 "Commit one suite setting",
                 "Write one allowlisted setting through the single committed configuration-store publication path.",
@@ -895,6 +920,19 @@ internal sealed class GameMcpProtocolRouter
                     "offerUuid",
                     "field 'offerUuid' is not accepted for mode '" + mode + "'"));
             }
+        }
+
+        if (string.Equals(name, "game_challenge", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var hasUuid = arguments.ContainsKey("uuid");
+            if (mode is "select" or "queue" or "abandon" && !hasUuid)
+                errors.Add(ValidationError("missing_required", "uuid",
+                    "required field 'uuid' is missing for mode '" + mode + "'"));
+            else if (mode is "fetch_time" or "fetch_prestige" && hasUuid)
+                errors.Add(ValidationError("unexpected_for_mode", "uuid",
+                    "field 'uuid' is not accepted for mode '" + mode + "'"));
         }
 
         if (string.Equals(name, "game_spell_composition", StringComparison.Ordinal) &&

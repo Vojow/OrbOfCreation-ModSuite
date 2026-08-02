@@ -52,7 +52,8 @@ internal static class GameMcpEntityCapabilityMap
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
         if (target == Guid.Empty && capability is not (
-                GameMcpCommandKind.SpellComposition or GameMcpCommandKind.Targeting))
+                GameMcpCommandKind.SpellComposition or GameMcpCommandKind.Targeting or
+                GameMcpCommandKind.Challenge))
         {
             reason = "a non-empty stable UUID is required";
             return false;
@@ -109,6 +110,10 @@ internal static class GameMcpEntityCapabilityMap
                 TryResolveGenericDiscoveryType(world, target, out _, out reason),
             GameMcpCommandKind.EquipmentLoadout =>
                 Entity(world.EntityIdentities, world.Equipment, target, "equipment", capability, out reason),
+            GameMcpCommandKind.Challenge when target == Guid.Empty =>
+                AvailableGlobal(world.ChallengeContext.Available, "challenge decision state", out reason),
+            GameMcpCommandKind.Challenge =>
+                Entity(world.EntityIdentities, world.Challenges, target, "challenges", capability, out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -327,6 +332,12 @@ internal static class GameMcpEntityCapabilityMap
         return false;
     }
 
+    private static bool AvailableGlobal(bool available, string label, out string reason)
+    {
+        reason = available ? string.Empty : "the published " + label + " is unavailable";
+        return available;
+    }
+
     private static Dictionary<string, GameMcpEntityCapabilityDescriptor> Index()
     {
         var result = new Dictionary<string, GameMcpEntityCapabilityDescriptor>(StringComparer.Ordinal);
@@ -366,7 +377,7 @@ internal static class GameMcpEntityCapabilityMap
         D("rituals", "RitualSO", GameMcpCommandKind.GenericDiscovery),
         D("achievements", "AchievementSO"),
         D("advancements", "AdvancementSO"),
-        D("challenges", "ChallengeSO"),
+        D("challenges", "ChallengeSO", GameMcpCommandKind.Challenge),
         D("thought-streams", "ThoughtStreamSO"),
         D("tutorials", "TutorialSO"),
         D("views", "ViewSO"),

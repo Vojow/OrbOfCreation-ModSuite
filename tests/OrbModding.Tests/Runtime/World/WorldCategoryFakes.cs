@@ -1583,6 +1583,11 @@ internal sealed class FakeChallenge
     public double baseReward;
 
     public Guid GetGuid() => Identity;
+    public bool IsAvailableToRun() => maxLevel < 0 || level < maxLevel;
+    public bool IsCompletedOnce() => level > 0 || (int)state == 3;
+    public bool IsMaxLevel() => maxLevel >= 0 && level >= maxLevel;
+    public BigDouble GetDifficulty() => new(difficulty);
+    public BigDouble GetNextInstanceBaseReward() => new(baseReward);
 }
 
 internal sealed class FakeThoughtStream

@@ -49,8 +49,8 @@ public sealed class GameMcpEntityCapabilityMapTests
             .Select(name => (Name: name, Kind: GameMcpCommandKinds.FromToolName(name)))
             .ToArray();
 
-        Assert.Equal(23, mappings.Length);
-        Assert.Equal(23, mappings.Select(mapping => mapping.Kind).Distinct().Count());
+        Assert.Equal(24, mappings.Length);
+        Assert.Equal(24, mappings.Select(mapping => mapping.Kind).Distinct().Count());
         Assert.Equal(
             new[]
             {
@@ -62,6 +62,7 @@ public sealed class GameMcpEntityCapabilityMapTests
                 "game_discovery_offer",
                 "game_discover",
                 "game_equipment",
+                "game_challenge",
                 "game_spell_workbench",
                 "game_spell_composition",
                 "game_spell_loadout",

@@ -14,7 +14,12 @@ internal readonly struct WorldChallenge : IWorldEntity
         int maxLevel,
         int weight,
         double difficulty,
-        double baseReward)
+        double baseReward,
+        bool availableToRun = false,
+        bool completedOnce = false,
+        bool maximumLevelReached = false,
+        BigDouble nextDifficulty = default,
+        BigDouble nextReward = default)
     {
         ChallengeId = challengeId;
         Level = level;
@@ -25,6 +30,11 @@ internal readonly struct WorldChallenge : IWorldEntity
         Weight = weight;
         Difficulty = difficulty;
         BaseReward = baseReward;
+        AvailableToRun = availableToRun;
+        CompletedOnce = completedOnce;
+        MaximumLevelReached = maximumLevelReached;
+        NextDifficulty = nextDifficulty;
+        NextReward = nextReward;
     }
 
     internal Guid ChallengeId { get; }
@@ -46,6 +56,16 @@ internal readonly struct WorldChallenge : IWorldEntity
     internal double Difficulty { get; }
 
     internal double BaseReward { get; }
+
+    internal bool AvailableToRun { get; }
+
+    internal bool CompletedOnce { get; }
+
+    internal bool MaximumLevelReached { get; }
+
+    internal BigDouble NextDifficulty { get; }
+
+    internal BigDouble NextReward { get; }
 }
 
 internal sealed class WorldChallengeBinder : WorldPlainBinder<WorldChallenge>
@@ -59,6 +79,11 @@ internal sealed class WorldChallengeBinder : WorldPlainBinder<WorldChallenge>
     private Func<object, int>? _weight;
     private Func<object, double>? _difficulty;
     private Func<object, double>? _baseReward;
+    private Func<object, bool>? _availableToRun;
+    private Func<object, bool>? _completedOnce;
+    private Func<object, bool>? _maximumLevelReached;
+    private Func<object, BigDouble>? _nextDifficulty;
+    private Func<object, BigDouble>? _nextReward;
 
     internal override string Category => "challenges";
 
@@ -76,6 +101,11 @@ internal sealed class WorldChallengeBinder : WorldPlainBinder<WorldChallenge>
         _weight = bind.Field<int>("weight");
         _difficulty = bind.Field<double>("difficulty");
         _baseReward = bind.Field<double>("baseReward");
+        _availableToRun = bind.Call<bool>("IsAvailableToRun");
+        _completedOnce = bind.Call<bool>("IsCompletedOnce");
+        _maximumLevelReached = bind.Call<bool>("IsMaxLevel");
+        _nextDifficulty = bind.Call<BigDouble>("GetDifficulty");
+        _nextReward = bind.Call<BigDouble>("GetNextInstanceBaseReward");
         return bind.Failure;
     }
 
@@ -89,5 +119,10 @@ internal sealed class WorldChallengeBinder : WorldPlainBinder<WorldChallenge>
             _maxLevel!(entity),
             _weight!(entity),
             _difficulty!(entity),
-            _baseReward!(entity));
+            _baseReward!(entity),
+            _availableToRun!(entity),
+            _completedOnce!(entity),
+            _maximumLevelReached!(entity),
+            _nextDifficulty!(entity),
+            _nextReward!(entity));
 }

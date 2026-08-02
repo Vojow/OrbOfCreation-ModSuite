@@ -46,6 +46,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         FakePlayerGlobals.Reset();
         FakeTargetingManager.Reset();
         FakeConsumableInventory.Reset();
+        FakeChallengeManager.instance = new FakeChallengeManager();
+        FakePersistentResetManager.instance = new FakePersistentResetManager();
         WorldCategoryFakes.Clear();
     }
 
@@ -86,6 +88,9 @@ public sealed class GameWorldCollectorTests : IDisposable
             ["Inventory"] = typeof(FakeConsumableInventory),
             ["ConsumableRefListVariable"] = typeof(FakeConsumableRefListVariable),
             ["UICraftingPage"] = typeof(FakeCraftingPage),
+            ["ChallengeManager"] = typeof(FakeChallengeManager),
+            ["PersistentResetManager"] = typeof(FakePersistentResetManager),
+            ["ChallengeListVariable"] = typeof(FakeChallengeList),
         };
 
         foreach (var pair in WorldCategoryFakes.ByTypeName) byName[pair.Key] = pair.Value;
@@ -144,8 +149,9 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         Assert.True(report.IsComplete, report.Describe());
         // Five primary entities, two purchase-view relations, three live prerequisite-verdict
-        // rows, two Scribe queues, and eight complete zero-candidate Scroll-target evidence rows.
-        Assert.Equal(20, report.TotalSampled);
+        // rows, two Scribe queues, eight complete zero-candidate Scroll-target evidence rows,
+        // and one frame-local challenge-decision context row.
+        Assert.Equal(21, report.TotalSampled);
 
         Assert.True(WorldLookup.TryFind(world.Resources, mana, out var resource));
         Assert.Equal(60d, resource.Reading.Quantity.ToDouble());
@@ -387,7 +393,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Fifty-four passes: the four categories
+        // The scope claim, asserted rather than described. Fifty-five passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -395,7 +401,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         // each purchasable entity's lifecycle-authored per-level conditions plus their separately
         // refreshed live native verdicts, prerequisite links' volatile native gates, and crafting
         // recipes' separately refreshed live state and player-action decisions, which are second
-        // walks of cached lifecycle bindings rather than registries of their own, the
+        // walks of cached lifecycle bindings rather than registries of their own, the challenge
+        // decision context captured from its managers in the same frame, the
         // plot-and-action pairs, which belong to neither side, and
         // the two that belong to no per-type registry at all and are reached by uuid: the action
         // queues, the equipped spell loadout, the paired Concept registries, and the current
@@ -404,13 +411,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(54, report.Categories.Length);
+        Assert.Equal(55, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "concept instances", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "challenge decisions", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "concept instances", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -1671,6 +1678,7 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         public Guid GetGuid() => Identity;
         public int AsInt() => (int)value.GetValue().ToDouble();
+        public void SetValue(int amount) => value = new FakeModifierRecord(amount);
     }
 
     private static class FakeGlobalVariables
@@ -1696,9 +1704,36 @@ public sealed class GameWorldCollectorTests : IDisposable
         public bool value;
 
         public Guid GetGuid() => Identity;
+        public bool GetValue() => value;
+        public void SetValue(bool next) => value = next;
         public bool initialValue;
         public bool isSaved;
         public int observerId;
+    }
+
+    private sealed class FakeChallengeList
+    {
+        public List<FakeChallenge> value = new();
+        public int Maximum = 3;
+        public int GetMax() => Maximum;
+        public bool IsChallengeRestricted(FakeChallenge challenge) => false;
+    }
+
+    private sealed class FakeChallengeManager
+    {
+        public static FakeChallengeManager instance = new();
+        public FakeChallengeList preferredChallenges = new();
+        public FakeChallengeList activeChallenges = new();
+    }
+
+    private sealed class FakePersistentResetManager
+    {
+        public static FakePersistentResetManager instance = new();
+        public FakeChallengeList activeChallenges = new();
+        public FakeCount challengeRerollsLeft = new(1);
+        public FakeCount challengeRerollsMax = new(1);
+        public FakeFlag hasCompleteWorldCycle = new() { value = true };
+        public FakeFlag hasFetchedChallenges = new();
     }
 
     /// <summary>

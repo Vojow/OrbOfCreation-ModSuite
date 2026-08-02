@@ -20305,6 +20305,210 @@
       "type": "EquipmentManager", "typeVisibility": "public", "kind": "method", "member": "UnEquipItem",
       "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["EquipmentSO"],
       "owners": ["Automata equipment loadout GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.challenge.type-action", "assembly": "assembly-csharp",
+      "type": "ChallengeSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.manager.type-action", "assembly": "assembly-csharp",
+      "type": "ChallengeManager", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.reset-manager.type-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.list.type-action", "assembly": "assembly-csharp",
+      "type": "ChallengeListVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.int-variable.type-action", "assembly": "assembly-csharp",
+      "type": "IntVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.bool-variable.type-action", "assembly": "assembly-csharp",
+      "type": "BoolVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.manager-instance-action", "assembly": "assembly-csharp",
+      "type": "ChallengeManager", "typeVisibility": "public", "kind": "field", "member": "instance",
+      "visibility": "public", "static": true, "valueType": "ChallengeManager",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.reset-manager-instance-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "instance",
+      "visibility": "public", "static": true, "valueType": "PersistentResetManager",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.manager-preferred-action", "assembly": "assembly-csharp",
+      "type": "ChallengeManager", "typeVisibility": "public", "kind": "field", "member": "preferredChallenges",
+      "visibility": "public", "static": false, "valueType": "ChallengeListVariable",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.manager-active-action", "assembly": "assembly-csharp",
+      "type": "ChallengeManager", "typeVisibility": "public", "kind": "field", "member": "activeChallenges",
+      "visibility": "public", "static": false, "valueType": "ChallengeListVariable",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.reset-active-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "activeChallenges",
+      "visibility": "public", "static": false, "valueType": "ChallengeListVariable",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.reset-rerolls-left-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "challengeRerollsLeft",
+      "visibility": "public", "static": false, "valueType": "IntVariable",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.reset-rerolls-maximum-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "challengeRerollsMax",
+      "visibility": "public", "static": false, "valueType": "IntVariable",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.reset-cycle-complete-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "hasCompleteWorldCycle",
+      "visibility": "public", "static": false, "valueType": "BoolVariable",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.reset-fetched-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "field", "member": "hasFetchedChallenges",
+      "visibility": "public", "static": false, "valueType": "BoolVariable",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.list-values-action", "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "field", "member": "value",
+      "visibility": "public", "static": false, "valueType": "System.Collections.Generic.List`1<!0>",
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.list-maximum-action", "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "method", "member": "GetMax",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.list-empty-spot-action", "assembly": "assembly-csharp",
+      "type": "GenericListVariable`1", "typeVisibility": "public", "kind": "method", "member": "HasEmptySpot",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata challenge GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.list-contains-action", "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "method", "member": "Contains",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": ["!0"],
+      "owners": ["Automata challenge GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.list-toggle-action", "assembly": "assembly-csharp",
+      "type": "GenericListVariable`1", "typeVisibility": "public", "kind": "method", "member": "Toggle",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["!0"],
+      "owners": ["Automata challenge GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.list-restricted-action", "assembly": "assembly-csharp",
+      "type": "ChallengeListVariable", "typeVisibility": "public", "kind": "method", "member": "IsChallengeRestricted",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": ["ChallengeSO"],
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.challenge-state-action", "assembly": "assembly-csharp",
+      "type": "ChallengeSO", "typeVisibility": "public", "kind": "field", "member": "state",
+      "visibility": "public", "static": false, "valueType": "ChallengeSO+ChallengeState",
+      "owners": ["Automata challenge GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.challenge-toggle-queue-action", "assembly": "assembly-csharp",
+      "type": "ChallengeSO", "typeVisibility": "public", "kind": "method", "member": "ToggleQueueActivation",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata challenge GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.challenge-abandon-action", "assembly": "assembly-csharp",
+      "type": "ChallengeSO", "typeVisibility": "public", "kind": "method", "member": "AbandonChallenge",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata challenge GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.int-as-int-action", "assembly": "assembly-csharp",
+      "type": "IntVariable", "typeVisibility": "public", "kind": "method", "member": "AsInt",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.int-set-action", "assembly": "assembly-csharp",
+      "type": "IntVariable", "typeVisibility": "public", "kind": "method", "member": "SetValue",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["System.Int32"],
+      "owners": ["Automata challenge GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.bool-get-action", "assembly": "assembly-csharp",
+      "type": "BoolVariable", "typeVisibility": "public", "kind": "method", "member": "GetValue",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata challenge GameAction", "Common challenge world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.bool-set-action", "assembly": "assembly-csharp",
+      "type": "BoolVariable", "typeVisibility": "public", "kind": "method", "member": "SetValue",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["System.Boolean"],
+      "owners": ["Automata challenge GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.manager-fetch-action", "assembly": "assembly-csharp",
+      "type": "ChallengeManager", "typeVisibility": "public", "kind": "method", "member": "LoadNewActiveChallenges",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata challenge GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.reset-fetch-action", "assembly": "assembly-csharp",
+      "type": "PersistentResetManager", "typeVisibility": "public", "kind": "method", "member": "FetchNewChallenges",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata challenge GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "challenge.available-to-run-capture", "assembly": "assembly-csharp",
+      "type": "ChallengeSO", "typeVisibility": "public", "kind": "method", "member": "IsAvailableToRun",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Common challenge world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "challenge.completed-once-capture", "assembly": "assembly-csharp",
+      "type": "ChallengeSO", "typeVisibility": "public", "kind": "method", "member": "IsCompletedOnce",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Common challenge world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "challenge.maximum-level-capture", "assembly": "assembly-csharp",
+      "type": "ChallengeSO", "typeVisibility": "public", "kind": "method", "member": "IsMaxLevel",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Common challenge world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "challenge.next-difficulty-capture", "assembly": "assembly-csharp",
+      "type": "ChallengeSO", "typeVisibility": "public", "kind": "method", "member": "GetDifficulty",
+      "visibility": "public", "static": false, "returnType": "BigDouble", "parameters": [],
+      "owners": ["Common challenge world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "challenge.next-reward-capture", "assembly": "assembly-csharp",
+      "type": "ChallengeSO", "typeVisibility": "public", "kind": "method", "member": "GetNextInstanceBaseReward",
+      "visibility": "public", "static": false, "returnType": "BigDouble", "parameters": [],
+      "owners": ["Common challenge world collection"], "usages": ["reflection"], "place": "capture"
     }
   ],
   "sourceAudit": {
@@ -20321,6 +20525,7 @@
       "src/DiscoveryTree",
       "src/GenericDiscovery",
       "src/EquipmentLoadout",
+      "src/Challenge",
       "src/Mentor",
       "src/ModConfig",
       "src/SpellComposition",

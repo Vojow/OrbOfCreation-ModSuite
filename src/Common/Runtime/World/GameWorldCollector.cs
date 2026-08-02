@@ -105,6 +105,7 @@ internal sealed class GameWorldCollector
     private readonly WorldCategoryReader<WorldAchievement, WorldAchievement> _achievements;
     private readonly WorldCategoryReader<WorldAdvancement, WorldAdvancement> _advancements;
     private readonly WorldCategoryReader<WorldChallenge, WorldChallenge> _challenges;
+    private readonly WorldChallengeContextReader _challengeContext;
     private readonly WorldCategoryReader<WorldThoughtStream, WorldThoughtStream> _thoughtStreams;
     private readonly WorldCategoryReader<WorldTutorial, WorldTutorial> _tutorials;
     private readonly WorldCategoryReader<WorldView, WorldView> _views;
@@ -236,6 +237,7 @@ internal sealed class GameWorldCollector
         _achievements = Reader(new WorldAchievementBinder(), resolveType, static frame => frame.Achievements);
         _advancements = Reader(new WorldAdvancementBinder(), resolveType, static frame => frame.Advancements);
         _challenges = Reader(new WorldChallengeBinder(), resolveType, static frame => frame.Challenges);
+        _challengeContext = new WorldChallengeContextReader(resolveType);
         _thoughtStreams = Reader(new WorldThoughtStreamBinder(), resolveType, static frame => frame.ThoughtStreams);
         _tutorials = Reader(new WorldTutorialBinder(), resolveType, static frame => frame.Tutorials);
         _views = Reader(new WorldViewBinder(), resolveType, static frame => frame.Views);
@@ -289,7 +291,7 @@ internal sealed class GameWorldCollector
             _harvestElements, _harvestResources, _timeRunes, _glyphs, _consumables,
             _consumableInventory,
             _scribeRelations,
-            _rituals, _achievements, _advancements, _challenges,
+            _rituals, _achievements, _advancements, _challenges, _challengeContext,
             _thoughtStreams, _tutorials, _views, _plotNodeActions,
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
             _recipeBooks, _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions,

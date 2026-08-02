@@ -119,6 +119,7 @@ does not refresh it by hidden navigation.
 | `game_discovery_offer` | Initiate, select, confirm, or reroll one Discovery Tree offer lifecycle |
 | `game_discover` | Discover one published alchemy recipe, equipment asset, glyph, ritual, or time rune |
 | `game_equipment` | Equip/increase or unequip/decrease one created artifact using live native multi-buy |
+| `game_challenge` | Select, queue, abandon, or fetch the Time/prestige challenge offers |
 | `game_spell_workbench` | Select an authored spell recipe, discover it, or create another equipped instance |
 | `game_spell_composition` | Set the global spell output level or replace one equipped spell's augment stack |
 | `game_spell_loadout` | Remove one exact equipped runtime spell or move it to another loadout slot |
@@ -266,6 +267,29 @@ or refusal. Call `game_equipment` with `mode:"equip"` or `mode:"unequip"`; there
 argument because one call reproduces one native player click. A committed call returns the complete
 newer equipment row inline, so no read-back is required. Usage reservations, effects, and
 attunement are post-state evidence, never payment-verification gates.
+
+### Challenge decision loop
+
+The `challenges` category is both the per-entity read and the pre-decision surface for
+`game_challenge`. Every row carries the native idle/queued/active/passed/failed state, current and
+maximum level, native next difficulty/reward, availability/completion verdicts, selection and offer
+membership, and explicit `select`, `queue`, and, when active, `abandon` decisions. Challenge
+selection has no resource price, so a row does not invent empty costs or affordability.
+
+Every challenge list/get/search response also carries one same-generation `challengeState`: ordered
+fully named `selected`, `timeOffers`, and `prestigeOffers`; selection capacity; first-fetch state;
+rerolls; and explicit `fetchTime`/`fetchPrestige` availability. This shared state is captured once
+on Unity's main thread with the ordinary world and projected by reference.
+
+The MCP-only sequence is:
+
+1. Page `challenges`; compare next difficulty/reward and the named ordered offers from
+   `challengeState`.
+2. Call `game_challenge(mode="select", uuid=...)`; its terminal response returns the updated
+   target plus ordered selection and offers.
+3. Call `queue` to toggle an offered target's activation state, or `abandon` for an active target.
+4. Call `fetch_time` or `fetch_prestige` without a UUID. The terminal response returns the complete
+   replacement named offer lists and remaining next decisions; no read-back is required.
 
 The MCP-only decision/action sequence is seven calls when two offers need explanations:
 
@@ -541,6 +565,8 @@ tools/game-mcp-client.py call game_spell_workbench --arguments \
   '{"mode":"select","spellRecipeUuid":"SPELL_RECIPE_UUID"}'
 tools/game-mcp-client.py call game_spell_composition --arguments \
   '{"mode":"set_augments","spellInstanceUuid":"RUNTIME_SPELL_UUID","augmentGlyphs":[{"glyphUuid":"GLYPH_UUID","count":2}]}'
+tools/game-mcp-client.py call game_challenge --arguments \
+  '{"mode":"select","uuid":"CHALLENGE_UUID"}'
 ```
 
 `game_discovery_offer` requires `offerUuid` for `select` and `confirm`, and rejects it for
@@ -621,6 +647,18 @@ multi-buy, maximum stacks, and native usage-affordability checks before taking t
 Success is only the exact requested target-stack transition. It returns the complete newer named
 equipment row with both next decisions and no receipt or payment/usage stanza. A missing transition
 quarantines this family for the lifecycle; a throw after the exact transition commits.
+
+`game_challenge` requires one of `select`, `queue`, `abandon`, `fetch_time`, or
+`fetch_prestige`. The three target modes require a published `ChallengeSO` `uuid`; both fetch modes
+reject it. The boundary rereads the exact manager/list graph and target state on Unity's main
+thread, checks offer membership, selection room/restrictions, active/queued state, world-cycle
+completion, and rerolls, then captures the `ChallengeLifecycle` permit last. Select verifies exact
+membership inversion; queue verifies the exact idle/queued toggle; abandon verifies the exact
+target becomes failed. A fetch verifies that its requested ordered offer surface materialized and
+every offer entered the native queued state. Rerolls, fetched flags, rewards, effects, and other
+accounting remain evidence rather than success gates. Committed target modes return the complete
+newer named challenge row plus shared challenge state; fetch returns the shared state. No success
+receipt or follow-up read is required.
 
 CLI play commands therefore need no generation option:
 

@@ -32,6 +32,7 @@ internal enum GameMcpCommandKind
     Crafting = 21,
     GenericDiscovery = 22,
     EquipmentLoadout = 23,
+    Challenge = 24,
 }
 
 internal static class GameMcpCommandKinds
@@ -42,7 +43,7 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.SpellComposition or GameMcpCommandKind.SpellLoadout or
             GameMcpCommandKind.Targeting or GameMcpCommandKind.Consumable or
             GameMcpCommandKind.Crafting or GameMcpCommandKind.GenericDiscovery or
-            GameMcpCommandKind.EquipmentLoadout;
+            GameMcpCommandKind.EquipmentLoadout or GameMcpCommandKind.Challenge;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -60,6 +61,7 @@ internal static class GameMcpCommandKinds
         "game_craft" => GameMcpCommandKind.Crafting,
         "game_discover" => GameMcpCommandKind.GenericDiscovery,
         "game_equipment" => GameMcpCommandKind.EquipmentLoadout,
+        "game_challenge" => GameMcpCommandKind.Challenge,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -634,6 +636,22 @@ internal static class GameMcpActionResultCodeNames
             if (code == EquipmentLoadoutActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == EquipmentLoadoutActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == EquipmentLoadoutActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.Challenge)
+        {
+            if (code == ChallengeActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == ChallengeActionResultCodes.Quarantined) return "quarantined";
+            if (code == ChallengeActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == ChallengeActionResultCodes.IdentityUnavailable) return "identity_unavailable";
+            if (code == ChallengeActionResultCodes.OfferUnavailable) return "offer_unavailable";
+            if (code == ChallengeActionResultCodes.SelectionFull) return "selection_full";
+            if (code == ChallengeActionResultCodes.SelectionRestricted) return "selection_restricted";
+            if (code == ChallengeActionResultCodes.InvalidState) return "invalid_state";
+            if (code == ChallengeActionResultCodes.FetchUnavailable) return "fetch_unavailable";
+            if (code == ChallengeActionResultCodes.NoRerolls) return "no_rerolls";
+            if (code == ChallengeActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == ChallengeActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == ChallengeActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";
