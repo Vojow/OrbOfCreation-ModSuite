@@ -17,7 +17,6 @@ internal static class AutoBuyActionResultCodes
     public static ServiceActionResultCode OwningViewUnavailable => new(2049);
     public static ServiceActionResultCode OwningViewRelationMissing => new(2050);
     public static ServiceActionResultCode OwningViewRelationUnreadable => new(2051);
-    public static ServiceActionResultCode OwningViewRelationAmbiguous => new(2052);
     public static ServiceActionResultCode OwningViewRelationContradictory => new(2053);
     public static ServiceActionResultCode StructureUnavailable => new(2054);
     public static ServiceActionResultCode DestinationCapacityFull => new(2055);

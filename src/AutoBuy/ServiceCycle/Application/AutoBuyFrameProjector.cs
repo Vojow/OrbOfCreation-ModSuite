@@ -194,8 +194,6 @@ internal static class AutoBuyFrameProjector
                 return AutoBuyOwningViewStatus.RelationMissing;
             case WorldPurchaseViewRelationStatus.Unreadable:
                 return AutoBuyOwningViewStatus.RelationUnreadable;
-            case WorldPurchaseViewRelationStatus.Ambiguous:
-                return AutoBuyOwningViewStatus.RelationAmbiguous;
             case WorldPurchaseViewRelationStatus.Contradictory:
                 return AutoBuyOwningViewStatus.RelationContradictory;
             case WorldPurchaseViewRelationStatus.Resolved:
@@ -204,11 +202,29 @@ internal static class AutoBuyFrameProjector
                 return AutoBuyOwningViewStatus.RelationUnreadable;
         }
 
-        if (relation.ViewId == Guid.Empty || relation.ListId == Guid.Empty ||
-            !WorldLookup.TryFind(world.Views, relation.ViewId, out var view))
-            return AutoBuyOwningViewStatus.RelationUnreadable;
-        return view.Available
-            ? AutoBuyOwningViewStatus.Available
+        if (relation.RouteCount == 0)
+            return AutoBuyOwningViewStatus.RelationContradictory;
+        if (!WorldPurchaseViewRouteLookup.TryFindRange(
+                world.PurchaseViewRoutes,
+                candidateId,
+                out var routeStart,
+                out var routeCount) ||
+            routeCount != relation.RouteCount)
+            return AutoBuyOwningViewStatus.RelationContradictory;
+        var unreadable = false;
+        for (var index = 0; index < routeCount; index++)
+        {
+            var route = world.PurchaseViewRoutes[routeStart + index];
+            if (route.ViewId == Guid.Empty || route.ListId == Guid.Empty ||
+                !WorldLookup.TryFind(world.Views, route.ViewId, out var view))
+            {
+                unreadable = true;
+                continue;
+            }
+            if (view.Available) return AutoBuyOwningViewStatus.Available;
+        }
+        return unreadable
+            ? AutoBuyOwningViewStatus.RelationUnreadable
             : AutoBuyOwningViewStatus.Unavailable;
     }
 

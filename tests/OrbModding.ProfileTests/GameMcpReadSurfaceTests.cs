@@ -242,6 +242,30 @@ public sealed class GameMcpStreamableHttpProtocolTests
 public sealed class GameMcpWorldEnvelopeTests
 {
     [Fact]
+    public void WorldOverviewCountsOccupiedQueueRowsInsteadOfPublishedRows()
+    {
+        var queue = Guid.NewGuid();
+        var slots = new[]
+        {
+            new WorldActionQueueSlot(queue, 0, empty: false, Guid.NewGuid(), Guid.NewGuid(), 1, engaged: true),
+            new WorldActionQueueSlot(queue, 1, empty: true, Guid.Empty, Guid.Empty, 0, engaged: false),
+        };
+        var world = new GameWorldState
+        {
+            ActionQueueSlots = PublicationTable<WorldActionQueueSlot>.Create(slots, slots.Length),
+            CollectedAtEpoch = 1,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+        using var publisher = new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
+        publisher.Publish(world, new WorldGeneration(2));
+
+        var overview = GameMcpWorldQuery.Overview(Snapshot(publisher.ReadLatest()));
+
+        Assert.Equal(1, (int?)overview["running"]?["occupiedActionQueueSlots"]);
+        Assert.Equal(0, (int?)overview["running"]?["activeConceptAssignments"]);
+    }
+
+    [Fact]
     public void OneResponseUsesOnePublishedWorldAndCarriesCollectionEvidence()
     {
         var world = new GameWorldState

@@ -104,8 +104,6 @@ internal readonly struct AutoBuyPurchaseNarration
                 candidate, "owning view relation missing"),
             AutoBuyPurchasePreflight.OwningViewRelationUnreadable => Refusal(
                 candidate, "owning view relation unreadable"),
-            AutoBuyPurchasePreflight.OwningViewRelationAmbiguous => Refusal(
-                candidate, "owning view relation ambiguous"),
             AutoBuyPurchasePreflight.OwningViewRelationContradictory => Refusal(
                 candidate, "owning view relation contradictory"),
             AutoBuyPurchasePreflight.StructureUnavailable => Refusal(

@@ -101,7 +101,7 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
-    public void AutoBuyUiGateAdmission_MatchesCompleteNativeBindingSet()
+    public void AutoBuyAuthoredRouteAdmission_MatchesCompleteNativeBindingSet()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
 
@@ -116,18 +116,15 @@ public sealed class InstalledGameContractTests
         Assert.Equal(
             "System.Collections.Generic.List`1<StructureSO>",
             assembly.GetFieldType("StructureTypeSO", "structures"));
-        AssertMethod(
-            assembly,
-            "StructureListVariable",
-            "GetAll",
-            false,
-            "System.Collections.Generic.List`1<StructureSO>");
-        AssertMethod(
-            assembly,
-            "UpgradeListVariable",
-            "GetAll",
-            false,
-            "System.Collections.Generic.List`1<UpgradeSO>");
+        Assert.Equal(
+            "GenericListVariable`1<StructureSO>",
+            assembly.GetBaseType("StructureListVariable"));
+        Assert.Equal(
+            "GenericListVariable`1<UpgradeSO>",
+            assembly.GetBaseType("UpgradeListVariable"));
+        Assert.Equal(
+            "System.Collections.Generic.List`1<!0>",
+            assembly.GetFieldType("AbstractListVariable`1", "value"));
         AssertMethod(assembly, "ViewSO", "IsAvailable", false, "System.Boolean");
         AssertMethod(assembly, "StructureSO", "IsAvailable", false, "System.Boolean");
 

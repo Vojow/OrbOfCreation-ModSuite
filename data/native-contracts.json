@@ -5520,7 +5520,6 @@
       "parameters": [],
       "owners": [
         "Automata Auto Buy refusal diagnostics",
-        "Automata Auto Buy owning-view action admission",
         "Automata Auto Buy destination-capacity admission"
       ],
       "usages": [
@@ -15631,21 +15630,6 @@
       "place": "capture"
     },
     {
-      "id": "auto-buy.owning-view.abstract-list-type-action",
-      "assembly": "assembly-csharp",
-      "type": "AbstractListVariable",
-      "typeVisibility": "public",
-      "kind": "type",
-      "baseType": "TooltipableObject",
-      "owners": [
-        "Automata Auto Buy owning-view action admission"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
       "id": "auto-buy.owning-view.relevant-lists-capture",
       "assembly": "assembly-csharp",
       "type": "ViewSO",
@@ -15662,24 +15646,6 @@
         "reflection"
       ],
       "place": "capture"
-    },
-    {
-      "id": "auto-buy.owning-view.relevant-lists-action",
-      "assembly": "assembly-csharp",
-      "type": "ViewSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "relevantLists",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Collections.Generic.List`1<AbstractListVariable>",
-      "owners": [
-        "Automata Auto Buy owning-view action admission"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
     },
     {
       "id": "auto-buy.owning-view.available-lists-capture",
@@ -15700,24 +15666,6 @@
       "place": "capture"
     },
     {
-      "id": "auto-buy.owning-view.available-lists-action",
-      "assembly": "assembly-csharp",
-      "type": "ViewSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "availableLists",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Collections.Generic.List`1<AbstractListVariable>",
-      "owners": [
-        "Automata Auto Buy owning-view action admission"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
       "id": "auto-buy.owning-view.structure-category-members-capture",
       "assembly": "assembly-csharp",
       "type": "StructureTypeSO",
@@ -15736,52 +15684,15 @@
       "place": "capture"
     },
     {
-      "id": "auto-buy.owning-view.structure-category-members-action",
+      "id": "auto-buy.owning-view.list-membership-capture",
       "assembly": "assembly-csharp",
-      "type": "StructureTypeSO",
+      "type": "AbstractListVariable`1",
       "typeVisibility": "public",
       "kind": "field",
-      "member": "structures",
-      "visibility": "private",
-      "static": false,
-      "valueType": "System.Collections.Generic.List`1<StructureSO>",
-      "owners": [
-        "Automata Auto Buy owning-view action admission"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "auto-buy.owning-view.structure-category-action",
-      "assembly": "assembly-csharp",
-      "type": "StructureSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "structureType",
+      "member": "value",
       "visibility": "public",
       "static": false,
-      "valueType": "StructureTypeSO",
-      "owners": [
-        "Automata Auto Buy owning-view action admission"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "auto-buy.owning-view.structure-list-capture",
-      "assembly": "assembly-csharp",
-      "type": "StructureListVariable",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetAll",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Collections.Generic.List`1<StructureSO>",
-      "parameters": [],
+      "valueType": "System.Collections.Generic.List`1<!0>",
       "owners": [
         "Automata Auto Buy owning-view world publication"
       ],
@@ -15789,81 +15700,6 @@
         "reflection"
       ],
       "place": "capture"
-    },
-    {
-      "id": "auto-buy.owning-view.structure-list-action",
-      "assembly": "assembly-csharp",
-      "type": "StructureListVariable",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetAll",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Collections.Generic.List`1<StructureSO>",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Buy owning-view action admission"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "auto-buy.owning-view.upgrade-list-capture",
-      "assembly": "assembly-csharp",
-      "type": "UpgradeListVariable",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetAll",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Collections.Generic.List`1<UpgradeSO>",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Buy owning-view world publication"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "auto-buy.owning-view.upgrade-list-action",
-      "assembly": "assembly-csharp",
-      "type": "UpgradeListVariable",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetAll",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Collections.Generic.List`1<UpgradeSO>",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Buy owning-view action admission"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "auto-buy.owning-view.view-registry-action",
-      "assembly": "assembly-csharp",
-      "type": "ViewSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "All",
-      "visibility": "public",
-      "static": true,
-      "valueType": "System.Collections.Generic.List`1<ViewSO>",
-      "owners": [
-        "Automata Auto Buy owning-view action admission"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
     },
     {
       "id": "auto-buy.owning-view.view-availability-action",

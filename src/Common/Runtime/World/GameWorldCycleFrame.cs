@@ -108,6 +108,7 @@ internal sealed class GameWorldCycleFrame
     /// view's live availability.
     /// </summary>
     internal WorldRelationBuffer<WorldPurchaseViewRelation> PurchaseViewRelations { get; } = new();
+    internal WorldRelationBuffer<WorldPurchaseViewRoute> PurchaseViewRoutes { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyRecipe, WorldAlchemyRecipe> AlchemyRecipes { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyType, WorldAlchemyType> AlchemyTypes { get; } = new();
     internal WorldSampleBuffer<WorldSpellRecipe, WorldSpellRecipe> SpellRecipes { get; } = new();
@@ -330,6 +331,15 @@ internal static class GameWorldFrameDeriver
             PurchaseViewRelations = WorldScribeRelationDeriver.Build(
                 frame.PurchaseViewRelations,
                 static (left, right) => left.CandidateId.CompareTo(right.CandidateId)),
+            PurchaseViewRoutes = WorldScribeRelationDeriver.Build(
+                frame.PurchaseViewRoutes,
+                static (left, right) =>
+                {
+                    var candidate = left.CandidateId.CompareTo(right.CandidateId);
+                    if (candidate != 0) return candidate;
+                    var view = left.ViewId.CompareTo(right.ViewId);
+                    return view != 0 ? view : left.ListId.CompareTo(right.ListId);
+                }),
             PlotNodeActions = plotNodeActions,
             PassiveAbilities = frame.PassiveAbilities.Build(WorldIdentityDeriver<WorldPassiveAbility>.Shared),
             Characters = frame.Characters.Build(WorldIdentityDeriver<WorldCharacter>.Shared),

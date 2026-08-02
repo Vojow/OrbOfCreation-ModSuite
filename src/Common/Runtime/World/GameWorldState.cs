@@ -194,6 +194,9 @@ public sealed record GameWorldState
     internal PublicationTable<WorldPurchaseViewRelation> PurchaseViewRelations { get; init; } =
         PublicationTable<WorldPurchaseViewRelation>.Empty;
 
+    internal PublicationTable<WorldPurchaseViewRoute> PurchaseViewRoutes { get; init; } =
+        PublicationTable<WorldPurchaseViewRoute>.Empty;
+
     internal PublicationTable<WorldPlotNodeAction> PlotNodeActions { get; init; } =
         PublicationTable<WorldPlotNodeAction>.Empty;
 

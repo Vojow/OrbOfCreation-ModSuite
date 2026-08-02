@@ -2,6 +2,7 @@ using System;
 using OrbAutomata;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.World;
 using OrbModding.Tests.Runtime.World;
 using Xunit;
@@ -93,6 +94,123 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
 
         Assert.True(candidate.IsAvailable);
         Assert.Equal(AutoBuyOwningViewStatus.Unavailable, candidate.OwningView);
+    }
+
+    [Fact]
+    public void Project_ReadsAuthoredListMembershipInsteadOfTheGlobalTypeRegistry()
+    {
+        global::ViewSO.All.Clear();
+        var resource = Resource();
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        PriceStructure(structure, resource, new BigDouble(1.0, 0));
+        global::StructureSO.All.Add(structure);
+
+        var containingList = new global::StructureListVariable();
+        containingList.value.Add(structure);
+        var unrelatedList = new global::StructureListVariable();
+        var containingView = new global::ViewSO { available = true };
+        containingView.relevantLists.Add(containingList);
+        var unrelatedView = new global::ViewSO { available = true };
+        unrelatedView.relevantLists.Add(unrelatedList);
+        global::ViewSO.All.Add(containingView);
+        global::ViewSO.All.Add(unrelatedView);
+
+        Assert.Same(global::StructureSO.All, unrelatedList.GetAll());
+        Assert.Empty(unrelatedList.value);
+        var candidate = Assert.Single(
+            Project(Config(structures: true, upgrades: false)).Candidates.ToArray());
+
+        Assert.Equal(AutoBuyOwningViewStatus.Available, candidate.OwningView);
+    }
+
+    [Theory]
+    [InlineData(true, true, (int)AutoBuyOwningViewStatus.Available, 1)]
+    [InlineData(true, false, (int)AutoBuyOwningViewStatus.Available, 1)]
+    [InlineData(false, false, (int)AutoBuyOwningViewStatus.Unavailable, 0)]
+    public void CollectorProjectorEvaluator_AppliesAnyVisibleRouteAdmission(
+        bool firstVisible,
+        bool secondVisible,
+        int expectedStatus,
+        int expectedActions)
+    {
+        global::ViewSO.All.Clear();
+        var resource = Resource();
+        resource.quantity = new BigDouble(1.0, 6);
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        PriceStructure(structure, resource, new BigDouble(1.0, 0));
+        global::StructureSO.All.Add(structure);
+        AddStructureRoute(structure, firstVisible);
+        AddStructureRoute(structure, secondVisible);
+
+        var config = Config(structures: true, upgrades: false);
+        var frame = Project(config);
+
+        Assert.Equal((AutoBuyOwningViewStatus)expectedStatus, Assert.Single(frame.Candidates.ToArray()).OwningView);
+        Assert.Equal(expectedActions, PlannedActionCount(in frame, in config));
+    }
+
+    [Fact]
+    public void CollectorProjectorEvaluator_ZeroRoutesFailsClosedAsMissing()
+    {
+        global::ViewSO.All.Clear();
+        var resource = Resource();
+        resource.quantity = new BigDouble(1.0, 6);
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        PriceStructure(structure, resource, new BigDouble(1.0, 0));
+        global::StructureSO.All.Add(structure);
+
+        var config = Config(structures: true, upgrades: false);
+        var frame = Project(config);
+
+        Assert.Equal(
+            AutoBuyOwningViewStatus.RelationMissing,
+            Assert.Single(frame.Candidates.ToArray()).OwningView);
+        Assert.Equal(0, PlannedActionCount(in frame, in config));
+    }
+
+    [Fact]
+    public void CollectorProjectorEvaluator_DuplicateMembershipFailsClosedAsContradictory()
+    {
+        global::ViewSO.All.Clear();
+        var resource = Resource();
+        resource.quantity = new BigDouble(1.0, 6);
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        PriceStructure(structure, resource, new BigDouble(1.0, 0));
+        global::StructureSO.All.Add(structure);
+        var list = new global::StructureListVariable();
+        list.value.Add(structure);
+        list.value.Add(structure);
+        var view = new global::ViewSO { available = true };
+        view.relevantLists.Add(list);
+        global::ViewSO.All.Add(view);
+
+        var config = Config(structures: true, upgrades: false);
+        var frame = Project(config);
+
+        Assert.Equal(
+            AutoBuyOwningViewStatus.RelationContradictory,
+            Assert.Single(frame.Candidates.ToArray()).OwningView);
+        Assert.Equal(0, PlannedActionCount(in frame, in config));
     }
 
     [Fact]
@@ -507,6 +625,26 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
         var resource = new global::ResourceSO { uuid = Guid.NewGuid().ToString() };
         global::ResourceSO.All.Add(resource);
         return resource;
+    }
+
+    private static void AddStructureRoute(global::StructureSO structure, bool available)
+    {
+        var list = new global::StructureListVariable();
+        list.value.Add(structure);
+        var view = new global::ViewSO { available = available };
+        view.relevantLists.Add(list);
+        global::ViewSO.All.Add(view);
+    }
+
+    private static int PlannedActionCount(
+        in AutoBuyCycleFrame frame,
+        in SuiteRuntimeConfiguration config)
+    {
+        var store = new ReusableActionStore<AutoBuyCycleAction>();
+        store.BeginWrite();
+        var writer = new ServiceActionWriter<AutoBuyCycleAction>(store);
+        AutoBuyCycleEvaluator.Evaluate(in frame, in config, writer, out _);
+        return store.Count;
     }
 
     private static AutoBuyCycleFrame Project(SuiteRuntimeConfiguration config) =>

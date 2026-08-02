@@ -102,7 +102,7 @@ public sealed class AutoBuyCycleEvaluatorTests
         AutoBuyServiceProjection.Write(in state, output);
 
         var projection = output.CaptureSnapshot();
-        Assert.Equal(15, projection.Count);
+        Assert.Equal(14, projection.Count);
         Assert.Collection(
             Enumerable.Range(0, projection.Count).Select(projection.GetEntry),
             entry => AssertProjection(entry, AutoBuyServiceProjection.CapturedCandidatesKey, 3),
@@ -118,8 +118,10 @@ public sealed class AutoBuyCycleEvaluatorTests
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedOwningViewUnavailableKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedOwningViewRelationMissingKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedOwningViewRelationUnreadableKey, 0),
-            entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedOwningViewRelationAmbiguousKey, 0),
             entry => AssertProjection(entry, AutoBuyServiceProjection.ExcludedOwningViewRelationContradictoryKey, 0));
+        Assert.DoesNotContain(
+            Enumerable.Range(0, projection.Count).Select(projection.GetEntry),
+            entry => entry.Key.Value == AutoBuyServiceProjection.RetiredOwningViewRelationAmbiguousKey);
     }
 
     /// <summary>
@@ -160,7 +162,6 @@ public sealed class AutoBuyCycleEvaluatorTests
     [InlineData((int)AutoBuyOwningViewStatus.Unavailable, (int)AutoBuyExclusion.OwningViewUnavailable)]
     [InlineData((int)AutoBuyOwningViewStatus.RelationMissing, (int)AutoBuyExclusion.OwningViewRelationMissing)]
     [InlineData((int)AutoBuyOwningViewStatus.RelationUnreadable, (int)AutoBuyExclusion.OwningViewRelationUnreadable)]
-    [InlineData((int)AutoBuyOwningViewStatus.RelationAmbiguous, (int)AutoBuyExclusion.OwningViewRelationAmbiguous)]
     [InlineData((int)AutoBuyOwningViewStatus.RelationContradictory, (int)AutoBuyExclusion.OwningViewRelationContradictory)]
     public void Planner_ExcludesOwningViewFailuresWithTheirNamedReason(
         int owningViewValue,
