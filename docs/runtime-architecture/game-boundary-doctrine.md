@@ -244,6 +244,14 @@ glyph layout is chosen before loadout add and baked into the new spell. Casting 
 are global dials, not per-spell state. Whenever the MCP cannot bind the exact visible sibling, it
 returns `contract_unavailable` rather than substituting a nearby native path.
 
+The current spell-loadout add boundary is the concrete fail-closed case. The native button admits a
+candidate only after checking usage requirements, computed usage cost, unique-spell compatibility,
+loadout budget, and non-level glyph requirements. Until that complete candidate binding set is in
+the installed manifest, the recipe row reports `loadoutAdd.available=false` with
+`reasonCode=contract_unavailable`, and the shared GameAction refuses before selection, payment, or
+creation. Core-component spell discovery remains independently bound; unused creation members do
+not poison its lifecycle completeness set.
+
 Every MCP gameplay action still uses its capability's canonical GameAction and live Unity-main-thread
 revalidation. A failed player-driven attempt returns its exact failure and leaves no MCP-owned
 lifecycle quarantine; the next request revalidates live again. This does not relax automation safety

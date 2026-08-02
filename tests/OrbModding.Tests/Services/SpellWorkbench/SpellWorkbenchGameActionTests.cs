@@ -80,7 +80,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     }
 
     [Fact]
-    public void LoadoutAddBakesTheChosenAugmentLayoutIntoTheNewSpell()
+    public void LoadoutAddRefusesBeforeMutationUntilEveryPlayerVisibleAdmissionGateIsBound()
     {
         var (recipe, _, _) = Recipe(discovered: true);
         var resource = new ResourceSO { quantity = new BigDouble(10) };
@@ -102,54 +102,13 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
             Array.Empty<SpellWorkbenchGlyphStack>(),
             new[] { new SpellWorkbenchGlyphStack(augment.GetGuid(), 2) }));
 
-        Assert.True(result.Verified, result.Reason);
-        var spell = Assert.Single(SpellManager.instance!.activeSpells.value);
-        Assert.Equal(2, spell.GetQuantityOfGlyph(augment));
-        Assert.Equal(1, recipe.baseUsageCost.PerformCalls);
-        Assert.Equal(7d, resource.GetTrueQuantity().ToDouble());
-    }
-
-    [Fact]
-    public void LoadoutAddAcceptsAnExplicitEmptyGlyphLayoutWithoutUiSelection()
-    {
-        var (recipe, _, _) = Recipe(discovered: true);
-        using var action = Action();
-
-        var result = action.Submit(new SpellWorkbenchAction(
-            SpellWorkbenchActionKind.CreateWithLayout,
-            recipe.GetGuid(),
-            Epoch,
-            Array.Empty<SpellWorkbenchGlyphStack>(),
-            Array.Empty<SpellWorkbenchGlyphStack>()));
-
-        Assert.True(result.Verified, result.Reason);
-        Assert.Empty(Assert.Single(SpellManager.instance!.activeSpells.value).GetAugmentGlyphs());
-    }
-
-    [Fact]
-    public void LoadoutAddRefusesMoreGlyphCopiesThanTheLiveUsableCount()
-    {
-        var (recipe, _, _) = Recipe(discovered: true);
-        var augment = new GlyphSO
-        {
-            DisplayName = "Bright",
-            NativeAvailable = true,
-            augmentsSpells = true,
-            maxUsages = new ValueModifierRecord(new BigDouble(1)),
-        };
-        IdScriptableObject.RuntimeLookup[augment.GetGuid()] = augment;
-        using var action = Action();
-
-        var result = action.Submit(new SpellWorkbenchAction(
-            SpellWorkbenchActionKind.CreateWithLayout,
-            recipe.GetGuid(),
-            Epoch,
-            Array.Empty<SpellWorkbenchGlyphStack>(),
-            new[] { new SpellWorkbenchGlyphStack(augment.GetGuid(), 2) }));
-
-        Assert.Equal(SpellWorkbenchPreflight.SelectionUnavailable, result.Preflight);
+        Assert.Equal(SpellWorkbenchPreflight.ContractUnavailable, result.Preflight);
+        Assert.Contains("complete player-visible admission contract is not bound", result.Reason);
         Assert.Empty(SpellManager.instance!.activeSpells.value);
-        Assert.Contains("live usable count is 1", result.Reason);
+        Assert.Empty(SpellManager.instance.selectedCoreGlyphs.value);
+        Assert.Empty(SpellManager.instance.selectedAugmentGlyphs.value);
+        Assert.Equal(0, recipe.baseUsageCost.PerformCalls);
+        Assert.Equal(10d, resource.GetTrueQuantity().ToDouble());
     }
 
     [Fact]
@@ -164,62 +123,6 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
             CoreLayout(first, second), Array.Empty<SpellWorkbenchGlyphStack>()));
 
         Assert.True(result.Verified);
-    }
-
-    [Fact]
-    public void CreateVerifiesANewRuntimeInstanceOfTheExactRecipe()
-    {
-        var (recipe, _, _) = Recipe(discovered: true);
-        using var action = Action();
-
-        var result = action.Submit(new SpellWorkbenchAction(
-            SpellWorkbenchActionKind.CreateWithLayout, recipe.GetGuid(), Epoch,
-            Array.Empty<SpellWorkbenchGlyphStack>(), Array.Empty<SpellWorkbenchGlyphStack>()));
-
-        Assert.True(result.Verified);
-        var spell = Assert.Single(SpellManager.instance!.activeSpells.value);
-        Assert.Same(recipe, spell.get_reference());
-        Assert.NotEqual(Guid.Empty, spell.guidContainer.guid);
-    }
-
-    [Fact]
-    public void MissingCreateOutcomeFaultsThisAttemptAndTheNextCallRevalidates()
-    {
-        var (recipe, priorCore, _) = Recipe(discovered: true);
-        var priorAugment = new GlyphSO { augmentsSpells = true };
-        SpellManager.instance!.selectedCoreGlyphs.value.Add(priorCore);
-        SpellManager.instance.selectedAugmentGlyphs.value.Add(priorAugment);
-        using var action = Action();
-        SpellManager.instance!.SuppressCreation = true;
-
-        var failed = action.Submit(new SpellWorkbenchAction(
-            SpellWorkbenchActionKind.CreateWithLayout, recipe.GetGuid(), Epoch,
-            Array.Empty<SpellWorkbenchGlyphStack>(), Array.Empty<SpellWorkbenchGlyphStack>()));
-        var retry = action.Submit(new SpellWorkbenchAction(
-            SpellWorkbenchActionKind.CreateWithLayout, recipe.GetGuid(), Epoch,
-            Array.Empty<SpellWorkbenchGlyphStack>(), Array.Empty<SpellWorkbenchGlyphStack>()));
-
-        Assert.Equal(SpellWorkbenchPreflight.VerificationFailed, failed.Preflight);
-        Assert.Equal(SpellWorkbenchPreflight.VerificationFailed, retry.Preflight);
-        Assert.True(failed.Evidence.PaymentInvoked);
-        Assert.True(retry.Evidence.PaymentInvoked);
-        Assert.Empty(SpellManager.instance.activeSpells.value);
-        Assert.Equal(new[] { priorCore }, SpellManager.instance.selectedCoreGlyphs.value);
-        Assert.Equal(new[] { priorAugment }, SpellManager.instance.selectedAugmentGlyphs.value);
-    }
-
-    [Fact]
-    public void EmptyRuntimeIdentityDoesNotVerifyCreation()
-    {
-        var (recipe, _, _) = Recipe(discovered: true);
-        using var action = Action();
-        SpellManager.instance!.CreateEmptyIdentity = true;
-
-        var result = action.Submit(new SpellWorkbenchAction(
-            SpellWorkbenchActionKind.CreateWithLayout, recipe.GetGuid(), Epoch,
-            Array.Empty<SpellWorkbenchGlyphStack>(), Array.Empty<SpellWorkbenchGlyphStack>()));
-
-        Assert.Equal(SpellWorkbenchPreflight.VerificationFailed, result.Preflight);
     }
 
     [Theory]

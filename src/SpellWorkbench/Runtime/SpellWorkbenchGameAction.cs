@@ -70,8 +70,7 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             return action.Kind switch
             {
                 SpellWorkbenchActionKind.Discover => Discover(in action, native, manager, recipe),
-                SpellWorkbenchActionKind.CreateWithLayout =>
-                    CreateWithLayout(in action, native, manager, recipe),
+                SpellWorkbenchActionKind.CreateWithLayout => CreateWithLayout(),
                 _ => SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.ContractUnavailable,
                     "Unknown spell workbench action kind " + (int)action.Kind + "."),
             };
@@ -207,140 +206,13 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         }
     }
 
-    private SpellWorkbenchSubmission CreateWithLayout(
-        in SpellWorkbenchAction action,
-        SpellWorkbenchNativeBindings native,
-        object manager,
-        object recipe)
-    {
-        if (!TryResolveGlyphLayout(
-                action.AugmentGlyphs, expectAugment: true, native,
-                out var augments, out var augmentReason))
-            return SpellWorkbenchSubmission.Reject(
-                SpellWorkbenchPreflight.SelectionUnavailable, augmentReason);
-        var authored = native.ReadRecipeGlyphs(recipe);
-        var core = new List<object>(authored.Count);
-        for (var index = 0; index < authored.Count; index++)
-        {
-            var glyph = authored[index];
-            if (glyph is null || glyph.GetType() != native.GlyphType ||
-                native.IsGlyphAugment(glyph) || !native.IsGlyphAvailable(glyph))
-                return SpellWorkbenchSubmission.Reject(
-                    SpellWorkbenchPreflight.RecipeUnavailable,
-                    "The recipe's authored core glyphs are not currently usable.");
-            core.Add(glyph);
-        }
-        if (!native.IsDiscovered(recipe))
-            return SpellWorkbenchSubmission.Reject(
-                SpellWorkbenchPreflight.DiscoveryUnavailable,
-                "Loadout add requires an already discovered recipe.");
-        if (!native.IsCreatable(recipe))
-            return SpellWorkbenchSubmission.Reject(
-                SpellWorkbenchPreflight.RecipeUnavailable,
-                "SpellRecipeSO.IsCreatable() refused the requested recipe.");
-        var active = native.ReadActive(manager);
-        if (!native.HasEmpty(active))
-            return SpellWorkbenchSubmission.Reject(
-                SpellWorkbenchPreflight.LoadoutFull,
-                "The native active-spell list has no empty slot.");
-        var combined = new List<object>(core.Count + augments.Count);
-        combined.AddRange(core);
-        combined.AddRange(augments);
-        var nativeCombined = NativeGlyphList(native, combined);
-        var resolved = native.ResolveRecipe(manager, nativeCombined);
-        if (resolved is null || resolved.GetType() != native.RecipeType ||
-            native.ReadIdentity(resolved) != action.SpellRecipeId)
-            return SpellWorkbenchSubmission.Reject(
-                SpellWorkbenchPreflight.WrongSelection,
-                "The authored core plus requested augment layout did not resolve to the requested recipe.");
-        var createCost = native.GetCreateCost(manager, nativeCombined);
-        if (createCost is null || !native.HasEnough(createCost))
-            return SpellWorkbenchSubmission.Reject(
-                SpellWorkbenchPreflight.Unaffordable,
-                "GetSpellCreateCost().HasEnough() refused the requested layout.");
-
-        var before = Capture(native, manager, recipe);
-        if (!TryCapturePermit(out var permitReason))
-            return SpellWorkbenchSubmission.Reject(
-                SpellWorkbenchPreflight.MutationPermitUnavailable, permitReason);
-
-        var nativeCalls = 0;
-        var stage = SpellWorkbenchNativeStage.ClearSelection;
-        var previousCore = Copy(native.ReadGlyphValues(native.ReadCore(manager)));
-        var previousAugments = Copy(native.ReadGlyphValues(native.ReadAugments(manager)));
-        try
-        {
-            ApplySelection(native, manager, core, augments, ref nativeCalls);
-            stage = SpellWorkbenchNativeStage.ApplySelection;
-            var selected = native.ResolveRecipe(
-                manager, native.ReadGlyphValues(native.ReadCore(manager)));
-            if (selected is null || selected.GetType() != native.RecipeType ||
-                native.ReadIdentity(selected) != action.SpellRecipeId)
-            {
-                if (RestoreSelection(
-                        native, manager, previousCore, previousAugments, ref nativeCalls))
-                    return SpellWorkbenchSubmission.Reject(
-                        SpellWorkbenchPreflight.WrongSelection,
-                        "The authored core layout no longer resolves to the requested recipe.");
-                var divergent = CaptureBestEffort(native, manager, recipe, in before);
-                return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
-                    SpellWorkbenchNativeStage.ApplySelection,
-                    NativeMutationOutcome.PostconditionFailed, nativeCalls,
-                    in before, in divergent,
-                    "The loadout selection diverged and its prior UI state could not be restored.");
-            }
-            stage = SpellWorkbenchNativeStage.Payment;
-            native.PerformCost(createCost);
-            nativeCalls++;
-            stage = SpellWorkbenchNativeStage.Create;
-            native.Create(manager);
-            nativeCalls++;
-            var after = Capture(native, manager, recipe);
-            return HasNewInstance(
-                    before.TargetSpellInstanceIds, after.TargetSpellInstanceIds)
-                ? Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
-                    in before, in after,
-                    "A new spell with the selected augment layout is equipped.")
-                : FaultAfterMissingCreate(
-                    in action, native, manager, recipe, nativeCalls,
-                    previousCore, previousAugments, in before);
-        }
-        catch (Exception ex) when (IsExpected(ex))
-        {
-            var after = CaptureBestEffort(native, manager, recipe, in before);
-            if (HasNewInstance(before.TargetSpellInstanceIds, after.TargetSpellInstanceIds))
-                return Verified(SpellWorkbenchNativeStage.Verification, nativeCalls,
-                    in before, in after,
-                    "The layout-backed spell was added before the native fault.");
-            RestoreSelection(
-                native, manager, previousCore, previousAugments, ref nativeCalls);
-            after = CaptureBestEffort(native, manager, recipe, in before);
-            return FaultAfterCommit(in action, SpellWorkbenchPreflight.PostCommitFault,
-                stage, NativeMutationOutcome.ExecutionThrew, nativeCalls,
-                in before, in after,
-                "Loadout add faulted after its payment boundary but before its outcome was observable: " +
-                ex.GetBaseException().Message);
-        }
-    }
-
-    private SpellWorkbenchSubmission FaultAfterMissingCreate(
-        in SpellWorkbenchAction action,
-        SpellWorkbenchNativeBindings native,
-        object manager,
-        object recipe,
-        int nativeCalls,
-        List<object> previousCore,
-        List<object> previousAugments,
-        in SpellWorkbenchState before)
-    {
-        RestoreSelection(native, manager, previousCore, previousAugments, ref nativeCalls);
-        var after = CaptureBestEffort(native, manager, recipe, in before);
-        return FaultAfterCommit(in action, SpellWorkbenchPreflight.VerificationFailed,
-            SpellWorkbenchNativeStage.Verification,
-            NativeMutationOutcome.PostconditionFailed, nativeCalls,
-            in before, in after,
-            "The creation payment boundary ran but the requested spell instance was not added.");
-    }
+    private static SpellWorkbenchSubmission CreateWithLayout() =>
+        SpellWorkbenchSubmission.Reject(
+            SpellWorkbenchPreflight.ContractUnavailable,
+            "Spell loadout add is unavailable because the complete player-visible admission " +
+            "contract is not bound: usage requirements, computed usage cost, unique-spell " +
+            "compatibility, loadout budget, and non-level glyph requirements must all be " +
+            "revalidated before mutation.");
 
     private bool TryResolveGlyphLayout(
         SpellWorkbenchGlyphStack[] layout,
@@ -511,27 +383,6 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         return false;
     }
 
-    private static bool Same(Guid[] left, Guid[] right)
-    {
-        if (left.Length != right.Length) return false;
-        for (var index = 0; index < left.Length; index++) if (left[index] != right[index]) return false;
-        return true;
-    }
-
-    private static bool HasNewInstance(Guid[] before, Guid[] after)
-    {
-        if (after.Length <= before.Length) return false;
-        for (var index = 0; index < after.Length; index++)
-        {
-            if (after[index] == Guid.Empty) continue;
-            var found = false;
-            for (var prior = 0; prior < before.Length; prior++)
-                if (after[index] == before[prior]) { found = true; break; }
-            if (!found) return true;
-        }
-        return false;
-    }
-
     private static SpellWorkbenchSubmission Verified(SpellWorkbenchNativeStage stage,
         int nativeCalls, in SpellWorkbenchState before, in SpellWorkbenchState after, string reason)
     {
@@ -548,11 +399,8 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
     {
         var exactReason = $"Spell workbench action faulted after {stage} on " +
             $"recipe {EntityIdentityFormatter.Format(action.SpellRecipeId)}: {reason}";
-        var paymentInvoked =
-            (action.Kind == SpellWorkbenchActionKind.Discover &&
-                stage >= SpellWorkbenchNativeStage.Discover) ||
-            (action.Kind == SpellWorkbenchActionKind.CreateWithLayout &&
-                stage >= SpellWorkbenchNativeStage.Payment);
+        var paymentInvoked = action.Kind == SpellWorkbenchActionKind.Discover &&
+            stage >= SpellWorkbenchNativeStage.Discover;
         var evidence = new SpellWorkbenchEvidence(
             true, in before, in after, paymentInvoked);
         return new SpellWorkbenchSubmission(preflight, stage, outcome,
