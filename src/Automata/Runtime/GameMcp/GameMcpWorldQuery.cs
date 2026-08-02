@@ -1593,8 +1593,6 @@ internal static class GameMcpWorldQuery
         GameWorldState world,
         in WorldSpellRecipe recipe)
     {
-        var selected = MatchesSelection(recipe.CoreGlyphs, world.SpellWorkbench.CoreGlyphs) &&
-            world.SpellWorkbench.AugmentGlyphs.Count == 0;
         var result = new JObject
         {
             ["entityId"] = recipe.EntityId.ToString("D"),
@@ -1602,7 +1600,6 @@ internal static class GameMcpWorldQuery
             ["nativeType"] = "SpellRecipeSO",
             ["discovered"] = recipe.Discovered,
             ["masteryLevel"] = recipe.MasteryLevel,
-            ["selected"] = selected,
         };
         if (recipe.CoreGlyphs.Count > 0)
         {
@@ -1636,14 +1633,6 @@ internal static class GameMcpWorldQuery
 
         result["loadBudget"] = ProjectSpellLoadBudget(world);
 
-        if (!selected && recipe.CoreGlyphs.Count > 0)
-        {
-            result["select"] = new JObject
-            {
-                ["available"] = true,
-            };
-        }
-
         var next = new JObject();
         var costs = recipe.Discovered
             ? ProjectSpellCosts(world, world.SpellWorkbench.CreationCosts)
@@ -1652,13 +1641,27 @@ internal static class GameMcpWorldQuery
         var affordable = recipe.Discovered
             ? world.SpellWorkbench.CreationAffordable
             : recipe.DiscoveryAffordable;
-        next["available"] = selected && affordable &&
-            (!recipe.Discovered || world.SpellWorkbench.HasEmptySlot);
-        if (!selected) next["reasonCode"] = "selection_required";
-        else if (!affordable) next["reasonCode"] = "unaffordable";
+        next["affordable"] = affordable;
+        next["available"] = affordable &&
+            (recipe.Discovered
+                ? world.SpellWorkbench.HasEmptySlot
+                : recipe.CoreGlyphs.Count > 0 && recipe.Discovery.Visible &&
+                    recipe.Discovery.CanDiscover);
+        if (!affordable) next["reasonCode"] = "unaffordable";
         else if (recipe.Discovered && !world.SpellWorkbench.HasEmptySlot)
             next["reasonCode"] = "loadout_full";
-        result[recipe.Discovered ? "create" : "discover"] = next;
+        else if (!recipe.Discovered && recipe.CoreGlyphs.Count == 0)
+            next["reasonCode"] = "components_unavailable";
+        else if (!recipe.Discovered && !recipe.Discovery.Visible)
+            next["reasonCode"] = "not_visible";
+        else if (!recipe.Discovered && !recipe.Discovery.CanDiscover)
+            next["reasonCode"] = "discovery_unavailable";
+        if (!recipe.Discovered)
+        {
+            next["surface"] = "spellcraft";
+            next["components"] = ProjectComponentReferences(recipe.CoreGlyphs);
+        }
+        result[recipe.Discovered ? "loadoutAdd" : "discover"] = next;
         return result.Freeze();
     }
 
@@ -1795,6 +1798,19 @@ internal static class GameMcpWorldQuery
             {
                 ["componentId"] = components[index].Uuid.ToString("D"),
                 ["count"] = components[index].Count,
+            });
+        return result;
+    }
+
+    private static JArray ProjectComponentReferences(
+        PublicationTable<WorldSpellRecipeGlyph> components)
+    {
+        var result = new JArray();
+        for (var index = 0; index < components.Count; index++)
+            result.Add(new JObject
+            {
+                ["componentId"] = components[index].GlyphId.ToString("D"),
+                ["count"] = 1,
             });
         return result;
     }
@@ -2149,18 +2165,6 @@ internal static class GameMcpWorldQuery
             });
         }
         return result;
-    }
-
-    private static bool MatchesSelection(
-        PublicationTable<WorldSpellRecipeGlyph> recipe,
-        PublicationTable<WorldSpellWorkbenchGlyph> selected)
-    {
-        if (recipe.Count == 0 || recipe.Count != selected.Count) return false;
-        for (var index = 0; index < recipe.Count; index++)
-        {
-            if (recipe[index].GlyphId != selected[index].GlyphId) return false;
-        }
-        return true;
     }
 
     private static GameMcpValue ProjectResource(in WorldResource resource)

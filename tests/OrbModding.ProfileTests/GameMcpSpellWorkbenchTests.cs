@@ -67,11 +67,10 @@ public sealed class GameMcpSpellWorkbenchTests
     }
 
     [Fact]
-    public void ListAndGetExposeTheSameNamedPreDecisionEconomicsBeforeSelection()
+    public void ListAndGetExposeTheSameComponentFirstDiscoveryDecision()
     {
         var context = GameMcpTestHarness.Context(World(
             discovered: false,
-            selected: false,
             discoveryAffordable: true,
             creationAffordable: true,
             hasEmptySlot: true));
@@ -88,9 +87,18 @@ public sealed class GameMcpSpellWorkbenchTests
             exact.Properties().Select(property => property.Name));
         Assert.Equal("Gather Knowledge", (string?)listed["name"]);
         Assert.Equal("spell-recipes", (string?)listed["category"]);
-        Assert.True((bool)listed["select"]!["available"]!);
-        Assert.False((bool)listed["discover"]!["available"]!);
-        Assert.Equal("selection_required", (string?)listed["discover"]!["reasonCode"]);
+        Assert.Null(listed["selected"]);
+        Assert.Null(listed["select"]);
+        Assert.True((bool)listed["discover"]!["available"]!);
+        Assert.True((bool)listed["discover"]!["affordable"]!);
+        Assert.Equal("spellcraft", (string?)listed["discover"]!["surface"]);
+        Assert.Equal(
+            new[] { "Brew", "Insight" },
+            listed["discover"]!["components"]!.Values<JObject>()
+                .Select(component => (string?)component!["component"]!["name"]));
+        Assert.All(
+            listed["discover"]!["components"]!.Values<JObject>(),
+            component => Assert.Equal(1, (int)component!["count"]!));
         var glyphs = listed["coreGlyphs"]!.Values<JObject>().ToArray();
         Assert.Equal(new[] { "Brew", "Insight" },
             glyphs.Select(glyph => (string?)glyph!["glyph"]!["name"]));
@@ -103,11 +111,10 @@ public sealed class GameMcpSpellWorkbenchTests
     }
 
     [Fact]
-    public void SelectedRecipePublishesTheExactPaidStepAndCurrentHoldings()
+    public void DiscoveredRecipePublishesTheExactLoadoutAddDecisionAndCurrentHoldings()
     {
         var context = GameMcpTestHarness.Context(World(
             discovered: true,
-            selected: true,
             discoveryAffordable: true,
             creationAffordable: true,
             hasEmptySlot: true,
@@ -117,10 +124,11 @@ public sealed class GameMcpSpellWorkbenchTests
             context, "spell-recipes", RecipeId.ToString("D"), "SpellRecipeSO"));
         var row = response["row"]!;
 
-        Assert.True((bool)row["selected"]!);
+        Assert.Null(row["selected"]);
         Assert.Null(row["select"]);
-        Assert.True((bool)row["create"]!["available"]!);
-        var cost = Assert.Single(row["create"]!["costs"]!.Values<JObject>())!;
+        Assert.True((bool)row["loadoutAdd"]!["available"]!);
+        Assert.True((bool)row["loadoutAdd"]!["affordable"]!);
+        var cost = Assert.Single(row["loadoutAdd"]!["costs"]!.Values<JObject>())!;
         Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
         Assert.Equal("7.5e2", (string?)cost["cost"]);
         Assert.Equal("9e6", (string?)cost["amount"]);
@@ -161,7 +169,6 @@ public sealed class GameMcpSpellWorkbenchTests
         terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectPostState(
             GameMcpTestHarness.Context(World(
                 discovered: true,
-                selected: false,
                 discoveryAffordable: true,
                 creationAffordable: true,
                 hasEmptySlot: true)),
@@ -172,12 +179,12 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Equal(new[]
             {
                 "status", "uuid", "name", "internalName", "category", "nativeType", "discovered",
-                "masteryLevel", "selected", "coreGlyphs", "loadBudget", "select", "create",
+                "masteryLevel", "coreGlyphs", "loadBudget", "loadoutAdd",
             },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
         Assert.Equal("Gather Knowledge", (string?)success["name"]);
-        Assert.Equal("selection_required", (string?)success["create"]!["reasonCode"]);
+        Assert.True((bool)success["loadoutAdd"]!["available"]!);
         Assert.Null(success["preflight"]);
         Assert.Null(success["before"]);
         Assert.Null(success["after"]);
@@ -212,7 +219,6 @@ public sealed class GameMcpSpellWorkbenchTests
     {
         var world = World(
             discovered: false,
-            selected: false,
             discoveryAffordable: true,
             creationAffordable: true,
             hasEmptySlot: true);
@@ -239,7 +245,7 @@ public sealed class GameMcpSpellWorkbenchTests
 
         Assert.True(ownership.TryBeginGameMcpOperation(
             GameMcpCommandKind.SpellWorkbench,
-            "select",
+            "discover",
             out var scope,
             out var reason), reason);
         using (scope)
@@ -270,7 +276,6 @@ public sealed class GameMcpSpellWorkbenchTests
 
     private static GameWorldState World(
         bool discovered,
-        bool selected,
         bool discoveryAffordable,
         bool creationAffordable,
         bool hasEmptySlot,
@@ -288,13 +293,6 @@ public sealed class GameMcpSpellWorkbenchTests
                 new BigDouble(4.4d, 3),
                 new BigDouble(9d, 6)),
         });
-        var selectedGlyphs = selected
-            ? PublicationTable<WorldSpellWorkbenchGlyph>.Create(new[]
-            {
-                new WorldSpellWorkbenchGlyph(0, FirstGlyphId),
-                new WorldSpellWorkbenchGlyph(1, SecondGlyphId),
-            })
-            : PublicationTable<WorldSpellWorkbenchGlyph>.Empty;
         var creationCosts = PublicationTable<WorldSpellWorkbenchCost>.Create(new[]
         {
             new WorldSpellWorkbenchCost(
@@ -344,7 +342,7 @@ public sealed class GameMcpSpellWorkbenchTests
                 Glyph(FirstGlyphId, 7),
             }),
             SpellWorkbench = new WorldSpellWorkbench(
-                selectedGlyphs,
+                PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
                 PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
                 creationCosts,
                 creationAffordable,
