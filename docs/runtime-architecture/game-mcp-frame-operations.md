@@ -88,6 +88,10 @@ batch.
 7. Parameterized UI/native reads run only in their named operation. Multi-frame UI operations
    (navigation and end-of-frame framebuffer capture) retain their original pinned context and own
    completion until their terminal callback.
+8. A committed gameplay operation retains terminal ownership while one shared settlement coroutine
+   waits up to one second for a world strictly newer than its admission world. All gameplay tools
+   use the same readiness predicate and command-to-world projector; only event-driven discovery
+   offers strengthen readiness by requiring their requested mode/offer transition to be published.
 
 ### Cancellation and shutdown
 
@@ -161,7 +165,7 @@ claimed operation on Unity's main thread; it is never retained as an MCP snapsho
 | Trace health fields: writer state/result, accepted/written/discarded records, bytes, written/retained segments, pending/peak blocks, artifact, fault site/message, writer revision | Request-time | One `trace_health` operation reads `DecisionJournalStatusRegistry`; scope is writer health only. No event stream or gameplay trace is mirrored. |
 | Tooltip catalog paths; compact typed `TooltipNode` kind/text/children; semantic alternate-tree deltas; nested/computed/inspected panels | Request-time | `game_tooltips`/`game_tooltip` only, through lifecycle-bound tooltip accessors on Unity. Rich-text and projection ceremony are removed after the one requested read; unrelated operations make zero tooltip calls. |
 | Screen tab/subtab catalog, independent subtab-strip active states, navigation destination/candidates, exact probe value, Continue scene/runtime result, framebuffer PNG and optional generated save path | Request-time | Only the matching screen/navigation/probe/continue/screenshot operation. These are UI/diagnostic facts, never shared-world state. |
-| Response status, one read generation, requested rows or mutation post-state, and exact failure evidence | Request-time | Typed terminal document on Unity; encoded once by the waiting HTTP worker. Action generations, success codes/reasons, payment stanzas, counters, null/empty/default fields, timestamps, and mailbox fields are not protocol data. |
+| Response status, one read generation, requested rows or mutation post-state, and exact failure evidence | Request-time | Typed terminal document on Unity; encoded once by the waiting HTTP worker. A committed mutation stamps only the strictly newer world generation that supplied its post-state. Success codes/reasons, payment stanzas, counters, null/default fields, timestamps, and mailbox fields are not protocol data; explicitly written empty decision collections remain present. |
 
 ### Why authored collection is no longer ordinary work
 
@@ -177,20 +181,23 @@ live state between captures; authored rows survive and live verdicts change.
 The listener and an empty inbox acquire no action-family lease. A claimed gameplay operation asks
 `AutomataActionFamilyOwnership.TryBeginGameMcpOperation` for only its mapped family, holds that scope
 around one `AutomataServiceCycleRuntime.ExecuteGameMcp` call, and releases it immediately. Runtime
-execution delegates to the same purchase, cast, concept, harvest, spell-level, or Discovery Tree
-offer GameAction used by features/tests. UUID category and expected native type come from the one
+execution delegates to the same purchase, cast, concept, harvest, spell-level, discovery, loadout,
+crafting, equipment, research, challenge, prestige, targeting, or consumable GameAction used by
+features/tests. MCP capability registration is independent of whether an automation consumer is
+configured on. UUID category and expected native type come from the one
 `GameMcpEntityCapabilityMap` used by both read validation and action admission.
 
 ## Minimal terminal protocol
 
 Reads use `available`/`unavailable`, one `worldGeneration`, and the requested rows/evidence.
-Mutations use `committed`/`refused`/`faulted`; success returns the newer post-state and omits action
-generations, payment evidence, request echoes, and counters, while failure keeps named target,
-reason, mismatches that actually occurred, native outcome, and decomposed receipt. `content` is
+Mutations use `committed`/`refused`/`faulted`; success returns the newer post-state with the generation
+that supplied it and omits payment evidence, request echoes, and counters, while failure keeps named
+target, concrete reason, a pointer to the owning read surface, mismatches that actually occurred,
+and decomposed receipt evidence. `content` is
 reserved for text-first tools and actual image media; structured data appears once in
 `structuredContent`. Committed, refused, and faulted GameAction results are all successful MCP tool executions:
 their domain `status`/`reasonCode` carries the outcome and `isError` stays false so an MCP client cannot
-replace a quarantine receipt with a generic transport error. `isError` is reserved for failures that
+replace a decomposed fault receipt with a generic transport error. `isError` is reserved for failures that
 occur before a canonical domain result exists, such as frame-operation dispatch failure.
 
 The protocol does not expose submission/processing/responded/captured timestamps, queue occupancy,

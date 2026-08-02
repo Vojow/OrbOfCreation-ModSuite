@@ -230,3 +230,36 @@ facts, then the operation returns the newer published post-state that would othe
 follow-up read. Resource and cost rows use one canonical spendable `amount`; deeper collector and
 factor internals remain outside the player surface. Compact text is legitimate when it is faster for
 an agent to read than structured data and no handle extraction is required.
+
+## Proposed action-surface and settlement clarification
+
+> **Pending maintainer ratification at landing.** This records the supervised verb-surface ruling
+> and supersedes the older MCP-specific generation and quarantine wording above where they differ.
+
+The native player UI defines the MCP action vocabulary. A compiled manager or UI handler is not by
+itself permission to expose a verb: the player must actually be offered that choice. Discovery is
+therefore component composition followed by native resolution and confirmation; transient discovery
+offers are modes of that same discovery namespace. A loaded spell has no in-place glyph editor, so
+glyph layout is chosen before loadout add and baked into the new spell. Casting Output and Reserve
+are global dials, not per-spell state. Whenever the MCP cannot bind the exact visible sibling, it
+returns `contract_unavailable` rather than substituting a nearby native path.
+
+Every MCP gameplay action still uses its capability's canonical GameAction and live Unity-main-thread
+revalidation. A failed player-driven attempt returns its exact failure and leaves no MCP-owned
+lifecycle quarantine; the next request revalidates live again. This does not relax automation safety
+policy, and MCP capability registration does not depend on whether the owning automation is enabled.
+
+All committed gameplay actions pass through one post-state settlement path. It waits up to one
+second for a shared world publication strictly newer than the world used for mutation admission,
+then delegates to one command-to-world projector. The successful response stamps that observed
+`worldGeneration` and returns the complete next-decision state. If no newer publication arrives, it
+omits post-state and generation: it never labels an older world as committed state and never adds a
+ceremonial lag explanation. Navigation uses the same one-second freshness rule for the arrived UI
+state. Domain-specific readiness may strengthen the shared predicate only when the requested outcome
+is event-driven, as discovery offers are.
+
+Wire format follows the decision. Structured JSON remains the default when an agent must extract
+UUID handles or compose the next action; compact text is allowed for genuinely human-readable
+catalogs or summaries. A tool has one response shape and one vocabulary regardless of media. Format
+freedom is not permission to create a second spelling, numeric encoding, status vocabulary, or
+pagination dialect for the same concept.
