@@ -531,7 +531,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
                     ["name"] = "entity_catalog",
                     ["arguments"] = new JObject
                     {
-                        ["query"] = "1ab06404-18d4-4bca-b86f-f0a8b4552755",
+                        ["query"] = "01ae245e-21b8-4034-8e95-e0a191145e43",
                     },
                 }),
             operation => GameMcpTestHarness.ExecuteRead(
@@ -541,7 +541,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
         var result = (JObject)response.Body!["result"]!["structuredContent"]!;
         var match = Assert.IsType<JObject>(Assert.Single((JArray)result["matches"]!));
         Assert.Null(match["internalName"]);
-        Assert.Equal("AdditionalInformation", (string?)match["name"]);
+        Assert.Equal("OrbAnim2", (string?)match["name"]);
         Assert.Equal("asset", (string?)match["nameSource"]);
         Assert.Equal("not-world-projected", (string?)match["category"]);
         Assert.Null(match["hasDisplayName"]);
