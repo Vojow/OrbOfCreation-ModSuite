@@ -24,8 +24,10 @@ the produced files. It does not admit one operating system by an assembly hash.
 
 Commands:
 
-- `extract` writes the full model, progression graph, census, identity TSVs, provenance manifest,
-  and `message.txt` from one read-only scan. Logs go to `artifacts/gamedata/logs/`.
+- `extract` writes the full content-object model, UUID-backed progression graph and identity views,
+  census, provenance manifest, and `message.txt` from one read-only scan. UUID-less content stays
+  in the full model without being invented into the identity catalog. Logs go to
+  `artifacts/gamedata/logs/`.
 - `verify` checks file hashes, build pins, counts, full-model/graph agreement, and every derived
   TSV. Add `--game-dir` to compare the committed outputs byte-for-byte with a fresh scan.
 - `query` reads the committed full model by class, exact name, UUID, reverse reference,

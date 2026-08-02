@@ -135,11 +135,25 @@ def verify_committed(data_directory: Path) -> dict[str, int]:
         for record in bucket.values()
         if isinstance(record, dict) and record.get("id")
     }
-    if model_ids != set(graph_ids):
-        only_model = sorted(model_ids - set(graph_ids))[:10]
-        only_graph = sorted(set(graph_ids) - model_ids)[:10]
+    graph_id_set = set(graph_ids)
+    only_model = sorted(model_ids - graph_id_set)
+    if only_model:
         errors.append(
-            f"model/graph UUID mismatch: only-model={only_model}, only-graph={only_graph}"
+            f"full-model UUIDs missing from the entity graph: {only_model[:10]}"
+        )
+    graph_only = graph_id_set - model_ids
+    graph_entities_by_id = {
+        str(entity.get("id", "")).lower(): entity for entity in entities
+    }
+    unexpected_graph_only = sorted(
+        entity_id
+        for entity_id in graph_only
+        if str(graph_entities_by_id[entity_id].get("type", "")).endswith(("SO", "Variable"))
+    )
+    if unexpected_graph_only:
+        errors.append(
+            "content-class graph UUIDs missing from the full model: "
+            f"{unexpected_graph_only[:10]}"
         )
 
     provenance_keys = (
@@ -177,6 +191,8 @@ def verify_committed(data_directory: Path) -> dict[str, int]:
     return {
         "objects": actual_object_count,
         "classes": actual_class_count,
+        "entities": len(entities),
+        "entityTypes": int(graph_metadata.get("entityTypeCount", 0)),
         "relationships": int(graph_metadata.get("relationshipCount", 0)),
         "requirementGates": int(graph_metadata.get("requirementGateCount", 0)),
     }

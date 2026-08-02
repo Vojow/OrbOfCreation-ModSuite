@@ -85,6 +85,8 @@ def build_census(model: dict[str, Any], graph: dict[str, Any]) -> dict[str, Any]
         "counts": {
             "objects": model["metadata"]["objectCount"],
             "classes": model["metadata"]["classCount"],
+            "catalogEntities": graph["metadata"]["entityCount"],
+            "catalogTypes": graph["metadata"]["entityTypeCount"],
             "uniqueUuids": len({entity["id"] for entity in entities}),
             "uniqueInternalNames": len(internal_names),
             "duplicatedInternalNames": len(repeated),
@@ -97,6 +99,7 @@ def build_census(model: dict[str, Any], graph: dict[str, Any]) -> dict[str, Any]
             "prerequisiteLinks": graph["metadata"]["unlockLinkCount"],
         },
         "objectsByClass": model["metadata"]["objectCountsByClass"],
+        "entitiesByType": graph["metadata"]["entityCountsByType"],
     }
 
 

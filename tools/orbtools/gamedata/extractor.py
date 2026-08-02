@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import hashlib
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -142,6 +143,7 @@ class GameDataExtractor:
         self.environment: Any = None
         self.type_trees: TypeTreeSupport | None = None
         self.headers: list[ScriptHeader] = []
+        self.content_objects: list[RawEntity] = []
         self.entities: list[RawEntity] = []
         self.entity_by_object: dict[tuple[str, int], RawEntity] = {}
         self.name_by_object: dict[tuple[str, int], str] = {}
@@ -212,8 +214,17 @@ class GameDataExtractor:
         empty_identity_counts: Counter[str] = Counter()
         entities_by_id: dict[str, RawEntity] = {}
         for header in self.headers:
+            is_content = header.class_name.endswith("SO") or header.class_name.endswith("Variable")
             nodes = self.type_trees.nodes_for(header.assembly, header.class_name)
-            if not nodes or not self._has_identity_field(nodes):
+            if not nodes:
+                if is_content:
+                    failures.append(
+                        f"{header.class_name} at {header.asset_file}:{header.path_id}: "
+                        "type tree unavailable"
+                    )
+                continue
+            has_identity = self._has_identity_field(nodes)
+            if not is_content and not has_identity:
                 continue
             try:
                 record = header.reader.read_typetree(nodes)
@@ -222,37 +233,45 @@ class GameDataExtractor:
                     f"{header.class_name} at {header.asset_file}:{header.path_id}: {error}"
                 )
                 continue
-            entity_id = guid_from(record)
-            if not entity_id:
-                empty_identity_counts[header.class_name] += 1
-                continue
-            entity = RawEntity(
+            object_id = guid_from(record)
+            content_object = RawEntity(
                 reader=header.reader,
                 asset_file=header.asset_file,
                 path_id=header.path_id,
-                entity_id=entity_id,
+                entity_id=object_id,
                 class_name=header.class_name,
                 name=clean_text(record.get("m_Name")) or header.name,
                 display_name=clean_text(record.get("displayName")),
                 has_display_name="displayName" in record,
                 record=record,
             )
-            key = self._object_key(entity.asset_file, entity.path_id)
-            if entity_id in entities_by_id:
-                raise ValueError(f"Duplicate serialized entity UUID: {entity_id}")
-            self.entities.append(entity)
-            entities_by_id[entity_id] = entity
-            self.entity_by_object[key] = entity
+            if is_content:
+                self.content_objects.append(content_object)
+            if not object_id:
+                if has_identity:
+                    empty_identity_counts[header.class_name] += 1
+                continue
+            key = self._object_key(content_object.asset_file, content_object.path_id)
+            if object_id in entities_by_id:
+                raise ValueError(f"Duplicate serialized entity UUID: {object_id}")
+            self.entities.append(content_object)
+            entities_by_id[object_id] = content_object
+            self.entity_by_object[key] = content_object
 
         if failures:
             details = "\n  ".join(failures[:20])
             raise ValueError(f"Entity deserialization failures ({len(failures)}):\n  {details}")
-        if not self.entities:
-            raise ValueError("No UUID-backed serialized game entities were extracted.")
+        if not self.content_objects or not self.entities:
+            raise ValueError("No serialized content objects or UUID-backed entities were extracted.")
+        self.content_objects.sort(
+            key=lambda item: (item.class_name, item.name, item.entity_id, item.path_id)
+        )
         self.entities.sort(key=lambda item: (item.class_name, item.name, item.entity_id))
         ignored = sum(empty_identity_counts.values())
         LOGGER.info(
-            "Read %d UUID-backed entities; excluded %d identity-shaped objects with empty UUIDs",
+            "Read %d content objects and %d UUID-backed entities; "
+            "excluded %d identity-shaped objects with empty UUIDs from the entity catalog",
+            len(self.content_objects),
             len(self.entities),
             ignored,
         )
@@ -340,10 +359,10 @@ class GameDataExtractor:
 
     def full_model(self) -> dict[str, Any]:
         objects: dict[str, dict[str, Any]] = {}
-        for entity in self.entities:
+        for entity in self.content_objects:
             registry = self._registry(entity.record)
             record: dict[str, Any] = {
-                "id": entity.entity_id,
+                "id": entity.entity_id or None,
                 "name": entity.name,
                 "class": entity.class_name,
             }
@@ -354,15 +373,28 @@ class GameDataExtractor:
             bucket = objects.setdefault(entity.class_name, {})
             name_key = entity.name
             if not name_key or name_key in bucket:
-                name_key = f"{entity.name}#{entity.entity_id}"
+                identity = entity.entity_id or hashlib.sha256(
+                    json.dumps(record, ensure_ascii=False, sort_keys=True).encode("utf-8")
+                ).hexdigest()
+                name_key = f"{entity.name}#{identity}"
+            if name_key in bucket:
+                if bucket[name_key] != record:
+                    raise ValueError(
+                        f"Serialized content key collision in {entity.class_name}: {name_key}"
+                    )
+                base_key = name_key
+                occurrence = 2
+                while name_key in bucket:
+                    name_key = f"{base_key}:{occurrence}"
+                    occurrence += 1
             bucket[name_key] = record
 
-        type_counts = Counter(entity.class_name for entity in self.entities)
+        type_counts = Counter(entity.class_name for entity in self.content_objects)
         metadata = {
             "formatVersion": 1,
             "source": "read-only serialized Unity asset extraction",
             **self.metadata,
-            "objectCount": len(self.entities),
+            "objectCount": len(self.content_objects),
             "classCount": len(type_counts),
             "objectCountsByClass": dict(sorted(type_counts.items())),
         }

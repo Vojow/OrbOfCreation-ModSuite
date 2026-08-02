@@ -47,7 +47,9 @@ def extract_command(arguments: argparse.Namespace) -> None:
         logging.exception("Extraction failed")
         raise
     print(
-        f"Extracted {summary['objects']} objects across {summary['classes']} classes "
+        f"Extracted {summary['objects']} content objects across {summary['classes']} classes "
+        f"and {summary['entities']} UUID-backed entities across "
+        f"{summary['entityTypes']} types "
         f"to {Path(arguments.output_dir)}"
     )
     print(f"Log: {log_path}")
@@ -70,7 +72,8 @@ def verify_command(arguments: argparse.Namespace) -> None:
         raise
     suffix = " and fresh installed-game scan" if arguments.game_dir else ""
     print(
-        f"Verified {summary['objects']} objects across {summary['classes']} classes"
+        f"Verified {summary['objects']} content objects across {summary['classes']} classes and "
+        f"{summary['entities']} UUID-backed entities across {summary['entityTypes']} types"
         f" against committed provenance{suffix}."
     )
     print(f"Log: {log_path}")

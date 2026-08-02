@@ -133,3 +133,17 @@ def test_fresh_comparison_is_byte_exact(tmp_path: Path) -> None:
     (fresh / "entity-mappings.tsv").write_text("drift\n")
     with pytest.raises(VerificationError, match="entity-mappings.tsv"):
         compare_generated_directories(committed, fresh)
+
+
+def test_full_model_may_include_uuidless_content_outside_entity_graph(tmp_path: Path) -> None:
+    model, graph = fixture_payloads()
+    model["metadata"]["objectCount"] = 3
+    model["metadata"]["classCount"] = 3
+    model["metadata"]["objectCountsByClass"]["SoundEffectSO"] = 1
+    model["objects"]["SoundEffectSO"] = {
+        "Click": {"id": None, "name": "Click", "class": "SoundEffectSO"}
+    }
+    write_generated_outputs(tmp_path, model, graph)
+    summary = verify_committed(tmp_path)
+    assert summary["objects"] == 3
+    assert summary["entities"] == 2
