@@ -217,6 +217,12 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         Assert.Null(read["row"]!["treeId"]);
         Assert.Null(read["row"]!["debugMode"]);
         Assert.Null(read["row"]!["overrideChoicesId"]);
+        var explanation = GameMcpTestHarness.Json(GameMcpEntityExplainer.Explain(
+            context,
+            treeId.ToString("D")));
+        Assert.Equal("available", (string?)explanation["status"]);
+        Assert.Equal("discovery_tree", (string?)explanation["kind"]);
+        Assert.Equal("idle", (string?)explanation["state"]!["mode"]);
         Assert.True(GameMcpEntityCapabilityMap.Contains(
             world,
             treeId,
@@ -362,7 +368,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var implicated = Assert.Single(response["implicatedOffers"]!).Value<JObject>()!;
         Assert.Equal(treeId.ToString("D"), (string?)implicated["tree"]!["uuid"]);
         Assert.Equal(missing.ToString("D"), (string?)implicated["offer"]!["uuid"]);
-        Assert.Equal("unavailable", (string?)implicated["offer"]!["nameEvidence"]!["status"]);
+        Assert.Null(implicated["offer"]!["nameEvidence"]);
         Assert.Equal(0, (int)implicated["ordinal"]!);
     }
 

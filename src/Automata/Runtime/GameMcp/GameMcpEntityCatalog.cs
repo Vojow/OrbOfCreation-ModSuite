@@ -43,7 +43,7 @@ internal static class GameMcpEntityCatalog
 
         var result = new JObject { ["status"] = "available" };
         if (matches.Count > 0) result["matches"] = matches;
-        if (totalMatches > matches.Count) result["truncated"] = true;
+        if (totalMatches > matches.Count) result["hasMore"] = true;
         return result;
     }
 
@@ -91,6 +91,8 @@ internal static class GameMcpEntityCatalog
             ["nativeType"] = row.RuntimeType,
         };
         if (identity.HasName) result["name"] = identity.Name;
+        if (identity.Source == EntityIdentityNameSource.LiveAssetName)
+            result["nameSource"] = "asset";
         if (row.AssetName.Length > 0 &&
             !string.Equals(identity.Name, row.AssetName, StringComparison.Ordinal))
             result["internalName"] = row.AssetName;
@@ -98,6 +100,7 @@ internal static class GameMcpEntityCatalog
                 row.RuntimeType,
                 out var category))
             result["category"] = category;
+        else result["category"] = "not-world-projected";
         if (!identity.HasName)
         {
             result["nameEvidence"] = new JObject

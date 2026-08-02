@@ -26,6 +26,8 @@ internal static class GameMcpNumberFormatter
         return Scientific(mantissa, exponent);
     }
 
+    internal static string Format(double value) => Format(value, 0);
+
     private static string Scientific(double mantissa, long exponent)
     {
         var rounded = Math.Round(mantissa, 2, MidpointRounding.AwayFromZero);

@@ -145,6 +145,10 @@ same immutable snapshot reference pinned by the world that supplied the tree sta
 therefore follows the suite-wide formatter fallback/warning contract and never creates a second
 Discovery name lookup or changes UUID/type admission.
 
+The tree UUID is also accepted by `explain_entity`; it resolves to the identical named
+`discovery-trees` decision row used by `world_get`. A strategist therefore does not receive an
+`unknown_uuid` contradiction for a tree it can already list or act on.
+
 ## Admission order
 
 Every mode checks, in order:

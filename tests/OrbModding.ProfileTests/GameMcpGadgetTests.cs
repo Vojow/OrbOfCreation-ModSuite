@@ -114,7 +114,7 @@ public sealed class GameMcpGadgetTests
     }
 
     [Fact]
-    public void NavigationReturnsFlatDestinationStateWithoutMutationCeremony()
+    public void NavigationReturnsPerStripDestinationStateWithoutMutationCeremony()
     {
         var command = new GameMcpCommand(
             1,
@@ -138,9 +138,18 @@ public sealed class GameMcpGadgetTests
             observedConfigurationGeneration: 34,
             details: new GameMcpObjectBuilder
             {
-                ["tab"] = "Research",
-                ["activeSubtab"] = "Discover",
-                ["subtabs"] = new GameMcpArrayBuilder("Discover", "Development"),
+                ["activeTab"] = "Research",
+                ["subtabStrips"] = new GameMcpArrayBuilder(
+                    new GameMcpObjectBuilder
+                    {
+                        ["active"] = "Discover",
+                        ["labels"] = new GameMcpArrayBuilder("Discover", "Development"),
+                    },
+                    new GameMcpObjectBuilder
+                    {
+                        ["active"] = "Inventory",
+                        ["labels"] = new GameMcpArrayBuilder("Inventory", "Concepts"),
+                    }),
             }.Freeze());
 
         var projected = GameMcpTestHarness.Json(terminal.Project(command));
@@ -155,9 +164,15 @@ public sealed class GameMcpGadgetTests
         Assert.Null(projected["observedLifecycleGeneration"]);
         Assert.Null(projected["observedConfigurationGeneration"]);
         Assert.Null(projected["operation"]);
-        Assert.Equal("Research", (string?)projected["tab"]);
-        Assert.Equal("Discover", (string?)projected["activeSubtab"]);
-        Assert.Equal(new[] { "Discover", "Development" }, projected["subtabs"]!.Values<string>());
+        Assert.Equal("Research", (string?)projected["activeTab"]);
+        Assert.Null(projected["activeSubtab"]);
+        Assert.Null(projected["subtabs"]);
+        var strips = projected["subtabStrips"]!.OfType<JObject>().ToArray();
+        Assert.Equal(2, strips.Length);
+        Assert.Equal("Discover", (string?)strips[0]["active"]);
+        Assert.Equal(new[] { "Discover", "Development" }, strips[0]["labels"]!.Values<string>());
+        Assert.Equal("Inventory", (string?)strips[1]["active"]);
+        Assert.Equal(new[] { "Inventory", "Concepts" }, strips[1]["labels"]!.Values<string>());
 
         var partial = GameMcpCommandResult.Rejected(
                 "subtab_selection_failed",
@@ -165,13 +180,13 @@ public sealed class GameMcpGadgetTests
             .WithDetails(
                 new GameMcpObjectBuilder
                 {
-                    ["tab"] = "Research",
+                    ["activeTab"] = "Research",
                     ["subtabCandidates"] = new GameMcpArrayBuilder("Discover", "Development"),
                 }.Freeze());
         var partialProjection = GameMcpTestHarness.Json(partial.Project(command));
         Assert.Equal("refused", (string?)partialProjection["status"]);
         Assert.Null(partialProjection["uiStateMutationAttempts"]);
-        Assert.Equal("Research", (string?)partialProjection["tab"]);
+        Assert.Equal("Research", (string?)partialProjection["activeTab"]);
         Assert.Equal(new[] { "Discover", "Development" },
             partialProjection["subtabCandidates"]!.Values<string>());
     }
@@ -183,22 +198,33 @@ public sealed class GameMcpGadgetTests
             "Main",
             navigationAvailable: true,
             new[] { ("Magic", false), ("Scholar", true), ("Mods", false) },
-            new[] { ("Loadout", false), ("Discover", true), ("Research", false) });
+            new[]
+            {
+                ("primary", "Loadout", false),
+                ("primary", "Discover", true),
+                ("primary", "Research", false),
+                ("secondary", "Inventory", true),
+                ("secondary", "Concepts", false),
+            });
 
         Assert.Equal(
             "scene: Main\n" +
             "tabs:\n" +
             "    Magic\n" +
             "  * Scholar\n" +
-            "    subtabs:\n" +
-            "        Loadout\n" +
-            "      * Discover\n" +
-            "        Research\n" +
+            "    subtab strips:\n" +
+            "      -\n" +
+            "          Loadout\n" +
+            "        * Discover\n" +
+            "          Research\n" +
+            "      -\n" +
+            "        * Inventory\n" +
+            "          Concepts\n" +
             "    Mods",
             projected);
         Assert.DoesNotContain("index", projected, System.StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Canvas", projected, System.StringComparison.Ordinal);
-        Assert.Equal(111, System.Text.Encoding.UTF8.GetByteCount(projected));
+        Assert.Equal(178, System.Text.Encoding.UTF8.GetByteCount(projected));
     }
 
     [Fact]

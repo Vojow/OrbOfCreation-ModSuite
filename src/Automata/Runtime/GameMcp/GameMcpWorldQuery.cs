@@ -627,13 +627,18 @@ internal static class GameMcpWorldQuery
         for (var index = 0; index < Categories.Length; index++)
             categories.Add(Categories[index].Name);
         var unavailable = new JArray();
+        var readRows = 0;
+        var skippedRows = 0;
         for (var index = 0; index < world.CollectionCategories.Count; index++)
         {
             var category = world.CollectionCategories[index];
+            readRows += category.Sampled;
+            skippedRows += category.Skipped;
             if (category.IsClean) continue;
             unavailable.Add(new JObject
             {
                 ["category"] = Normalize(category.Category),
+                ["read"] = category.Sampled,
                 ["skipped"] = category.Skipped,
                 ["reason"] = category.FirstFailure,
             });
@@ -641,6 +646,8 @@ internal static class GameMcpWorldQuery
         var result = new JObject
         {
             ["complete"] = IsCollectionComplete(world),
+            ["read"] = readRows,
+            ["skipped"] = skippedRows,
             ["categories"] = categories,
         };
         if (unavailable.Count > 0) result["unavailableCategories"] = unavailable;
@@ -736,7 +743,7 @@ internal static class GameMcpWorldQuery
         var availability = Availability(world, category);
         var result = new JObject
         {
-            ["name"] = category.Name,
+            ["category"] = category.Name,
             ["expectedNativeType"] = category.ExpectedNativeType,
             ["count"] = category.Count(world),
             ["available"] = availability.Available,
@@ -937,17 +944,21 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
-    private static GameMcpValue ProjectResource(in WorldResource resource) =>
-        new JObject
+    private static GameMcpValue ProjectResource(in WorldResource resource)
+    {
+        var result = new JObject
         {
             ["entityId"] = resource.EntityId.ToString("D"),
             ["category"] = "resources",
             ["nativeType"] = "ResourceSO",
             ["amount"] = new GameMcpDomainValue(resource.TrueQuantity),
-            ["capacity"] = new GameMcpDomainValue(resource.Reading.Capacity),
-            ["netRate"] = new GameMcpDomainValue(resource.TrueRate),
-            ["atCapacity"] = resource.IsAtCapacity,
-        }.Freeze();
+        };
+        if (resource.IsCapped)
+            result["capacity"] = new GameMcpDomainValue(resource.Reading.Capacity);
+        result["netRatePerSecond"] = new GameMcpDomainValue(resource.TrueRate);
+        if (resource.IsCapped) result["atCapacity"] = resource.IsAtCapacity;
+        return result.Freeze();
+    }
 
     internal static GameMcpValue ProjectPurchaseCost(in WorldPurchaseCost cost)
     {

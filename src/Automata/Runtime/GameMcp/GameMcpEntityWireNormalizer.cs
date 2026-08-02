@@ -1,6 +1,7 @@
 #if SERVICE_CYCLE_PROFILE
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using OrbModding.Common;
@@ -56,12 +57,16 @@ internal static class GameMcpEntityWireNormalizer
         FlattenDetails(item);
         FlattenReading(item);
         Rename(item, "playerFacingName", "name");
+        Rename(item, "unlocked", "available");
+        Rename(item, "quantity", "amount");
         Rename(item, "availableAmount", "amount");
         Rename(item, "balance", "amount");
         Rename(item, "balanceBefore", "amountBefore");
         Rename(item, "balanceAfter", "amountAfter");
         Rename(item, "trueQuantity", "amount");
-        Rename(item, "trueRate", "netRate");
+        Rename(item, "trueRate", "netRatePerSecond");
+        Rename(item, "netRate", "netRatePerSecond");
+        Rename(item, "truncated", "hasMore");
 
         if (item["status"] is JValue statusValue)
         {
@@ -104,6 +109,19 @@ internal static class GameMcpEntityWireNormalizer
                 Guid.TryParseExact((string?)scalar, "D", out var uuid))
             {
                 NormalizeIdentity(item, property, uuid, catalog);
+                continue;
+            }
+            if (property.Value is JValue text && text.Type == JTokenType.String)
+            {
+                text.Value = GameMcpTextFormatter.Plain((string?)text ?? string.Empty);
+                continue;
+            }
+            if (property.Value is JValue number &&
+                IsPlayerMagnitude(property.Name) &&
+                number.Type is JTokenType.Integer or JTokenType.Float)
+            {
+                number.Value = GameMcpNumberFormatter.Format(
+                    Convert.ToDouble(number.Value, CultureInfo.InvariantCulture));
                 continue;
             }
             NormalizeToken(property.Value, catalog);
@@ -178,19 +196,11 @@ internal static class GameMcpEntityWireNormalizer
         var identity = EntityIdentityFormatter.Describe(uuid, catalog);
         if (!identity.HasName)
         {
-            target["nameEvidence"] = new JObject
-            {
-                ["status"] = "unavailable",
-                ["reasonCode"] = "entity_name_unavailable",
-                ["reason"] = catalog.State == EntityIdentityCatalogState.ContractUnavailable
-                    ? "the live entity-name catalog contract is unavailable"
-                    : catalog.State == EntityIdentityCatalogState.Unbound
-                        ? "the live entity-name catalog has not bound in this lifecycle yet"
-                        : "the live registry has no player-facing or asset name for this stable UUID",
-            };
             return;
         }
         target["name"] = identity.Name;
+        if (identity.Source == EntityIdentityNameSource.LiveAssetName)
+            target["nameSource"] = "asset";
         if (identity.AssetName.Length > 0 &&
             !string.Equals(identity.AssetName, identity.Name, StringComparison.Ordinal))
             target["internalName"] = identity.AssetName;
@@ -289,6 +299,20 @@ internal static class GameMcpEntityWireNormalizer
         status.Remove();
         item.AddFirst(status);
     }
+
+    private static bool IsPlayerMagnitude(string field) => field switch
+    {
+        "amount" or "amountBefore" or "amountAfter" or
+        "baseCost" or "effectiveCost" or "groupCost" or "totalCost" or "cost" or
+        "capacity" or "netRatePerSecond" or "yield" or
+        "level" or "committedLevel" or "effectiveLevel" or "queuedLevels" or
+        "maxLevel" or "remainingLevels" or "baseLevel" or "bonusLevel" or
+        "totalLevel" or "purchasedLevel" or "purchasedLevels" or "freeLevels" or
+        "baseLevelExcludingBonus" or "effectiveCap" or "artificialCap" or
+        "startingAmount" or "currentCharges" or "maximumCharges" or
+        "developmentProgress" => true,
+        _ => false,
+    };
 
     internal static string Snake(string value)
     {

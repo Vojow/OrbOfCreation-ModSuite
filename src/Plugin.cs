@@ -1556,8 +1556,10 @@ public sealed class Plugin : BaseUnityPlugin
             result.Append("\nfeatures ")
                 .Append(GameMcpEntityWireNormalizer.Snake(group.Key.State.ToString()));
             var reasonCode = GameMcpEntityWireNormalizer.Snake(group.Key.Code.ToString());
-            if (reasonCode.Length > 0) result.Append(" (").Append(reasonCode).Append(')');
-            result.Append(": ").Append(string.Join(", ", group.Select(feature => feature.DisplayName)));
+            if (reasonCode.Length > 0 && reasonCode != "none")
+                result.Append(" (").Append(reasonCode).Append(')');
+            result.Append(": ").Append(string.Join(", ", group.Select(
+                feature => CanonicalGameMcpFeatureName(feature.DisplayName))));
         }
 
         var runtimeServices = context.Runtime?.Services ?? Array.Empty<AutomataServiceFrameFacts>();
@@ -1570,10 +1572,14 @@ public sealed class Plugin : BaseUnityPlugin
             result.Append("\nservices ")
                 .Append(GameMcpEntityWireNormalizer.Snake(group.Key))
                 .Append(": ")
-                .Append(string.Join(", ", group.Select(service => service.DisplayName)));
+                .Append(string.Join(", ", group.Select(
+                    service => CanonicalGameMcpFeatureName(service.DisplayName))));
         }
         return result.ToString();
     }
+
+    private static string CanonicalGameMcpFeatureName(string name) =>
+        string.Equals(name, "Orb Mentor", StringComparison.Ordinal) ? "Mentor" : name;
 
     internal static GameMcpValue ProjectGameMcpConfiguration(GameMcpFrameContext context)
     {
@@ -1600,7 +1606,6 @@ public sealed class Plugin : BaseUnityPlugin
                 ? "available"
                 : "not_available",
             ["configurationGeneration"] = context.ConfigurationGeneration.Value,
-            ["configuration"] = new GameMcpDomainValue(context.Configuration.Snapshot),
         };
         if (writable.Count > 0) result["writableSettings"] = writable;
         return result.Freeze();
@@ -2068,21 +2073,21 @@ public sealed class Plugin : BaseUnityPlugin
                 scene,
                 navigationAvailable: false,
                 Array.Empty<(string Label, bool Active)>(),
-                Array.Empty<(string Label, bool Active)>());
+                Array.Empty<(string Strip, string Label, bool Active)>());
         var tabs = _uiShell.CaptureNativeTabsForGameMcp();
         var subtabs = CaptureSubtabs();
         return ProjectGameMcpScreenCatalog(
             scene,
             navigationAvailable: true,
             tabs.Select(tab => (tab.Label, tab.Active)).ToArray(),
-            subtabs.Select(subtab => (subtab.Label, subtab.Active)).ToArray());
+            subtabs.Select(subtab => (subtab.StripKey, subtab.Label, subtab.Active)).ToArray());
     }
 
     internal static string ProjectGameMcpScreenCatalog(
         string scene,
         bool navigationAvailable,
         IReadOnlyList<(string Label, bool Active)> tabs,
-        IReadOnlyList<(string Label, bool Active)> subtabs)
+        IReadOnlyList<(string Strip, string Label, bool Active)> subtabs)
     {
         if (!navigationAvailable)
             return "scene: " + scene +
@@ -2093,12 +2098,16 @@ public sealed class Plugin : BaseUnityPlugin
             var tab = tabs[index];
             result.Append("\n  ").Append(tab.Active ? "* " : "  ").Append(tab.Label);
             if (!tab.Active || subtabs.Count == 0) continue;
-            result.Append("\n    subtabs:");
-            for (var subtabIndex = 0; subtabIndex < subtabs.Count; subtabIndex++)
+            result.Append("\n    subtab strips:");
+            var strips = subtabs.GroupBy(subtab => subtab.Strip, StringComparer.Ordinal);
+            foreach (var strip in strips)
             {
-                var subtab = subtabs[subtabIndex];
-                result.Append("\n      ").Append(subtab.Active ? "* " : "  ")
-                    .Append(subtab.Label);
+                result.Append("\n      -");
+                foreach (var subtab in strip)
+                {
+                    result.Append("\n        ").Append(subtab.Active ? "* " : "  ")
+                        .Append(subtab.Label);
+                }
             }
         }
         return result.ToString();
@@ -2148,7 +2157,7 @@ public sealed class Plugin : BaseUnityPlugin
             return false;
         }
 
-        details = new GameMcpObjectBuilder { ["tab"] = tab.Label };
+        details = new GameMcpObjectBuilder { ["activeTab"] = tab.Label };
         return true;
     }
 
@@ -2195,7 +2204,6 @@ public sealed class Plugin : BaseUnityPlugin
                         .WithDetails(details.Freeze()));
                 yield break;
             }
-            details["subtab"] = subtab.Label;
             yield return null;
         }
         if (command.TargetId != Guid.Empty)
@@ -2214,16 +2222,7 @@ public sealed class Plugin : BaseUnityPlugin
         }
         var destinationSubtabs = CaptureSubtabs();
         if (destinationSubtabs.Count > 0)
-        {
-            var labels = new GameMcpArrayBuilder();
-            for (var index = 0; index < destinationSubtabs.Count; index++)
-            {
-                labels.Add(destinationSubtabs[index].Label);
-                if (destinationSubtabs[index].Active)
-                    details["activeSubtab"] = destinationSubtabs[index].Label;
-            }
-            details["subtabs"] = labels;
-        }
+            details["subtabStrips"] = ProjectSubtabStrips(destinationSubtabs);
         var result = GadgetCommitted(
             "navigation_arrived",
             "the requested catalog destination was invoked through native UI controls",
@@ -2321,6 +2320,7 @@ public sealed class Plugin : BaseUnityPlugin
                     index,
                     pages[index],
                     "Mods/Page[" + index + "]",
+                    "Mods",
                     index == _uiShell.SelectedPageIndexForGameMcp,
                     () => _uiShell.TrySelectPageForGameMcp(pageIndex, out var reason)
                         ? string.Empty
@@ -2358,6 +2358,7 @@ public sealed class Plugin : BaseUnityPlugin
                 index,
                 candidate.Label!.text?.Trim() ?? string.Empty,
                 candidate.Path,
+                ParentPath(candidate.Path),
                 NativeViewAdapter.IsAlive(NativeViewAdapter.ReadView(candidate.Component)) &&
                     NativeViewAdapter.IsActive(NativeViewAdapter.ReadView(candidate.Component)!),
                 () =>
@@ -2367,6 +2368,31 @@ public sealed class Plugin : BaseUnityPlugin
                 });
         }
         return result;
+    }
+
+    private static GameMcpArrayBuilder ProjectSubtabStrips(
+        IReadOnlyList<GameMcpSubtab> subtabs)
+    {
+        var strips = new GameMcpArrayBuilder();
+        foreach (var group in subtabs.GroupBy(subtab => subtab.StripKey, StringComparer.Ordinal))
+        {
+            var labels = new GameMcpArrayBuilder();
+            var strip = new GameMcpObjectBuilder();
+            foreach (var subtab in group)
+            {
+                labels.Add(subtab.Label);
+                if (subtab.Active) strip["active"] = subtab.Label;
+            }
+            strip["labels"] = labels;
+            strips.Add(strip);
+        }
+        return strips;
+    }
+
+    private static string ParentPath(string path)
+    {
+        var separator = path.LastIndexOf('/');
+        return separator <= 0 ? path : path.Substring(0, separator);
     }
 
     private static bool TryResolveTabSelector(
@@ -2660,12 +2686,14 @@ public sealed class Plugin : BaseUnityPlugin
             int index,
             string label,
             string path,
+            string stripKey,
             bool active,
             Func<string> select)
         {
             Index = index;
             Label = label ?? string.Empty;
             Path = path ?? string.Empty;
+            StripKey = stripKey ?? string.Empty;
             Active = active;
             _select = select ?? throw new ArgumentNullException(nameof(select));
         }
@@ -2673,6 +2701,7 @@ public sealed class Plugin : BaseUnityPlugin
         internal int Index { get; }
         internal string Label { get; }
         internal string Path { get; }
+        internal string StripKey { get; }
         internal bool Active { get; }
         internal bool TrySelect(out string reason)
         {

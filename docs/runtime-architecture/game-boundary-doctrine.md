@@ -220,6 +220,9 @@ request echo, and no payment or generation-mismatch stanza. Failure retains deco
 Every entity reference carries stable UUID plus player-facing name, category/type when relevant, and
 internal name only when it differs. Every game-domain magnitude is one rounded string: zero is `0`;
 all nonzero values use a lowercase scientific exponent and at most two mantissa decimals.
+Integral and large-number implementations of the same player concept therefore have one wire type;
+protocol counters and identifiers remain integers. Native numeric sentinels are translated into
+their domain semantics, normally field absence, rather than forwarded as plausible magnitudes.
 
 Read tools retain one `worldGeneration` naming the immutable publication that answered. Action
 schemas and results have no world generation: the GameAction revalidates live identity and mutable

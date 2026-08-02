@@ -479,7 +479,8 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Equal("AttributeSO", (string?)match["nativeType"]);
         Assert.Equal("HiddenComponent", (string?)match["internalName"]);
         Assert.Equal("Hidden Component", (string?)match["name"]);
-        Assert.Null(match["category"]);
+        Assert.Equal("not-world-projected", (string?)match["category"]);
+        Assert.Null(match["nameSource"]);
         Assert.Null(match["hasDisplayName"]);
         Assert.Null(match["visibilityIndependent"]);
     }
@@ -499,6 +500,19 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Null(result["query"]);
         Assert.Null(result["limit"]);
         Assert.Null(result["truncated"]);
+    }
+
+    [Fact]
+    public void LimitedCatalogSearchUsesTheSharedHasMoreSpelling()
+    {
+        var result = GameMcpTestHarness.Json(GameMcpEntityCatalog.Search(
+            GameMcpTestHarness.EntityCatalog,
+            "a",
+            1).Freeze());
+
+        Assert.True((bool)result["hasMore"]!);
+        Assert.Null(result["truncated"]);
+        Assert.Single(result["matches"]!);
     }
 
     [Fact]
@@ -528,6 +542,8 @@ public sealed class GameMcpStreamableHttpProtocolTests
         var match = Assert.IsType<JObject>(Assert.Single((JArray)result["matches"]!));
         Assert.Null(match["internalName"]);
         Assert.Equal("AdditionalInformation", (string?)match["name"]);
+        Assert.Equal("asset", (string?)match["nameSource"]);
+        Assert.Equal("not-world-projected", (string?)match["category"]);
         Assert.Null(match["hasDisplayName"]);
         Assert.Null(match["visibilityIndependent"]);
     }
@@ -881,15 +897,16 @@ public sealed class GameMcpWorldEnvelopeTests
 
         var resource = categories["categories"]!
             .Values<JObject>()
-            .Single(item => (string?)item!["name"] == "resources")!;
+            .Single(item => (string?)item!["category"] == "resources")!;
         Assert.True((bool)resource["available"]!);
         Assert.Equal(0, (int)resource["count"]!);
         Assert.Null(resource["worldProperty"]);
         Assert.Null(resource["rowType"]);
+        Assert.Null(resource["name"]);
 
         var rituals = categories["categories"]!
             .Values<JObject>()
-            .Single(item => (string?)item!["name"] == "rituals")!;
+            .Single(item => (string?)item!["category"] == "rituals")!;
         Assert.False((bool)rituals["available"]!);
         Assert.Contains("registry was unreadable", (string?)rituals["reason"]);
     }
@@ -966,7 +983,7 @@ public sealed class GameMcpWorldEnvelopeTests
         var categories = GameMcpTestHarness.Json(GameMcpWorldQuery.ListCategories(state));
         var resources = categories["categories"]!
             .Values<JObject>()
-            .Single(item => (string?)item!["name"] == "resources")!;
+            .Single(item => (string?)item!["category"] == "resources")!;
         Assert.False((bool)resources["available"]!);
         Assert.Contains("collection is partial", (string?)resources["reason"]);
         Assert.Contains("quantity was unreadable", (string?)resources["reason"]);
@@ -982,6 +999,15 @@ public sealed class GameMcpWorldEnvelopeTests
         Assert.Equal("world_search_incomplete", (string?)search["reasonCode"]);
         Assert.NotEmpty(search["unavailableCategories"]!.Values<JObject>());
         Assert.Null(search["partialMatches"]);
+
+        var overview = GameMcpTestHarness.Json(GameMcpWorldQuery.Overview(state));
+        Assert.False((bool)overview["collection"]!["complete"]!);
+        Assert.Equal(3, (int)overview["collection"]!["read"]!);
+        Assert.Equal(1, (int)overview["collection"]!["skipped"]!);
+        var degraded = Assert.Single(
+            overview["collection"]!["unavailableCategories"]!.Values<JObject>())!;
+        Assert.Equal(3, (int)degraded["read"]!);
+        Assert.Equal(1, (int)degraded["skipped"]!);
     }
 
     [Fact]
@@ -1255,10 +1281,10 @@ public sealed class GameMcpWorldEnvelopeTests
         var categories = GameMcpTestHarness.Json(GameMcpWorldQuery.ListCategories(state));
         var purchaseCosts = categories["categories"]!
             .Values<JObject>()
-            .Single(item => (string?)item!["name"] == "purchase-costs")!;
+            .Single(item => (string?)item!["category"] == "purchase-costs")!;
         var mastery = categories["categories"]!
             .Values<JObject>()
-            .Single(item => (string?)item!["name"] == "mastery-experience")!;
+            .Single(item => (string?)item!["category"] == "mastery-experience")!;
 
         Assert.False((bool)purchaseCosts["available"]!);
         Assert.Contains("UpgradeSO cost capture failed", (string?)purchaseCosts["reason"]);
@@ -1307,10 +1333,10 @@ public sealed class GameMcpWorldEnvelopeTests
         var categories = GameMcpTestHarness.Json(GameMcpWorldQuery.ListCategories(state));
         var purchaseCosts = categories["categories"]!
             .Values<JObject>()
-            .Single(item => (string?)item!["name"] == "purchase-costs")!;
+            .Single(item => (string?)item!["category"] == "purchase-costs")!;
         var plotActions = categories["categories"]!
             .Values<JObject>()
-            .Single(item => (string?)item!["name"] == "plot-actions")!;
+            .Single(item => (string?)item!["category"] == "plot-actions")!;
 
         Assert.False((bool)purchaseCosts["available"]!);
         Assert.Equal("modifier variables failed", (string?)purchaseCosts["reason"]);
@@ -1355,7 +1381,7 @@ public sealed class GameMcpWorldEnvelopeTests
         {
             var category = categories["categories"]!
                 .Values<JObject>()
-                .Single(item => (string?)item!["name"] == name)!;
+                .Single(item => (string?)item!["category"] == name)!;
             Assert.False((bool)category["available"]!);
             Assert.Equal(
                 "frame-global modifier reconstruction failed",
@@ -1436,7 +1462,7 @@ public sealed class GameMcpWorldEnvelopeTests
 
         var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
             result.ToString(Newtonsoft.Json.Formatting.None));
-        Assert.Equal(1230, responseBytes);
+        Assert.Equal(1085, responseBytes);
         Assert.True(responseBytes < 1461);
 
         Assert.Equal("available", (string?)result["status"]);

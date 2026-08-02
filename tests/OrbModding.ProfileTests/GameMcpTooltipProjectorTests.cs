@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using OrbAutomata.GameMcp;
 using Xunit;
@@ -42,34 +43,50 @@ public sealed class GameMcpTooltipProjectorTests
             new[] { nested },
             new[] { inspected }));
 
-        Assert.Equal("direct_unity_main_thread_read", (string?)result["dataSource"]);
-        Assert.Contains("not published", (string?)result["collectorGap"]);
-        Assert.Equal("primary", (string?)result["tooltip"]?["role"]);
-        var rootRow = Assert.Single(result["tooltip"]!["nodes"]!.Values<JObject>());
-        Assert.Equal("Parent", (string?)rootRow!["nodeKind"]);
-        Assert.Equal("Boxed", (string?)rootRow["parentKind"]);
-        var children = rootRow["children"]!.Values<JObject>();
+        Assert.Equal("unity_main_thread", (string?)result["source"]);
+        Assert.Null(result["collectorGap"]);
+        Assert.Null(result["nodeLimit"]);
+        Assert.Null(result["depthLimit"]);
+        Assert.Null(result["tooltip"]?["role"]);
+        var rootRow = Assert.IsType<JObject>(
+            Assert.Single(result["tooltip"]!["nodes"]!.Children()));
+        Assert.Equal("parent", (string?)rootRow["kind"]);
+        Assert.Null(rootRow["parentKind"]);
+        var children = rootRow["children"]!.OfType<JObject>();
         Assert.Collection(
             children,
             authored =>
             {
-                Assert.Equal("authored", (string?)authored!["textKind"]);
-                Assert.Equal("authored child", (string?)authored["text"]);
+                var row = Assert.IsType<JObject>(authored);
+                Assert.Equal("authored child", (string?)row["text"]);
+                Assert.Null(row["textKind"]);
+                Assert.Null(row["authoredText"]);
             },
             live =>
             {
-                Assert.Equal("computed", (string?)live!["textKind"]);
-                Assert.Equal("live value 42", (string?)live["text"]);
-                Assert.Equal("available", (string?)live["computationStatus"]);
-                Assert.Equal("Linked", (string?)live["linkedTooltip"]?["name"]);
+                var row = Assert.IsType<JObject>(live);
+                Assert.Equal("live value 42", (string?)row["text"]);
+                Assert.Null(row["computationStatus"]);
+                Assert.Equal("Linked", (string?)row["linkedTooltip"]?["name"]);
             });
         Assert.Equal(1, computations);
-        Assert.Equal(
-            "authored_nested",
-            (string?)Assert.Single(result["nestedTooltips"]!.Values<JObject>())!["role"]);
+        Assert.Null(Assert.Single(result["nestedTooltips"]!.Values<JObject>())!["role"]);
         var inspectedRow = Assert.Single(result["inspectedPanels"]!.Values<JObject>());
-        Assert.Equal("inspected_panel", (string?)inspectedRow!["role"]);
+        Assert.Null(inspectedRow!["role"]);
         Assert.Equal("panel row", (string?)inspectedRow["nodes"]![0]!["text"]);
+        Assert.All(
+            result.DescendantsAndSelf().OfType<JObject>(),
+            row =>
+            {
+                Assert.Null(row["path"]);
+                Assert.Null(row["depth"]);
+                Assert.Null(row["ordinal"]);
+                Assert.Null(row["color"]);
+                Assert.Null(row["textColor"]);
+                Assert.Null(row["hasIcon"]);
+                Assert.Null(row["iconBacked"]);
+                Assert.Null(row["size"]);
+            });
     }
 
     [Fact]
@@ -90,7 +107,50 @@ public sealed class GameMcpTooltipProjectorTests
         Assert.Null(result["tooltip"]!["altNodes"]);
         Assert.Null(result["tooltip"]!["nodes"]![0]!["children"]);
         Assert.Null(result["tooltip"]!["nodes"]![0]!["subTooltips"]);
-        Assert.Null(result["tooltip"]!["nodes"]![0]!["computationReason"]);
+        Assert.Null(result["tooltip"]!["nodes"]![0]!["reason"]);
+    }
+
+    [Fact]
+    public void IdenticalAlternateTreeAndRichTextCeremonyAreRemoved()
+    {
+        var primaryNode = new TooltipNode("<emph>Quantity:</emph>");
+        var altNode = new TooltipNode("<emph>Quantity:</emph>");
+        var tooltip = new FakeTooltip("Resource", primaryNode)
+        {
+            DisplayType = "<#BBACE2FF>Essence</color> Resource",
+            Description = "<deemph>Spendable List<T> supply.</deemph>",
+        };
+        tooltip.AltNodes.Add(altNode);
+
+        var result = GameMcpTestHarness.Json(
+            GameMcpTooltipProjector.Project(tooltip, null, null));
+
+        Assert.Equal("Essence Resource", (string?)result["tooltip"]!["displayType"]);
+        Assert.Equal("Spendable List<T> supply.", (string?)result["tooltip"]!["description"]);
+        Assert.Equal("Quantity:", (string?)result["tooltip"]!["nodes"]![0]!["text"]);
+        Assert.Null(result["tooltip"]!["altNodes"]);
+        Assert.True(result.ToString(Newtonsoft.Json.Formatting.None).Length < 500);
+    }
+
+    [Fact]
+    public void FortyNodeDuplicateTooltipFitsTheCriticSignalBudget()
+    {
+        var tooltip = new FakeTooltip("Dense");
+        for (var index = 0; index < 40; index++)
+        {
+            var text = "Fact " + index + ": <emph>1.23e24</emph>";
+            tooltip.Nodes.Add(new TooltipNode(text));
+            tooltip.AltNodes.Add(new TooltipNode(text));
+        }
+
+        var result = GameMcpTestHarness.Json(
+            GameMcpTooltipProjector.Project(tooltip, null, null));
+        var encoded = result.ToString(Newtonsoft.Json.Formatting.None);
+
+        Assert.Null(result["tooltip"]!["altNodes"]);
+        Assert.Equal(40, result["tooltip"]!["nodes"]!.Count());
+        Assert.DoesNotContain("<emph>", encoded, StringComparison.Ordinal);
+        Assert.True(encoded.Length <= 3_412, "compact tooltip was " + encoded.Length + " characters");
     }
 
     private sealed class FakeTooltip : ITooltipable
@@ -102,15 +162,18 @@ public sealed class GameMcpTooltipProjectorTests
         }
 
         private string Name { get; }
+        internal string DisplayType { get; set; } = "Fixture";
+        internal string? Description { get; set; }
         internal List<TooltipNode> Nodes { get; } = new();
+        internal List<TooltipNode> AltNodes { get; } = new();
         public string GetName() => Name;
-        public string GetDisplayType() => "Fixture";
+        public string GetDisplayType() => DisplayType;
         public UnityEngine.Sprite GetIcon() => new();
         public UnityEngine.Color GetColor() => UnityEngine.Color.white;
         public bool IsColoredIcon() => false;
-        public bool HasAltTooltips() => false;
-        public string GetDescription() => Name + " description";
+        public bool HasAltTooltips() => AltNodes.Count > 0;
+        public string GetDescription() => Description ?? Name + " description";
         public List<TooltipNode> GetTooltipNodes() => Nodes;
-        public List<TooltipNode> GetAltTooltipNodes() => new();
+        public List<TooltipNode> GetAltTooltipNodes() => AltNodes;
     }
 }

@@ -149,6 +149,35 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
     }
 
     [Fact]
+    public void ExplanationSeparatesUnknownFromKnownButUnprojectedIdentity()
+    {
+        var known = Guid.Parse("b4505524-ad2f-4a5a-9d28-df0c30937748");
+        var unknown = Guid.Parse("00000000-0000-4000-8000-000000000099");
+        var world = new GameWorldState
+        {
+            CollectedAtEpoch = 1,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+        var context = GameMcpTestHarness.Context(world, generation: 911);
+
+        var knownResult = GameMcpTestHarness.Json(GameMcpEntityExplainer.Explain(
+            context,
+            known.ToString("D")));
+        var unknownResult = GameMcpTestHarness.Json(GameMcpEntityExplainer.Explain(
+            context,
+            unknown.ToString("D")));
+
+        Assert.Equal("not_world_projected", (string?)knownResult["reasonCode"]);
+        Assert.Equal("InventoryUnlocked", (string?)knownResult["name"]);
+        Assert.Equal("entity_catalog", (string?)knownResult["readWith"]!["tool"]);
+        Assert.Null(knownResult["nameEvidence"]);
+        Assert.Equal("uuid_unknown", (string?)unknownResult["reasonCode"]);
+        Assert.Equal("entity_catalog", (string?)unknownResult["readWith"]!["tool"]);
+        Assert.Null(unknownResult["name"]);
+        Assert.Null(unknownResult["nameEvidence"]);
+    }
+
+    [Fact]
     public void RequirementsExpandOrderedLinkTiersAndPreserveAndOrGroups()
     {
         var owner = Upgrade();
@@ -224,7 +253,7 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
 
         var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
             result.ToString(Newtonsoft.Json.Formatting.None));
-        Assert.Equal(3167, responseBytes);
+        Assert.Equal(3215, responseBytes);
         Assert.True(responseBytes < 3402);
 
         Assert.Equal("available", (string?)result["status"]);
@@ -257,11 +286,11 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         var cap = result["blockers"]!["cap"]!;
         Assert.True((bool)cap["blocked"]!);
         Assert.Equal("research_complete", (string?)cap["reasonCode"]);
-        Assert.Equal(1, (int)cap["purchasedLevel"]!);
-        Assert.Equal(1, (int)cap["baseLevelExcludingBonus"]!);
-        Assert.Equal(0, (int)cap["bonusLevel"]!);
-        Assert.Equal(1, (int)cap["totalLevel"]!);
-        Assert.Equal(1, (int)cap["effectiveCap"]!);
+        Assert.Equal("1e0", (string?)cap["purchasedLevel"]);
+        Assert.Equal("1e0", (string?)cap["baseLevelExcludingBonus"]);
+        Assert.Equal("0", (string?)cap["bonusLevel"]);
+        Assert.Equal("1e0", (string?)cap["totalLevel"]);
+        Assert.Equal("1e0", (string?)cap["effectiveCap"]);
         Assert.True((bool)cap["nativeComplete"]!);
     }
 
@@ -375,8 +404,8 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
             "research_leeway_exhausted",
             (string?)result["predicates"]!["canDevelop"]!["reasonCode"]);
         var cap = result["blockers"]!["cap"]!;
-        Assert.Equal(1, (int)cap["artificialCap"]!);
-        Assert.Equal(-1, (int)cap["effectiveCap"]!);
+        Assert.Equal("1e0", (string?)cap["artificialCap"]);
+        Assert.Equal("-1e0", (string?)cap["effectiveCap"]);
         Assert.False((bool)cap["nativeComplete"]!);
     }
 

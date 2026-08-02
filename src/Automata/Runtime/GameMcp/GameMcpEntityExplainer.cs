@@ -37,13 +37,26 @@ internal static class GameMcpEntityExplainer
         var world = publication.Snapshot;
         if (!TryResolve(world, uuid, out var kind, out var row, out var nativeType))
         {
+            var known = world.EntityIdentities.TryGet(uuid, out var identity);
+            var code = known ? "not_world_projected" : "uuid_unknown";
+            var reason = known
+                ? "this known entity has no explainable published world row"
+                : "nothing in this process knows this UUID; search entity_catalog by name";
+            var remedy = new JObject { ["tool"] = "entity_catalog" };
+            if (known && GameMcpEntityCapabilityMap.TryCategoryForNativeType(
+                    identity.RuntimeType,
+                    out var knownCategory))
+            {
+                remedy["tool"] = "world_get";
+                remedy["category"] = knownCategory;
+            }
             return GameMcpWorldQuery.WithEnvelope(state, new JObject
             {
                 ["status"] = "not_available",
-                ["code"] = "unknown_uuid",
-                ["reason"] = "UUID " + uuid.ToString("D") +
-                    " is absent from every explainable published entity category",
+                ["code"] = code,
+                ["reason"] = reason,
                 ["uuid"] = uuid.ToString("D"),
+                ["readWith"] = remedy,
             });
         }
 
@@ -901,6 +914,7 @@ internal static class GameMcpEntityExplainer
             EntityKind.Glyph => "glyphs",
             EntityKind.Equipment => "equipment",
             EntityKind.TimeRune => "time-runes",
+            EntityKind.DiscoveryTree => "discovery-trees",
             _ => string.Empty,
         };
         return category.Length != 0;
@@ -949,6 +963,8 @@ internal static class GameMcpEntityExplainer
             Found(EntityKind.Equipment, equipment, "EquipmentSO");
         if (WorldLookup.TryFind(world.TimeRunes, id, out var timeRune))
             Found(EntityKind.TimeRune, timeRune, "TimeRuneSO");
+        if (WorldLookup.TryFind(world.DiscoveryTrees, id, out var discoveryTree))
+            Found(EntityKind.DiscoveryTree, discoveryTree, "DiscoveryTreeSO");
         kind = resolvedKind;
         row = resolvedRow!;
         nativeType = resolvedNativeType;
@@ -1046,6 +1062,7 @@ internal static class GameMcpEntityExplainer
         Glyph = 10,
         Equipment = 11,
         TimeRune = 12,
+        DiscoveryTree = 13,
     }
 }
 #endif

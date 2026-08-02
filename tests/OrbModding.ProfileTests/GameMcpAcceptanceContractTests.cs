@@ -102,13 +102,13 @@ public sealed class GameMcpWorldQueryTests
             new[]
             {
                 "uuid", "name", "category", "nativeType", "amount", "capacity",
-                "netRate", "atCapacity",
+                "netRatePerSecond", "atCapacity",
             },
             row.Children<JProperty>().Select(property => property.Name));
         Assert.Equal("Knowledge", (string?)row["name"]);
         Assert.Equal("5.63e24", (string?)row["amount"]);
         Assert.Equal("8e26", (string?)row["capacity"]);
-        Assert.Equal("1.4e21", (string?)row["netRate"]);
+        Assert.Equal("1.4e21", (string?)row["netRatePerSecond"]);
         Assert.False((bool)row["atCapacity"]!);
         Assert.Null(row["reading"]);
         Assert.Null(row["quantity"]);
@@ -116,8 +116,123 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(row["rateInputs"]);
         Assert.Null(row["traits"]);
         Assert.Null(row["modifiers"]);
-        Assert.Equal(277, System.Text.Encoding.UTF8.GetByteCount(
+        Assert.Equal(286, System.Text.Encoding.UTF8.GetByteCount(
             response.ToString(Newtonsoft.Json.Formatting.None)));
+    }
+
+    [Fact]
+    public void UncappedResourceOmitsTheNativeNegativeCapacitySentinel()
+    {
+        var resourceId = Guid.Parse("67acd892-3260-47b7-aaca-23e49c5903d4");
+        var rateInputs = default(RawResourceRateInputs);
+        var traits = default(RawResourceTraits);
+        var modifiers = default(RawResourceModifiers);
+        var reading = new RawResourceSample(
+            resourceId,
+            new BigDouble(5d, 24),
+            new BigDouble(-9.48d, 9),
+            BigDouble.Zero,
+            visible: true,
+            lifetimeQuantity: BigDouble.Zero,
+            discoveryTime: BigDouble.Zero,
+            quality: new BigDouble(100d),
+            gainRate: new BigDouble(100d),
+            drain: BigDouble.Zero,
+            reservation: BigDouble.Zero,
+            usage: BigDouble.Zero,
+            inLossMode: false,
+            inRestMode: true,
+            inRallyMode: false,
+            appliedLevels: 0,
+            levelVariableId: Guid.Empty,
+            in rateInputs,
+            in traits,
+            in modifiers);
+        var resource = new WorldResource(
+            in reading,
+            isCapped: false,
+            headroom: BigDouble.Zero,
+            fillFraction: 0d,
+            isAtCapacity: false,
+            trueQuantity: new BigDouble(9.83d, 24),
+            trueRate: BigDouble.Zero);
+        var world = new GameWorldState
+        {
+            Resources = PublicationTable<WorldResource>.Create(new[] { resource }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(
+                new[]
+                {
+                    new WorldCollectionCategoryStatus(
+                        "resources", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
+                }),
+            CollectedAtEpoch = 1,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRows(
+            GameMcpTestHarness.Context(world, generation: 1004),
+            "resources",
+            new[] { resourceId.ToString("D") },
+            string.Empty));
+        var row = Assert.Single(response["results"]!.Values<JObject>())!["row"]!;
+
+        Assert.Equal("9.83e24", (string?)row["amount"]);
+        Assert.Equal("0", (string?)row["netRatePerSecond"]);
+        Assert.Null(row["capacity"]);
+        Assert.Null(row["atCapacity"]);
+    }
+
+    [Fact]
+    public void SamePlayerMagnitudeFieldAlwaysUsesScientificStrings()
+    {
+        var encoded = GameMcpDocumentJsonEncoder.Encode(
+            new GameMcpObjectBuilder
+            {
+                ["rows"] = new GameMcpArrayBuilder(
+                    new GameMcpObjectBuilder { ["committedLevel"] = 1 },
+                    new GameMcpObjectBuilder
+                    {
+                        ["committedLevel"] = new GameMcpDomainValue(new BigDouble(1.57d, 2)),
+                    }),
+            }.Freeze(),
+            GameMcpTestHarness.EntityCatalog);
+        var rows = encoded["rows"]!.OfType<JObject>().ToArray();
+
+        Assert.Equal("1e0", (string?)rows[0]["committedLevel"]);
+        Assert.Equal("1.57e2", (string?)rows[1]["committedLevel"]);
+    }
+
+    [Fact]
+    public void LegacyProjectionFieldsNormalizeToOneWireDialect()
+    {
+        var uuid = Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
+        var encoded = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            new GameMcpObjectBuilder
+            {
+                ["entityId"] = uuid,
+                ["playerFacingName"] = "legacy label",
+                ["mcpCategory"] = "resources",
+                ["quantity"] = new GameMcpDomainValue(new BigDouble(2.5d, 3)),
+                ["netRate"] = new GameMcpDomainValue(new BigDouble(4d, 1)),
+                ["unlocked"] = true,
+                ["truncated"] = true,
+            }.Freeze(),
+            GameMcpTestHarness.EntityCatalog));
+
+        Assert.Equal(uuid.ToString("D"), (string?)encoded["uuid"]);
+        Assert.Equal("Knowledge", (string?)encoded["name"]);
+        Assert.Equal("resources", (string?)encoded["category"]);
+        Assert.Equal("2.5e3", (string?)encoded["amount"]);
+        Assert.Equal("4e1", (string?)encoded["netRatePerSecond"]);
+        Assert.True((bool)encoded["available"]!);
+        Assert.True((bool)encoded["hasMore"]!);
+        Assert.Null(encoded["entityId"]);
+        Assert.Null(encoded["playerFacingName"]);
+        Assert.Null(encoded["mcpCategory"]);
+        Assert.Null(encoded["quantity"]);
+        Assert.Null(encoded["netRate"]);
+        Assert.Null(encoded["unlocked"]);
+        Assert.Null(encoded["truncated"]);
     }
 
     [Fact]
@@ -175,7 +290,7 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(overview["detailCategories"]);
         Assert.Null(overview["unlocks"]);
         Assert.Null(overview["harvest"]);
-        Assert.Equal(1276, System.Text.Encoding.UTF8.GetByteCount(
+        Assert.Equal(1297, System.Text.Encoding.UTF8.GetByteCount(
             overview.ToString(Newtonsoft.Json.Formatting.None)));
 
         var exact = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
@@ -210,7 +325,7 @@ public sealed class GameMcpWorldQueryTests
             GameMcpWorldQuery.ListRows(state, "spell-recipes", 0, 10));
         var scan = Assert.Single(list["rows"]!.Values<JObject>())!;
         Assert.Equal(GameMcpAcceptanceFixture.SpellId.ToString("D"), (string?)scan["uuid"]);
-        Assert.Equal("unavailable", (string?)scan["nameEvidence"]!["status"]);
+        Assert.Null(scan["nameEvidence"]);
         Assert.Equal(4, (int)scan["masteryLevel"]!);
         Assert.Null(scan["spellPowerMod"]);
         Assert.Null(scan["category"]);
@@ -431,15 +546,25 @@ public sealed class GameMcpProtocolSurfaceTests
                 FeatureStatusReasonCode.ConfigurationDisabled,
                 "disabled"),
             lifecycleGeneration: 9);
-        var context = GameMcpTestHarness.Context(features: new[] { feature });
+        var mentor = new FeatureStatusSnapshot(
+            new FeatureStatusKey(PluginIds.SuiteGuid, "Mentor"),
+            "Orb Mentor",
+            configuredEnabled: true,
+            FeatureStatusState.Operational,
+            new FeatureStatusReason(FeatureStatusReasonCode.None, string.Empty),
+            lifecycleGeneration: 9);
+        var context = GameMcpTestHarness.Context(features: new[] { feature, mentor });
         var compact = Plugin.ProjectGameMcpHealth(context);
         Assert.Contains("availability: available", compact, StringComparison.Ordinal);
         Assert.Contains(
             "features configuration_disabled (configuration_disabled): Auto Buy",
             compact,
             StringComparison.Ordinal);
+        Assert.Contains("features operational: Mentor", compact, StringComparison.Ordinal);
+        Assert.DoesNotContain("Orb Mentor", compact, StringComparison.Ordinal);
+        Assert.DoesNotContain("(none)", compact, StringComparison.Ordinal);
         Assert.DoesNotContain("mailbox", compact, StringComparison.Ordinal);
-        Assert.Equal(254, System.Text.Encoding.UTF8.GetByteCount(compact));
+        Assert.Equal(283, System.Text.Encoding.UTF8.GetByteCount(compact));
 
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
@@ -517,6 +642,7 @@ public sealed class GameMcpConfigurationTests
             context: GameMcpTestHarness.Context(writable: new[] { writable }));
         Assert.Equal((ulong)3, (ulong)result["configurationGeneration"]!);
         Assert.Null(result["worldGeneration"]);
+        Assert.Null(result["configuration"]);
         Assert.Single(result["writableSettings"]!.Values<JObject>());
     }
 
@@ -559,6 +685,10 @@ public sealed class GameMcpConfigurationTests
                 (string?)item?["key"] == "Mode")!;
 
         Assert.Equal((ulong)12, (ulong)result["configurationGeneration"]!);
+        Assert.Null(result["configuration"]);
+        Assert.DoesNotContain(
+            result.DescendantsAndSelf().OfType<JProperty>(),
+            property => property.Name == "equalityContract");
         Assert.Equal("Disabled", (string?)autoCastMode["serializedValue"]);
         Assert.Equal("Active", configuration.AutoCastMode.GetSerializedValue());
         Assert.Same(schema, GameMcpTestHarness.Context(writable: schema).WritableConfiguration);

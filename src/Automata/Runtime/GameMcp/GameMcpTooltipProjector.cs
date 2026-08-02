@@ -1,6 +1,7 @@
 #if SERVICE_CYCLE_PROFILE
 using System;
 using System.Collections.Generic;
+using OrbModding.Common;
 using JObject = OrbAutomata.GameMcp.GameMcpObjectBuilder;
 using JArray = OrbAutomata.GameMcp.GameMcpArrayBuilder;
 
@@ -25,12 +26,8 @@ internal static class GameMcpTooltipProjector
         var context = new ProjectionContext();
         var result = new JObject
         {
-            ["dataSource"] = "direct_unity_main_thread_read",
-            ["collectorGap"] =
-                "Tooltip documents are UI-local and are not published by the world collector.",
+            ["source"] = "unity_main_thread",
             ["tooltip"] = ProjectTooltip(primary, "primary", "primary", 0, context),
-            ["nodeLimit"] = MaximumNodes,
-            ["depthLimit"] = MaximumDepth,
         };
         var nested = ProjectMany(authoredNested, "authored_nested", "nested", 1, context);
         if (nested.Count > 0) result["nestedTooltips"] = nested;
@@ -66,29 +63,27 @@ internal static class GameMcpTooltipProjector
         ProjectionContext context)
     {
         if (depth > MaximumDepth)
-            return Limited(path, role, "tooltip_depth_exceeded");
+            return Limited("tooltip_depth_exceeded", depth);
         if (!context.Tooltips.Add(item))
-            return Limited(path, role, "tooltip_cycle");
+            return Limited("tooltip_cycle", depth);
 
         try
         {
             var result = new JObject
             {
-                ["role"] = role,
-                ["path"] = path,
-                ["depth"] = depth,
                 ["name"] = item.GetName(),
                 ["displayType"] = item.GetDisplayType(),
                 ["description"] = item.GetDescription(),
-                ["hasAltTooltips"] = item.HasAltTooltips(),
             };
+            TryAttachIdentity(result, item);
             var nodes = ProjectNodes(item.GetTooltipNodes(), path + "/nodes", depth, context);
-            if (nodes.Count > 0) result["nodes"] = nodes;
+            if (nodes.Items.Count > 0) result["nodes"] = nodes;
             if (item.HasAltTooltips())
             {
                 var altNodes = ProjectNodes(
                     item.GetAltTooltipNodes(), path + "/altNodes", depth, context);
-                if (altNodes.Count > 0) result["altNodes"] = altNodes;
+                if (altNodes.Items.Count > 0 && !Equivalent(nodes, altNodes))
+                    result["altNodes"] = altNodes;
             }
             return result;
         }
@@ -98,21 +93,21 @@ internal static class GameMcpTooltipProjector
         }
     }
 
-    private static JArray ProjectNodes(
+    private static GameMcpArray ProjectNodes(
         IReadOnlyList<TooltipNode>? nodes,
         string path,
         int depth,
         ProjectionContext context)
     {
         var result = new JArray();
-        if (nodes is null) return result;
+        if (nodes is null) return result.Freeze();
         for (var index = 0; index < nodes.Count; index++)
         {
             var node = nodes[index];
             if (node is null) continue;
             result.Add(ProjectNode(node, index, path + "/" + index, depth, context));
         }
-        return result;
+        return result.Freeze();
     }
 
     private static JObject ProjectNode(
@@ -123,46 +118,35 @@ internal static class GameMcpTooltipProjector
         ProjectionContext context)
     {
         if (depth > MaximumDepth)
-            return Limited(path, "node", "tooltip_depth_exceeded");
+            return Limited("tooltip_depth_exceeded", depth);
         if (++context.NodeCount > MaximumNodes)
-            return Limited(path, "node", "tooltip_node_limit_exceeded");
+            return Limited("tooltip_node_limit_exceeded", depth);
 
-        var textKind = node.textFn is null ? "authored" : "computed";
         string? computedText = null;
-        string computationStatus;
         string computationReason;
         try
         {
             computedText = node.textFn is null ? node.text : node.textFn();
-            computationStatus = "available";
             computationReason = string.Empty;
         }
         catch (Exception exception)
         {
-            computationStatus = "not_available";
             computationReason = exception.GetBaseException().Message;
         }
 
         var result = new JObject
         {
-            ["path"] = path,
-            ["depth"] = depth,
-            ["ordinal"] = ordinal,
-            ["nodeKind"] = node.nodeType.ToString(),
-            ["parentKind"] = node.parentType.ToString(),
-            ["textKind"] = textKind,
+            ["kind"] = node.nodeType.ToString(),
             ["text"] = computedText,
-            ["computationStatus"] = computationStatus,
-            ["hasIcon"] = node.icon is not null,
-            ["iconBacked"] = node.isIconBacked,
-            ["size"] = node.size,
-            ["color"] = Color(node.color),
-            ["textColor"] = Color(node.textColor),
         };
-        if (!string.IsNullOrEmpty(node.text)) result["authoredText"] = node.text;
-        if (computationReason.Length > 0) result["computationReason"] = computationReason;
+        if (computationReason.Length > 0)
+        {
+            result["status"] = "not_available";
+            result["code"] = "tooltip_text_evaluation_failed";
+            result["reason"] = computationReason;
+        }
         var children = ProjectNodes(node.children, path + "/children", depth + 1, context);
-        if (children.Count > 0) result["children"] = children;
+        if (children.Items.Count > 0) result["children"] = children;
         if (node.tooltipable is not null)
             result["linkedTooltip"] = ProjectTooltip(
                 node.tooltipable, "node_link", path + "/linkedTooltip", depth + 1, context);
@@ -172,21 +156,56 @@ internal static class GameMcpTooltipProjector
         return result;
     }
 
-    private static JObject Limited(string path, string role, string code) => new()
+    private static JObject Limited(string code, int depth) => new()
     {
         ["status"] = "not_available",
         ["code"] = code,
-        ["role"] = role,
-        ["path"] = path,
+        ["truncatedAtDepth"] = depth,
     };
 
-    private static JObject Color(UnityEngine.Color color) => new()
+    private static void TryAttachIdentity(JObject result, ITooltipable item)
     {
-        ["r"] = color.r,
-        ["g"] = color.g,
-        ["b"] = color.b,
-        ["a"] = color.a,
-    };
+        if (item is not IdScriptableObject) return;
+        try
+        {
+            var uuid = RuntimeIdentityRegistryBinding.Shared.ReadStableUuid(item);
+            if (uuid.HasValue && uuid.Value != Guid.Empty)
+                result["uuid"] = uuid.Value.ToString("D");
+        }
+        catch (Exception)
+        {
+            // Tooltip content remains useful when optional identity enrichment is unavailable.
+        }
+    }
+
+    private static bool Equivalent(GameMcpValue left, GameMcpValue right)
+    {
+        if (left.GetType() != right.GetType()) return false;
+        if (left is GameMcpNull) return true;
+        if (left is GameMcpScalar leftScalar && right is GameMcpScalar rightScalar)
+            return Equals(leftScalar.Value, rightScalar.Value);
+        if (left is GameMcpArray leftArray && right is GameMcpArray rightArray)
+        {
+            if (leftArray.Items.Count != rightArray.Items.Count) return false;
+            for (var index = 0; index < leftArray.Items.Count; index++)
+                if (!Equivalent(leftArray.Items[index], rightArray.Items[index])) return false;
+            return true;
+        }
+        if (left is GameMcpObject leftObject && right is GameMcpObject rightObject)
+        {
+            if (leftObject.Properties.Count != rightObject.Properties.Count) return false;
+            for (var index = 0; index < leftObject.Properties.Count; index++)
+            {
+                var leftProperty = leftObject.Properties[index];
+                var rightProperty = rightObject.Properties[index];
+                if (!string.Equals(leftProperty.Name, rightProperty.Name, StringComparison.Ordinal) ||
+                    !Equivalent(leftProperty.Value, rightProperty.Value))
+                    return false;
+            }
+            return true;
+        }
+        return false;
+    }
 
     private sealed class ProjectionContext
     {

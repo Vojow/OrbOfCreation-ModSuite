@@ -462,7 +462,7 @@ internal sealed class GameMcpProtocolRouter
                 "Read suite runtime health",
                 "Read one compact scene/runtime/STOP/native-contract line plus feature and service names grouped by state.",
                 ObjectSchema()),
-            Tool("suite_configuration", "Read committed configuration", "Read the single committed suite configuration and its generation.", ObjectSchema()),
+            Tool("suite_configuration", "Read committed configuration", "Read the committed writable setting catalog, current serialized values, and configuration generation.", ObjectSchema()),
             Tool(
                 "trace_health",
                 "Read trace-writer health",

@@ -128,12 +128,13 @@ does not refresh it by hidden navigation.
 | `game_probe` | Read one fixed native fact not carried by `WORLD` |
 
 `world_overview` deliberately contains only facts a strategist normally wants before choosing a
-detailed read: collection completeness, unavailable categories, resource-row count, unlocked
+detailed read: collection completeness with total successfully read and skipped row counts,
+unavailable categories, resource-row count, unlocked
 structure count, purchasable-upgrade count, discovered/mastery-ready recipe
 counts, available views, visible plots, and current action/spell/concept/plot occupancy. Exact rows
 remain in list/get/search.
 
-`world_categories` is the authoritative inventory. It reports category name, native type,
+`world_categories` is the authoritative inventory. Each row reports `category`, native type,
 identity mode, row count, and exact availability. Internal world-property and row-type names are
 not protocol data. `world_get` always requires `category` plus one `uuids` list, including when the
 list has one item.
@@ -152,8 +153,10 @@ player-facing `GetName()`, so loaded entities hidden or not yet revealed by prog
 without navigation. Before that bind, or when its declared contracts fail, the tool returns
 `unavailable` rather than substituting the build-time TSV fixtures.
 
-A match contains `uuid`, `name`, `nativeType`, the `category` handle accepted by `world_get` where
-one exists, and `internalName` only when it differs from the player-facing name. The same immutable
+A match contains `uuid`, `name`, `nativeType`, and one `category`. `category=not-world-projected`
+means that the live registry identity has no world row. `nameSource=asset` appears only when no
+player-facing name exists and the Unity asset name supplied the label; absence means the name is
+player-facing. `internalName` appears only when it differs. The same immutable
 catalog reference is pinned with the answering world and supplies names for every MCP entity
 reference; UUID-only joins are unnecessary. Catalog membership and naming do not prove current
 visibility, availability, or a world-category row. Lifecycle replacement clears the catalog before
@@ -175,8 +178,10 @@ row exposes `baseCost`, verified `effectiveCost`, optional `groupLevels`/`groupC
 bandwidth resources spend headroom. These fields use the same exact combiner as Auto Buy and do not
 include Auto Buy's configurable reserve or excess policy.
 
-A `resources` row is deliberately only named identity, canonical spendable `amount`, `capacity`,
-`netRate`, and `atCapacity`. The old `balance`/`quantity`/`trueQuantity` ambiguity is gone. Detailed
+A `resources` row is deliberately only named identity, canonical spendable `amount`,
+`netRatePerSecond`, and, when the resource is capped, `capacity` plus `atCapacity`. A negative native
+capacity is the game's uncapped sentinel and is never serialized as a magnitude. The old
+`balance`/`quantity`/`trueQuantity` ambiguity is gone. Detailed
 factor math will belong to a future Details-panel tool; it is not leaked through world rows.
 
 Research rows distinguish the native evaluator's base and effective requirement levels. Their
@@ -260,6 +265,11 @@ availability, queue, cap, cost, and affordability evidence remains present for d
 assembling a rival purchase oracle. Consumable `CanFire()` is likewise a named collector gap,
 `native_can_fire_not_published`, rather than a collection-time call or reconstructed verdict.
 
+Discovery trees are explainable entities: their explanation carries the same decision row as
+`world_get(discovery-trees)`. A UUID absent from the live identity registry returns `uuid_unknown`
+and points to `entity_catalog`; a catalog-known UUID with no explainable row returns
+`not_world_projected` and names the applicable read surface. The two remedies never share a code.
+
 Per-level structure, upgrade, and Research requirements preserve the implicit container `AND`,
 explicit native `AND`/`OR` nodes, authored order, and recursively expanded prerequisite-link tiers. Every leaf names
 the requirement UUID and native type, comparison kind, exact published value selected by the native
@@ -289,8 +299,8 @@ leeway, recipe-discovery, bandwidth, and drain evidence only when an axis applie
 null domain properties, and inapplicable axes are omitted.
 
 `game_navigate` is classified **UI-only, no gameplay/save mutation**. It is not read-only because
-selecting a tab, subtab, or plot commits live UI state. Success returns the destination tab, active
-subtab, and the destination's subtab labels. A tab/subtab match refusal returns the exact live label
+selecting a tab, subtab, or plot commits live UI state. Success returns `activeTab` and every
+independent `subtabStrips[{active,labels}]` state. A tab/subtab match refusal returns the exact live label
 candidates it compared. It carries no static mutation-scope label or counter ceremony. Navigation
 never authorizes a gameplay or save mutation.
 
@@ -389,6 +399,10 @@ mutation proof.
 STOP closes MCP native admission exactly as it closes automation. Resume still requires the host's
 ordinary fresh-world gate.
 
+`suite_configuration` returns `configurationGeneration` plus the startup-built
+`writableSettings` catalog and its current serialized values. It never reflectively serializes the
+runtime configuration record or exposes compiler metadata and internal nested policy objects.
+
 `suite_config_set` requires the current `configurationGeneration` and commits through
 `AutomataConfigurationStore`, the same single publication path as the in-game controls. BepInEx
 parse/domain validation runs before publication. Compatibility acknowledgements, shortcuts, and
@@ -413,9 +427,9 @@ from the caller. Its success waits for the transition and returns the new `scene
 
 `game_screen_catalog` reads the live Main-scene UI. Top tabs retain native rail order. Current
 subtabs are active `UIViewRadioButton` controls under the current native content area. Inactive
-popup templates are excluded. The response is compact text: it marks the active tab and subtab with
-`*` and nests current subtabs under their owning active tab. Unity paths and unstable numeric
-indexes are deliberately absent.
+popup templates are excluded. The response is compact text: it marks the active tab and each
+independent subtab strip's active label with `*`, grouping every strip beneath its owning active tab.
+Unity paths and unstable numeric indexes are deliberately absent.
 
 `game_navigate(tab, subtab?, plotNodeUuid?, capture?)` accepts exact labels only. Name matching is
 ordinal and closed-world: zero or multiple matches reject with the exact candidate labels. Plot selection resolves
@@ -446,16 +460,18 @@ The current game build makes the exploration loop feasible. Active `HoverTooltip
 an `ITooltipable`, core name/type/description methods, and a private authored `subTooltips` list;
 `OpenTooltip` renders the selected element. `game_tooltips` pages through current-screen elements by
 an exact native hierarchy path whose sibling indices disambiguate repeated Unity clone rows.
-`game_tooltip` requires one exact path and returns the native tooltip as typed
-`TooltipNode` rows. Every row identifies its hierarchy path, depth, ordinal,
-native node/parent kind, authored-versus-computed text source, evaluated text,
-colors, icon shape, children, linked tooltip, and sub-tooltip documents. The
+`game_tooltip` requires one exact path and returns the native tooltip as compact typed
+`TooltipNode` rows. Each row keeps native kind, evaluated text, children, linked tooltip, and
+sub-tooltip documents. Per-node paths, ordinals, paint, icon ceremony, success stanzas, and
+authored/evaluated duplicates are absent. Alternate nodes appear only when their semantic tree
+differs from the primary tree. The
 same response expands authored nested tooltips and currently open inspected
-panels, with explicit cycle, depth, and node-count refusal rows. Computed text
+panels, with explicit cycle, depth, and node-count refusal rows. Unity rich-text markup is stripped
+from every MCP string. Stable UUID identity is attached when the tooltipable is an
+`IdScriptableObject`; names that cannot resolve uniquely are never guessed. Computed text
 delegates run inline on the Unity thread; the reader never clicks a node or
-renders a panel. The result explicitly labels its `direct_unity_main_thread_read`
-source and the UI-local tooltip documents that the world collector does not
-publish. Core tooltip identity and description remain alongside the node tree,
+renders a panel. The result labels its `unity_main_thread` source. Core tooltip identity and
+description remain alongside the node tree,
 and the tool can return an inline screenshot with the tooltip open.
 
 ```sh
