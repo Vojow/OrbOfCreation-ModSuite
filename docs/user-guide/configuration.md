@@ -90,4 +90,4 @@ default. Warnings and errors are always emitted. Use the Runtime page's explicit
 journal, and verification actions when deeper evidence is needed; there is no global
 detailed-logging mode.
 
-Back up saves before risky configuration changes and run only one automatic buyer. The complete scheduling, affordability, reserve, and queue-ownership contract is in the [automation reference](../../src/Automata/README.md).
+Back up saves before risky configuration changes and run only one automatic buyer. The complete scheduling, affordability, reserve, and queue-ownership contract is in the [automation reference](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/src/Automata/README.md).
