@@ -243,6 +243,8 @@ internal static class GameMcpWorldQuery
                 ["slots"] = snapshotLoadout.Slots,
             }.Freeze();
         }
+        if (row is WorldPlotAction plotAction)
+            return ProjectPlotAction(world, in plotAction);
         return new GameMcpProjectedDomainValue(
             row,
             ListFields(category),
@@ -1255,57 +1257,48 @@ internal static class GameMcpWorldQuery
         GameMcpCommand command)
     {
         if (state.World is null ||
-            !WorldLookup.TryFind(state.World.Snapshot.PlotNodes, command.TargetId, out var current))
+            !WorldPlotActionLookup.TryFind(state.World.Snapshot.PlotActions,
+                command.TargetId, command.SecondaryId, out var current))
             return PostStateUnavailable("post_state_not_published",
-                "the settled world has no harvested plot row");
+                "the settled world has no requested plot-action row");
+        var world = state.World.Snapshot;
         var oldWorld = Before(command);
-        var beforeMastery = oldWorld is not null && WorldLookup.TryFind(
-            oldWorld.PlotNodes, command.TargetId, out var previous)
-            ? previous.Reading.MasteryLevel
-            : (int?)null;
-        if (TryFindEngagedPlotAction(
-                state.World.Snapshot.PlotActionInstances,
-                command.TargetId,
-                command.SecondaryId,
-                out var activeQuantity))
+        var before = oldWorld is null ? 0 : PlotActionQuantity(
+            oldWorld.PlotActionInstances, command.TargetId, command.SecondaryId);
+        var after = PlotActionQuantity(
+            world.PlotActionInstances, command.TargetId, command.SecondaryId);
+        if (command.Mode == "add" ? after <= before : after >= before)
+            return PostStateUnavailable("requested_state_not_reached",
+                "the settled world does not show the requested plot-action quantity change");
+        return new JObject
         {
-            return new JObject
+            ["plot"] = EntityReference(world, command.TargetId),
+            ["action"] = EntityReference(world, command.SecondaryId),
+            ["active"] = new JObject
             {
-                ["uuid"] = command.TargetId.ToString("D"),
-                ["actionId"] = command.SecondaryId.ToString("D"),
-                ["state"] = "active",
-                ["quantity"] = activeQuantity,
-            }.Freeze();
-        }
-        if (beforeMastery.HasValue &&
-            current.Reading.MasteryLevel != beforeMastery.Value)
-            return Change(
-                command.TargetId,
-                beforeMastery,
-                current.Reading.MasteryLevel,
-                "mastery");
-        return PostStateUnavailable(
-            "requested_state_not_reached",
-            "the settled world shows neither the requested active harvest nor its completed mastery change");
+                ["before"] = before,
+                ["after"] = after,
+            },
+            ["next"] = ProjectPlotActionDecision(world, in current, after),
+        }.Freeze();
     }
 
-    private static bool TryFindEngagedPlotAction(
+    private static int PlotActionQuantity(
         PublicationTable<WorldPlotActionInstance> instances,
         Guid plotId,
-        Guid actionId,
-        out int quantity)
+        Guid actionId)
     {
-        quantity = 0;
+        var quantity = 0;
         if (!WorldPlotActionInstanceLookup.TryFindRange(
-                instances, plotId, actionId, out var start, out var count))
-            return false;
+            instances, plotId, actionId, out var start, out var count))
+            return 0;
         for (var index = start; index < start + count; index++)
         {
             var instance = instances[index];
-            if (!instance.Engaged) continue;
-            quantity += instance.Quantity;
+            if (!instance.Empty && instance.ReferenceResolved)
+                quantity += Math.Max(instance.Quantity, 0);
         }
-        return quantity > 0;
+        return quantity;
     }
 
     private static GameMcpValue ProjectSpellLevelDelta(
@@ -2253,6 +2246,8 @@ internal static class GameMcpWorldQuery
             ? ProjectSnapshotLoadout(world, in snapshotLoadout)
             : row is WorldHarvestElement harvestElement
             ? ProjectHarvestElement(world, in harvestElement)
+            : row is WorldPlotAction plotAction
+            ? ProjectPlotAction(world, in plotAction)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -2310,6 +2305,73 @@ internal static class GameMcpWorldQuery
             actions.Add(row);
         }
         if (actions.Count > 0) result["actions"] = actions;
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectPlotAction(
+        GameWorldState world,
+        in WorldPlotAction action)
+    {
+        var active = PlotActionQuantity(
+            world.PlotActionInstances, action.PlotNodeId, action.PlotNodeActionId);
+        return new JObject
+        {
+            ["plot"] = EntityReference(world, action.PlotNodeId),
+            ["action"] = EntityReference(world, action.PlotNodeActionId),
+            ["active"] = active,
+            ["add"] = ProjectPlotActionDecision(world, in action, active),
+            ["remove"] = new JObject { ["available"] = active > 0 },
+        }.Freeze();
+    }
+
+    private static GameMcpValue ProjectPlotActionDecision(
+        GameWorldState world,
+        in WorldPlotAction action,
+        int active)
+    {
+        var result = new JObject();
+        var reason = string.Empty;
+        var available = true;
+        if (action.Reading.OfferedCount != 1)
+        {
+            available = false;
+            reason = action.Reading.OfferedCount == 0
+                ? "not_offered"
+                : "ambiguous_offer";
+        }
+        else if (action.Reading.PrerequisiteEvidence !=
+                 PlotActionPrerequisiteEvidence.NativeLatchedTrue)
+        {
+            available = false;
+            reason = "needs_live_prerequisite_check";
+        }
+        else if (!action.ElementCostKnown)
+        {
+            available = false;
+            reason = "cost_unavailable";
+        }
+        else if (!action.HasEnoughForOneInstance || action.MaximumRemainingInstances <= 0)
+        {
+            available = false;
+            reason = "plot_quantity_insufficient";
+        }
+        else if (active == 0 &&
+                 (!WorldLookup.TryFind(world.ActionQueues,
+                      KnownEntities.ActivePlotNodeActions.Uuid, out var queue) ||
+                  !queue.Consistent || !queue.HasEmptySlot))
+        {
+            available = false;
+            reason = "plot_action_list_full";
+        }
+        result["available"] = available;
+        if (!available)
+        {
+            result["reasonCode"] = reason;
+            return result.Freeze();
+        }
+        result["maximumAdditional"] = Math.Min(
+            action.MaximumRemainingInstances, Math.Max(10_000 - active, 0));
+        result["plotQuantityCost"] = action.ElementCost;
         return result.Freeze();
     }
 

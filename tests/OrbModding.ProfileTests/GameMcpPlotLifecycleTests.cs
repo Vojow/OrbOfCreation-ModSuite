@@ -1,0 +1,117 @@
+using System;
+using System.Linq;
+using Newtonsoft.Json.Linq;
+using OrbAutomata;
+using OrbAutomata.GameMcp;
+using OrbModding.Common;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.World;
+using Xunit;
+
+namespace OrbModding.ProfileTests;
+
+public sealed class GameMcpPlotLifecycleTests
+{
+    private static readonly Guid PlotId =
+        Guid.Parse("fd000000-0000-0000-0000-000000000001");
+    private static readonly Guid ActionId =
+        Guid.Parse("fd000000-0000-0000-0000-000000000002");
+
+    [Fact]
+    public void Tool_requires_the_exact_plot_action_pair_and_visible_ui_modes()
+    {
+        var tool = Assert.Single(GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "game_harvest");
+
+        Assert.Equal(new[] { "mode", "uuid", "actionUuid" },
+            tool["inputSchema"]!["required"]!.Values<string>());
+        Assert.Equal(new[] { "add", "remove" },
+            tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
+        Assert.NotNull(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
+        var operation = GameMcpProtocolRouter.BuildOperation("game_harvest", new JObject
+        {
+            ["mode"] = "add",
+            ["uuid"] = PlotId.ToString("D"),
+            ["actionUuid"] = ActionId.ToString("D"),
+            ["amount"] = 2,
+        });
+        Assert.Equal(GameMcpOperationClass.Gameplay, operation.Classification);
+        Assert.Equal(ActionId, operation.SecondaryUuid);
+    }
+
+    [Fact]
+    public void Plot_action_rows_name_arbitrary_pairs_and_publish_only_runnable_costs()
+    {
+        var world = World(prerequisitesReady: true, active: 2);
+        var response = Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(world, generation: 911),
+            "plot-actions", 0, 10).Freeze(), world);
+
+        var row = Assert.Single(response["rows"]!.Values<JObject>());
+        Assert.Equal("Moon Garden", (string?)row["plot"]!["name"]);
+        Assert.Equal("Plant Moondust", (string?)row["action"]!["name"]);
+        Assert.Equal(2, (int)row["active"]!);
+        Assert.True((bool)row["add"]!["available"]!);
+        Assert.Equal(3, (int)row["add"]!["plotQuantityCost"]!);
+        Assert.True((bool)row["remove"]!["available"]!);
+
+        var blockedWorld = World(prerequisitesReady: false, active: 0);
+        var blocked = Assert.Single(Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(blockedWorld, generation: 912),
+            "plot-actions", 0, 10).Freeze(), blockedWorld)["rows"]!.Values<JObject>());
+        Assert.False((bool)blocked["add"]!["available"]!);
+        Assert.Equal("needs_live_prerequisite_check",
+            (string?)blocked["add"]!["reasonCode"]);
+        Assert.Null(blocked["add"]!["plotQuantityCost"]);
+    }
+
+    private static GameWorldState World(bool prerequisitesReady, int active)
+    {
+        var pair = new WorldPlotAction(
+            new RawPlotAction(PlotId, ActionId, 1, active > 0 ? 1 : 0,
+                prerequisitesReady
+                    ? PlotActionPrerequisiteEvidence.NativeLatchedTrue
+                    : PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation),
+            elementCost: 3,
+            elementCostKnown: true,
+            hasEnoughForOneInstance: true,
+            maximumRemainingInstances: 8);
+        var instances = active > 0
+            ? PublicationTable<WorldPlotActionInstance>.Create(new[]
+            {
+                new WorldPlotActionInstance(PlotId, ActionId, 0, active, true, false, true),
+            })
+            : PublicationTable<WorldPlotActionInstance>.Empty;
+        var identities = GameMcpTestHarness.EntityCatalog.Rows.AsSpan().ToArray().Concat(new[]
+        {
+            new EntityIdentityName(PlotId, "PlotNodeSO", "Moon Garden", "moonGarden"),
+            new EntityIdentityName(ActionId, "PlotNodeActionSO", "Plant Moondust", "plantMoondust"),
+        }).OrderBy(row => row.EntityId).ToArray();
+        return new GameWorldState
+        {
+            CollectedAtEpoch = 9,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+            EntityIdentities = EntityIdentityCatalogSnapshot.Bound(9, identities),
+            PlotActions = PublicationTable<WorldPlotAction>.Create(new[] { pair }),
+            PlotActionInstances = instances,
+            ActionQueues = PublicationTable<WorldActionQueue>.Create(new[]
+            {
+                new WorldActionQueue(PlotLifecycleNativeBindings.ActiveActionsId,
+                    Guid.Empty, 4, active > 0 ? 1 : 0, active > 0 ? 3 : 4,
+                    hasEmptySlot: true, consistent: true),
+            }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus("plot nodes", WorldCategoryOutcome.Collected,
+                    1, 0, string.Empty),
+                new WorldCollectionCategoryStatus("plot node actions", WorldCategoryOutcome.Collected,
+                    1, 0, string.Empty),
+                new WorldCollectionCategoryStatus("plot actions", WorldCategoryOutcome.Collected,
+                    1, 0, string.Empty),
+            }),
+        };
+    }
+
+    private static JObject Json(GameMcpValue value, GameWorldState world) =>
+        Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(value, world.EntityIdentities));
+}

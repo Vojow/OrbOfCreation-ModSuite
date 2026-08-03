@@ -428,15 +428,8 @@ internal static class GameMcpEntityCapabilityMap
                 " is absent from published category plot-nodes";
             return false;
         }
-        if (target == KnownEntities.FruitTreePlot.Uuid ||
-            target == KnownEntities.TreasureTreePlot.Uuid)
-        {
-            reason = string.Empty;
-            return true;
-        }
-        reason = "plot " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
-            " is published but has no audited native harvest capability";
-        return false;
+        reason = string.Empty;
+        return true;
     }
 
     private static bool Entity<TRow>(

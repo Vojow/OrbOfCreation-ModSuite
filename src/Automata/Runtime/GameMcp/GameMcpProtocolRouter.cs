@@ -269,8 +269,12 @@ internal sealed class GameMcpProtocolRouter
                     arguments, "amount", 1, 1, 1_000_000);
                 break;
             case "game_harvest":
+                builder.Mode = RequireOneOf(arguments, "mode", "add", "remove");
                 builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.SecondaryUuid = RequireUuid(arguments, "actionUuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                builder.Amount = OptionalIntInRange(
+                    arguments, "amount", 1, 1, 10_000);
                 break;
             case "game_harvest_setup":
                 builder.Mode = RequireOneOf(arguments, "mode",
@@ -668,14 +672,21 @@ internal sealed class GameMcpProtocolRouter
                     "mode", "uuid")),
             Tool(
                 "game_harvest",
-                "Harvest an audited plot",
-                "Derive the audited harvest pair from a published plot UUID and return the terminal native result inline.",
-                ActionSchema(
+                "Configure a plot action",
+                "Add, increase, decrease, or cancel any exact plot/action pair exposed by the Agromancy plot-action screen.",
+                ModeSchema(ActionSchema(
                     new JObject
                     {
+                        ["mode"] = EnumSchema("add", "remove"),
                         ["uuid"] = StringSchema("Published plot-node UUID."),
+                        ["actionUuid"] = StringSchema("PlotNodeActionSO UUID offered by that plot."),
+                        ["amount"] = IntegerSchema(1, 10_000),
                     },
-                    "uuid")),
+                    "mode", "uuid", "actionUuid"),
+                    ModeRule("add"),
+                    ModeRule("remove")),
+                readOnly: false,
+                idempotent: false),
             Tool(
                 "game_harvest_setup",
                 "Configure active harvest elements and actions",

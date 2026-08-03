@@ -1624,6 +1624,14 @@ public sealed class PlotNodeSO : IdScriptableObject
     public bool IsVisible() => visible;
 
     public List<PlotNodeActionInstance> GetActionInstances() => actionInstances;
+
+    public PlotNodeActionInstance AddAction(PlotNodeActionSO action)
+    {
+        availableActions.Add(action);
+        var instance = new PlotNodeActionInstance(this, action);
+        actionInstances.Add(instance);
+        return instance;
+    }
 }
 
 /// <summary>
@@ -1673,12 +1681,20 @@ public sealed class PlotNodeActionInstance
 
     public int GetMaximumInstances() => MaximumInstances;
 
+    public bool IsAtMinimumQuantity() => quantity == 1;
+
+    public void Cancel()
+    {
+        quantity = 0;
+        engaged = false;
+    }
+
     /// <summary>
     /// Models the shipped existing-row path: it clamps against the absolute maximum, not the
     /// remaining maximum, and performs no affordability check.
     /// </summary>
     public void PlayerChangeInstanceQuantity(int change) =>
-        quantity = Math.Max(0, Math.Min(quantity + change, GetMaximumInstances()));
+        quantity = Math.Max(1, Math.Min(quantity + change, GetMaximumInstances()));
 
     public void Engage() => engaged = true;
 }

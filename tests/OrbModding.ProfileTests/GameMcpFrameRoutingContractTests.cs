@@ -174,6 +174,8 @@ public sealed class GameMcpFrameRoutingContractTests
         "game_harvest" => new JObject
         {
             ["uuid"] = Guid.NewGuid().ToString("D"),
+            ["actionUuid"] = Guid.NewGuid().ToString("D"),
+            ["mode"] = "add",
         },
         "game_harvest_setup" => new JObject
         {

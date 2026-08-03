@@ -628,6 +628,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .HarvestLifecycleOwnershipFailure)
+                    , createPlotLifecycle: () => new PlotLifecycleGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureHarvestMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .HarvestOwnershipFailure)
                     , createChallenges: () => new ChallengeGameAction(
                         readAutoHarvestLifecycleEpoch,
                         tryCaptureMutationPermit: () =>
@@ -1901,11 +1909,7 @@ public sealed class Plugin : BaseUnityPlugin
         else if (kind == GameMcpCommandKind.Harvest)
         {
             nativeType = "PlotNodeSO";
-            mode = request.Uuid == KnownEntities.FruitTreePlot.Uuid
-                ? "fruit_tree"
-                : request.Uuid == KnownEntities.TreasureTreePlot.Uuid
-                    ? "treasure_tree"
-                    : string.Empty;
+            mode = request.Mode;
         }
         else if (kind == GameMcpCommandKind.SpellLevel)
             nativeType = "SpellRecipeSO";

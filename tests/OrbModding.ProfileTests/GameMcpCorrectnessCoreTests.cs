@@ -54,20 +54,28 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
-    public void HarvestPostStateReportsTheRequestedActivePairOrItsCompletedMasteryChange()
+    public void PlotPostStateReportsTheObservedRequestedPairQuantityChange()
     {
-        var plotId = Guid.Parse("f1000000-0000-0000-0000-000000000001");
-        var actionId = Guid.Parse("f1000000-0000-0000-0000-000000000002");
+        var plotId = KnownEntities.FruitTreePlot.Uuid;
+        var actionId = KnownEntities.FruitTreeCollect.Uuid;
         var before = new GameWorldState
         {
-            PlotNodes = PublicationTable<WorldPlotNode>.Create(new[] { Plot(plotId, 4) }),
+            PlotActions = PublicationTable<WorldPlotAction>.Create(new[]
+            {
+                PlotAction(plotId, actionId, instanceCount: 1,
+                    maximumRemainingInstances: 4),
+            }),
+            PlotActionInstances = PublicationTable<WorldPlotActionInstance>.Create(new[]
+            {
+                new WorldPlotActionInstance(plotId, actionId, 0, 2, true, false, true),
+            }),
         };
         var command = new GameMcpCommand(
             1,
             GameMcpCommandKind.Harvest,
             expectedLifecycleGeneration: 9,
             expectedConfigurationGeneration: 3,
-            mode: "execute",
+            mode: "add",
             targetId: plotId,
             secondaryId: actionId,
             derivedNativeType: "PlotNodeSO",
@@ -81,7 +89,11 @@ public sealed class GameMcpCorrectnessCoreTests
         var committed = GameMcpCommandResult.Committed("committed", 9, 3);
         var activeWorld = new GameWorldState
         {
-            PlotNodes = PublicationTable<WorldPlotNode>.Create(new[] { Plot(plotId, 4) }),
+            PlotActions = PublicationTable<WorldPlotAction>.Create(new[]
+            {
+                PlotAction(plotId, actionId, instanceCount: 1,
+                    maximumRemainingInstances: 3),
+            }),
             PlotActionInstances = PublicationTable<WorldPlotActionInstance>.Create(new[]
             {
                 new WorldPlotActionInstance(
@@ -97,18 +109,13 @@ public sealed class GameMcpCorrectnessCoreTests
 
         var active = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
             GameMcpTestHarness.Context(activeWorld), command, committed));
-        Assert.Equal("active", (string?)active["state"]);
-        Assert.Equal(3, (int)active["amount"]!);
+        Assert.Equal(2, (int)active["active"]!["before"]!);
+        Assert.Equal(3, (int)active["active"]!["after"]!);
+        Assert.Equal(plotId.ToString("D"), (string?)active["plot"]!["uuid"]);
+        Assert.False(string.IsNullOrWhiteSpace((string?)active["plot"]!["name"]));
         Assert.Equal(actionId.ToString("D"), (string?)active["action"]!["uuid"]);
-
-        var completedWorld = new GameWorldState
-        {
-            PlotNodes = PublicationTable<WorldPlotNode>.Create(new[] { Plot(plotId, 5) }),
-        };
-        var completed = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
-            GameMcpTestHarness.Context(completedWorld), command, committed));
-        Assert.Equal(4, (int)completed["mastery"]!["before"]!);
-        Assert.Equal(5, (int)completed["mastery"]!["after"]!);
+        Assert.False(string.IsNullOrWhiteSpace((string?)active["action"]!["name"]));
+        Assert.True((bool)active["next"]!["available"]!);
     }
 
     [Fact]
@@ -247,38 +254,20 @@ public sealed class GameMcpCorrectnessCoreTests
             developmentProgress: 0);
     }
 
-    private static WorldPlotNode Plot(Guid plotId, int masteryLevel) => new(
-        new RawPlotNodeSample(
-            plotId,
-            true,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            masteryLevel,
-            false,
-            false,
-            false,
-            false,
-            false,
-            0,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            BigDouble.Zero,
-            0,
-            0,
-            0),
-        0,
-        0);
+    private static WorldPlotAction PlotAction(
+        Guid plotId,
+        Guid actionId,
+        int instanceCount,
+        int maximumRemainingInstances) =>
+        new(
+            new RawPlotAction(
+                plotId,
+                actionId,
+                offeredCount: 1,
+                instanceCount,
+                PlotActionPrerequisiteEvidence.NativeLatchedTrue),
+            elementCost: 2,
+            elementCostKnown: true,
+            hasEnoughForOneInstance: true,
+            maximumRemainingInstances);
 }

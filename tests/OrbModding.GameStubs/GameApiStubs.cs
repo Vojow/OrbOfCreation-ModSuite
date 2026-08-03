@@ -656,6 +656,8 @@ public interface IActionable
 /// <summary>The plot-action queue: one instance, reached by uuid rather than through a registry.</summary>
 public sealed class PlotNodeActionInstanceListVariable : EmptyTypeListVariable<PlotNodeActionInstance>
 {
+    public bool SuppressMutation { get; set; }
+
     protected override bool IsFilledElement(PlotNodeActionInstance element) =>
         element is not null && !element.IsEmpty();
 
@@ -675,8 +677,9 @@ public sealed class PlotNodeActionInstanceListVariable : EmptyTypeListVariable<P
 
     public void AddInstance(PlotNodeActionInstance prototype, int quantity)
     {
+        if (SuppressMutation) return;
         var existing = FindInstance(prototype);
-        if (existing is not null)
+        if (existing is not null && !existing.IsEmpty())
         {
             existing.PlayerChangeInstanceQuantity(quantity);
             return;
@@ -694,6 +697,14 @@ public sealed class PlotNodeActionInstanceListVariable : EmptyTypeListVariable<P
             }
         }
         value.Add(prototype);
+    }
+
+    public void RemoveInstance(PlotNodeActionInstance prototype, int quantity)
+    {
+        if (SuppressMutation) return;
+        var existing = FindInstance(prototype);
+        if (existing is null || existing.IsEmpty()) return;
+        existing.PlayerChangeInstanceQuantity(-quantity);
     }
 }
 

@@ -38,6 +38,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly CraftingInstanceLifecycleGameAction? _craftingInstances;
     private readonly LoadoutGameAction? _loadouts;
     private readonly HarvestLifecycleGameAction? _harvestLifecycle;
+    private readonly PlotLifecycleGameAction? _plotLifecycle;
     private readonly ChallengeGameAction? _challenges;
     private readonly PrestigeGameAction? _prestige;
     private readonly ResearchGameAction? _research;
@@ -66,6 +67,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         CraftingInstanceLifecycleGameAction? craftingInstances = null,
         LoadoutGameAction? loadouts = null,
         HarvestLifecycleGameAction? harvestLifecycle = null,
+        PlotLifecycleGameAction? plotLifecycle = null,
         ChallengeGameAction? challenges = null,
         PrestigeGameAction? prestige = null,
         ResearchGameAction? research = null)
@@ -90,6 +92,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _craftingInstances = craftingInstances;
         _loadouts = loadouts;
         _harvestLifecycle = harvestLifecycle;
+        _plotLifecycle = plotLifecycle;
         _challenges = challenges;
         _prestige = prestige;
         _research = research;
@@ -164,6 +167,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _craftingInstances?.InvalidateLifecycle();
         _loadouts?.InvalidateLifecycle();
         _harvestLifecycle?.InvalidateLifecycle();
+        _plotLifecycle?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
         _prestige?.InvalidateLifecycle();
         _research?.InvalidateLifecycle();
@@ -237,6 +241,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteLoadout(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.HarvestLifecycle)
                 return ExecuteHarvestLifecycle(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.Harvest)
+                return ExecutePlotLifecycle(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Challenge)
                 return ExecuteChallenge(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Prestige)
@@ -678,6 +684,30 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             GameMcpHarvestLifecycleProjection.Project(in submission));
     }
 
+    private GameMcpCommandResult ExecutePlotLifecycle(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_plotLifecycle is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared plot-action GameAction was not composed", lifecycle,
+                configurationGeneration);
+        GameMcpNativeActionAdmission.AssertNativeType(command, "PlotNodeSO");
+        var kind = command.Mode switch
+        {
+            "add" => PlotLifecycleActionKind.Add,
+            "remove" => PlotLifecycleActionKind.Remove,
+            _ => throw new ArgumentException("unsupported plot-action mode " + command.Mode),
+        };
+        var action = new PlotLifecycleAction(kind, command.TargetId,
+            command.SecondaryId, command.Amount, command.ExpectedLifecycleGeneration);
+        var submission = _plotLifecycle.Submit(in action);
+        var result = PlotLifecycleActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason);
+    }
+
     private GameMcpCommandResult ExecuteGenericLevel(
         GameMcpCommand command,
         long lifecycle,
@@ -884,23 +914,6 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         GameWorldState world,
         in ServiceActionResult result)
     {
-        if (command.Kind == GameMcpCommandKind.Harvest &&
-            result.Disposition == ServiceActionDisposition.Rejected &&
-            result.Code == CommonActionResultCodes.PolicyRejected)
-        {
-            var pair = command.Mode == "fruit_tree"
-                ? AutoHarvestPair.FruitTree
-                : AutoHarvestPair.TreasureTree;
-            var expected = AutoHarvestPairAuthoring.For(pair);
-            var facts = AutoHarvestWorldFacts.For(
-                world,
-                expected.PlotId,
-                expected.ActionId);
-            var harvestEvidenceReason =
-                HarvestPrerequisiteEvidenceReason(command.Mode, facts.Prerequisites);
-            if (harvestEvidenceReason is not null) return harvestEvidenceReason;
-        }
-
         if (command.Kind != GameMcpCommandKind.Purchase ||
             !string.Equals(command.Mode, "upgrade", StringComparison.Ordinal) ||
             result.Disposition != ServiceActionDisposition.Skipped ||
@@ -912,14 +925,6 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
 
         return "This upgrade's live price is still refreshing; open its game screen and retry.";
     }
-
-    internal static string? HarvestPrerequisiteEvidenceReason(
-        string mode,
-        PlotActionPrerequisiteEvidence prerequisites) =>
-        prerequisites == PlotActionPrerequisiteEvidence.Unknown
-            ? "The exact " + mode +
-              " harvest prerequisite cannot be confirmed right now."
-            : null;
 
     private sealed class GameMcpActionUnavailableException : Exception
     {
@@ -1018,28 +1023,6 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                     world.CollectedAtEpoch,
                     in belief);
                 return ((AutoConceptFeatureRuntime)feature).TryExecuteGameMcp(
-                    in action, in config, in context);
-            }
-            case GameMcpCommandKind.Harvest:
-            {
-                GameMcpNativeActionAdmission.AssertNativeType(command, "PlotNodeSO");
-                var pair = command.Mode == "fruit_tree"
-                    ? AutoHarvestPair.FruitTree
-                    : AutoHarvestPair.TreasureTree;
-                var expected = AutoHarvestPairAuthoring.For(pair);
-                if (command.TargetId != expected.PlotId)
-                {
-                    throw new GameMcpActionUnavailableException(
-                        "harvest_target_mismatch",
-                        "the server-derived " + command.Mode + " harvest pair requires plot " +
-                        expected.PlotId.ToString("D") + ", not " +
-                        command.TargetId.ToString("D"));
-                }
-                var action = new AutoHarvestCycleAction(
-                    pair,
-                    AutoHarvestWorldFacts.For(world, expected.PlotId, expected.ActionId),
-                    AutoHarvestActionSafety.For(world, in expected));
-                return ((AutoHarvestFeatureRuntime)feature).TryExecuteGameMcp(
                     in action, in config, in context);
             }
             case GameMcpCommandKind.SpellLevel:
@@ -1148,6 +1131,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _craftingInstances?.Dispose();
             _loadouts?.Dispose();
             _harvestLifecycle?.Dispose();
+            _plotLifecycle?.Dispose();
             _challenges?.Dispose();
             _prestige?.Dispose();
             _research?.Dispose();

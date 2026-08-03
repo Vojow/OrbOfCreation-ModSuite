@@ -221,6 +221,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         "The current MCP operation does not hold GenericLevel.";
     public string PlayerLoadoutOwnershipFailure =>
         "The current MCP operation does not hold PlayerLoadout.";
+    public string HarvestOwnershipFailure =>
+        "The current MCP operation does not hold HarvestAction.";
     public string HarvestLifecycleOwnershipFailure =>
         "The current MCP operation does not hold HarvestLifecycle.";
 

@@ -36,6 +36,7 @@ internal static class AutomataServiceCycleComposition
         Func<SpellWorkbenchGameAction, EquipmentLoadoutGameAction,
             AlchemyLoadoutGameAction, LoadoutGameAction>? createLoadouts = null,
         Func<HarvestLifecycleGameAction>? createHarvestLifecycle = null,
+        Func<PlotLifecycleGameAction>? createPlotLifecycle = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
         Func<ResearchGameAction>? createResearch = null)
@@ -62,6 +63,7 @@ internal static class AutomataServiceCycleComposition
                 createCraftingInstances,
                 createLoadouts,
                 createHarvestLifecycle,
+                createPlotLifecycle,
                 createChallenges,
                 createPrestige,
                 createResearch);
@@ -103,6 +105,7 @@ internal static class AutomataServiceCycleComposition
         Func<SpellWorkbenchGameAction, EquipmentLoadoutGameAction,
             AlchemyLoadoutGameAction, LoadoutGameAction>? createLoadouts = null,
         Func<HarvestLifecycleGameAction>? createHarvestLifecycle = null,
+        Func<PlotLifecycleGameAction>? createPlotLifecycle = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
         Func<ResearchGameAction>? createResearch = null)
@@ -132,6 +135,7 @@ internal static class AutomataServiceCycleComposition
         CraftingInstanceLifecycleGameAction? craftingInstances = null;
         LoadoutGameAction? loadouts = null;
         HarvestLifecycleGameAction? harvestLifecycle = null;
+        PlotLifecycleGameAction? plotLifecycle = null;
         ChallengeGameAction? challenges = null;
         PrestigeGameAction? prestige = null;
         ResearchGameAction? research = null;
@@ -205,6 +209,7 @@ internal static class AutomataServiceCycleComposition
                 loadouts = createLoadouts(spellWorkbench, equipmentLoadout, alchemyLoadout);
             }
             harvestLifecycle = createHarvestLifecycle?.Invoke();
+            plotLifecycle = createPlotLifecycle?.Invoke();
             challenges = createChallenges?.Invoke();
             prestige = createPrestige?.Invoke();
             research = createResearch?.Invoke();
@@ -228,6 +233,7 @@ internal static class AutomataServiceCycleComposition
                 craftingInstances,
                 loadouts,
                 harvestLifecycle,
+                plotLifecycle,
                 challenges,
                 prestige,
                 research);
@@ -248,6 +254,7 @@ internal static class AutomataServiceCycleComposition
             craftingInstances?.Dispose();
             loadouts?.Dispose();
             harvestLifecycle?.Dispose();
+            plotLifecycle?.Dispose();
             challenges?.Dispose();
             prestige?.Dispose();
             research?.Dispose();

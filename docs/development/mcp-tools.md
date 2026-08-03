@@ -127,7 +127,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_purchase` | Buy an Attribute (`StructureSO`) or Upgrade derived from its UUID |
 | `game_cast` | Fire, release charge, or turn off one equipped toggle spell |
 | `game_concept` | Add or remove one owned concept assignment |
-| `game_harvest` | Harvest an audited pair derived from a plot UUID |
+| `game_harvest` | Add, increase, decrease, or cancel any action offered by a plot |
 | `game_harvest_setup` | Add or remove active harvest elements and their offered actions |
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
 | `game_casting_dial` | Set the global Output Level or Reserve Level shown on the Casting screen |
@@ -390,6 +390,23 @@ standing usage capacity, and mastery-derived action maximum on Unity's main thre
 only the active count before and after plus the settled next decision for the affected element or
 pair. The one mutation sentinel is that game-written active count moving in the requested
 direction; resource reservations and drain math are planning facts, never postcondition ledgers.
+
+### Plot action lifecycle
+
+The `plot-actions` category enumerates every `PlotNodeSO` / `PlotNodeActionSO` pair authored by
+the game, not only Auto Harvest's fruit and treasure collect pairs. Each row names both handles,
+shows the active quantity, and carries add/remove decisions. An available add includes the plot
+quantity consumed by one instance and the current maximum additional count. A prerequisite latch
+that has not been evaluated is reported as `needs_live_prerequisite_check`; the action boundary
+performs the exact native check instead of a read mutating the latch.
+
+Call `game_harvest(mode="add"|"remove", uuid=..., actionUuid=...)`. `amount` defaults to one.
+Add uses the same active plot-action list control as `UIPlotNodeActionList.OnActionClick`.
+Remove decrements an existing quantity; at the native minimum it uses that UI handler's distinct
+`Cancel()` path, so crossing from several instances through the last one requires two calls.
+Success returns the observed active quantity change and the settled next decision. The only
+postcondition is the exact pair's game-written active quantity moving in the requested direction;
+refund behavior on cancellation is neither recomputed nor verified.
 
 ### Brewing Station lifecycle
 
@@ -756,7 +773,7 @@ where components are supplied, it derives the target from the live resolver inst
 tools/game-mcp-client.py call game_purchase --arguments \
   '{"uuid":"ATTRIBUTE_OR_UPGRADE_UUID","count":1}'
 tools/game-mcp-client.py call game_harvest --arguments \
-  '{"uuid":"PLOT_UUID"}'
+  '{"mode":"add","uuid":"PLOT_UUID","actionUuid":"PLOT_ACTION_UUID","amount":1}'
 tools/game-mcp-client.py call game_harvest_setup --arguments \
   '{"mode":"add_action","uuid":"HARVEST_ELEMENT_UUID","actionUuid":"HARVEST_ACTION_UUID","amount":1}'
 tools/game-mcp-client.py call game_cast --arguments \

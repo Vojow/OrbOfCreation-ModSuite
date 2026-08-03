@@ -403,26 +403,6 @@ public sealed class GameMcpActionAdmissionTests
     }
 }
 
-public sealed class GameMcpActionFailureReasonTests
-{
-    [Fact]
-    public void MissingHarvestPrerequisiteEvidenceDoesNotClaimTheNativeCheckFailed()
-    {
-        var reason = AutomataServiceCycleRuntime.HarvestPrerequisiteEvidenceReason(
-            "fruit_tree",
-            PlotActionPrerequisiteEvidence.Unknown);
-
-        Assert.NotNull(reason);
-        Assert.Equal(
-            "The exact fruit_tree harvest prerequisite cannot be confirmed right now.",
-            reason);
-        Assert.DoesNotContain("unmet", reason);
-        Assert.Null(AutomataServiceCycleRuntime.HarvestPrerequisiteEvidenceReason(
-            "fruit_tree",
-            PlotActionPrerequisiteEvidence.UnknownNeedsNativeValidation));
-    }
-}
-
 public sealed class GameMcpInlineCompletionTests
 {
     [Fact]
@@ -944,5 +924,7 @@ internal static class GameMcpAcceptanceFixture
             Classification = GameMcpOperationClass.Gameplay,
             RequiredData = GameMcpFrameData.World | GameMcpFrameData.Configuration,
             Uuid = KnownEntities.FruitTreePlot.Uuid,
+            SecondaryUuid = KnownEntities.FruitTreeCollect.Uuid,
+            Mode = "add",
         }.Freeze());
 }

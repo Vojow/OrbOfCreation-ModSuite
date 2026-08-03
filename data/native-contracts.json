@@ -22827,6 +22827,82 @@
     {
       "id": "harvest-lifecycle.scaling-drain-cost-capture", "assembly": "assembly-csharp", "type": "ScalingMap`2", "typeVisibility": "public", "kind": "method", "member": "GetDrainCostMod",
       "visibility": "public", "static": false, "returnType": "!0", "parameters": [], "owners": ["Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "plot-lifecycle.plot.type-action", "assembly": "assembly-csharp", "type": "PlotNodeSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.action.type-action", "assembly": "assembly-csharp", "type": "PlotNodeActionSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.instance.type-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstance", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.list.type-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstanceListVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.plot-visible-action", "assembly": "assembly-csharp", "type": "PlotNodeSO", "typeVisibility": "public", "kind": "method", "member": "IsVisible",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.plot-instances-action", "assembly": "assembly-csharp", "type": "PlotNodeSO", "typeVisibility": "public", "kind": "method", "member": "GetActionInstances",
+      "visibility": "public", "static": false, "returnType": "System.Collections.Generic.List`1<PlotNodeActionInstance>", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.instance-action-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstance", "typeVisibility": "public", "kind": "method", "member": "GetAction",
+      "visibility": "public", "static": false, "returnType": "PlotNodeActionSO", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.instance-plot-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstance", "typeVisibility": "public", "kind": "method", "member": "GetElement",
+      "visibility": "public", "static": false, "returnType": "PlotNodeSO", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.instance-visible-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstance", "typeVisibility": "public", "kind": "method", "member": "IsVisible",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.instance-affordable-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstance", "typeVisibility": "public", "kind": "method", "member": "HasEnoughForOneInstance",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.instance-maximum-remaining-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstance", "typeVisibility": "public", "kind": "method", "member": "GetMaximumRemInstances",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.instance-maximum-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstance", "typeVisibility": "public", "kind": "method", "member": "GetMaximumInstances",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.instance-quantity-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstance", "typeVisibility": "public", "kind": "method", "member": "GetActualQuantity",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.instance-at-minimum-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstance", "typeVisibility": "public", "kind": "method", "member": "IsAtMinimumQuantity",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.instance-cancel-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstance", "typeVisibility": "public", "kind": "method", "member": "Cancel",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.list-find-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "FindInstance",
+      "visibility": "public", "static": false, "returnType": "PlotNodeActionInstance", "parameters": ["PlotNodeActionInstance"], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.list-room-action", "assembly": "assembly-csharp", "type": "EmptyTypeListVariable`1", "typeVisibility": "public", "kind": "method", "member": "HasEmptySpot",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.list-add-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "AddInstance",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["PlotNodeActionInstance", "System.Int32"], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "plot-lifecycle.list-remove-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "RemoveInstance",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["PlotNodeActionInstance", "System.Int32"], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
     }
   ],
   "sourceAudit": {
@@ -22844,6 +22920,7 @@
       "src/Common",
       "src/DiscoveryTree",
       "src/HarvestLifecycle",
+      "src/PlotLifecycle",
     "src/GenericDiscovery",
       "src/GenericLevel",
       "src/Loadout",
