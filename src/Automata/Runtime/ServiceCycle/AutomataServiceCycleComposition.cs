@@ -109,6 +109,7 @@ internal static class AutomataServiceCycleComposition
 #if SERVICE_CYCLE_PROFILE
                 , profileProbe
 #endif
+                , message => log.LogAutomataError(message)
                 );
             var observabilityOptions = hostDependencies.Observability;
             host.AttachObservability(observability, in observabilityOptions);

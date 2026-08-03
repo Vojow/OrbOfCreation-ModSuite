@@ -3,6 +3,9 @@ using System;
 namespace OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 /// <summary>The compact, stable wire identity of an exact native action target.</summary>
+/// <remarks>
+/// This is an append-only schema-3 roster. Existing numeric values are never reused or renumbered.
+/// </remarks>
 public enum ServiceActionNativeTypeId : ushort
 {
     NotApplicable = 0,
@@ -21,9 +24,8 @@ public enum ServiceActionRouteStatus : byte
 {
     NotApplicable = 1,
     Resolved = 2,
-    Missing = 3,
-    Unreadable = 4,
-    Contradictory = 5,
+    Contradictory = 3,
+    AttributionFailed = 4,
 }
 
 /// <summary>
@@ -40,7 +42,7 @@ public readonly struct ServiceActionJournalAttribution
     {
         if (nativeType is < ServiceActionNativeTypeId.NotApplicable or > ServiceActionNativeTypeId.EquipmentSO)
             throw new ArgumentOutOfRangeException(nameof(nativeType));
-        if (routeStatus is < ServiceActionRouteStatus.NotApplicable or > ServiceActionRouteStatus.Contradictory)
+        if (routeStatus is < ServiceActionRouteStatus.NotApplicable or > ServiceActionRouteStatus.AttributionFailed)
             throw new ArgumentOutOfRangeException(nameof(routeStatus));
         if ((nativeType == ServiceActionNativeTypeId.NotApplicable) != (candidateId == Guid.Empty))
             throw new ArgumentException(
@@ -55,9 +57,12 @@ public readonly struct ServiceActionJournalAttribution
             throw new ArgumentException("Only a resolved route can carry list or view UUIDs.");
         }
         if (candidateId == Guid.Empty && routeStatus is not (
-                ServiceActionRouteStatus.NotApplicable or ServiceActionRouteStatus.Contradictory))
+                ServiceActionRouteStatus.NotApplicable or ServiceActionRouteStatus.AttributionFailed))
             throw new ArgumentException(
                 "A non-native action cannot carry a native route state.", nameof(routeStatus));
+        if (candidateId != Guid.Empty && routeStatus == ServiceActionRouteStatus.AttributionFailed)
+            throw new ArgumentException(
+                "An attribution failure cannot claim a native candidate.", nameof(routeStatus));
         CandidateId = candidateId;
         NativeType = nativeType;
         ListId = listId;
@@ -72,13 +77,14 @@ public readonly struct ServiceActionJournalAttribution
     public ServiceActionRouteStatus RouteStatus { get; }
     public bool IsValid =>
         NativeType is >= ServiceActionNativeTypeId.NotApplicable and <= ServiceActionNativeTypeId.EquipmentSO &&
-        RouteStatus is >= ServiceActionRouteStatus.NotApplicable and <= ServiceActionRouteStatus.Contradictory &&
+        RouteStatus is >= ServiceActionRouteStatus.NotApplicable and <= ServiceActionRouteStatus.AttributionFailed &&
         (NativeType == ServiceActionNativeTypeId.NotApplicable) == (CandidateId == Guid.Empty) &&
         (RouteStatus == ServiceActionRouteStatus.Resolved
             ? ListId != Guid.Empty && ViewId != Guid.Empty
             : ListId == Guid.Empty && ViewId == Guid.Empty) &&
         (CandidateId != Guid.Empty || RouteStatus is
-            ServiceActionRouteStatus.NotApplicable or ServiceActionRouteStatus.Contradictory);
+            ServiceActionRouteStatus.NotApplicable or ServiceActionRouteStatus.AttributionFailed) &&
+        (CandidateId == Guid.Empty || RouteStatus != ServiceActionRouteStatus.AttributionFailed);
 
     public static ServiceActionJournalAttribution Native(
         Guid candidateId,
@@ -98,5 +104,5 @@ public readonly struct ServiceActionJournalAttribution
 
     internal static ServiceActionJournalAttribution Failed =>
         new(Guid.Empty, ServiceActionNativeTypeId.NotApplicable, Guid.Empty, Guid.Empty,
-            ServiceActionRouteStatus.Contradictory);
+            ServiceActionRouteStatus.AttributionFailed);
 }

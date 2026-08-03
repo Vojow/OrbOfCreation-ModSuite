@@ -19,6 +19,7 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
     internal ServiceActionDispatch Advance(
         in ServiceActionFact actionFact,
         in ServiceActionJournalAttribution attribution,
+        string? attributionFailureReason,
         in ServiceFaultRecoveryFact pendingRecovery,
         MonotonicTimestamp observedAt,
         bool committed,
@@ -47,7 +48,8 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
                 attribution,
                 true,
                 completed,
-                recoveredFault: CommitRecovery(in pendingRecovery));
+                recoveredFault: CommitRecovery(in pendingRecovery),
+                attributionFailureReason: attributionFailureReason);
         }
         if (_runtime.Lifetime.IsSuperseded)
         {
@@ -66,19 +68,22 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
                 attribution,
                 true,
                 orphaned,
-                recoveredFault: CommitRecovery(in pendingRecovery));
+                recoveredFault: CommitRecovery(in pendingRecovery),
+                attributionFailureReason: attributionFailureReason);
         }
         return new ServiceActionDispatch(
             actionFact,
             attribution,
             false,
             default,
-            recoveredFault: CommitRecovery(in pendingRecovery));
+            recoveredFault: CommitRecovery(in pendingRecovery),
+            attributionFailureReason: attributionFailureReason);
     }
 
     internal ServiceActionDispatch Terminate(
         in ServiceActionFact actionFact,
         in ServiceActionJournalAttribution attribution,
+        string? attributionFailureReason,
         in ServiceActionResult result,
         in ServiceFaultRecoveryFact pendingRecovery,
         int index,
@@ -124,7 +129,8 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
             terminal,
             fault,
             retryDue,
-            CommitRecovery(in pendingRecovery));
+            CommitRecovery(in pendingRecovery),
+            attributionFailureReason);
     }
 
     private ServiceFaultRecoveryFact CommitRecovery(

@@ -30,8 +30,11 @@ internal sealed class AutomataServiceCycleHost : IDisposable
         Func<long> readFrameIdentity,
         IServiceCyclePumpTimingSink? pumpTiming,
         ServiceCycleSemanticRecorder? semanticTrace,
-        ServiceCycleProfileProbe profileProbe)
-        : this(registry, readFrameIdentity, pumpTiming, semanticTrace, null, profileProbe) { }
+        ServiceCycleProfileProbe profileProbe,
+        Action<string>? attributionFailureLog = null)
+        : this(
+            registry, readFrameIdentity, pumpTiming, semanticTrace, null, profileProbe,
+            attributionFailureLog) { }
 
     internal AutomataServiceCycleHost(
         ServiceCycleRegistry registry,
@@ -39,14 +42,16 @@ internal sealed class AutomataServiceCycleHost : IDisposable
         IServiceCyclePumpTimingSink? pumpTiming,
         ServiceCycleSemanticRecorder? semanticTrace,
         ServiceActionOutcomeWindowRegistry? actionOutcomes,
-        ServiceCycleProfileProbe profileProbe)
+        ServiceCycleProfileProbe profileProbe,
+        Action<string>? attributionFailureLog = null)
 #else
     internal AutomataServiceCycleHost(
         ServiceCycleRegistry registry,
         Func<long> readFrameIdentity,
         IServiceCyclePumpTimingSink? pumpTiming,
         ServiceCycleSemanticRecorder? semanticTrace,
-        ServiceActionOutcomeWindowRegistry? actionOutcomes = null)
+        ServiceActionOutcomeWindowRegistry? actionOutcomes = null,
+        Action<string>? attributionFailureLog = null)
 #endif
     {
         if (registry is null) throw new ArgumentNullException(nameof(registry));
@@ -65,6 +70,7 @@ internal sealed class AutomataServiceCycleHost : IDisposable
 #if SERVICE_CYCLE_PROFILE
             , profileProbe
 #endif
+            , attributionFailureLog
             );
     }
 

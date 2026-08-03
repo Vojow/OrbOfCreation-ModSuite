@@ -2,6 +2,7 @@ using System;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Tracing.BufferedSegments;
 #if SERVICE_CYCLE_PROFILE
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
 #endif
@@ -100,10 +101,8 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
         var snapshot = configuration.Snapshot;
         observer?.ActionAttempted(ordinal, in context);
         var executionStartedAt = _runtime.Clock.Now;
-        var attribution = DescribeAction(in action, out var attributionValid);
-        var result = attributionValid
-            ? ExecuteAction(in action, in snapshot, in context)
-            : ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
+        var attribution = DescribeAction(in action, out var attributionFailureReason);
+        var result = ExecuteAction(in action, in snapshot, in context);
 
         var observedAt = _runtime.Clock.Now;
         var actionFact = new ServiceActionFact(
@@ -130,6 +129,7 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
             ? _outcomes.Advance(
                 in actionFact,
                 in attribution,
+                attributionFailureReason,
                 in pendingRecovery,
                 observedAt,
                 result.Disposition == ServiceActionDisposition.Committed,
@@ -137,6 +137,7 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
             : _outcomes.Terminate(
                 in actionFact,
                 in attribution,
+                attributionFailureReason,
                 in result,
                 in pendingRecovery,
                 index,
@@ -167,17 +168,25 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
 
     private ServiceActionJournalAttribution DescribeAction(
         in TAction action,
-        out bool valid)
+        out string? failureReason)
     {
         try
         {
             var attribution = _runtime.Definition.DescribeAction(in action);
-            valid = attribution.IsValid;
-            return valid ? attribution : ServiceActionJournalAttribution.Failed;
+            if (attribution.IsValid)
+            {
+                failureReason = null;
+                return attribution;
+            }
+            failureReason = "the service returned an invalid attribution value";
+            return ServiceActionJournalAttribution.Failed;
         }
-        catch
+        catch (Exception exception) when (!BufferedSegmentFailurePolicy.IsProcessFatal(exception))
         {
-            valid = false;
+            var root = exception.GetBaseException();
+            failureReason = string.IsNullOrWhiteSpace(root.Message)
+                ? root.GetType().FullName ?? root.GetType().Name
+                : root.Message;
             return ServiceActionJournalAttribution.Failed;
         }
     }

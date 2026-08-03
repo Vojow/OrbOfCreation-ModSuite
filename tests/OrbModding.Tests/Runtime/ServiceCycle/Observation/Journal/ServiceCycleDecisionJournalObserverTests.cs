@@ -122,6 +122,34 @@ public sealed class ServiceCycleDecisionJournalObserverTests
     }
 
     [Fact]
+    public void FaultedActionCycleKeepsFaultVisibleBesideActionOutcome()
+    {
+        var fixture = new Fixture();
+        var start = CapturedAttempt(1);
+        var response = SuccessfulResponse(1, actionCount: 1);
+        var terminal = FaultedAction(1);
+
+        fixture.Observer.StartAttemptObserved(0, in start, new MonotonicTimestamp(20));
+        fixture.Observer.ResponseAcquired(0, in response, new MonotonicTimestamp(32));
+        fixture.Observer.ActionDispatched(0, in terminal, new MonotonicTimestamp(46));
+        fixture.Observer.Advance(new MonotonicTimestamp(100));
+
+        Assert.Collection(
+            fixture.Sink.Records,
+            action =>
+            {
+                Assert.Equal(DecisionJournalRecordKind.Action, action.Kind);
+                Assert.Equal(ServiceActionDisposition.Faulted, action.ActionOutcome.Disposition);
+            },
+            decision =>
+            {
+                Assert.Equal(DecisionJournalRecordKind.DecisionSpan, decision.Kind);
+                Assert.Equal(DecisionJournalDecisionOutcomeKind.Fault, decision.DecisionOutcomeKind);
+                Assert.Equal(ServiceFaultCategory.ActionExecution, decision.FaultCategory);
+            });
+    }
+
+    [Fact]
     public void FaultStatePersistsUntilExactRecovery()
     {
         var fixture = new Fixture();

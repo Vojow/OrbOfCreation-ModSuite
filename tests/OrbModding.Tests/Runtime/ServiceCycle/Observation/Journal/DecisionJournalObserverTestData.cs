@@ -215,6 +215,38 @@ internal static class DecisionJournalObserverTestData
         return new ServiceActionDispatch(fact, attribution, true, receipt);
     }
 
+    internal static ServiceActionDispatch FaultedAction(ulong cycleValue)
+    {
+        var cycle = Identity(cycleValue);
+        var completedAt = new MonotonicTimestamp(45);
+        var result = ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
+        var context = new ServiceActionContext(
+            cycle,
+            new BatchId(cycleValue),
+            new ActionId(1),
+            0,
+            new MonotonicTimestamp(44));
+        var fact = new ServiceActionFact(context, result, new MonotonicTimestamp(44), completedAt);
+        var receipt = BatchReceipt.Terminated(
+            cycle,
+            new BatchId(cycleValue),
+            actionCount: 1,
+            committedCount: 0,
+            terminalIndex: 0,
+            result,
+            default,
+            completedAt);
+        var fault = new ServiceFault(
+            ServiceFaultCategory.ActionExecution,
+            CommonActionResultCodes.AdapterFault,
+            1,
+            completedAt);
+        var attribution = ServiceActionJournalAttribution.Native(
+            new Guid("11111111-1111-1111-1111-111111111111"),
+            ServiceActionNativeTypeId.StructureSO);
+        return new ServiceActionDispatch(fact, attribution, true, receipt, fault);
+    }
+
     /// <summary>
     /// The world collector's shape: one action that committed by publishing a snapshot, so the batch
     /// truthfully reports no native call at all.

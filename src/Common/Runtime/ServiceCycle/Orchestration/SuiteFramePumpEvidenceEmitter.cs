@@ -1,3 +1,4 @@
+using System;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
@@ -12,13 +13,15 @@ internal sealed class SuiteFramePumpEvidenceEmitter
 {
     private readonly SuiteFramePumpTraceSession _traces;
     private readonly SuiteFramePumpJournalSession _journal;
+    private readonly Action<string>? _attributionFailureLog;
 #if SERVICE_CYCLE_PROFILE
     private readonly SuiteFramePumpEvidenceProfiler _profiler;
 #endif
 
     internal SuiteFramePumpEvidenceEmitter(
         SuiteFramePumpTraceSession traces,
-        SuiteFramePumpJournalSession journal
+        SuiteFramePumpJournalSession journal,
+        Action<string>? attributionFailureLog
 #if SERVICE_CYCLE_PROFILE
         , SuiteFramePumpEvidenceProfiler profiler
 #endif
@@ -26,6 +29,7 @@ internal sealed class SuiteFramePumpEvidenceEmitter
     {
         _traces = traces;
         _journal = journal;
+        _attributionFailureLog = attributionFailureLog;
 #if SERVICE_CYCLE_PROFILE
         _profiler = profiler;
 #endif
@@ -121,6 +125,14 @@ internal sealed class SuiteFramePumpEvidenceEmitter
 #endif
         }
         _journal.Observer?.ActionDispatched(ordinal, in dispatch, observedAt);
+        if (dispatch.AttributionFailureReason is { } reason)
+        {
+            var action = dispatch.ActionFact.Context;
+            _attributionFailureLog?.Invoke(
+                $"ServiceCycle action attribution failed for service ordinal {ordinal + 1}, " +
+                $"cycle {action.Cycle.Cycle.Value}, action {action.Action.Value}; " +
+                $"the action executed and the journal marked attribution failed: {reason}");
+        }
     }
 
     internal void StartAttemptObserved(

@@ -84,6 +84,21 @@ public sealed class DecisionJournalRecordTests
     }
 
     [Fact]
+    public void SchemaThreeNativeTypeRosterIsAppendOnlyAndPinned()
+    {
+        Assert.Equal(9, Enum.GetValues(typeof(ServiceActionNativeTypeId)).Length);
+        Assert.Equal(0, (ushort)ServiceActionNativeTypeId.NotApplicable);
+        Assert.Equal(1, (ushort)ServiceActionNativeTypeId.StructureSO);
+        Assert.Equal(2, (ushort)ServiceActionNativeTypeId.UpgradeSO);
+        Assert.Equal(3, (ushort)ServiceActionNativeTypeId.PlotNodeActionSO);
+        Assert.Equal(4, (ushort)ServiceActionNativeTypeId.SpellRecipeSO);
+        Assert.Equal(5, (ushort)ServiceActionNativeTypeId.AlchemyRecipeSO);
+        Assert.Equal(6, (ushort)ServiceActionNativeTypeId.ConsumableSO);
+        Assert.Equal(7, (ushort)ServiceActionNativeTypeId.CraftingRecipeSO);
+        Assert.Equal(8, (ushort)ServiceActionNativeTypeId.EquipmentSO);
+    }
+
+    [Fact]
     public void MissingCycleBreaksOtherwiseEquivalentSpan()
     {
         var first = DecisionJournalRecord.Decision(CreateObservation(1, 10));

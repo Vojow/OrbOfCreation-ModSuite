@@ -28,26 +28,29 @@ public sealed class SuiteFramePump : IDisposable
         ServiceCycleRegistry registry,
         ServiceCycleSemanticRecorder? semanticRecorder)
 #if SERVICE_CYCLE_PROFILE
-        : this(registry, semanticRecorder, null, new ServiceCycleProfileProbe()) { }
+        : this(registry, semanticRecorder, null, new ServiceCycleProfileProbe(), null) { }
 
     internal SuiteFramePump(
         ServiceCycleRegistry registry,
         ServiceCycleSemanticRecorder? semanticRecorder,
         ServiceActionOutcomeWindowRegistry? outcomeWindows,
-        ServiceCycleProfileProbe profileProbe)
+        ServiceCycleProfileProbe profileProbe,
+        Action<string>? attributionFailureLog = null)
 #else
-        : this(registry, semanticRecorder, null) { }
+        : this(registry, semanticRecorder, null, null) { }
 
     internal SuiteFramePump(
         ServiceCycleRegistry registry,
         ServiceCycleSemanticRecorder? semanticRecorder,
-        ServiceActionOutcomeWindowRegistry? outcomeWindows)
+        ServiceActionOutcomeWindowRegistry? outcomeWindows,
+        Action<string>? attributionFailureLog = null)
 #endif
     {
         _state = new SuiteFramePumpState(
             registry,
             semanticRecorder,
-            outcomeWindows
+            outcomeWindows,
+            attributionFailureLog
 #if SERVICE_CYCLE_PROFILE
             , profileProbe
 #endif

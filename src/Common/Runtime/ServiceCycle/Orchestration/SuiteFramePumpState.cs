@@ -17,7 +17,8 @@ internal sealed class SuiteFramePumpState
     internal SuiteFramePumpState(
         ServiceCycleRegistry registry,
         ServiceCycleSemanticRecorder? semanticRecorder,
-        ServiceActionOutcomeWindowRegistry? outcomeWindows
+        ServiceActionOutcomeWindowRegistry? outcomeWindows,
+        Action<string>? attributionFailureLog
 #if SERVICE_CYCLE_PROFILE
         , ServiceCycleProfileProbe profileProbe
 #endif
@@ -49,9 +50,13 @@ internal sealed class SuiteFramePumpState
         EvidenceEmitter = new SuiteFramePumpEvidenceEmitter(
             Traces,
             Journal,
+            attributionFailureLog,
             EvidenceProfiler);
 #else
-        EvidenceEmitter = new SuiteFramePumpEvidenceEmitter(Traces, Journal);
+        EvidenceEmitter = new SuiteFramePumpEvidenceEmitter(
+            Traces,
+            Journal,
+            attributionFailureLog);
 #endif
     }
 

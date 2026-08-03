@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
@@ -128,6 +129,42 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         Assert.Equal(CommonActionResultCodes.Committed.Value, action.ActionOutcome.Code);
         Assert.Equal(ServiceActionNativeTypeId.StructureSO, action.Attribution.NativeType);
         Assert.NotEqual(Guid.Empty, action.Attribution.CandidateId);
+    }
+
+    [Fact]
+    public void AttributionFailureExecutesAndJournalsDistinctStatusWithLoggedReason()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var definition = new ExecutionServiceDefinition("journal.runtime.attribution-failure")
+        {
+            ActionCount = 1,
+            ThrowOnDescribeAction = true,
+        };
+        using var registration = registry.Register(definition, new LifecycleGeneration(1));
+        registry.Seal();
+        var messages = new List<string>();
+        using var pump = new SuiteFramePump(registry, null, null, messages.Add);
+        TestWorldCollector.CollectedAtActivation(registry);
+        using var storage = new DecisionJournalRuntimeTestStorage();
+        var runtime = Runtime(pump, storage);
+        using var teardown = new JournalTeardown(runtime);
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
+
+        var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
+        Assert.Equal(1, pump.PumpFrame(frame).ActionsAttempted);
+        Assert.Equal(1, definition.ActionExecutionCount);
+        runtime.RequestStop();
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
+
+        var action = Assert.Single(
+            storage.ReadRecords(),
+            item => item.Kind == DecisionJournalRecordKind.Action);
+        Assert.Equal(ServiceActionDisposition.Committed, action.ActionOutcome.Disposition);
+        Assert.Equal(ServiceActionRouteStatus.AttributionFailed, action.Attribution.RouteStatus);
+        var message = Assert.Single(messages);
+        Assert.Contains("the action executed", message, StringComparison.Ordinal);
+        Assert.Contains("attribution exploded", message, StringComparison.Ordinal);
     }
 
     [Fact]

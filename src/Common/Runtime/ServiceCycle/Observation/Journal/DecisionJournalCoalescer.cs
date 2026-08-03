@@ -57,7 +57,9 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
         if (observation.Terminal.IsPresent && _actionCycles[index] == observation.Cycle)
         {
             _actionCycles[index] = 0;
-            return;
+            // The action record already carries the ordinary terminal outcome. A fault is not
+            // ordinary terminal accounting: it remains independently visible in the decision span.
+            if (!observation.Fault.IsValid) return;
         }
         var next = DecisionJournalRecord.Decision(in observation);
         if (!_hasOpen[index])
@@ -85,11 +87,17 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
         EnsureRunning(new MonotonicTimestamp(transition.LastTimestampTicks));
         if (transition.Service.IsValid)
         {
-            if (!AppendOpen(ServiceIndex(transition.Service))) return;
+            var index = ServiceIndex(transition.Service);
+            if (!AppendOpen(index)) return;
+            _actionCycles[index] = 0;
         }
         else if (!AppendAllOpen())
         {
             return;
+        }
+        else
+        {
+            Array.Clear(_actionCycles, 0, _actionCycles.Length);
         }
         if (!_sink.TryAppend(in transition)) IsFaulted = true;
     }
@@ -100,7 +108,8 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
     {
         if (IsFaulted) return;
         EnsureRunning(observedAt);
-        AppendOpen(ServiceIndex(service));
+        var index = ServiceIndex(service);
+        if (AppendOpen(index)) _actionCycles[index] = 0;
     }
 
     public void Advance(MonotonicTimestamp now)
