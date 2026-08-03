@@ -22719,6 +22719,114 @@
     {
       "id": "loadout.cost-enough-action", "assembly": "assembly-csharp", "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "HasEnough",
       "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata player loadout GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.element.type-action", "assembly": "assembly-csharp", "type": "HarvestElementSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.action.type-action", "assembly": "assembly-csharp", "type": "HarvestActionSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.instance.type-action", "assembly": "assembly-csharp", "type": "HarvestActionInstance", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.element-list.type-action", "assembly": "assembly-csharp", "type": "HarvestElementListVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.action-list.type-action", "assembly": "assembly-csharp", "type": "HarvestActionInstanceListVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.cost.type-action", "assembly": "assembly-csharp", "type": "ResourceCostList", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.element-visible-action", "assembly": "assembly-csharp", "type": "HarvestElementSO", "typeVisibility": "public", "kind": "method", "member": "IsVisible",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.element-available-action", "assembly": "assembly-csharp", "type": "HarvestElementSO", "typeVisibility": "public", "kind": "method", "member": "IsAvailable",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.element-usage-cost-action", "assembly": "assembly-csharp", "type": "HarvestElementSO", "typeVisibility": "public", "kind": "field", "member": "usageCost",
+      "visibility": "public", "static": false, "valueType": "ResourceCostList", "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.element-maximum-instances-action", "assembly": "assembly-csharp", "type": "HarvestElementSO", "typeVisibility": "public", "kind": "method", "member": "MaximumNumberInstances",
+      "visibility": "public", "static": false, "returnType": "BigDouble", "parameters": [], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.element-action-instances-action", "assembly": "assembly-csharp", "type": "HarvestElementSO", "typeVisibility": "public", "kind": "method", "member": "GetActionInstances",
+      "visibility": "public", "static": false, "returnType": "System.Collections.Generic.List`1<HarvestActionInstance>", "parameters": [], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.instance-action-action", "assembly": "assembly-csharp", "type": "HarvestActionInstance", "typeVisibility": "public", "kind": "method", "member": "GetAction",
+      "visibility": "public", "static": false, "returnType": "HarvestActionSO", "parameters": [], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.instance-element-action", "assembly": "assembly-csharp", "type": "HarvestActionInstance", "typeVisibility": "public", "kind": "method", "member": "GetElement",
+      "visibility": "public", "static": false, "returnType": "HarvestElementSO", "parameters": [], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.instance-visible-action", "assembly": "assembly-csharp", "type": "HarvestActionInstance", "typeVisibility": "public", "kind": "method", "member": "IsVisible",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.instance-maximum-action", "assembly": "assembly-csharp", "type": "HarvestActionInstance", "typeVisibility": "public", "kind": "method", "member": "GetMaximumInstances",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.instance-count-action", "assembly": "assembly-csharp", "type": "HarvestActionInstance", "typeVisibility": "public", "kind": "field", "member": "instances",
+      "visibility": "public", "static": false, "valueType": "System.Int32", "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.element-list-stacks-action", "assembly": "assembly-csharp", "type": "StackableListVariable`1", "typeVisibility": "public", "kind": "method", "member": "GetStacks",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": ["!0"], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.list-has-empty-spot-action", "assembly": "assembly-csharp", "type": "GenericListVariable`1", "typeVisibility": "public", "kind": "method", "member": "HasEmptySpot",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.element-list-add-action", "assembly": "assembly-csharp", "type": "HarvestElementListVariable", "typeVisibility": "public", "kind": "method", "member": "AddInstance",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["HarvestElementSO", "BigDouble"], "owners": ["Automata harvest lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.element-list-remove-action", "assembly": "assembly-csharp", "type": "HarvestElementListVariable", "typeVisibility": "public", "kind": "method", "member": "RemoveInstance",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["HarvestElementSO", "BigDouble"], "owners": ["Automata harvest lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.action-list-find-action", "assembly": "assembly-csharp", "type": "HarvestActionInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "FindInstance",
+      "visibility": "public", "static": false, "returnType": "HarvestActionInstance", "parameters": ["HarvestActionInstance"], "owners": ["Automata harvest lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.action-list-add-action", "assembly": "assembly-csharp", "type": "HarvestActionInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "AddInstance",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["HarvestActionInstance", "System.Int32"], "owners": ["Automata harvest lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.action-list-remove-action", "assembly": "assembly-csharp", "type": "HarvestActionInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "RemoveInstance",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["HarvestActionInstance", "System.Int32"], "owners": ["Automata harvest lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.cost-has-enough-action", "assembly": "assembly-csharp", "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "HasEnough",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata harvest lifecycle GameAction", "Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "harvest-lifecycle.action-base-cost-capture", "assembly": "assembly-csharp", "type": "HarvestActionInstance", "typeVisibility": "public", "kind": "method", "member": "ComputeResourceCost",
+      "visibility": "private", "static": false, "returnType": "ResourceCostList", "parameters": [], "owners": ["Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "harvest-lifecycle.action-scaling-capture", "assembly": "assembly-csharp", "type": "HarvestActionInstance", "typeVisibility": "public", "kind": "method", "member": "GetScalingInfo",
+      "visibility": "public", "static": false, "returnType": "ScalingInfo", "parameters": ["System.Int32"], "owners": ["Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "harvest-lifecycle.scaling-drain-cost-capture", "assembly": "assembly-csharp", "type": "ScalingMap`2", "typeVisibility": "public", "kind": "method", "member": "GetDrainCostMod",
+      "visibility": "public", "static": false, "returnType": "!0", "parameters": [], "owners": ["Common harvest lifecycle world collection"], "usages": ["reflection"], "place": "capture"
     }
   ],
   "sourceAudit": {
@@ -22735,6 +22843,7 @@
       "src/Automata",
       "src/Common",
       "src/DiscoveryTree",
+      "src/HarvestLifecycle",
     "src/GenericDiscovery",
       "src/GenericLevel",
       "src/Loadout",

@@ -109,7 +109,7 @@ does not refresh it by hidden navigation.
 
 ## Tool surface
 
-The registry is exactly 39 tools. It is built once per lifecycle and never changes mid-session, so
+The registry is exactly 40 tools. It is built once per lifecycle and never changes mid-session, so
 there is no `tools/list_changed` notification. The rows below are in `tools/list` order.
 
 | Tool | Purpose |
@@ -128,6 +128,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_cast` | Fire, release charge, or turn off one equipped toggle spell |
 | `game_concept` | Add or remove one owned concept assignment |
 | `game_harvest` | Harvest an audited pair derived from a plot UUID |
+| `game_harvest_setup` | Add or remove active harvest elements and their offered actions |
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
 | `game_casting_dial` | Set the global Output Level or Reserve Level shown on the Casting screen |
 | `game_spell_loadout` | Preview or add a discovered recipe with an explicit glyph layout, remove one equipped runtime spell, or move it |
@@ -368,6 +369,27 @@ returns only the settled paid- or bonus-level change plus the resulting total. T
 checks the game's persistent usage cost but does not perform a one-time payment; the concrete
 native level callback applies its own usage/effects. Research development and spell mastery stay
 on `game_research` and `game_spell_level`, respectively.
+
+### Harvest element and action lifecycle
+
+Every `harvest-elements` detail row joins the exact active-element count, the next visible
+add/remove decision, and the element's offered harvest actions. An available element add includes
+its named standing usage costs and current spendable amounts. Each offered action reports its
+active/maximum count, add/remove availability, and the named resource drain for the **next**
+instance. An unavailable control carries only the reason that binds the next decision; no priced
+ledger is computed for an action the screen cannot run.
+
+Call `game_harvest_setup(mode="add_element"|"remove_element", uuid=...)` for one exact
+`HarvestElementSO`. Action modes additionally require `actionUuid` naming an action actually
+offered by that element. `amount` defaults to one and reproduces the visible multi-instance list
+change without depending on the screen's hidden selector state. Optional `expectedNativeType`,
+when supplied, must be `HarvestElementSO`.
+
+The action boundary revalidates the concrete element/action pair, visibility, active-list room,
+standing usage capacity, and mastery-derived action maximum on Unity's main thread. Success returns
+only the active count before and after plus the settled next decision for the affected element or
+pair. The one mutation sentinel is that game-written active count moving in the requested
+direction; resource reservations and drain math are planning facts, never postcondition ledgers.
 
 ### Brewing Station lifecycle
 
@@ -735,6 +757,8 @@ tools/game-mcp-client.py call game_purchase --arguments \
   '{"uuid":"ATTRIBUTE_OR_UPGRADE_UUID","count":1}'
 tools/game-mcp-client.py call game_harvest --arguments \
   '{"uuid":"PLOT_UUID"}'
+tools/game-mcp-client.py call game_harvest_setup --arguments \
+  '{"mode":"add_action","uuid":"HARVEST_ELEMENT_UUID","actionUuid":"HARVEST_ACTION_UUID","amount":1}'
 tools/game-mcp-client.py call game_cast --arguments \
   '{"mode":"fire","slotIndex":0,"uuid":"SPELL_UUID"}'
 tools/game-mcp-client.py call game_cast --arguments \

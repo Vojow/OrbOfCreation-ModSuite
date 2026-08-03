@@ -35,6 +35,7 @@ internal static class AutomataServiceCycleComposition
         Func<CraftingInstanceLifecycleGameAction>? createCraftingInstances = null,
         Func<SpellWorkbenchGameAction, EquipmentLoadoutGameAction,
             AlchemyLoadoutGameAction, LoadoutGameAction>? createLoadouts = null,
+        Func<HarvestLifecycleGameAction>? createHarvestLifecycle = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
         Func<ResearchGameAction>? createResearch = null)
@@ -60,6 +61,7 @@ internal static class AutomataServiceCycleComposition
                 createCraftingStations,
                 createCraftingInstances,
                 createLoadouts,
+                createHarvestLifecycle,
                 createChallenges,
                 createPrestige,
                 createResearch);
@@ -100,6 +102,7 @@ internal static class AutomataServiceCycleComposition
         Func<CraftingInstanceLifecycleGameAction>? createCraftingInstances = null,
         Func<SpellWorkbenchGameAction, EquipmentLoadoutGameAction,
             AlchemyLoadoutGameAction, LoadoutGameAction>? createLoadouts = null,
+        Func<HarvestLifecycleGameAction>? createHarvestLifecycle = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
         Func<ResearchGameAction>? createResearch = null)
@@ -128,6 +131,7 @@ internal static class AutomataServiceCycleComposition
         CraftingStationGameAction? craftingStations = null;
         CraftingInstanceLifecycleGameAction? craftingInstances = null;
         LoadoutGameAction? loadouts = null;
+        HarvestLifecycleGameAction? harvestLifecycle = null;
         ChallengeGameAction? challenges = null;
         PrestigeGameAction? prestige = null;
         ResearchGameAction? research = null;
@@ -200,6 +204,7 @@ internal static class AutomataServiceCycleComposition
                         "The player-loadout action requires spell, Equipment, and Alchemy actions.");
                 loadouts = createLoadouts(spellWorkbench, equipmentLoadout, alchemyLoadout);
             }
+            harvestLifecycle = createHarvestLifecycle?.Invoke();
             challenges = createChallenges?.Invoke();
             prestige = createPrestige?.Invoke();
             research = createResearch?.Invoke();
@@ -222,6 +227,7 @@ internal static class AutomataServiceCycleComposition
                 craftingStations,
                 craftingInstances,
                 loadouts,
+                harvestLifecycle,
                 challenges,
                 prestige,
                 research);
@@ -241,6 +247,7 @@ internal static class AutomataServiceCycleComposition
             craftingStations?.Dispose();
             craftingInstances?.Dispose();
             loadouts?.Dispose();
+            harvestLifecycle?.Dispose();
             challenges?.Dispose();
             prestige?.Dispose();
             research?.Dispose();

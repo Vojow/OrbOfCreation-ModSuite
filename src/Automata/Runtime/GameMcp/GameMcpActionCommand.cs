@@ -40,6 +40,7 @@ internal enum GameMcpCommandKind
     GenericLevel = 29,
     CraftingStation = 30,
     Loadout = 31,
+    HarvestLifecycle = 32,
 }
 
 internal static class GameMcpCommandKinds
@@ -54,7 +55,7 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.Prestige or GameMcpCommandKind.Research or
             GameMcpCommandKind.AlchemyLoadout or GameMcpCommandKind.RitualLifecycle or
             GameMcpCommandKind.GenericLevel or GameMcpCommandKind.CraftingStation or
-            GameMcpCommandKind.Loadout;
+            GameMcpCommandKind.Loadout or GameMcpCommandKind.HarvestLifecycle;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -78,6 +79,7 @@ internal static class GameMcpCommandKinds
         "game_level" => GameMcpCommandKind.GenericLevel,
         "game_brewing_station" => GameMcpCommandKind.CraftingStation,
         "game_loadout" => GameMcpCommandKind.Loadout,
+        "game_harvest_setup" => GameMcpCommandKind.HarvestLifecycle,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -132,6 +134,7 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.GenericLevel => "game_level",
         GameMcpCommandKind.CraftingStation => "game_brewing_station",
         GameMcpCommandKind.Loadout => "game_loadout",
+        GameMcpCommandKind.HarvestLifecycle => "game_harvest_setup",
         _ => string.Empty,
     };
 }

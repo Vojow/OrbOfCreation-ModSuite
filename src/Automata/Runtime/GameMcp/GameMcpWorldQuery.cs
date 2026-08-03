@@ -597,6 +597,7 @@ internal static class GameMcpWorldQuery
             GameMcpCommandKind.GenericLevel => ProjectGenericLevelDelta(state, command),
             GameMcpCommandKind.CraftingStation => ProjectCraftingStationDelta(state, command),
             GameMcpCommandKind.Loadout => ProjectLoadoutDelta(state, command),
+            GameMcpCommandKind.HarvestLifecycle => ProjectHarvestLifecycleDelta(state, command),
             GameMcpCommandKind.Research => ProjectResearchDelta(state, command),
             GameMcpCommandKind.GenericDiscovery => ProjectDiscoveryDelta(state, command),
             _ => ProjectPostState(state, PostStateCategory(command), command.TargetId),
@@ -789,6 +790,57 @@ internal static class GameMcpWorldQuery
         AddRitualDecision(world, next, in current);
         result["next"] = next;
         return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectHarvestLifecycleDelta(
+        GameMcpFrameContext state,
+        GameMcpCommand command)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        var oldWorld = Before(command);
+        if (command.Mode is "add_element" or "remove_element")
+        {
+            if (!TryFindHarvestElementControl(
+                    world.HarvestElementControls, command.TargetId, out var current))
+                return PostStateUnavailable("post_state_not_published",
+                    "the settled world has no harvest-list row for that element");
+            WorldHarvestElementControl previous = default;
+            var hadBefore = oldWorld is not null && TryFindHarvestElementControl(
+                oldWorld.HarvestElementControls, command.TargetId, out previous);
+            var result = new JObject
+            {
+                ["uuid"] = command.TargetId.ToString("D"),
+                ["active"] = new JObject
+                {
+                    ["before"] = hadBefore ? previous.Active : (int?)null,
+                    ["after"] = current.Active,
+                },
+                ["next"] = ProjectHarvestElementDecision(world, in current),
+            };
+            return result.Freeze();
+        }
+
+        if (!TryFindHarvestActionControl(world.HarvestActionControls,
+                command.TargetId, command.SecondaryId, out var action))
+            return PostStateUnavailable("post_state_not_published",
+                "the settled world has no harvest-list row for that element and action");
+        WorldHarvestActionControl previousAction = default;
+        var hadActionBefore = oldWorld is not null && TryFindHarvestActionControl(
+            oldWorld.HarvestActionControls, command.TargetId, command.SecondaryId,
+            out previousAction);
+        return new JObject
+        {
+            ["uuid"] = command.TargetId.ToString("D"),
+            ["actionUuid"] = command.SecondaryId.ToString("D"),
+            ["active"] = new JObject
+            {
+                ["before"] = hadActionBefore ? previousAction.Active : (int?)null,
+                ["after"] = action.Active,
+            },
+            ["next"] = ProjectHarvestActionDecision(world, in action),
+        }.Freeze();
     }
 
     private static GameMcpValue ProjectGenericLevelDelta(
@@ -2199,11 +2251,199 @@ internal static class GameMcpWorldQuery
             ? ProjectPlayerLoadout(world, in playerLoadout)
             : row is WorldSnapshotLoadout snapshotLoadout
             ? ProjectSnapshotLoadout(world, in snapshotLoadout)
+            : row is WorldHarvestElement harvestElement
+            ? ProjectHarvestElement(world, in harvestElement)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
                 category.Name,
                 category.ExpectedNativeType);
+
+    private static GameMcpValue ProjectHarvestElement(
+        GameWorldState world,
+        in WorldHarvestElement element)
+    {
+        var result = new JObject
+        {
+            ["entityId"] = element.EntityId.ToString("D"),
+            ["category"] = "harvest-elements",
+            ["nativeType"] = "HarvestElementSO",
+            ["masteryLevel"] = element.MasteryLevel,
+            ["masteryXp"] = new GameMcpDomainValue(element.MasteryXp),
+        };
+        if (!TryFindHarvestElementControl(
+                world.HarvestElementControls, element.EntityId, out var control))
+            return result.Freeze();
+        result["active"] = control.Active;
+        result["addElement"] = ProjectHarvestElementDecision(world, in control);
+        result["removeElement"] = new JObject
+        {
+            ["available"] = control.RemoveAvailable,
+        };
+
+        var actions = new JArray();
+        for (var index = 0; index < world.HarvestActionControls.Count; index++)
+        {
+            var action = world.HarvestActionControls[index];
+            if (action.ElementId != element.EntityId || !action.Visible) continue;
+            var row = new JObject
+            {
+                ["uuid"] = action.ActionId.ToString("D"),
+                ["active"] = action.Active,
+                ["maximum"] = action.Maximum,
+                ["addAvailable"] = action.AddAvailable,
+                ["removeAvailable"] = action.RemoveAvailable,
+            };
+            if (action.AddAvailable)
+            {
+                var costs = ProjectHarvestLifecycleCosts(
+                    world, action.ElementId, action.ActionId,
+                    WorldHarvestLifecycleCostKind.NextActionDrain);
+                if (costs.Count > 0) row["nextDrain"] = costs;
+            }
+            else
+            {
+                row["addReasonCode"] = action.Active >= action.Maximum
+                    ? "mastery_cap_reached"
+                    : "harvest_action_list_full";
+            }
+            actions.Add(row);
+        }
+        if (actions.Count > 0) result["actions"] = actions;
+        return result.Freeze();
+    }
+
+    private static JObject ProjectHarvestElementDecision(
+        GameWorldState world,
+        in WorldHarvestElementControl control)
+    {
+        var result = new JObject
+        {
+            ["available"] = control.AddAvailable,
+        };
+        if (!control.AddAvailable)
+        {
+            result["reasonCode"] = !control.Visible
+                ? "element_unavailable"
+                : control.MaximumAdditional <= 0
+                    ? "capacity_exhausted"
+                    : !control.ListSpaceAvailable
+                        ? "harvest_list_full"
+                        : "unaffordable";
+            return result;
+        }
+        result["maximumAdditional"] = control.MaximumAdditional;
+        result["affordable"] = true;
+        var costs = ProjectHarvestLifecycleCosts(
+            world, control.ElementId, Guid.Empty,
+            WorldHarvestLifecycleCostKind.ElementUsage);
+        if (costs.Count > 0) result["costs"] = costs;
+        return result;
+    }
+
+    private static JObject ProjectHarvestActionDecision(
+        GameWorldState world,
+        in WorldHarvestActionControl action)
+    {
+        var result = new JObject
+        {
+            ["addAvailable"] = action.AddAvailable,
+            ["removeAvailable"] = action.RemoveAvailable,
+            ["maximum"] = action.Maximum,
+        };
+        if (!action.AddAvailable)
+        {
+            result["addReasonCode"] = action.Active >= action.Maximum
+                ? "mastery_cap_reached"
+                : "harvest_action_list_full";
+            return result;
+        }
+        var costs = ProjectHarvestLifecycleCosts(
+            world, action.ElementId, action.ActionId,
+            WorldHarvestLifecycleCostKind.NextActionDrain);
+        if (costs.Count > 0) result["nextDrain"] = costs;
+        return result;
+    }
+
+    private static JArray ProjectHarvestLifecycleCosts(
+        GameWorldState world,
+        Guid elementId,
+        Guid actionId,
+        WorldHarvestLifecycleCostKind kind)
+    {
+        var result = new JArray();
+        for (var index = 0; index < world.HarvestLifecycleCosts.Count; index++)
+        {
+            var cost = world.HarvestLifecycleCosts[index];
+            if (cost.ElementId != elementId || cost.ActionId != actionId || cost.Kind != kind)
+                continue;
+            var row = new JObject
+            {
+                ["resourceId"] = cost.ResourceId.ToString("D"),
+                ["cost"] = new GameMcpDomainValue(cost.Amount),
+            };
+            if (TryHarvestSpendableAmount(world, cost.ResourceId, out var amount))
+            {
+                row["amount"] = new GameMcpDomainValue(amount);
+                row["affordable"] = amount.CompareTo(cost.Amount) >= 0;
+            }
+            result.Add(row);
+        }
+        return result;
+    }
+
+    private static bool TryHarvestSpendableAmount(
+        GameWorldState world,
+        Guid resourceId,
+        out BigDouble amount)
+    {
+        if (WorldLookup.TryFind(world.Resources, resourceId, out var resource))
+        {
+            amount = SpendableAmount(world, resourceId, resource.Reading.Quantity);
+            return true;
+        }
+        if (WorldLookup.TryFind(world.HarvestResources, resourceId, out var harvestResource))
+        {
+            var value = harvestResource.Resource;
+            amount = value.Reading.Traits.BandwidthResource
+                ? value.Headroom
+                : value.Reading.Quantity;
+            return true;
+        }
+        amount = BigDouble.Zero;
+        return false;
+    }
+
+    private static bool TryFindHarvestElementControl(
+        PublicationTable<WorldHarvestElementControl> values,
+        Guid elementId,
+        out WorldHarvestElementControl result)
+    {
+        for (var index = 0; index < values.Count; index++)
+            if (values[index].ElementId == elementId)
+            {
+                result = values[index];
+                return true;
+            }
+        result = default;
+        return false;
+    }
+
+    private static bool TryFindHarvestActionControl(
+        PublicationTable<WorldHarvestActionControl> values,
+        Guid elementId,
+        Guid actionId,
+        out WorldHarvestActionControl result)
+    {
+        for (var index = 0; index < values.Count; index++)
+            if (values[index].ElementId == elementId && values[index].ActionId == actionId)
+            {
+                result = values[index];
+                return true;
+            }
+        result = default;
+        return false;
+    }
 
     private static GameMcpValue ProjectDiscoveryTree(
         GameWorldState world,
@@ -4798,6 +5038,9 @@ internal static class GameMcpWorldQuery
             Composite(nameof(GameWorldState.SnapshotEntries), world => world.SnapshotEntries),
             Entity(nameof(GameWorldState.HarvestElements), world => world.HarvestElements),
             Entity(nameof(GameWorldState.HarvestResources), world => world.HarvestResources),
+            Composite(nameof(GameWorldState.HarvestElementControls), world => world.HarvestElementControls),
+            Composite(nameof(GameWorldState.HarvestActionControls), world => world.HarvestActionControls),
+            Composite(nameof(GameWorldState.HarvestLifecycleCosts), world => world.HarvestLifecycleCosts),
             Entity(nameof(GameWorldState.TimeRunes), world => world.TimeRunes),
             Entity(nameof(GameWorldState.Glyphs), world => world.Glyphs),
             Entity(nameof(GameWorldState.Consumables), world => world.Consumables),
@@ -4911,6 +5154,8 @@ internal static class GameMcpWorldQuery
             new[] { "crafting-stations" },
         "player-loadouts" or "player-loadout-entries" or "snapshot-loadouts" or
             "snapshot-slots" or "snapshot-entries" => new[] { "loadouts" },
+        "harvest-element-controls" or "harvest-action-controls" or
+            "harvest-lifecycle-costs" => new[] { "harvest-lifecycle" },
         "requirement-native-verdicts" => new[] { "requirement-native-verdicts" },
         "consumables" => new[] { "consumables", "consumable-inventory" },
         _ => new[] { category },
@@ -5051,6 +5296,20 @@ internal static class GameMcpWorldQuery
         {
             "entityId", "elementId", "resource.entityId", "resource.reading.visible",
             "resource.trueQuantity", "resource.trueRate",
+        },
+        "harvest-element-controls" => new[]
+        {
+            "elementId", "visible", "active", "maximumAdditional",
+            "listSpaceAvailable", "usageAffordable", "addAvailable", "removeAvailable",
+        },
+        "harvest-action-controls" => new[]
+        {
+            "elementId", "actionId", "visible", "active", "maximum",
+            "addAvailable", "removeAvailable",
+        },
+        "harvest-lifecycle-costs" => new[]
+        {
+            "elementId", "actionId", "kind", "resourceId", "amount",
         },
         "time-runes" => new[]
         {

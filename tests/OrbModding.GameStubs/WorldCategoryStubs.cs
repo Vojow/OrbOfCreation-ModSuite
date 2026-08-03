@@ -413,7 +413,7 @@ public sealed class EnchantmentInstance : AbstractRefInstance<EnchantmentSO>
 }
 
 
-public sealed class HarvestElementSO : IdScriptableObject
+public sealed class HarvestElementSO : UpgradeableObject
 {
     public static List<HarvestElementSO> All = new List<HarvestElementSO>();
     public BigDouble masteryXp;
@@ -435,12 +435,106 @@ public sealed class HarvestElementSO : IdScriptableObject
     public ValueModifierRecord actionCostMod = new ValueModifierRecord(new BigDouble(0.0, 0));
     private BigDouble harvestRate;
     private BigDouble lastOutputRate;
+    public bool visible = true;
+    public bool available = true;
+    public ResourceCostList usageCost = new ResourceCostList();
+    public int MaximumAdditional = 16;
+    private readonly List<HarvestActionInstance> actionInstances = new();
+
+    public bool IsVisible() => visible;
+    public bool IsAvailable() => available;
+    public BigDouble MaximumNumberInstances() => new BigDouble(MaximumAdditional);
+    public List<HarvestActionInstance> GetActionInstances() => actionInstances;
+    public void AddAction(HarvestActionSO action) =>
+        actionInstances.Add(new HarvestActionInstance(this, action));
 
     /// <summary>
     /// Private in the game, created by the element rather than registered, which is why the resource
     /// registry cannot reach it and it is read through its owner.
     /// </summary>
     private ResourceSO harvestResource = new ResourceSO();
+}
+
+public sealed class HarvestActionSO : UpgradeableObject
+{
+    public bool visible = true;
+    public ResourceCostList DrainCost = new ResourceCostList();
+    public BigDouble NextDrainPercent = new BigDouble(100);
+}
+
+public sealed class HarvestActionInstance
+{
+    private readonly HarvestElementSO elementReference;
+    private readonly HarvestActionSO reference;
+
+    public HarvestActionInstance(HarvestElementSO element, HarvestActionSO action)
+    {
+        elementReference = element;
+        reference = action;
+    }
+
+    public int instances;
+    public HarvestActionSO GetAction() => reference;
+    public HarvestElementSO GetElement() => elementReference;
+    public bool IsVisible() => reference.visible;
+    public int GetMaximumInstances() => elementReference.masteryLevel + 1;
+    public ScalingInfo GetScalingInfo(int count) => new ScalingInfo
+    {
+        Level = count,
+        DrainCostMod = reference.NextDrainPercent,
+    };
+    private ResourceCostList ComputeResourceCost() => reference.DrainCost;
+    public bool IsSameRef(HarvestActionInstance other) => other is not null &&
+        ReferenceEquals(other.elementReference, elementReference) &&
+        ReferenceEquals(other.reference, reference);
+    public bool IsEmpty() => instances <= 0;
+    public void ChangeInstance(int amount) =>
+        instances = Math.Max(0, Math.Min(instances + amount, GetMaximumInstances()));
+}
+
+public sealed class HarvestElementListVariable : StackableListVariable<HarvestElementSO>
+{
+    public bool SuppressMutation { get; set; }
+
+    public void AddInstance(HarvestElementSO element, BigDouble amount)
+    {
+        if (!SuppressMutation) Stack(element, amount.ToInt());
+    }
+
+    public void RemoveInstance(HarvestElementSO element, BigDouble amount)
+    {
+        if (!SuppressMutation) Unstack(element, amount.ToInt());
+    }
+}
+
+public sealed class HarvestActionInstanceListVariable : GenericListVariable<HarvestActionInstance>
+{
+    public bool SuppressMutation { get; set; }
+
+    public HarvestActionInstance? FindInstance(HarvestActionInstance prototype) =>
+        value.Find(candidate => candidate.IsSameRef(prototype));
+
+    public void AddInstance(HarvestActionInstance prototype, int amount)
+    {
+        if (SuppressMutation) return;
+        var current = FindInstance(prototype);
+        if (current is null)
+        {
+            if (!HasEmptySpot()) return;
+            current = new HarvestActionInstance(prototype.GetElement(), prototype.GetAction());
+            Add(current);
+        }
+        current.ChangeInstance(amount);
+    }
+
+    public void RemoveInstance(HarvestActionInstance instance, int amount)
+    {
+        if (SuppressMutation) return;
+        var current = FindInstance(instance);
+        if (current is null) return;
+        current.ChangeInstance(-amount);
+        if (current.IsEmpty()) Remove(current);
+    }
 }
 
 
@@ -746,8 +840,10 @@ public sealed class ConsumableUsage
 public sealed class ScalingInfo
 {
     public int Level = 1;
+    public BigDouble DrainCostMod = new BigDouble(100);
 
     public int GetLevelInt() => Level;
+    public BigDouble GetDrainCostMod() => DrainCostMod;
     public static ScalingInfo Basic(BigDouble level) =>
         new ScalingInfo { Level = level.ToInt() };
 }

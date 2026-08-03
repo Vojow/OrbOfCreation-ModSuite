@@ -620,6 +620,14 @@ public sealed class Plugin : BaseUnityPlugin
                         spells,
                         equipment,
                         alchemy)
+                    , createHarvestLifecycle: () => new HarvestLifecycleGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureHarvestLifecycleMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .HarvestLifecycleOwnershipFailure)
                     , createChallenges: () => new ChallengeGameAction(
                         readAutoHarvestLifecycleEpoch,
                         tryCaptureMutationPermit: () =>
@@ -2008,6 +2016,8 @@ public sealed class Plugin : BaseUnityPlugin
             if (request.Mode.StartsWith("snapshot_", StringComparison.Ordinal))
                 amount = checked(request.SlotIndex + 1);
         }
+        else if (kind == GameMcpCommandKind.HarvestLifecycle)
+            nativeType = "HarvestElementSO";
         else if (kind == GameMcpCommandKind.Challenge)
             nativeType = "ChallengeSO";
         else if (kind == GameMcpCommandKind.Prestige)

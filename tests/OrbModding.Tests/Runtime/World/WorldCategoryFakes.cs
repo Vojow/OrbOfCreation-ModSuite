@@ -54,6 +54,10 @@ internal static class WorldCategoryFakes
         ["ResourceCostList"] = typeof(FakeCraftingResourceCostList),
         ["ResourceTuple"] = typeof(FakeCraftingResourceTuple),
         ["HarvestElementSO"] = typeof(FakeHarvestElement),
+        ["HarvestActionSO"] = typeof(FakeHarvestAction),
+        ["HarvestActionInstance"] = typeof(FakeHarvestActionInstance),
+        ["HarvestElementListVariable"] = typeof(FakeHarvestElementList),
+        ["HarvestActionInstanceListVariable"] = typeof(FakeHarvestActionList),
         ["TimeRuneSO"] = typeof(FakeTimeRune),
         ["GlyphSO"] = typeof(FakeGlyph),
         ["ConsumableSO"] = typeof(FakeConsumable),
@@ -156,6 +160,7 @@ internal static class WorldCategoryFakes
         FakeIdRegistry.RuntimeLookup.Clear();
         UnityEngine.Resources.Objects.Clear();
         SeedScribeRelations();
+        SeedHarvestLifecycle();
     }
 
     private static void SeedScribeRelations()
@@ -197,6 +202,19 @@ internal static class WorldCategoryFakes
             FakeIdRegistry.RuntimeLookup[enchantmentId] = enchantment;
             FakeIdRegistry.RuntimeLookup[scrollId] = scroll;
         }
+    }
+
+    internal static FakeHarvestElementList ActiveHarvestElements { get; private set; } = new();
+    internal static FakeHarvestActionList ActiveHarvestActions { get; private set; } = new();
+
+    private static void SeedHarvestLifecycle()
+    {
+        ActiveHarvestElements = new FakeHarvestElementList();
+        ActiveHarvestActions = new FakeHarvestActionList();
+        FakeIdRegistry.RuntimeLookup[Guid.Parse("5a9f8001-3ae2-4799-86b6-5198763e0fe2")] =
+            ActiveHarvestElements;
+        FakeIdRegistry.RuntimeLookup[Guid.Parse("e4a9d4c3-61cc-4f94-bab9-7bc8e841cc32")] =
+            ActiveHarvestActions;
     }
 }
 
@@ -536,6 +554,8 @@ internal sealed class FakeScribeEnchantmentInstance
 
 internal sealed class FakeScribeScalingInfo
 {
+    public BigDouble DrainCostMod = new(100);
+    public BigDouble GetDrainCostMod() => DrainCostMod;
     public static FakeScribeScalingInfo Basic(BigDouble level) => new();
 }
 
@@ -1576,6 +1596,11 @@ internal sealed class FakeHarvestElement
     public FakeModifierRecord actionCostMod = new(0d);
     public BigDouble harvestRate;
     public BigDouble lastOutputRate;
+    public bool Visible = true;
+    public bool Available = true;
+    public int MaximumAdditional = 8;
+    public FakeCraftingResourceCostList usageCost = new();
+    public List<FakeHarvestActionInstance> ActionInstances = new();
     /// <summary>
     /// Private, created by the element rather than registered — the shape that keeps it out of the
     /// resource registry and makes reading it through its owner the only path.
@@ -1586,6 +1611,54 @@ internal sealed class FakeHarvestElement
 
 
     public Guid GetGuid() => Identity;
+    public bool IsVisible() => Visible;
+    public bool IsAvailable() => Available;
+    public BigDouble MaximumNumberInstances() => new(MaximumAdditional);
+    public List<FakeHarvestActionInstance> GetActionInstances() => ActionInstances;
+}
+
+internal sealed class FakeHarvestAction
+{
+    public Guid Identity = Guid.NewGuid();
+    public bool Visible = true;
+    public FakeCraftingResourceCostList DrainCost = new();
+    public BigDouble NextDrainPercent = new(100);
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeHarvestActionInstance
+{
+    public FakeHarvestElement Element = null!;
+    public FakeHarvestAction Action = null!;
+    public int instances;
+    public int Maximum = 1;
+
+    public FakeHarvestAction GetAction() => Action;
+    public FakeHarvestElement GetElement() => Element;
+    public bool IsVisible() => Action.Visible;
+    public int GetMaximumInstances() => Maximum;
+    public FakeScribeScalingInfo GetScalingInfo(int count) => new()
+    {
+        DrainCostMod = Action.NextDrainPercent,
+    };
+    private FakeCraftingResourceCostList ComputeResourceCost() => Action.DrainCost;
+}
+
+internal sealed class FakeHarvestElementList
+{
+    private readonly Dictionary<FakeHarvestElement, int> _stacks = new();
+    public bool HasSpace = true;
+    public bool HasEmptySpot() => HasSpace;
+    public int GetStacks(FakeHarvestElement element) =>
+        _stacks.TryGetValue(element, out var count) ? count : 0;
+    public void SetStacks(FakeHarvestElement element, int count) => _stacks[element] = count;
+}
+
+internal sealed class FakeHarvestActionList
+{
+    public List<FakeHarvestActionInstance> value = new();
+    public bool HasSpace = true;
+    public bool HasEmptySpot() => HasSpace;
 }
 
 internal sealed class FakeTimeRune : global::IDiscoverable

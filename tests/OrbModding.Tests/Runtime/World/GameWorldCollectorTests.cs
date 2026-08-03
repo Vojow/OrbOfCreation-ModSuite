@@ -557,13 +557,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(58, report.Categories.Length);
+        Assert.Equal(59, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "challenge decisions", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "ordinary alchemy loadout", "concept instances", "crafting stations", "loadouts", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
+                 new[] { "resources", "harvest resources", "harvest lifecycle", "time runes", "challenges", "challenge decisions", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "ordinary alchemy loadout", "concept instances", "crafting stations", "loadouts", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -2281,6 +2281,70 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         // And it stays out of the resource table, because the game keeps it out of the registry.
         Assert.Equal(0, world.Resources.Count);
+    }
+
+    [Fact]
+    public void Harvest_element_and_action_controls_publish_active_counts_and_native_costs()
+    {
+        var resource = new FakeResource
+        {
+            Identity = Guid.NewGuid(),
+            Quantity = new BigDouble(20),
+            maxQuantity = new FakeModifierRecord(100d),
+            Visible = true,
+        };
+        FakeResource.All.Add(resource);
+        var element = new FakeHarvestElement { masteryLevel = 3, MaximumAdditional = 7 };
+        element.Resource.maxQuantity = new FakeModifierRecord(100d);
+        element.usageCost.costs.Add(new FakeCraftingResourceTuple
+        {
+            resource = resource,
+            valueBig = new BigDouble(4),
+        });
+        var action = new FakeHarvestAction { NextDrainPercent = new BigDouble(150) };
+        action.DrainCost.costs.Add(new FakeCraftingResourceTuple
+        {
+            resource = resource,
+            valueBig = new BigDouble(3),
+        });
+        var prototype = new FakeHarvestActionInstance
+        {
+            Element = element,
+            Action = action,
+            Maximum = 4,
+        };
+        element.ActionInstances.Add(prototype);
+        FakeHarvestElement.All.Add(element);
+        WorldCategoryFakes.ActiveHarvestElements.SetStacks(element, 2);
+        WorldCategoryFakes.ActiveHarvestActions.value.Add(new FakeHarvestActionInstance
+        {
+            Element = element,
+            Action = action,
+            Maximum = 4,
+            instances = 1,
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        var elementControl = Assert.Single(world.HarvestElementControls.AsSpan().ToArray());
+        Assert.Equal(2, elementControl.Active);
+        Assert.Equal(7, elementControl.MaximumAdditional);
+        Assert.True(elementControl.AddAvailable);
+        var actionControl = Assert.Single(world.HarvestActionControls.AsSpan().ToArray());
+        Assert.Equal(action.Identity, actionControl.ActionId);
+        Assert.Equal(1, actionControl.Active);
+        Assert.Equal(4, actionControl.Maximum);
+        Assert.True(actionControl.AddAvailable);
+        Assert.Equal(2, world.HarvestLifecycleCosts.Count);
+        Assert.Contains(world.HarvestLifecycleCosts.AsSpan().ToArray(), cost =>
+            cost.Kind == WorldHarvestLifecycleCostKind.ElementUsage &&
+            cost.Amount == new BigDouble(4));
+        Assert.Contains(world.HarvestLifecycleCosts.AsSpan().ToArray(), cost =>
+            cost.Kind == WorldHarvestLifecycleCostKind.NextActionDrain &&
+            cost.Amount == new BigDouble(4.5));
     }
 
     /// <summary>

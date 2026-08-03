@@ -286,7 +286,7 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(overview["unlocks"]);
         Assert.Null(overview["harvest"]);
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(
-            overview.ToString(Newtonsoft.Json.Formatting.None)) < 1_500);
+            overview.ToString(Newtonsoft.Json.Formatting.None)) < 1_600);
 
         var exact = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,
@@ -507,6 +507,7 @@ public sealed class GameMcpProtocolSurfaceTests
         var actionNames = new HashSet<string>(StringComparer.Ordinal)
         {
             "game_purchase", "game_cast", "game_concept", "game_harvest",
+            "game_harvest_setup",
             "game_spell_level", "game_casting_dial", "game_spell_loadout", "game_discover",
             "game_equipment", "game_alchemy", "game_ritual", "suite_config_set",
             "game_brewing_station", "game_loadout",

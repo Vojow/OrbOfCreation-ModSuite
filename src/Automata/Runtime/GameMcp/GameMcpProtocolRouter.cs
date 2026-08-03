@@ -272,6 +272,17 @@ internal sealed class GameMcpProtocolRouter
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
+            case "game_harvest_setup":
+                builder.Mode = RequireOneOf(arguments, "mode",
+                    "add_element", "remove_element", "add_action", "remove_action");
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                builder.SecondaryUuid = builder.Mode is "add_action" or "remove_action"
+                    ? RequireUuid(arguments, "actionUuid")
+                    : Guid.Empty;
+                builder.Amount = OptionalIntInRange(
+                    arguments, "amount", 1, 1, int.MaxValue);
+                break;
             case "game_spell_level":
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "single", "all");
@@ -499,6 +510,7 @@ internal sealed class GameMcpProtocolRouter
         GameMcpOperationRequestBuilder request) => name switch
     {
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
+            "game_harvest_setup" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
@@ -529,6 +541,7 @@ internal sealed class GameMcpProtocolRouter
         "trace_health" => GameMcpFrameData.TraceWriterHealth,
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
+            "game_harvest_setup" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
@@ -663,6 +676,27 @@ internal sealed class GameMcpProtocolRouter
                         ["uuid"] = StringSchema("Published plot-node UUID."),
                     },
                     "uuid")),
+            Tool(
+                "game_harvest_setup",
+                "Configure active harvest elements and actions",
+                "Add or remove active instances through the same element and action list controls shown on the Agromancy, Aspects, and Druidry screens.",
+                ModeSchema(ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema(
+                            "add_element", "remove_element", "add_action", "remove_action"),
+                        ["uuid"] = StringSchema("Published HarvestElementSO UUID."),
+                        ["actionUuid"] = StringSchema(
+                            "Published HarvestActionSO UUID offered by that element."),
+                        ["amount"] = IntegerSchema(1, int.MaxValue),
+                    },
+                    "mode", "uuid"),
+                    ModeRule("add_element", forbidden: new[] { "actionUuid" }),
+                    ModeRule("remove_element", forbidden: new[] { "actionUuid" }),
+                    ModeRule("add_action", new[] { "actionUuid" }),
+                    ModeRule("remove_action", new[] { "actionUuid" })),
+                readOnly: false,
+                idempotent: false),
             Tool(
                 "game_spell_level",
                 "Buy spell mastery",
@@ -1253,6 +1287,19 @@ internal sealed class GameMcpProtocolRouter
             if (!snapshot && slot)
                 errors.Add(ValidationError("unexpected_for_mode", "slot",
                     "field 'slot' is accepted only for snapshot modes"));
+        }
+
+        if (string.Equals(name, "game_harvest_setup", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var action = arguments.ContainsKey("actionUuid");
+            if (mode is "add_action" or "remove_action" && !action)
+                errors.Add(ValidationError("missing_required", "actionUuid",
+                    "required field 'actionUuid' is missing for mode '" + mode + "'"));
+            else if (mode is "add_element" or "remove_element" && action)
+                errors.Add(ValidationError("unexpected_for_mode", "actionUuid",
+                    "field 'actionUuid' is accepted only for action modes"));
         }
 
         if (string.Equals(name, "game_spell_level", StringComparison.Ordinal) &&

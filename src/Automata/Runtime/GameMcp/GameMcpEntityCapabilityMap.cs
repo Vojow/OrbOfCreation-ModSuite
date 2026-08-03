@@ -132,6 +132,9 @@ internal static class GameMcpEntityCapabilityMap
                 CraftingStationTarget(world, target, out reason),
             GameMcpCommandKind.Loadout =>
                 TryResolveLoadoutType(world, target, out _, out reason),
+            GameMcpCommandKind.HarvestLifecycle =>
+                Entity(world.EntityIdentities, world.HarvestElements, target,
+                    "harvest-elements", capability, out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -512,7 +515,10 @@ internal static class GameMcpEntityCapabilityMap
         D("player-loadout-entries", "Spell|EquipmentSO|AlchemyRecipeSO"),
         D("snapshot-slots", "AlchemySnapshot|EquipmentSnapshot"),
         D("snapshot-entries", "EquipmentSO|AlchemyRecipeSO"),
-        D("harvest-elements", "HarvestElementSO"),
+        D("harvest-elements", "HarvestElementSO", GameMcpCommandKind.HarvestLifecycle),
+        D("harvest-element-controls", "HarvestElementSO"),
+        D("harvest-action-controls", "HarvestActionSO"),
+        D("harvest-lifecycle-costs", "ResourceCostList"),
         D("harvest-resources", "HarvestElementSO"),
         D("time-runes", "TimeRuneSO", GameMcpCommandKind.GenericDiscovery,
             GameMcpCommandKind.GenericLevel),

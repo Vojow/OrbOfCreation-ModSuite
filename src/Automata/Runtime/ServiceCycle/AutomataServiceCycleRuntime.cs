@@ -37,6 +37,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly CraftingStationGameAction? _craftingStations;
     private readonly CraftingInstanceLifecycleGameAction? _craftingInstances;
     private readonly LoadoutGameAction? _loadouts;
+    private readonly HarvestLifecycleGameAction? _harvestLifecycle;
     private readonly ChallengeGameAction? _challenges;
     private readonly PrestigeGameAction? _prestige;
     private readonly ResearchGameAction? _research;
@@ -64,6 +65,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         CraftingStationGameAction? craftingStations = null,
         CraftingInstanceLifecycleGameAction? craftingInstances = null,
         LoadoutGameAction? loadouts = null,
+        HarvestLifecycleGameAction? harvestLifecycle = null,
         ChallengeGameAction? challenges = null,
         PrestigeGameAction? prestige = null,
         ResearchGameAction? research = null)
@@ -87,6 +89,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _craftingStations = craftingStations;
         _craftingInstances = craftingInstances;
         _loadouts = loadouts;
+        _harvestLifecycle = harvestLifecycle;
         _challenges = challenges;
         _prestige = prestige;
         _research = research;
@@ -160,6 +163,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _craftingStations?.InvalidateLifecycle();
         _craftingInstances?.InvalidateLifecycle();
         _loadouts?.InvalidateLifecycle();
+        _harvestLifecycle?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
         _prestige?.InvalidateLifecycle();
         _research?.InvalidateLifecycle();
@@ -231,6 +235,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteCraftingStation(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Loadout)
                 return ExecuteLoadout(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.HarvestLifecycle)
+                return ExecuteHarvestLifecycle(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Challenge)
                 return ExecuteChallenge(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Prestige)
@@ -643,6 +649,33 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
             configurationGeneration, submission.Reason,
             GameMcpRitualLifecycleProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecuteHarvestLifecycle(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_harvestLifecycle is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared harvest-list GameAction was not composed", lifecycle,
+                configurationGeneration);
+        GameMcpNativeActionAdmission.AssertNativeType(command, "HarvestElementSO");
+        var kind = command.Mode switch
+        {
+            "add_element" => HarvestLifecycleActionKind.AddElement,
+            "remove_element" => HarvestLifecycleActionKind.RemoveElement,
+            "add_action" => HarvestLifecycleActionKind.AddAction,
+            "remove_action" => HarvestLifecycleActionKind.RemoveAction,
+            _ => throw new ArgumentException("unsupported harvest-list mode " + command.Mode),
+        };
+        var action = new HarvestLifecycleAction(kind, command.TargetId,
+            command.SecondaryId, command.Amount, command.ExpectedLifecycleGeneration);
+        var submission = _harvestLifecycle.Submit(in action);
+        var result = HarvestLifecycleActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason,
+            GameMcpHarvestLifecycleProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteGenericLevel(
@@ -1114,6 +1147,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _craftingStations?.Dispose();
             _craftingInstances?.Dispose();
             _loadouts?.Dispose();
+            _harvestLifecycle?.Dispose();
             _challenges?.Dispose();
             _prestige?.Dispose();
             _research?.Dispose();

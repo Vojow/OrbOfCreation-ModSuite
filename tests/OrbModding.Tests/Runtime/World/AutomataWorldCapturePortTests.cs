@@ -113,6 +113,10 @@ public sealed class AutomataWorldCapturePortTests
         Register(
             KnownEntities.ScribeCrafting.Uuid,
             new global::CraftingRecipeTypeSO { maxStartingLevel = 1, isLevelType = true });
+        Register(HarvestLifecycleNativeBindings.ActiveElementsId,
+            new global::HarvestElementListVariable());
+        Register(HarvestLifecycleNativeBindings.ActiveActionsId,
+            new global::HarvestActionInstanceListVariable());
 
         foreach (var (scrollId, enchantmentId) in new[]
                  {

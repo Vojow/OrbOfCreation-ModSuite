@@ -146,6 +146,9 @@ internal sealed class GameWorldCycleFrame
     internal WorldRelationBuffer<WorldSnapshotEntry> SnapshotEntries { get; } = new();
     internal WorldSampleBuffer<WorldHarvestElement, WorldHarvestElement> HarvestElements { get; } = new();
     internal WorldSampleBuffer<RawHarvestResourceSample, WorldHarvestResource> HarvestResources { get; } = new();
+    internal WorldRelationBuffer<WorldHarvestElementControl> HarvestElementControls { get; } = new();
+    internal WorldRelationBuffer<WorldHarvestActionControl> HarvestActionControls { get; } = new();
+    internal WorldRelationBuffer<WorldHarvestLifecycleCost> HarvestLifecycleCosts { get; } = new();
     internal WorldSampleBuffer<WorldTimeRune, WorldTimeRune> TimeRunes { get; } = new();
     internal WorldSampleBuffer<WorldGlyph, WorldGlyph> Glyphs { get; } = new();
     internal WorldSampleBuffer<WorldConsumable, WorldConsumable> Consumables { get; } = new();
@@ -340,6 +343,12 @@ internal static class GameWorldFrameDeriver
             SnapshotEntries = WorldLoadoutDeriver.BuildSnapshotEntries(frame.SnapshotEntries),
             HarvestElements = frame.HarvestElements.Build(WorldIdentityDeriver<WorldHarvestElement>.Shared),
             HarvestResources = frame.HarvestResources.Build(new WorldHarvestResourceDeriver(frame.FrameGlobals)),
+            HarvestElementControls = WorldHarvestLifecycleDeriver.BuildElements(
+                frame.HarvestElementControls),
+            HarvestActionControls = WorldHarvestLifecycleDeriver.BuildActions(
+                frame.HarvestActionControls),
+            HarvestLifecycleCosts = WorldHarvestLifecycleDeriver.BuildCosts(
+                frame.HarvestLifecycleCosts),
             TimeRunes = frame.TimeRunes.Build(WorldIdentityDeriver<WorldTimeRune>.Shared),
             Glyphs = frame.Glyphs.Build(WorldIdentityDeriver<WorldGlyph>.Shared),
             Consumables = frame.Consumables.Build(WorldIdentityDeriver<WorldConsumable>.Shared),

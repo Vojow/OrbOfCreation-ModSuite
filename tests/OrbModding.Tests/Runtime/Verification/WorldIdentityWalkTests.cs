@@ -90,6 +90,9 @@ public sealed class WorldIdentityWalkTests
     /// keyed by a runtime station whose own row owns the identity. <c>CollectionCategories</c> is
     /// <c>PlayerLoadoutEntries</c>, <c>SnapshotSlots</c>, and <c>SnapshotEntries</c> are saved-entry
     /// and owner/slot relations keyed by the player or snapshot-list rows that own their UUIDs.
+    /// <c>HarvestElementControls</c>, <c>HarvestActionControls</c>, and
+    /// <c>HarvestLifecycleCosts</c> are list-state and cost relations keyed by harvest elements,
+    /// actions, and resources whose identities come from their primary tables or the live catalog.
     /// <c>CollectionCategories</c> is
     /// availability evidence about one collector pass, not a native
     /// row and not a second identity namespace. <c>ScribeWork</c>,
@@ -140,6 +143,9 @@ public sealed class WorldIdentityWalkTests
         "PlayerLoadoutEntries",
         "SnapshotSlots",
         "SnapshotEntries",
+        "HarvestElementControls",
+        "HarvestActionControls",
+        "HarvestLifecycleCosts",
     };
 
     /// <summary>

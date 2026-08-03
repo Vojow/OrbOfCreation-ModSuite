@@ -173,6 +173,18 @@ public sealed record GameWorldState
     internal PublicationTable<WorldHarvestResource> HarvestResources { get; init; } =
         PublicationTable<WorldHarvestResource>.Empty;
 
+    /// <summary>Active-count and admission facts for the player's harvest element list.</summary>
+    internal PublicationTable<WorldHarvestElementControl> HarvestElementControls { get; init; } =
+        PublicationTable<WorldHarvestElementControl>.Empty;
+
+    /// <summary>Active-count and admission facts for every offered element/action pair.</summary>
+    internal PublicationTable<WorldHarvestActionControl> HarvestActionControls { get; init; } =
+        PublicationTable<WorldHarvestActionControl>.Empty;
+
+    /// <summary>Only the costs that can affect the player's next harvest-list decision.</summary>
+    internal PublicationTable<WorldHarvestLifecycleCost> HarvestLifecycleCosts { get; init; } =
+        PublicationTable<WorldHarvestLifecycleCost>.Empty;
+
     internal PublicationTable<WorldTimeRune> TimeRunes { get; init; } =
         PublicationTable<WorldTimeRune>.Empty;
 
