@@ -61,8 +61,8 @@ a player's word resolves to exactly one managed type.
 For scale before you walk a registry: the mapping holds 229 `UpgradeSO`, 180 `StructureSO`, 80
 `ResourceSO` and 68 `ConsumableSO` rows, against an observed live action-queue capacity of 304.
 Those are authored populations, not live availability; the per-type census is
-[`data/entity-types.tsv`](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/data/entity-types.tsv), and the build-pinned scan census is
-[`data/game-data-census.json`](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/data/game-data-census.json).
+[`data/entity-types.tsv`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/entity-types.tsv), and the build-pinned scan census is
+[`data/game-data-census.json`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/game-data-census.json).
 
 ## Base-class chain
 

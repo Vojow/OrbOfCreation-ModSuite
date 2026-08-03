@@ -16,7 +16,7 @@ The line names the observed `Assembly-CSharp` and `Assembly-CSharp-firstpass` ha
 
 Run **Mods > Runtime > Run differential verification** while quarantined and report the results. If a player chooses to proceed before an audited release, press **Resume all** on General or the top-left STOP button. That immediate action accepts only the exact observed pair and resumes in the same step. This is an explicit risk acknowledgement, not audit evidence, and either assembly changing resets it. **Advanced > Allow this unverified game build** is the alternative when the player wants to acknowledge the pair but keep STOP engaged for a later one-click resume. Turning that acknowledgement off immediately re-engages STOP; restart to unload patches already installed during that session.
 
-Players should still report the new game version on the [issue tracker](https://github.com/Vojow/OrbOfCreation-ModSuite/issues). Maintainers re-audit a build with `script/re-audit --game-dir <path>` to see what changed, then `--stamp` to record the new baseline once every verification stage passes.
+Players should still report the new game version on the [issue tracker](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/issues). Maintainers re-audit a build with `script/re-audit --game-dir <path>` to see what changed, then `--stamp` to record the new baseline once every verification stage passes.
 
 ## Steam Deck UI or severe frame-rate loss
 

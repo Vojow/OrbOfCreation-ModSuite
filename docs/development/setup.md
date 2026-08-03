@@ -1,6 +1,6 @@
 # Development setup
 
-[Back to documentation](../README.md) · [Contributing](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/CONTRIBUTING.md) ·
+[Back to documentation](../README.md) · [Contributing](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/CONTRIBUTING.md) ·
 [Engineering doctrine](engineering-doctrine.md)
 
 ## Repository flow

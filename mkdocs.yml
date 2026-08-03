@@ -1,7 +1,7 @@
 site_name: Orb Of Creation ModSuite
-site_url: https://vojow.github.io/OrbOfCreation-ModSuite/
-repo_url: https://github.com/Vojow/OrbOfCreation-ModSuite
-repo_name: Vojow/OrbOfCreation-ModSuite
+site_url: https://orbautomata.github.io/OrbOfCreation-ModSuite/
+repo_url: https://github.com/OrbAutomata/OrbOfCreation-ModSuite
+repo_name: OrbAutomata/OrbOfCreation-ModSuite
 
 docs_dir: docs
 site_dir: artifacts/docs-site

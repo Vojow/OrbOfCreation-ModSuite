@@ -9,7 +9,7 @@ cannot be defended.
 |---|---|---|
 | Mono.Cecil / ILSpy over the installed assemblies | signatures, inheritance, call order inside a method, formula shape | which assets exist, what is attached to them |
 | AssetRipper + the `sharedassets0.assets` type tree | serialized field values, asset-to-asset references, authored names and icons | anything computed at runtime |
-| [`data/entity-*.tsv`](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/data/README.md) + `tools/find-entity.py` | UUID ↔ managed type ↔ internal name ↔ display name | relationships, state |
+| [`data/entity-*.tsv`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/README.md) + `tools/find-entity.py` | UUID ↔ managed type ↔ internal name ↔ display name | relationships, state |
 | the live Game MCP against a running perf-debug build | current registry population, live values, whether a call is admitted | why the game answered that way |
 
 The in-game differential verifier sits across all four: it recomputes costs, rates, modifiers,

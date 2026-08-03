@@ -31,7 +31,7 @@ pair a formula or IL order came from when the two could differ.
 
 ## What the manifest proves
 
-[`data/native-contracts.json`](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/data/native-contracts.json) is the reviewable inventory of
+[`data/native-contracts.json`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/native-contracts.json) is the reviewable inventory of
 every game member the suite resolves by reflection or patches with Harmony. It carries the
 admitted hash pairs and, per member, the declaring type, visibility, staticness, return type, and
 ordered parameter list. Installed-game tests validate it directly, and the same hashes are checked
@@ -56,5 +56,5 @@ present in the loader directory do not.
    admission short-circuits, and rounding are the ones that move.
 4. Run the in-game differential verifier against a disposable save to confirm parity for costs,
    rates, modifiers, affordability, accessors, and structure/upgrade requirements.
-5. Re-import [`data/entity-mappings.tsv`](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/data/entity-mappings.tsv) if assets were added or
+5. Re-import [`data/entity-mappings.tsv`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/entity-mappings.tsv) if assets were added or
    removed; UUIDs are stable across builds, but the population is not.
