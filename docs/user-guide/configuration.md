@@ -1,94 +1,85 @@
 # Configuration and safety
 
-[Back to documentation](../README.md) · [Installation](installation.md)
+[Back to documentation](../README.md) · [Installation](installation.md) ·
+[Troubleshooting](troubleshooting.md)
 
-Open the in-game **Mods** tab to configure the suite. The tab itself is optional — `Interface.EnableButtonShell` turns it off — and every value stays editable in the BepInEx configuration file.
+Open the in-game **Mods** tab and select **Orb Of Creation ModSuite**. The left rail contains
+Runtime, General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, Mentor,
+and Advanced.
 
-The suite is one plugin with one identity (`dev.vojow.orbofcreation.modsuite`), so BepInEx keeps all of it in one configuration file. That file carries a hidden `[OrbModding] ConfigurationSchemaVersion` marker and its current version is 6. Settings from retired per-plugin files do not carry over. Before migration the transaction creates the first free sibling backup (`.pre-schema-v<version>.bak`, then `.bak.2`, and so on) and never overwrites one that exists. Malformed, negative, or newer unsupported schema versions stop the suite before it changes gameplay or opens its UI; do not lower the marker by hand. The Mods panel reports the schema state separately from both runtime health and the Apply result, and never displays the configuration path or saved values in that status.
+The suite stores all settings in
+`BepInEx/config/dev.vojow.orbofcreation.modsuite.cfg`. You can edit that file while the game is
+closed, but the Mods tab is the recommended route because it validates values and explains them.
 
-Important controls:
+## How changes work
 
-The left rail contains Runtime, General, Auto Buy, Auto Cast, Auto Concept, Auto Harvest, Auto
-Items, Auto Scribe, Mentor, and Advanced. The old Safety, Spells, Artifacts, Alchemy, and duplicate
-feature-tab row is gone. Mentor's spell, artifact, alchemy, source, percentage, and economy
-policies live together on the Mentor page.
+Most settings are staged until you press **Apply**. **Revert** discards staged changes for the
+selected mod. If a hotkey, quick control, or external file edit changes a value you are editing,
+the row asks you to choose **Keep mine** or **Take live** before applying.
 
-Each feature page begins with one status card and an immediate **Turn on/Turn off** command. That command and the matching gameplay quick button are the only two feature-mode controls in the UI, and both publish through the committed configuration store before returning. Mode rows are not repeated in the staged settings list. Disabled feature modes lock their tuning fields. Nested controls unlock only when all of their committed or staged prerequisites are selected; these UI dependencies do not change or erase saved values.
+Each feature page has an immediate **Turn on** or **Turn off** command. The matching gameplay quick
+control changes the same saved value immediately. A feature that is configured On can still show a
+separate waiting, blocked, or failed status; its tooltip and the Runtime page explain why.
 
-Apply, Revert, unsaved-state, and validation in the Mods page are scoped to the selected mod. If a quick button, hotkey, or file reload changes a value that is also staged, the row shows both values and requires an explicit **Keep mine** or **Take live** choice before Apply.
+## Start safely
 
-Keyboard shortcuts are parsed and validated while staged. Text-backed dependencies are re-evaluated when editing ends, so dependent rows update without rebuilding the page on every keystroke.
+Auto Buy starts Active. Auto Cast, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, and Mentor
+start Disabled. Review Auto Buy's reserves and queue settings before playing, then enable other
+features one at a time.
 
-The Mods catalog is reused across ordinary refreshes and unchanged scene rebuilds. Late plugin/config-definition additions or removals invalidate it at the existing integrity check, rebuild it once, and restore navigation by stable plugin and section identity.
+The top-left **STOP ALL** control is always available during gameplay. It immediately stops new
+suite actions and discards prepared automation work. Press it again to resume. The **General** page
+offers the same **Stop all** or **Resume all** command, plus **Automation enabled** for turning the
+whole suite off without editing the configuration file.
 
-Runtime starts with a two-column summary of all seven suite features; failures and attention states
-sort before waiting and healthy features. One **Create bug report** action packages the suite's recent
-activity, settings, log, and identifiable save files into a shareable zip; it captures what already
-happened and does not start recording. The separate game-math check follows, then optional profiling,
-the automation activity timeline, the decision journal, and detailed service cards. The
-Runtime footer reports whether the Mods refresh is pending and how long ago it last completed. Mods
-maintenance admits at most one pass per Unity frame and continues pending work on later frames.
+Back up saves before risky changes and use only one automatic buyer or other mod responsible for a
+given game action.
 
-Every registered automation feature's quick control and feature-card command publishes the saved
-value through the same configuration store used by every other writer before the click returns,
-then renders that committed intent. Auto Items has one feature-wide control for Scrolls, Relics,
-and exact-UUID-approved temporary items; Auto Scribe likewise has one feature-wide control. A
-button decides its next value from committed state, not from a raw file-watcher
-notification that the application has not accepted yet. Mods Apply and external edits join the
-same store at the start of the next main-thread frame.
+## Feature settings
 
-Runtime waiting, pauses, blockers, and failures remain a separate health axis in the button tooltip and
-Mods Runtime page; a configured-On feature does not pretend to be Off merely because it cannot currently
-run. Service diagnostics publish health only. One central presentation join combines it with committed
-intent, so a late lifecycle, host-fault, or completed-cycle update cannot repaint a saved setting. The
-suite renderer also exclusively owns each cloned button's configured-intent graphic; native hover, press,
-release, and selection transitions cannot repaint it as a second state.
+- **Auto Buy** controls Structure and Upgrade spending separately. Absolute and relative reserves
+  protect chosen resources, and `LeaveQueueSlots` keeps room for manual actions. Spell Leveling is
+  enabled by default while Auto Buy is active and can be turned off separately.
+- **Auto Cast** starts Disabled, uses `F8` by default, and fully charges charge-capable spells by
+  default. Turn off **Full charge** to cast them immediately.
+- **Auto Concept** starts Disabled. Its default Timed Cycle rotates acquired concepts after 30
+  seconds of settled training. Rotate All may replace a lower-mastery active concept, while
+  Preserve Manual keeps concepts that were active when automation began. Rate, quantity, and drain
+  protections remain configurable.
+- **Auto Harvest** starts Disabled. Fruit-tree and treasure-tree collection are both selected by
+  default behind the feature switch.
+- **Auto Items** starts Disabled. Scrolls and Relics are selected by default behind the feature
+  switch. Temporary Fruits, Potions, and Threads remain unused until you explicitly approve
+  individual items in the picker.
+- **Auto Scribe** starts Disabled. An empty Roles value selects all supported producible roles;
+  `none` selects no roles. Use the listed role keys to narrow production.
+- **Mentor** starts Disabled and uses `Left Alt + M` by default. Choose which mastery domains may
+  receive shared XP, the source policy, sharing percentages, and whether the percentage is divided
+  across recipients or granted to each recipient.
 
-The top-left safety control is always present in gameplay, including when the automation master switch is off or the worker host failed. **STOP ALL** engages the suite emergency stop with one click and discards prepared automation work; pressing it again clears the stop immediately. The Mods **General** page exposes the same immediate **Stop all**/**Resume all** command, with no staged Apply or resume confirmation. The second closed quick button opens the seven feature toggles in a transient drawer to the right. If a contained feature is faulted or blocked while the drawer is closed, the disclosure gains both a red color and a separate exclamation marker. **Automation enabled** remains on General so the whole suite can be turned off and back on without editing the file.
+## Runtime and problem reports
 
-After a game update produces a complete but unaudited assembly pair, the suite opens in compatibility quarantine instead of disappearing. Mods and **Check game math** remain available, while no Harmony patch, automation service, Mentor service, or feature quick control is installed. Emergency stop starts engaged. Clearing it from the quick button or General is the player's explicit acknowledgement for the exact two-file hash pair: it records the pair and permits runtime composition at the player's own risk in the same action. The acknowledgement survives restarts only for that exact pair and automatically resets after either game assembly changes. **Advanced > Allow this unverified game build** remains available as a separate acknowledgement path when the player wants to permit composition but leave STOP engaged for a later one-click resume. Turning that acknowledgement off re-engages STOP immediately; restart the game to unload patches already installed during that session.
+The **Runtime** page shows feature health, current waits and blockers, completed automation activity,
+and the recent decision journal. It also provides two immediate actions:
 
-If the shared automation host cannot start, desired-On features report that runtime fault while desired-Off features remain Off. Configuration changes are retained while the host is absent. One automatic retry is made on the next eligible frame; after that bounded attempt, the fault remains visible instead of retrying indefinitely.
+- **Create bug report** packages recent activity, settings, the BepInEx log, and identifiable save
+  files into one zip. It captures evidence already held by the suite; it does not start recording.
+- **Check game math** performs a read-only comparison against the loaded game. The game visibly
+  pauses while this check runs.
 
-- `AutoBuy.Mode` and `AutoCast.Mode`: saved values are `Disabled` or `Active`; change them with the feature header or quick button.
-- `AutoConcept.Mode`: `Disabled` (default) or `Active` for Scholar Active Concepts; change it with the feature header or quick button.
-- `AutoHarvest.Mode`: `Disabled` (default) or `Active`; change it with the feature header or quick button. `CollectFruitTrees` and `CollectTreasureTrees` both default to true behind the disabled master switch.
-- `AutoItems.Mode`: `Disabled` (default) or `Active`; change it with the feature header or the one feature-wide quick control. That control gates Scrolls, Relics, and exact-UUID-approved temporary items together. `UseScrolls` and `UseRelics` both default to true behind the disabled master switch; Scrolls use native randomized targeting and Relics receive priority. `TemporaryItemAllowlist` is empty by default and accepts comma-separated exact UUIDs only; it has no family-level switch, and an empty list leaves temporary Fruits, Potions, and Threads inert.
-- `AutoScribe.Mode`: `Disabled` (default) or `Active`; change it with the feature header or quick control. `AutoScribe.Roles` accepts comma-separated semantic role keys (`scribe.advancement`, `scribe.power`, `scribe.learning`, `scribe.excellence`, `scribe.development`, `scribe.echo`). Empty selects all audited producible roles and `none` selects none. Native UUIDs are not configuration values.
-- The world collector publishes a fresh immutable reading every 250 milliseconds. Auto Buy, spell leveling, Auto Cast, Auto Concept, Auto Harvest, Auto Items, and Auto Scribe evaluate from world and configuration publications; training periods, manual-cast pauses, and fault backoffs remain explicit waits for their own semantics.
-- `AutoConcept.SlotManagementMode`: `TimedCycle` (default) rotates through every unlocked concept after each assignment has received the complete configured settled-active period; the game decides whether releasing an assignment opens an appropriate typed or typeless slot. `RotateAll` replaces active concepts to train a same-type strictly lower-mastery concept; `PreserveManual` keeps concepts that were already active when automation started.
-- Legacy `AutoCast.ShowToggleButton` and `AutoConcept.ShowToggleButton` values remain readable from existing config files but are hidden and ignored. Every registered automation feature has one quick control.
-- `AutoConcept.TrainingPeriodSeconds`: settled active time for one newly assigned concept; default 30, range 10 to 3600. Schema 6 rewrites every serialized 300-second value — the former default — to 30, including a value deliberately saved by a player; all other customized values are preserved. `RotateAll` and `PreserveManual` can resume earlier after mastery catch-up, while `TimedCycle` always waits for the full period.
-- Auto Concept considers every discovered (unlocked) concept. While a settled training period is still running, its tooltip and Runtime status say that it is waiting. If training has finished but no other unlocked concept can be assigned, they show that progression-locked reason instead of treating a locked concept as a candidate. If the game refuses an unlocked replacement because its prospective slot or resource drain is unsafe, that attempt ends Auto Concept's work on the current world reading. The candidate re-enters ordinary planning after the next collection; persistent refusal is logged again on every publication and may deliberately starve later candidates until the collected schema exposes the native constraint. There is no retry timer, fallback poll, or rejection memory. `BepInEx/LogOutput.log` names each verified quantity delta or rejected rotation and its native reason.
-- `AutoBuy.AutoLevelSpells`: enabled by default while Auto Buy is active. It detects native progression automatically: Locked, Single, then All after the completed level-all Upgrade. It spends the game's live spell-level costs and can be disabled separately.
-- Structure and upgrade affordability modes are configured separately.
-- Absolute and relative reserves protect selected resources.
-- `LeaveQueueSlots` preserves queue room for manual actions.
-- Auto Buy always fills the available queue while preserving `LeaveQueueSlots`. Structures prefer the live Bulk Development count but reduce it to the largest positive exactly priced group the remaining batch ledger can fund; upgrades request one level. Candidates are ranked by cost ratio and stable UUID, without UUID filters or a structure-effect priority tier. Every submitted level is capped to live queue room and revalidated independently.
-- Auto Concept always deepens an assignment to its native mastery maximum; there is no separate quantity cap.
-- Auto Concept rate, quantity, and drain-ratio floors protect continuous resources; zero-resource replacements are skipped so they cannot starve other safe concepts in the cycle. Current concept quantities remain the rollback ownership baseline even when `RotateAll` permits assignment replacement.
-- `Safety.EmergencyDisable`: General suite emergency stop. It immediately stops new automated purchases, casts, concept mutations, spell levels, harvest and consumable submissions, and mastery sharing. On a quarantined build, explicitly clearing it also accepts the exact observed assembly pair.
-- `Compatibility.AllowUnverifiedGameBuild`: Advanced-only risk acknowledgement for the exact unaudited assembly pair currently installed. Default false; a changed pair resets it automatically.
+Use **Create bug report** immediately after a problem, then follow
+[reporting a problem](troubleshooting.md#reporting-a-problem) before sharing the file.
 
-Default input inventory:
+## Game updates and compatibility quarantine
 
-- Auto Cast is polled once per Unity frame and defaults to `F8`; the central collision audit verifies that chord has no audited native default.
-- Mentor is polled once per Unity frame and defaults to `Left Alt + M`. It intentionally remains configurable and the audit warns that its modifier is also the native More Info modifier.
-- Differential verification has no key listener. Run it with **Check game math** on Mods -> Runtime.
-- Auto Buy, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, emergency stop, Mods navigation, and Runtime diagnostic actions are buttons, not global key listeners. Auto Items and Auto Scribe expose the same feature-wide mode through their Mods command and registered quick control.
+An unknown but complete game assembly pair opens the Mods control plane in compatibility quarantine.
+Gameplay patches and services remain stopped, but **Check game math** is available. Waiting for an
+audited ModSuite release is the safe choice.
 
-Auto Buy defaults to Active with 100x affordability thresholds. Auto Cast, Auto Concept, Auto
-Harvest, Auto Items, and Auto Scribe default to Disabled. Auto Harvest queues quantity one, keeps at
-most one supported collect active, and runs only through the Common ServiceCycle engine. It may use
-the final free plot-action entry when the game's native capacity contract also reports room. Auto
-Items submits one eligible Relic or Scroll at a time through the native consumable queue and stops
-for the lifecycle if an attempted mutation cannot be verified. Auto Scribe produces at most one
-audited Scroll per publication, yields to native automatic Scribe work, and quarantines after an
-unverified paid transaction. When enabled, Auto Cast fully charges charge-capable spells by
-default; turn off `Auto Cast > Full charge` to fire them immediately. Auto Concept uses a 10%
-positive-rate reserve, 10% finite-resource quantity floor, and 0.95 native drain-ratio watchdog by
-default. Warnings and errors are always emitted. Use **Create bug report** after a problem to package
-the recent evidence, or **Check game math** for a read-only live comparison; there is no global
-detailed-logging mode.
+If you choose to proceed at your own risk, **Resume all** or the top-left STOP button acknowledges
+only the exact installed assembly pair and resumes in the same action. **Advanced > Allow this
+unverified game build** records the same acknowledgement while leaving STOP engaged. Either game
+assembly changing resets the acknowledgement.
 
-Back up saves before risky configuration changes and run only one automatic buyer. The complete scheduling, affordability, reserve, and queue-ownership contract is in the [automation reference](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/src/Automata/README.md).
+Next, keep [troubleshooting](troubleshooting.md) available while you try your configuration. To
+remove the suite and keep or discard its settings, follow [uninstalling](uninstalling.md).

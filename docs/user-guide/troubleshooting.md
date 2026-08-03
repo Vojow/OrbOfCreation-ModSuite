@@ -1,68 +1,99 @@
 # Troubleshooting
 
-[Back to documentation](../README.md) · [Installation](installation.md)
+[Back to documentation](../README.md) · [Installation](installation.md) ·
+[Configuration](configuration.md) · [Uninstalling](uninstalling.md)
 
-## The mod entered compatibility quarantine after a game update
+When the suite loads, `BepInEx/LogOutput.log` records **Orb Of Creation ModSuite** once. Start with
+that file for installation problems. For problems after startup, use **Mods > Runtime > Create bug
+report** immediately after the issue so the report includes the most useful recent evidence.
 
-This is the expected result of a game update, not a broken install. The suite computes the game's economy math itself, so an unknown complete assembly pair loads only the Mods configuration and verifier while gameplay patches and services remain emergency-stopped.
+## The suite entered compatibility quarantine after a game update
 
-`BepInEx/LogOutput.log` will contain one warning line beginning:
+The suite uses audited game assemblies for its economy calculations. An unknown complete assembly
+pair opens only the Mods configuration and diagnostic controls while gameplay patches and services
+remain stopped.
+
+`BepInEx/LogOutput.log` contains a warning beginning:
 
 ```text
 Gameplay runtime quarantined: the installed game build does not match an audited baseline.
 ```
 
-The line names the observed `Assembly-CSharp` and `Assembly-CSharp-firstpass` hashes and the audited baselines. A refusal beginning `Refusing to load even the diagnostic control plane` means the pair could not be discovered completely, so even a hash-bound acknowledgement would be unsafe.
+Run **Mods > Runtime > Check game math** and include its result in your report. Waiting for an
+audited ModSuite release is the safe choice. If you choose to proceed at your own risk, the
+[configuration guide](configuration.md#game-updates-and-compatibility-quarantine) explains the two
+exact-build acknowledgement controls.
 
-Run **Mods > Runtime > Check game math** while quarantined and report the results. If a player chooses to proceed before an audited release, press **Resume all** on General or the top-left STOP button. That immediate action accepts only the exact observed pair and resumes in the same step. This is an explicit risk acknowledgement, not audit evidence, and either assembly changing resets it. **Advanced > Allow this unverified game build** is the alternative when the player wants to acknowledge the pair but keep STOP engaged for a later one-click resume. Turning that acknowledgement off immediately re-engages STOP; restart to unload patches already installed during that session.
-
-Players should still report the new game version on the [issue tracker](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/issues). Maintainers re-audit a build with `script/re-audit --game-dir <path>` to see what changed, then `--stamp` to record the new baseline once every verification stage passes.
-
-## Steam Deck UI or severe frame-rate loss
-
-Current supported builds throttle native UI discovery while autoqueue is locked, retry the Mods UI while Proton finishes constructing the scene, and cooperatively bound automation, Mentor, and configuration-UI work. If the problem persists, disable Auto Buy, Auto Cast, Auto Concept, and Mentor through their modes or gameplay controls, then attach `BepInEx/LogOutput.log` to the report. Include whether the native autoqueue and NG+ tabs were unlocked and which automation modes were active.
-
-## No `LogOutput.log`
-
-Verify that BepInEx files are beside the game executable. On Proton, recheck the `winhttp` override in the installation guide.
-
-## The configuration UI shows only itself
-
-Verify that BepInEx reports the suite plugin during startup. Remove duplicate DLLs and any test-stub DLLs from the game directory.
+A refusal beginning `Refusing to load even the diagnostic control plane` means the suite could not
+identify the complete assembly pair. Do not try to acknowledge that state. Report the game version
+and attach `BepInEx/LogOutput.log` on the
+[issue tracker](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/issues).
 
 ## The suite does not load
 
-First check for the refusal line described above. If it is absent, confirm that exactly one `OrbModSuite.dll` is present somewhere under `BepInEx/plugins`. The suite ships as a single assembly, so a leftover `OrbAutomata.dll`, `OrbMentor.dll`, `OrbModConfig.dll`, or `OrbModding.Common.dll` from a release before 0.4.0 is a cause of failure rather than a requirement — delete them. Search `BepInEx/LogOutput.log` for missing dependencies, duplicate plugin GUIDs, and assembly errors.
+1. Confirm that BepInEx files are beside `Orb Of Creation.exe`. On Proton, recheck the `winhttp`
+   override in the [installation guide](installation.md#2-install-bepinex-5).
+2. Confirm that exactly one `OrbModSuite.dll` exists anywhere under `BepInEx/plugins`.
+3. Remove separate `OrbAutomata.dll`, `OrbMentor.dll`, `OrbModConfig.dll`, and
+   `OrbModding.Common.dll` files; they are not part of the one-plugin installation.
+4. Search `BepInEx/LogOutput.log` for missing dependencies, duplicate plugin identities, assembly
+   errors, or the compatibility refusal described above.
 
-## My settings are gone after upgrading
+If `BepInEx/LogOutput.log` does not exist, BepInEx itself did not start. Repeat the BepInEx section
+of the installation guide before troubleshooting the ModSuite.
 
-Expected on the upgrade to 0.4.0. The suite has one configuration file named after its own plugin GUID, and the four retired per-plugin files are never read or migrated. Reapply your settings in the in-game configuration UI.
+## The Mods tab shows only the configuration plugin
 
-## Auto Concept repeatedly removes and re-adds one concept
+Confirm that the BepInEx log lists **Orb Of Creation ModSuite** during startup. Remove duplicate
+suite DLLs and test-stub DLLs from the game directory, then restart the game.
 
-Current builds reject a positive concept drain when its authoritative resource is at zero, so an unsafe recipe cannot monopolize mutation work or prevent another acquired compatible slot from being filled. If churn remains, press **Create bug report** immediately after it happens and include the resulting zip plus the affected resource name.
+## My settings are missing
 
-If Auto Concept repeatedly logs `Auto Concept did not complete`, the line names the active and
-proposed replacement UUIDs and says whether the live slot, quantity, or prospective resource drain
-refused the rotation. That rejection ends the current world round. The same candidate may be proposed
-and rejected again after each 250-millisecond collection; this is deliberate evidence that the world
-snapshot is missing a native constraint, not a reason to skip ahead or add a retry timer.
+The suite reads only `BepInEx/config/dev.vojow.orbofcreation.modsuite.cfg`. Settings in separate
+per-plugin files are not imported. Reapply the wanted values in the Mods tab and keep the other
+files only as personal references.
+
+If the current suite configuration has an unsupported or malformed schema marker, the suite stops
+before changing gameplay. Restore an adjacent `.pre-schema-v*.bak` file if one exists, or move the
+current file aside so the suite can create defaults; do not lower the schema marker by hand.
+
+## Steam Deck UI problems or severe frame-rate loss
+
+Press **STOP ALL** first. If the problem clears, resume and enable features one at a time to identify
+the trigger. Create a bug report after reproducing the problem, then include whether the native
+autoqueue and NG+ tabs were unlocked and which features were active.
+
+## Auto Concept repeatedly changes the same concept
+
+Press **STOP ALL**, then create a bug report immediately. Include the affected concept and resource
+names with your reproduction steps. The report preserves the suite's recent decisions and the live
+refusal reason without requiring you to copy individual log lines.
 
 ## Checking the suite against the live game
 
-**Check game math** on Mods -> Runtime runs the diagnostic: it compares the suite's own economy math against the game's results for every structure and resource, checks its world collection against the game's own accessors, and checks its verdict on whether each upgrade and structure may be bought at its next level against the game's own per-level prerequisite check. It reports one verdict per pass in `BepInEx/LogOutput.log`, and reads and compares only; it changes nothing in the game.
+**Mods > Runtime > Check game math** compares the suite's economy and purchase decisions with the
+loaded game without changing the game. Load a save first. The check runs in one frame, so the game
+will visibly pause while it completes; its result is written to `BepInEx/LogOutput.log`.
 
-A requirement pass that reports `INCOMPLETE` names a condition class the suite does not model. That is not a wrong answer — an unmodelled condition already stops the purchase being planned — but it is worth reporting, because it makes Auto Buy skip something the game would have allowed.
+An `INCOMPLETE` result names a condition the suite does not model and therefore refuses to automate.
+Include that result in a problem report.
 
-It deliberately runs everything inside the single frame the key was pressed in, so **the game will visibly hitch** — that hitch is the acknowledgement that the run happened. Load a save first; with no structures or resources available the passes report as unavailable.
+## Reporting a problem
 
-Schema 5 removes the retired `Diagnostics/VerifyGameMathShortcut`; differential verification is an explicit Runtime action. Mentor's toggle (`General/ToggleShortcut`) remains `Left Alt + M`. Auto Cast defaults to `F8`; schema 3 migrates only the inherited `Left Alt + X` value and leaves a player-selected chord alone.
+1. Reproduce the problem, if it is safe to do so.
+2. Open **Mods > Runtime** and press **Create bug report** immediately.
+3. Inspect the resulting `orb-modsuite-diagnostics-<timestamp>.zip`. If you intend to share its
+   included save data publicly, attach the bundle and concise reproduction steps to an
+   [issue](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/issues). Otherwise, open the issue
+   with the reproduction steps and say that a bundle is available for private transfer.
 
-## Reporting a bug
+The zip is created under `BepInEx/config/OrbOfCreation-ModSuite/diagnostics/` and is capped at
+10 MiB. It can contain recent activity, settings, a BepInEx log tail, and identifiable top-level
+save files. Text is redacted for known usernames and absolute paths, but save files remain exact
+private game data. Inspect the archive and share it only with a recipient you trust.
 
-Press **Create bug report** on Mods -> Runtime immediately after the problem. The suite flushes the
-evidence it already holds and creates one timestamped zip no larger than 10 MiB. Text files are
-redacted for usernames and absolute paths; the included save remains a byte-exact private game file,
-so share the zip only with a recipient you trust. Include sanitized reproduction steps with it.
+If the action fails, the Runtime page explains why and no partial report is presented as ready.
+Attach `BepInEx/LogOutput.log` instead when it is available.
 
-If recovery requires removing the mod, follow [uninstalling](uninstalling.md).
+After recovery, return to [configuration](configuration.md). If you want to remove the suite,
+follow [uninstalling](uninstalling.md).
