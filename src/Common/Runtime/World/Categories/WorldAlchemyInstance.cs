@@ -636,7 +636,6 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
             coreId,
             scalingId,
             _advancementLevel!(recipe),
-            true,
             in reqCost,
             in reqSpeed,
             costUsesRarity,

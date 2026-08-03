@@ -7469,6 +7469,38 @@
       "place": "capture"
     },
     {
+      "id": "requirement-condition.and-children",
+      "assembly": "assembly-csharp",
+      "type": "Requirements.AndRequirement",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "andConditions",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<Requirements.IRequirementCondition>",
+      "owners": [
+        "Common world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "requirement-condition.and.type",
+      "assembly": "assembly-csharp",
+      "type": "Requirements.AndRequirement",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "requirement-condition.generic.type",
       "assembly": "assembly-csharp",
       "type": "Requirements.GenericRequirement",
@@ -7511,6 +7543,38 @@
       "owners": [
         "Common world collection",
         "Automata Auto Buy admission"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "requirement-condition.or-children",
+      "assembly": "assembly-csharp",
+      "type": "Requirements.OrRequirement",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "orConditions",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<Requirements.IRequirementCondition>",
+      "owners": [
+        "Common world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "requirement-condition.or.type",
+      "assembly": "assembly-csharp",
+      "type": "Requirements.OrRequirement",
+      "typeVisibility": "public",
+      "kind": "type",
+      "owners": [
+        "Common world collection"
       ],
       "usages": [
         "reflection"

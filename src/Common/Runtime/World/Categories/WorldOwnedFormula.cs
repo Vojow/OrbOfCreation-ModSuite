@@ -13,7 +13,6 @@ internal readonly struct WorldConceptDrainBasis : IWorldEntity
         Guid scalingId,
         int advancementLevel,
         int selectedLevel,
-        bool usageRequirementsMet,
         in GameValueModifier requirementCostPenalty,
         in GameValueModifier requirementSpeedPenalty,
         BigDouble rarityMultiplier,
@@ -25,7 +24,6 @@ internal readonly struct WorldConceptDrainBasis : IWorldEntity
         ScalingId = scalingId;
         AdvancementLevel = advancementLevel;
         SelectedLevel = selectedLevel;
-        UsageRequirementsMet = usageRequirementsMet;
         RequirementCostPenalty = requirementCostPenalty;
         RequirementSpeedPenalty = requirementSpeedPenalty;
         RarityMultiplier = rarityMultiplier;
@@ -39,7 +37,6 @@ internal readonly struct WorldConceptDrainBasis : IWorldEntity
     internal Guid ScalingId { get; }
     internal int AdvancementLevel { get; }
     internal int SelectedLevel { get; }
-    internal bool UsageRequirementsMet { get; }
     internal GameValueModifier RequirementCostPenalty { get; }
     internal GameValueModifier RequirementSpeedPenalty { get; }
     internal BigDouble RarityMultiplier { get; }
@@ -68,7 +65,6 @@ internal readonly struct RawConceptDrainBasis
         Guid coreTypeId,
         Guid scalingId,
         int advancementLevel,
-        bool usageRequirementsMet,
         in GameValueModifier requirementCostPenalty,
         in GameValueModifier requirementSpeedPenalty,
         bool costUsesRarity,
@@ -78,7 +74,6 @@ internal readonly struct RawConceptDrainBasis
         CoreTypeId = coreTypeId;
         ScalingId = scalingId;
         AdvancementLevel = advancementLevel;
-        UsageRequirementsMet = usageRequirementsMet;
         RequirementCostPenalty = requirementCostPenalty;
         RequirementSpeedPenalty = requirementSpeedPenalty;
         CostUsesRarity = costUsesRarity;
@@ -89,7 +84,6 @@ internal readonly struct RawConceptDrainBasis
     internal Guid CoreTypeId { get; }
     internal Guid ScalingId { get; }
     internal int AdvancementLevel { get; }
-    internal bool UsageRequirementsMet { get; }
     internal GameValueModifier RequirementCostPenalty { get; }
     internal GameValueModifier RequirementSpeedPenalty { get; }
     internal bool CostUsesRarity { get; }
@@ -149,7 +143,6 @@ internal static class WorldConceptDrainBasisDeriver
                 raw.ScalingId,
                 raw.AdvancementLevel,
                 Math.Max(1, selectedLevel),
-                raw.UsageRequirementsMet,
                 in requirementCostPenalty,
                 in requirementSpeedPenalty,
                 rarity,
@@ -203,13 +196,10 @@ internal static class OwnedConceptDrainMath
                 new BigDouble(basis.SelectedLevel - 1), BigDouble.One, out var level))
             return false;
 
-        var usageRequirementsMet = basis.UsageRequirementsMet;
-        if (HasUsageProgram(world.EntityRequirements, recipeId))
-        {
-            usageRequirementsMet = WorldRequirementEvaluator.Evaluate(
-                world, recipeId, level: 0, WorldRequirementProgramKind.Usage) ==
-                WorldRequirementVerdict.Met;
-        }
+        var usageRequirements = WorldRequirementEvaluator.Evaluate(
+            world, recipeId, level: 0, WorldRequirementProgramKind.Usage);
+        if (usageRequirements == WorldRequirementVerdict.Unevaluable) return false;
+        var usageRequirementsMet = usageRequirements == WorldRequirementVerdict.Met;
         var requirementSpeed = usageRequirementsMet
             ? BigDouble.One
             : basis.RequirementSpeedPenalty.Adjust(BigDouble.One);
@@ -244,17 +234,6 @@ internal static class OwnedConceptDrainMath
 
         modifier = baseModifier * costPercent * speedPercent * overdriveSpeed * overdriveDrain;
         return true;
-    }
-
-    private static bool HasUsageProgram(
-        PublicationTable<WorldEntityRequirement> requirements,
-        Guid recipeId)
-    {
-        if (!WorldEntityRequirementLookup.TryFindRange(requirements, recipeId, out var start, out var count))
-            return false;
-        for (var offset = 0; offset < count; offset++)
-            if (requirements[start + offset].Program == WorldRequirementProgramKind.Usage) return true;
-        return false;
     }
 
     internal static bool TryComputeCost(

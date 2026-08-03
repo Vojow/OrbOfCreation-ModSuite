@@ -113,12 +113,55 @@ internal static class WorldRequirementEvaluator
 
         var rows = world.EntityRequirements.AsSpan();
         var verdict = WorldRequirementVerdict.Met;
+        var priorGroup = -1;
         for (var offset = 0; offset < count; offset++)
         {
-            if (rows[start + offset].Program != program) continue;
-            var one = Evaluate(world, in rows[start + offset], level);
-            if (one == WorldRequirementVerdict.Unevaluable) return WorldRequirementVerdict.Unevaluable;
-            if (one == WorldRequirementVerdict.Unmet) verdict = WorldRequirementVerdict.Unmet;
+            ref readonly var row = ref rows[start + offset];
+            if (row.Program != program || row.GroupOrdinal == priorGroup) continue;
+            priorGroup = row.GroupOrdinal;
+            var group = EvaluateGroup(world, rows, start, count, in row, level, program);
+            if (group == WorldRequirementVerdict.Unevaluable)
+                return WorldRequirementVerdict.Unevaluable;
+            if (group == WorldRequirementVerdict.Unmet)
+                verdict = WorldRequirementVerdict.Unmet;
+        }
+
+        return verdict;
+    }
+
+    private static WorldRequirementVerdict EvaluateGroup(
+        GameWorldState world,
+        ReadOnlySpan<WorldEntityRequirement> rows,
+        int start,
+        int count,
+        in WorldEntityRequirement first,
+        long level,
+        WorldRequirementProgramKind program)
+    {
+        var verdict = first.GroupKind == WorldRequirementGroupKind.Any
+            ? WorldRequirementVerdict.Unmet
+            : WorldRequirementVerdict.Met;
+        for (var offset = 0; offset < count; offset++)
+        {
+            ref readonly var row = ref rows[start + offset];
+            if (row.Program != program || row.GroupOrdinal != first.GroupOrdinal) continue;
+            if (row.GroupKind != first.GroupKind) return WorldRequirementVerdict.Unevaluable;
+
+            var child = Evaluate(world, in row, level);
+            if (first.GroupKind == WorldRequirementGroupKind.Any)
+            {
+                if (child == WorldRequirementVerdict.Met) return WorldRequirementVerdict.Met;
+                if (child == WorldRequirementVerdict.Unevaluable)
+                    verdict = WorldRequirementVerdict.Unevaluable;
+                continue;
+            }
+
+            // Preserve the evaluator's fail-closed AND contract: an unmodelled child stays named
+            // even when another child is ordinarily unmet.
+            if (child == WorldRequirementVerdict.Unevaluable)
+                return WorldRequirementVerdict.Unevaluable;
+            if (child == WorldRequirementVerdict.Unmet)
+                verdict = WorldRequirementVerdict.Unmet;
         }
 
         return verdict;
@@ -132,6 +175,10 @@ internal static class WorldRequirementEvaluator
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
         if (row.Kind == WorldRequirementConditionKind.Unknown) return WorldRequirementVerdict.Unevaluable;
+        if (row.Kind == WorldRequirementConditionKind.Literal)
+            return row.ReqType == 1
+                ? WorldRequirementVerdict.Met
+                : WorldRequirementVerdict.Unmet;
         if (!TryThreshold(in row, level, out var threshold)) return WorldRequirementVerdict.Unevaluable;
 
         // The game rounds the threshold to a whole number for every comparison but the numeric one,

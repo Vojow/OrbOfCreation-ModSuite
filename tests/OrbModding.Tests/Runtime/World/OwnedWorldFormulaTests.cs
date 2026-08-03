@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using OrbModding.Common.Runtime.GameMath;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.World;
@@ -106,11 +107,37 @@ public sealed class OwnedWorldFormulaTests
     }
 
     [Fact]
+    public void ConceptDrainRefusesAnUnevaluableUsageProgramInsteadOfGuessingThePenalty()
+    {
+        var world = ConceptWorld(
+            selectedLevel: 1,
+            requirementsMet: null,
+            costUsesRarity: false,
+            rarity: 0,
+            freeSlots: 0,
+            costScaleRaw: 0,
+            levelRaw: 0,
+            prerequisiteRaw: 2,
+            overdriveSpeedPercent: 100);
+
+        Assert.False(OwnedConceptDrainMath.TryComputeModifier(world, Recipe, 1, out _));
+    }
+
+    [Fact]
+    public void ConceptDrainBasisCarriesNoCapturedUsageVerdictFallback()
+    {
+        const BindingFlags members = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+        Assert.Null(typeof(RawConceptDrainBasis).GetProperty("UsageRequirementsMet", members));
+        Assert.Null(typeof(WorldConceptDrainBasis).GetProperty("UsageRequirementsMet", members));
+    }
+
+    [Fact]
     public void MissingSelectedLevelDefaultsToOne()
     {
         var raw = new RawConceptDrainBasisBuffer();
         raw.Append(new RawConceptDrainBasis(
-            Recipe, Guid.NewGuid(), Recipe, 0, true, default, default, false, false));
+            Recipe, Guid.NewGuid(), Recipe, 0, default, default, false, false));
         var rows = WorldConceptDrainBasisDeriver.Build(
             raw,
             PublicationTable<WorldAlchemyType>.Empty,
@@ -156,7 +183,7 @@ public sealed class OwnedWorldFormulaTests
 
     private static GameWorldState ConceptWorld(
         int selectedLevel,
-        bool requirementsMet,
+        bool? requirementsMet,
         bool costUsesRarity,
         double rarity,
         int freeSlots,
@@ -187,13 +214,28 @@ public sealed class OwnedWorldFormulaTests
         var penalty = new GameValueModifier(
             GameValueModifierType.Raw, new BigDouble(prerequisiteRaw));
         var basis = new WorldConceptDrainBasis(
-            Recipe, Guid.NewGuid(), Recipe, 0, selectedLevel, requirementsMet,
+            Recipe, Guid.NewGuid(), Recipe, 0, selectedLevel,
             in penalty, in penalty, new BigDouble(rarity), costUsesRarity, false);
+        var requirement = new WorldEntityRequirement(
+            Recipe,
+            WorldRequirementOwnerKind.AlchemyRecipe,
+            0,
+            requirementsMet.HasValue
+                ? WorldRequirementConditionKind.Literal
+                : WorldRequirementConditionKind.Unknown,
+            requirementsMet.HasValue ? "test-literal" : "OpaqueRequirement",
+            Guid.Empty,
+            requirementsMet == true ? 1 : 0,
+            0,
+            default,
+            default,
+            WorldRequirementProgramKind.Usage);
         return new GameWorldState
         {
             ModifierPrograms = PublicationTable<WorldModifierProgram>.Create(programs),
             ModifierProgramEntries = PublicationTable<WorldModifierProgramEntry>.Create(entries),
             ConceptDrainBasis = PublicationTable<WorldConceptDrainBasis>.Create(new[] { basis }),
+            EntityRequirements = PublicationTable<WorldEntityRequirement>.Create(new[] { requirement }),
         };
     }
 

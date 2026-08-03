@@ -601,7 +601,7 @@ public sealed class AutoConceptCycleEvaluatorTests
                     WorldModifierProgramEntrySet.Modifier, 0, Guid.Empty,
                     GameValueModifierType.Raw, 0, new BigDouble(costScalingPerQuantity)));
             bases.Add(new WorldConceptDrainBasis(
-                recipe.RecipeId, recipe.CoreTypeId, recipe.RecipeId, 0, 1, true,
+                recipe.RecipeId, recipe.CoreTypeId, recipe.RecipeId, 0, 1,
                 default, default, default, false, false));
         }
 

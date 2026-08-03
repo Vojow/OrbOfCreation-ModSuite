@@ -181,7 +181,7 @@ public sealed class NativeContractManifestTests
         var repositoryRoot = RepositoryPaths.RequireRoot();
 
         Assert.Equal(3, manifest.SchemaVersion);
-        Assert.Equal(890, manifest.Contracts.Count);
+        Assert.Equal(894, manifest.Contracts.Count);
         Assert.Equal(10, manifest.SourceAudit.Exemptions.Count);
         Assert.False(string.IsNullOrWhiteSpace(manifest.AuditedAt));
         Assert.False(string.IsNullOrWhiteSpace(manifest.GameBuild));

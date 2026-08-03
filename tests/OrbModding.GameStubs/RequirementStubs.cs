@@ -146,11 +146,20 @@ public sealed class GenericRequirement : BaseCondition<UpgradeableObject, Generi
 }
 
 /// <summary>
-/// A composite. Present so a fixture can author one, and deliberately not modelled by the collector:
-/// it derives from the non-generic base and holds a nested list rather than an item, so it reads as a
-/// condition nobody can evaluate — which is what must make its owner inadmissible.
+/// The two native composites. They pass the same condition info to every child and fold their lists
+/// with LINQ Any/All respectively.
 /// </summary>
 public sealed class OrRequirement : IRequirementCondition
 {
     public System.Collections.Generic.List<IRequirementCondition> orConditions = new();
+}
+
+public sealed class AndRequirement : IRequirementCondition
+{
+    public System.Collections.Generic.List<IRequirementCondition> andConditions = new();
+}
+
+/// <summary>An intentionally unmodelled leaf used to prove fail-closed publication and evaluation.</summary>
+public sealed class OpaqueRequirement : IRequirementCondition
+{
 }

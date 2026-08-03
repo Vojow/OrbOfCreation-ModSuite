@@ -71,6 +71,9 @@ internal sealed class AutomataUsagePrerequisiteVerifier
         typeName = string.Empty;
         if (!WorldEntityRequirementLookup.TryFindRange(
                 world.EntityRequirements, ownerId, out var start, out var count)) return true;
+        if (WorldRequirementEvaluator.Evaluate(
+                world, ownerId, level: 0, WorldRequirementProgramKind.Usage) !=
+            WorldRequirementVerdict.Unevaluable) return true;
 
         var rows = world.EntityRequirements.AsSpan();
         for (var offset = 0; offset < count; offset++)
