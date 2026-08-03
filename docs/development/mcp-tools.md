@@ -1002,6 +1002,11 @@ is `status: committed, scene: Start`; the scene transition then clears every lif
 world, identity, binding, and lease through the ordinary lifecycle observer. The tool cannot choose
 a save, suppress the save event, select another scene, or run while another transition is active.
 
+There is deliberately no process-exit tool. Both installed quit entry points call
+`UnityEngine.Application.Quit` directly and expose no game-written state that can be verified while
+the process remains able to deliver an MCP response. See
+`docs/reverse-engineering/clean-exit-boundary.md` for the audited drop.
+
 `game_screen_catalog` reads the live Main-scene UI. Top tabs retain native rail order. Current
 subtabs are active `UIViewRadioButton` controls under the current native content area. Inactive
 popup templates are excluded. The response is a structured `scene` plus ordered `tabs`, each with

@@ -38,6 +38,7 @@ assets, or a live registry read belongs here.
 - [Harvest element and action pipeline](harvest-element-action-native-pipeline.md) — the two active lists, element/action pair identity, visible admission, and next-drain lineage.
 - [Plot action pipeline](plot-action-native-pipeline.md) — every authored plot/action pair, active-quantity lifecycle, and the native minimum/cancel boundary.
 - [Back to Menu pipeline](return-to-menu-native-pipeline.md) — the manual-save event, Start-scene transition, and pre-teardown sentinel.
+- [Clean-exit boundary](clean-exit-boundary.md) — the direct process-termination route and why it cannot produce a verified MCP receipt.
 
 The product-version-pinned authored model, progression graph, and census live under
 [`data/`](../../data/README.md).

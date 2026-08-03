@@ -947,3 +947,15 @@ actual scene load as the animation-complete callback. `FadeIn` synchronously wri
 stable transition sentinel available before the callback tears down the current lifecycle. The
 complete contract and validation list live in
 [`return-to-menu-native-pipeline.md`](return-to-menu-native-pipeline.md).
+
+---
+
+## Clean exit
+
+The visible `UIQuitButton.QuitApplication` callback (`0x06002507`) and
+`SaveStateManager.QuitGame` (`0x06000702`) are byte-identical direct calls to
+`UnityEngine.Application.Quit`; neither carries a game-defined save edge or a post-call state.
+Because process termination cannot both be invoked and verified before a terminal MCP response,
+there is deliberately no clean-exit GameAction or MCP tool. The audited drop and its precise
+revisit condition are recorded in
+[`clean-exit-boundary.md`](clean-exit-boundary.md).
