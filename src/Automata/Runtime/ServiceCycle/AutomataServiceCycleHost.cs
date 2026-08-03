@@ -101,9 +101,9 @@ internal sealed class AutomataServiceCycleHost : IDisposable
             for (var index = 0; index < _pump.AttributionFailureCount; index++)
             {
                 var failure = _pump.AttributionFailureAt(index);
+                var service = _roster[failure.ServiceOrdinal].MachineId;
                 _attributionFailureLog(
-                    $"ServiceCycle action attribution failed for service ordinal " +
-                    $"{failure.ServiceOrdinal + 1}, cycle {failure.Cycle}, action {failure.Action}; " +
+                    $"ServiceCycle action attribution failed for service {service}; " +
                     $"the action executed and the journal marked attribution failed: {failure.Reason}");
             }
         }

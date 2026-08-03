@@ -126,14 +126,7 @@ internal sealed class SuiteFramePumpEvidenceEmitter
         }
         _journal.Observer?.ActionDispatched(ordinal, in dispatch, observedAt);
         if (dispatch.AttributionFailureReason is { } reason)
-        {
-            var action = dispatch.ActionFact.Context;
-            _attributionFailures.Observe(
-                ordinal,
-                action.Cycle.Cycle.Value,
-                action.Action.Value,
-                reason);
-        }
+            _attributionFailures.Observe(ordinal, reason);
     }
 
     internal void StartAttemptObserved(

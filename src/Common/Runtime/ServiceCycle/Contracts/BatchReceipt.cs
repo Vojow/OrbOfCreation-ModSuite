@@ -110,12 +110,13 @@ public readonly struct BatchReceipt
                     "A batch with no native action cannot carry native evidence.",
                     nameof(nativeCallOutcome));
         }
-        // A publication-only batch has no native evidence. Without the retired publication count,
-        // that shape cannot be distinguished here from missing native evidence.
-        else if (!IsZero(in nativeCallOutcome) &&
-                 (nativeCallOutcome.MutationAttempts < processedNativeCandidates ||
-                  nativeCallOutcome.MutationsCommitted < committedCount ||
-                  committedCount == 0 && nativeCallOutcome.MutationsCommitted != 0))
+        // The surviving zero-evidence completion shape is publication-only: every candidate that
+        // reached the action boundary committed without a native mutation.
+        else if (IsZero(in nativeCallOutcome)
+                     ? committedCount != processedNativeCandidates
+                     : nativeCallOutcome.MutationAttempts < processedNativeCandidates ||
+                       nativeCallOutcome.MutationsCommitted < committedCount ||
+                       committedCount == 0 && nativeCallOutcome.MutationsCommitted != 0)
         {
             throw new ArgumentException(
                 "A completed batch requires one attempted mutation per processed native action and committed evidence for every committed native action.",

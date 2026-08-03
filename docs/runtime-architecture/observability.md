@@ -162,15 +162,16 @@ The journal records worker and terminal meaning rather than frames. An action-be
 fixed numeric record per attempted action: service and action ordinal, cycle and monotonic time,
 candidate UUID, exact native type ID, list UUID, view UUID, route status, and one packed
 disposition/result code. Actions without a native candidate use an explicit `NotApplicable` identity;
-an attribution failure refuses the action and records a contradictory route plus `AdapterFault` rather
-than mutating without evidence. Native objects and rich strings never enter the journal.
+an attribution failure does not gate gameplay: the action executes, the record uses the distinct
+`AttributionFailed` route, and one repeat-collapsible error line names the service and failure reason.
+Native objects and rich strings never enter the journal.
 
 Zero-action decisions retain one outcome kind/code and fault range. Consecutive equivalent decisions
 coalesce into one span with first/last time, cycle range, and repeat count; action records never
-coalesce. When a cycle has action records its aggregate terminal decision is omitted, because each
-action sentinel already carries the authoritative result and duplicate batch accounting has no
-consumer. Lifecycle, configuration, strategy, emergency, and world-gate transitions remain explicit
-records.
+coalesce. When a cycle has action records its ordinary aggregate terminal decision is omitted, because
+each action sentinel already carries the authoritative result and duplicate batch accounting has no
+consumer. A fault-bearing terminal remains as a fault-priority decision record beside its action.
+Lifecycle, configuration, strategy, emergency, and world-gate transitions remain explicit records.
 
 **Retention.** The fixed budget is 64 MiB. A maximum segment is 80 header bytes plus 128 fixed
 80-byte records plus a 40-byte footer, or 10,360 bytes. Production derives a retained limit of 6,476
@@ -211,11 +212,12 @@ There is deliberately no configuration toggle for the normal journal, and no res
 
 ## Other owned output paths
 
-The suite does not use `LogOutput.log` as an action ledger. Successful actions and ordinary native
-no-ops emit no per-action line; the action journal and Runtime outcome projection own those facts.
-Lifecycle/startup/shutdown messages remain, and an actual adapter failure or native refusal emits one
-actionable line with stable identity and reason. Auto Buy's classified refusal responder owns the
-`NotAdmissible` line so narration cannot duplicate it.
+The suite does not use `LogOutput.log` as an action ledger. Verified successes and ordinary preflight
+no-actions emit no per-action line; the action journal and Runtime outcome projection own those facts.
+A submitted mutation whose postcondition does not hold emits one warning. Lifecycle/startup/shutdown
+messages remain, and an actual adapter failure or native refusal emits one actionable line with stable
+identity and reason. Auto Buy's classified refusal responder owns the `NotAdmissible` line so narration
+cannot duplicate it.
 
 Auto Buy affordability drift remains a loud refusal but does not synchronously render or write a
 bundle. Structural contradictions that disable the feature retain a full text bundle under
