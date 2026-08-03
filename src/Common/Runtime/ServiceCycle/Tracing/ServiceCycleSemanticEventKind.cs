@@ -78,6 +78,8 @@ public enum ServiceCycleSemanticFields : ulong
     PumpDurations = 1UL << 23,
     NativeMutationOutcome = 1UL << 24,
 
+    // Bit 25 was PublishedCount. It is permanently burned: never reuse or renumber this wire bit.
+
     /// <summary>
     /// Which reading of the game a cycle ran against. The fourth pinned generation, and the last one
     /// the wire was missing: without it a decision can be read but not answered for, because nothing

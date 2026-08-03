@@ -102,12 +102,24 @@ public readonly struct BatchReceipt
         if (preNativeSkippedCount < 0 ||
             preNativeSkippedCount > actionCount - committedCount)
             throw new ArgumentOutOfRangeException(nameof(preNativeSkippedCount));
-        if (actionCount == 0)
+        var processedNativeCandidates = actionCount - preNativeSkippedCount;
+        if (processedNativeCandidates == 0)
         {
             if (!IsZero(in nativeCallOutcome))
                 throw new ArgumentException(
                     "A batch with no native action cannot carry native evidence.",
                     nameof(nativeCallOutcome));
+        }
+        // A publication-only batch has no native evidence. Without the retired publication count,
+        // that shape cannot be distinguished here from missing native evidence.
+        else if (!IsZero(in nativeCallOutcome) &&
+                 (nativeCallOutcome.MutationAttempts < processedNativeCandidates ||
+                  nativeCallOutcome.MutationsCommitted < committedCount ||
+                  committedCount == 0 && nativeCallOutcome.MutationsCommitted != 0))
+        {
+            throw new ArgumentException(
+                "A completed batch requires one attempted mutation per processed native action and committed evidence for every committed native action.",
+                nameof(nativeCallOutcome));
         }
         return new BatchReceipt(
             cycle, batch, BatchTerminalDisposition.Completed, actionCount, committedCount,
@@ -141,12 +153,18 @@ public readonly struct BatchReceipt
                 ServiceActionDisposition.Rejected or ServiceActionDisposition.Faulted))
             throw new ArgumentException("A terminal action must be rejected or faulted.", nameof(terminalAction));
         var terminalNative = terminalAction.NativeCallOutcome;
-        if (nativeCallOutcome.NativeCallsAttempted < terminalNative.NativeCallsAttempted ||
-            nativeCallOutcome.MutationAttempts < terminalNative.MutationAttempts ||
-            nativeCallOutcome.MutationsCommitted < terminalNative.MutationsCommitted)
+        var nativePrefix = terminalIndex - preNativeSkippedCount;
+        var minimumCalls = checked((long)nativePrefix + terminalNative.NativeCallsAttempted);
+        var minimumAttempts = checked((long)nativePrefix + terminalNative.MutationAttempts);
+        var prefixMutations = checked(
+            nativeCallOutcome.MutationsCommitted - terminalNative.MutationsCommitted);
+        if (nativeCallOutcome.NativeCallsAttempted < minimumCalls ||
+            nativeCallOutcome.MutationAttempts < minimumAttempts ||
+            prefixMutations < committedCount ||
+            committedCount == 0 && prefixMutations != 0)
         {
             throw new ArgumentException(
-                "Batch native evidence must account for the processed native prefix plus terminal action.",
+                "Batch native evidence requires one native call and mutation attempt per processed prefix action, committed evidence for each prefix commit, and the terminal action's evidence.",
                 nameof(nativeCallOutcome));
         }
         var disposition = terminalAction.Disposition == ServiceActionDisposition.Rejected
@@ -193,12 +211,21 @@ public readonly struct BatchReceipt
         if (preNativeSkippedCount < 0 ||
             preNativeSkippedCount > processedCount - committedCount)
             throw new ArgumentOutOfRangeException(nameof(preNativeSkippedCount));
-        if (processedCount == 0)
+        var processedNativeCandidates = processedCount - preNativeSkippedCount;
+        if (processedNativeCandidates == 0)
         {
             if (!IsZero(in nativeCallOutcome))
                 throw new ArgumentException(
                     "An orphan with no processed native prefix cannot carry native evidence.",
                     nameof(nativeCallOutcome));
+        }
+        else if (nativeCallOutcome.MutationAttempts < processedNativeCandidates ||
+                 nativeCallOutcome.MutationsCommitted < committedCount ||
+                 committedCount == 0 && nativeCallOutcome.MutationsCommitted != 0)
+        {
+            throw new ArgumentException(
+                "An orphaned batch requires one attempted mutation per processed native action and committed evidence for every committed native action.",
+                nameof(nativeCallOutcome));
         }
         return new BatchReceipt(
             cycle, batch, BatchTerminalDisposition.Orphaned, actionCount, committedCount,

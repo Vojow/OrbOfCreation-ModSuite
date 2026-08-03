@@ -6,7 +6,6 @@ namespace OrbModding.Common.Runtime.ServiceCycle.Tracing;
 internal static class ServiceCycleSemanticEventV7Codec
 {
     internal const int RecordBytes = 288;
-    private const ulong RetiredPublishedCountField = 1UL << 25;
 
     internal static void Write(Span<byte> bytes, in ServiceCycleSemanticEvent item)
     {
@@ -73,18 +72,9 @@ internal static class ServiceCycleSemanticEventV7Codec
         if (kindValue is < (int)ServiceCycleSemanticEventKind.ConfigurationPublished or
             > (int)ServiceCycleSemanticEventKind.ActionSkipped) throw Invalid();
         var kind = (ServiceCycleSemanticEventKind)kindValue;
-        var fields = ReadU64(bytes, 40);
-        var hasRetiredPublicationCount = (fields & RetiredPublishedCountField) != 0;
-        var retiredPublicationCount = ReadU32(bytes, 36);
-        var batchTerminal = kind is ServiceCycleSemanticEventKind.BatchCompleted or
-            ServiceCycleSemanticEventKind.BatchAborted or ServiceCycleSemanticEventKind.BatchOrphaned;
-        if (hasRetiredPublicationCount && !batchTerminal ||
-            retiredPublicationCount != 0 &&
-            (!hasRetiredPublicationCount || retiredPublicationCount > int.MaxValue))
-            throw Invalid();
-        fields &= ~RetiredPublishedCountField;
+        if (ReadU32(bytes, 36) != 0) throw Invalid();
         var payload = new ServiceCycleSemanticPayload(
-            (ServiceCycleSemanticFields)fields,
+            (ServiceCycleSemanticFields)ReadU64(bytes, 40),
             ReadU64(bytes, 48), ReadU64(bytes, 56), ReadU64(bytes, 64), ReadU64(bytes, 72),
             ReadU64(bytes, 80), ReadU64(bytes, 88), ReadU64(bytes, 96), ReadU64(bytes, 104), ReadU64(bytes, 112),
             ReadI64(bytes, 120), ReadI64(bytes, 128), ReadI64(bytes, 136), ReadI64(bytes, 144), ReadU64(bytes, 152),

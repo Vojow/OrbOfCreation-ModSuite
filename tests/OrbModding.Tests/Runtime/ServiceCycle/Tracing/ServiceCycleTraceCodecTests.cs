@@ -284,20 +284,14 @@ public sealed class ServiceCycleTraceCodecTests
     }
 
     [Fact]
-    public void HistoricalPublicationAccountingIsConsumedButNotExposed()
+    public void RecomputedCrcCannotReviveRetiredPublicationAccounting()
     {
-        var expected = ServiceCycleTraceFixtures.Event(1, ServiceCycleSemanticEventKind.BatchCompleted);
-        var bytes = Encode(new[] { expected });
+        var bytes = Encode(new[] {
+            ServiceCycleTraceFixtures.Event(1, ServiceCycleSemanticEventKind.BatchCompleted),
+        });
         BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(64 + 36, 4), 1);
-        var fields = BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan(64 + 40, 8));
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(64 + 40, 8), fields | (1UL << 25));
         RewriteChecksum(bytes);
-
-        var decoded = ServiceCycleTraceCodec.Decode(bytes);
-        Assert.Equal(1, decoded.Count);
-        var actual = decoded[0];
-
-        Assert.Equal(expected, actual);
+        Assert.Throws<FormatException>(() => ServiceCycleTraceCodec.Decode(bytes));
     }
 
     [Theory]
