@@ -246,12 +246,6 @@ internal sealed class AutoHarvestMutationAdapter : IAutoHarvestMutationPort
         state.SupportedCollectCount == 0 &&
         state.PairMatchCount == 0;
 
-    internal static bool VerifyTransition(
-        AutoHarvestSubmissionState before,
-        AutoHarvestSubmissionState after) =>
-        CanSubmit(before) &&
-        VerifyAdmittedTransition(before, after);
-
     private static bool VerifyAdmittedTransition(
         AutoHarvestSubmissionState before,
         AutoHarvestSubmissionState after) =>

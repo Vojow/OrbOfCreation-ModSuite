@@ -58,7 +58,7 @@ public sealed class GameMcpChallengeTests
     }
 
     [Fact]
-    public void Challenge_world_list_is_a_named_decision_complete_surface()
+    public void Challenge_world_list_is_lean_and_world_get_is_decision_complete()
     {
         var world = World();
         var response = Json(GameMcpWorldQuery.ListRows(
@@ -73,10 +73,15 @@ public sealed class GameMcpChallengeTests
             row => (string?)row?["uuid"] == First.ToString("D"))!;
         Assert.Equal("Prismatic Trial", (string?)first["name"]);
         Assert.Equal("queued", (string?)first["state"]);
-        Assert.True((bool)first["select"]!["available"]!);
-        Assert.True((bool)first["activate"]!["available"]!);
-        Assert.Equal("1.2e1", (string?)first["nextDifficulty"]);
-        Assert.Equal("3e1", (string?)first["nextReward"]);
+        Assert.Equal("1", (string?)first["level"]);
+        Assert.Null(first["select"]);
+        var exact = Json(GameMcpWorldQuery.GetRow(
+            GameMcpTestHarness.Context(world, generation: 2501),
+            "challenges", First.ToString("D"), "ChallengeSO").Freeze(), world)["row"]!;
+        Assert.True((bool)exact["select"]!["available"]!);
+        Assert.True((bool)exact["activate"]!["available"]!);
+        Assert.Equal("12", (string?)exact["nextDifficulty"]);
+        Assert.Equal("30", (string?)exact["nextReward"]);
         Assert.Null(first["receipt"]);
         Assert.Null(first["payment"]);
     }
@@ -86,15 +91,26 @@ public sealed class GameMcpChallengeTests
     {
         var world = World();
         var context = GameMcpTestHarness.Context(world, generation: 2502);
-        var target = Json(GameMcpWorldQuery.ProjectChallengePostState(context, First), world);
-        var fetch = Json(GameMcpWorldQuery.ProjectChallengePostState(context, Guid.Empty), world);
+        var before = World(selected: false);
+        var selectCommand = new GameMcpCommand(
+            1, GameMcpCommandKind.Challenge, 9, 3, "select", First, Guid.Empty,
+            "ChallengeSO", string.Empty, 1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before));
+        var fetchCommand = new GameMcpCommand(
+            2, GameMcpCommandKind.Challenge, 9, 3, "fetch_time", Guid.Empty, Guid.Empty,
+            "ChallengeSO", string.Empty, 1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before));
+        var target = Json(GameMcpWorldQuery.ProjectChallengePostState(context, selectCommand), world);
+        var fetch = Json(GameMcpWorldQuery.ProjectChallengePostState(context, fetchCommand), world);
 
-        Assert.Equal("Prismatic Trial", (string?)target["challenge"]!["name"]);
-        Assert.Equal("Expanding Trial",
-            (string?)target["challengeState"]!["timeOffers"]![1]!["name"]);
+        Assert.Equal("Prismatic Trial", (string?)target["name"]);
+        Assert.False((bool)target["selected"]!["before"]!);
+        Assert.True((bool)target["selected"]!["after"]!);
+        Assert.Null(target["challengeState"]);
         Assert.Null(target["receipt"]);
         Assert.NotNull(fetch["challengeState"]);
-        Assert.Null(fetch["challenge"]);
+        Assert.Equal("Expanding Trial",
+            (string?)fetch["challengeState"]!["timeOffers"]![1]!["name"]);
     }
 
     [Fact]
@@ -115,7 +131,7 @@ public sealed class GameMcpChallengeTests
         Assert.Empty(committed.Properties());
     }
 
-    private static GameWorldState World()
+    private static GameWorldState World(bool selected = true)
     {
         var rows = new[]
         {
@@ -139,10 +155,12 @@ public sealed class GameMcpChallengeTests
             EntityIdentities = EntityIdentityCatalogSnapshot.Bound(21, identities),
             Challenges = PublicationTable<WorldChallenge>.Create(rows),
             ChallengeContext = new WorldChallengeContext(true, string.Empty, true, true, 2, 3, 3,
-                PublicationTable<WorldChallengeReference>.Create(new[]
-                {
-                    new WorldChallengeReference(0, First),
-                }),
+                selected
+                    ? PublicationTable<WorldChallengeReference>.Create(new[]
+                    {
+                        new WorldChallengeReference(0, First),
+                    })
+                    : PublicationTable<WorldChallengeReference>.Empty,
                 PublicationTable<WorldChallengeReference>.Create(new[]
                 {
                     new WorldChallengeReference(0, First),

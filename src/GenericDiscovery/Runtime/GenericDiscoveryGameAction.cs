@@ -122,13 +122,13 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
             if (!native.IsVisible(target))
                 return GenericDiscoverySubmission.Reject(
                     GenericDiscoveryPreflight.NotVisible,
-                    "IDiscoverable.IsDiscoverVisible() refused " +
-                    EntityIdentityFormatter.Format(action.TargetId) + ".");
+                    EntityIdentityFormatter.Format(action.TargetId) +
+                    " is not visible on its discovery screen.");
             if (!native.CanDiscover(target))
                 return GenericDiscoverySubmission.Reject(
                     GenericDiscoveryPreflight.DiscoveryUnavailable,
-                    "IDiscoverable.CanDiscover() refused " +
-                    EntityIdentityFormatter.Format(action.TargetId) + ".");
+                    EntityIdentityFormatter.Format(action.TargetId) +
+                    " cannot be discovered right now.");
 
             var cost = native.GetCost(target);
             if (cost is null || cost.GetType() != native.CostType)
@@ -138,8 +138,8 @@ internal sealed class GenericDiscoveryGameAction : IDisposable
             if (!native.HasEnough(cost))
                 return GenericDiscoverySubmission.Reject(
                     GenericDiscoveryPreflight.Unaffordable,
-                    "GetDiscoverCost().HasEnough() refused " +
-                    EntityIdentityFormatter.Format(action.TargetId) + ".");
+                    EntityIdentityFormatter.Format(action.TargetId) +
+                    " has a discovery cost you cannot afford.");
             if (!TryCapturePermit(out var permitReason))
                 return GenericDiscoverySubmission.Reject(
                     GenericDiscoveryPreflight.MutationPermitUnavailable,

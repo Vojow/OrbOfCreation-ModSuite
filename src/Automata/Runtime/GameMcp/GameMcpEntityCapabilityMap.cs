@@ -181,7 +181,7 @@ internal static class GameMcpEntityCapabilityMap
     {
         if (!Supports("targeting", GameMcpCommandKind.Targeting) || world.Targeting.Count != 1)
         {
-            reason = "the published world has no exact pending targeting request";
+            reason = "There is no target selection waiting for input.";
             return false;
         }
         if (target == Guid.Empty) { reason = string.Empty; return true; }
@@ -237,7 +237,7 @@ internal static class GameMcpEntityCapabilityMap
                 reason = string.Empty;
                 return true;
             }
-            reason = "the published world has no live spell output-level range";
+            reason = "the current game state has no spell output-level range";
             return false;
         }
         var matches = 0;
@@ -365,7 +365,7 @@ internal static class GameMcpEntityCapabilityMap
 
     private static bool AvailableGlobal(bool available, string label, out string reason)
     {
-        reason = available ? string.Empty : "the published " + label + " is unavailable";
+        reason = available ? string.Empty : "the current " + label + " is unavailable";
         return available;
     }
 

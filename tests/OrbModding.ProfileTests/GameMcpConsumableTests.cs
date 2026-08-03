@@ -30,7 +30,7 @@ public sealed class GameMcpConsumableTests
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         var schema = tool["inputSchema"]!;
         Assert.Equal(
-            new[] { "mode", "consumableUuid" },
+            new[] { "mode", "uuid" },
             schema["required"]!.Values<string>().ToArray());
         Assert.Equal(
             new[] { "use", "cancel", "discard", "set_randomization", "move" },
@@ -58,7 +58,7 @@ public sealed class GameMcpConsumableTests
                 ["arguments"] = new JObject
                 {
                     ["mode"] = mode,
-                    ["consumableUuid"] = ConsumableId.ToString("D"),
+                    ["uuid"] = ConsumableId.ToString("D"),
                     ["destination"] = mode == "move" ? 1 : null,
                 },
             }));
@@ -85,41 +85,56 @@ public sealed class GameMcpConsumableTests
 
         Assert.Equal("Swift Thread", (string?)row["name"]);
         Assert.Equal(ConsumableId.ToString("D"), (string?)row["uuid"]);
-        Assert.Equal("3e0", (string?)row["amount"]);
+        Assert.Equal("3", (string?)row["amount"]);
         Assert.Equal(1, (int)row["queued"]!);
         Assert.True((bool)row["use"]!["available"]!);
         var cost = Assert.Single(row["useCosts"]!).Value<JObject>()!;
         Assert.Equal("Toxicity", (string?)cost["resource"]!["name"]);
-        Assert.Equal("2.5e2", (string?)cost["cost"]);
+        Assert.Equal("250", (string?)cost["cost"]);
         Assert.Equal("9e6", (string?)cost["amount"]);
         Assert.True((bool)row["cancel"]!["available"]!);
-        Assert.Equal("3e0", (string?)row["discard"]!["maximumAmount"]);
+        Assert.Equal(3, (int)row["discard"]!["maximumAmount"]!);
         Assert.False((bool)row["randomization"]!["enabled"]!);
         Assert.Equal("inventory", (string?)row["placements"]![0]!["list"]);
-        Assert.Equal("Other Relic",
-            (string?)response["consumableInventory"]!["lists"]![0]!["slots"]![1]!["consumable"]!["name"]);
+        Assert.Null(response["consumableInventory"]);
     }
 
     [Fact]
-    public void CommittedPostStateReturnsTheCompleteNamedInventoryWithoutReceiptCeremony()
+    public void CommittedPostStateReturnsOnlyTheNamedAmountDelta()
     {
-        var postState = Json(GameMcpWorldQuery.ProjectConsumablePostState(
-            GameMcpTestHarness.Context(World()),
-            ConsumableId));
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Consumable, 9, 3, "discard", ConsumableId,
+            Guid.Empty, "ConsumableSO", string.Empty, 1, string.Empty, string.Empty,
+            false, false, frameContext: GameMcpTestHarness.Context(World(quantity: 3)));
+        var committed = GameMcpCommandResult.Committed("committed", 9, 3);
+        var terminal = committed
+            .WithDetails(GameMcpWorldQuery.ProjectGameplayPostState(
+                GameMcpTestHarness.Context(World(quantity: 2)), command,
+                committed));
+        var postState = Json(terminal.Project(command));
 
-        Assert.Equal("Swift Thread", (string?)postState["consumable"]!["name"]);
-        Assert.Equal("Swift Thread",
-            (string?)postState["inventory"]!["lists"]![0]!["slots"]![0]!
-                ["consumable"]!["name"]);
-        Assert.Equal("Other Relic",
-            (string?)postState["inventory"]!["lists"]![0]!["slots"]![1]!
-                ["consumable"]!["name"]);
+        Assert.Equal("committed", (string?)postState["status"]);
+        Assert.Equal("Swift Thread", (string?)postState["name"]);
+        Assert.Equal(3, (int)postState["amount"]!["before"]!);
+        Assert.Equal(2, (int)postState["amount"]!["after"]!);
+        Assert.Null(postState["code"]);
+        Assert.Null(postState["inventory"]);
         Assert.Null(postState["receipt"]);
-        Assert.Null(postState["payment"]);
-        Assert.Null(postState["worldGeneration"]);
-        Assert.NotNull(postState["consumable"]!["use"]);
-        Assert.NotNull(postState["consumable"]!["discard"]);
-        Assert.NotNull(postState["consumable"]!["placements"]);
+
+        var randomizationCommand = new GameMcpCommand(
+            2, GameMcpCommandKind.Consumable, 9, 3, "set_randomization", ConsumableId,
+            Guid.Empty, "ConsumableSO", string.Empty, 1, string.Empty, string.Empty,
+            false, false, frameContext: GameMcpTestHarness.Context(World()));
+        var randomization = committed
+            .WithDetails(GameMcpWorldQuery.ProjectGameplayPostState(
+                GameMcpTestHarness.Context(World(randomized: true)),
+                randomizationCommand,
+                committed));
+        var randomizationPostState = Json(randomization.Project(randomizationCommand));
+        Assert.False((bool)randomizationPostState["randomized"]!["before"]!);
+        Assert.True((bool)randomizationPostState["randomized"]!["after"]!);
+        Assert.Equal(215, System.Text.Encoding.UTF8.GetByteCount(
+            randomizationPostState.ToString(Newtonsoft.Json.Formatting.None)));
     }
 
     [Fact]
@@ -146,14 +161,14 @@ public sealed class GameMcpConsumableTests
         Assert.Empty(success.Properties());
     }
 
-    private static GameWorldState World()
+    private static GameWorldState World(int quantity = 3, bool randomized = false)
     {
         var modifiers = default(RawConsumableModifiers);
         var primary = new WorldConsumable(
             ConsumableId,
             visible: true,
-            randomized: false,
-            quantity: 3,
+            randomized,
+            quantity: quantity,
             queuedQuantity: 1,
             maximumCarryLoad: 12,
             gainedSince: 0,
@@ -200,7 +215,7 @@ public sealed class GameMcpConsumableTests
             }),
             ConsumableCounts = PublicationTable<WorldConsumableCount>.Create(new[]
             {
-                new WorldConsumableCount(ConsumableId, 7, 3, 1),
+                new WorldConsumableCount(ConsumableId, 7, quantity, 1),
             }),
             ConsumableInventory = new WorldConsumableInventory(
                 true,

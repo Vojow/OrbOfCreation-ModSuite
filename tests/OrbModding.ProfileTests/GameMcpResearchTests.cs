@@ -32,7 +32,7 @@ public sealed class GameMcpResearchTests
     }
 
     [Fact]
-    public void Validation_names_missing_uuid_and_ignores_echoed_generation_metadata()
+    public void Validation_names_missing_uuid_and_rejects_removed_generation_metadata()
     {
         var inbox = new GameMcpFrameInbox();
         var router = new GameMcpProtocolRouter(inbox);
@@ -42,7 +42,7 @@ public sealed class GameMcpResearchTests
                 ["name"] = "game_research",
                 ["arguments"] = new JObject { ["mode"] = "develop" },
             }));
-        var accepted = router.Handle(GameMcpAcceptanceFixture.Request(2, "tools/call",
+        var rejected = router.Handle(GameMcpAcceptanceFixture.Request(2, "tools/call",
             new JObject
             {
                 ["name"] = "game_research",
@@ -57,7 +57,11 @@ public sealed class GameMcpResearchTests
         var missingErrors = Assert.IsType<JArray>(missing.Body!["error"]!["data"]!["validationErrors"]);
         Assert.Contains(missingErrors.Values<JObject>(), error => (string?)error!["code"] == "missing_required" &&
                 (string?)error["field"] == "uuid");
-        Assert.NotEqual(-32602, (int?)accepted.Body?["error"]?["code"]);
+        Assert.Equal(-32602, (int?)rejected.Body?["error"]?["code"]);
+        Assert.Contains(
+            rejected.Body!["error"]!["data"]!["validationErrors"]!.Values<JObject>(),
+            error => (string?)error["code"] == "unexpected_field" &&
+                     (string?)error["field"] == "worldGeneration");
         Assert.Empty(inbox.ClaimPending());
     }
 
@@ -78,9 +82,9 @@ public sealed class GameMcpResearchTests
         Assert.True((bool)row["develop"]!["affordable"]!);
         var cost = Assert.Single(row["develop"]!["costs"]!).Value<JObject>()!;
         Assert.Equal("Arcana", (string?)cost["resource"]!["name"]);
-        Assert.Equal("2e1", (string?)cost["cost"]);
-        Assert.Equal("8e1", (string?)cost["amount"]);
-        Assert.Equal("4e1", (string?)row["investment"]![0]!["invested"]);
+        Assert.Equal("20", (string?)cost["cost"]);
+        Assert.Equal("80", (string?)cost["amount"]);
+        Assert.Equal("40", (string?)row["investment"]![0]!["invested"]);
         Assert.Equal("Insight", (string?)row["researchTypes"]![0]!["researchType"]!["name"]);
         Assert.Equal(2, (int)row["researchTypes"]![0]!["remainingBonusLevels"]!);
     }
@@ -88,13 +92,16 @@ public sealed class GameMcpResearchTests
     [Fact]
     public void Research_cost_uses_spendable_amount_while_native_affordability_remains_authoritative()
     {
-        var world = World(developmentCostAffordable: false, spendableAmount: 1);
+        var world = World(
+            developmentCostAffordable: false,
+            spendableAmount: 1,
+            investmentRemaining: 100);
         var response = Json(GameMcpWorldQuery.GetRow(GameMcpTestHarness.Context(world, 2803),
             "research", ResearchId.ToString("D"), "ResearchSO").Freeze(), world);
         var develop = response["row"]!["develop"]!;
         var cost = Assert.Single(develop["costs"]!).Value<JObject>()!;
 
-        Assert.Equal("1e0", (string?)cost["amount"]);
+        Assert.Equal("1", (string?)cost["amount"]);
         Assert.False((bool)develop["affordable"]!);
         Assert.Equal("unaffordable", (string?)develop["reasonCode"]);
         Assert.Null(cost["lifetimeAmount"]);
@@ -135,7 +142,8 @@ public sealed class GameMcpResearchTests
 
     private static GameWorldState World(
         bool developmentCostAffordable = true,
-        double spendableAmount = 80)
+        double spendableAmount = 80,
+        double investmentRemaining = 60)
     {
         var decision = new WorldResearchDecision(
             true,
@@ -155,7 +163,7 @@ public sealed class GameMcpResearchTests
             PublicationTable<WorldResearchInvestment>.Create(new[]
             {
                 new WorldResearchInvestment(ResourceId, new BigDouble(40),
-                    new BigDouble(100), new BigDouble(60)),
+                    new BigDouble(100), new BigDouble(investmentRemaining)),
             }),
             PublicationTable<WorldResearchTypeDecision>.Create(new[]
             {

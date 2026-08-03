@@ -45,7 +45,6 @@ internal static class GameMcpEntityCatalog
         {
             ["status"] = "available",
             ["total"] = totalMatches,
-            ["returned"] = matches.Count,
             ["matches"] = matches,
         };
         if (totalMatches > matches.Count) result["nextOffset"] = matches.Count;

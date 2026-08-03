@@ -119,17 +119,26 @@ internal sealed class ResearchGameAction : IDisposable
                     if (state.MaxLevel > 0 && state.Level + state.QueuedLevels >= state.MaxLevel)
                     { reason = "The research queue has no room below its authored maximum level."; return ResearchPreflight.DevelopUnavailable; }
                     if (state.LevelsAvailable <= 0)
-                    { reason = "The native queued-development evaluators refused the next level."; return ResearchPreflight.DevelopUnavailable; }
+                    { reason = "No queued research level is currently available."; return ResearchPreflight.DevelopUnavailable; }
                 }
                 else if (!state.CanDevelop || !state.CostAffordable)
-                { reason = "The native immediate-development gates or cost refused the next level."; return ResearchPreflight.DevelopUnavailable; }
+                { reason = "The next research level is unavailable or unaffordable."; return ResearchPreflight.DevelopUnavailable; }
                 return ResearchPreflight.Proceeded;
             case ResearchActionKind.Pause:
             case ResearchActionKind.Resume:
                 if (state.QueueMode)
                 { reason = "Pause and resume are UI-reachable only when Research Queue Mode is disabled."; return ResearchPreflight.InvalidMode; }
                 if (!state.IsDeveloping || (kind == ResearchActionKind.Pause ? !state.IsActive : state.IsActive))
-                { reason = "The research is not in the requested active or paused state."; return ResearchPreflight.InvalidState; }
+                {
+                    var observed = !state.IsDeveloping
+                        ? "idle"
+                        : state.IsActive ? "active" : "paused";
+                    var required = kind == ResearchActionKind.Pause ? "active" : "paused";
+                    reason = "Research is " + observed + "; " +
+                        (kind == ResearchActionKind.Pause ? "pause" : "resume") +
+                        " requires " + required + " development.";
+                    return ResearchPreflight.InvalidState;
+                }
                 return ResearchPreflight.Proceeded;
             case ResearchActionKind.Cancel:
                 if (!state.IsDeveloping)

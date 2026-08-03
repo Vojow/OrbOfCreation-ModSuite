@@ -38,9 +38,8 @@ public sealed class GameMcpGenericDiscoveryTests
             schema["properties"]!["mode"]!["enum"]!.Values<string>());
         Assert.NotNull(schema["properties"]!["surface"]);
         Assert.NotNull(schema["properties"]!["components"]);
-        Assert.NotNull(schema["properties"]!["treeUuid"]);
+        Assert.NotNull(schema["properties"]!["uuid"]);
         Assert.NotNull(schema["properties"]!["offerUuid"]);
-        Assert.Null(schema["properties"]!["uuid"]);
         Assert.NotNull(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
         Assert.Null(schema["properties"]!["amount"]);
@@ -108,6 +107,7 @@ public sealed class GameMcpGenericDiscoveryTests
     [InlineData("runecraft", 22)]
     [InlineData("alchemy", 22)]
     [InlineData("artifacts", 22)]
+    [InlineData("concepts", 22)]
     public void Confirm_routes_only_spellcraft_to_the_spell_resolver(
         string surface,
         int expected)
@@ -126,7 +126,7 @@ public sealed class GameMcpGenericDiscoveryTests
             Context(), "glyphs", GlyphId));
 
         Assert.Equal("available", (string?)row["status"]);
-        Assert.Equal((ulong)2301, (ulong)row["worldGeneration"]!);
+        Assert.Null(row["worldGeneration"]);
         var glyph = row["row"]!;
         Assert.Equal(GlyphId.ToString("D"), (string?)glyph["uuid"]);
         Assert.Equal("Amplify", (string?)glyph["name"]);
@@ -135,8 +135,8 @@ public sealed class GameMcpGenericDiscoveryTests
         var cost = Assert.Single(glyph["discover"]!["costs"]!).Value<JObject>()!;
         Assert.Equal(ResourceId.ToString("D"), (string?)cost["resource"]!["uuid"]);
         Assert.Equal("Arcane Dust", (string?)cost["resource"]!["name"]);
-        Assert.Equal("5e0", (string?)cost["cost"]);
-        Assert.Equal("8e0", (string?)cost["amount"]);
+        Assert.Equal("5", (string?)cost["cost"]);
+        Assert.Equal("8", (string?)cost["amount"]);
         Assert.True((bool)cost["affordable"]!);
 
         Assert.Equal("Amplify", (string?)postState["name"]);
@@ -159,7 +159,7 @@ public sealed class GameMcpGenericDiscoveryTests
             }));
 
         Assert.Equal("available", (string?)preview["status"]);
-        Assert.Null(preview["surface"]);
+        Assert.Equal("glyphcraft", (string?)preview["surface"]);
         Assert.Null(preview["components"]);
         var output = preview["output"]!;
         Assert.Equal(GlyphId.ToString("D"), (string?)output["uuid"]);

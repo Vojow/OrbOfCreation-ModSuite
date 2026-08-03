@@ -243,57 +243,6 @@ public sealed class AutoHarvestMutationAdapterTests
         Assert.False(result.MutationAttempted);
     }
 
-    [Fact]
-    public void ExactSingleSubmissionTransitionIsVerified()
-    {
-        var before = State(used: 2, empty: 1, nativeHasEmptyEntry: true, supported: 0, matches: 0, quantity: 0, engaged: false);
-        var after = State(used: 3, empty: 0, nativeHasEmptyEntry: false, supported: 1, matches: 1, quantity: 1, engaged: true);
-
-        Assert.True(AutoHarvestMutationAdapter.VerifyTransition(before, after));
-    }
-
-    [Theory]
-    [InlineData(0, true)]
-    [InlineData(2, true)]
-    [InlineData(1, false)]
-    public void MissingAmbiguousOrUnengagedPairIsRejected(
-        int matches,
-        bool engaged)
-    {
-        var before = State(used: 2, empty: 1, nativeHasEmptyEntry: true, supported: 0, matches: 0, quantity: 0, engaged: false);
-        var after = State(used: 99, empty: 99, nativeHasEmptyEntry: true,
-            supported: 99, matches, quantity: 99, engaged);
-
-        Assert.False(AutoHarvestMutationAdapter.VerifyTransition(before, after));
-    }
-
-    [Theory]
-    [InlineData(0, true)]
-    [InlineData(1, false)]
-    public void SubmissionRequiresBothEnumeratedAndNativeEmptyEntryEvidence(
-        int emptyEntries,
-        bool nativeHasEmptyEntry)
-    {
-        var before = State(
-            used: 2,
-            empty: emptyEntries,
-            nativeHasEmptyEntry,
-            supported: 0,
-            matches: 0,
-            quantity: 0,
-            engaged: false);
-        var after = State(
-            used: 3,
-            empty: 0,
-            nativeHasEmptyEntry: false,
-            supported: 1,
-            matches: 1,
-            quantity: 1,
-            engaged: true);
-
-        Assert.False(AutoHarvestMutationAdapter.VerifyTransition(before, after));
-    }
-
     [Theory]
     [InlineData(false, 1, true, 0, 0, (int)AutoHarvestSubmissionFailureCode.RuntimeReadFailed)]
     [InlineData(true, 0, false, 0, 0, (int)AutoHarvestSubmissionFailureCode.PolicyRevalidationRejected)]

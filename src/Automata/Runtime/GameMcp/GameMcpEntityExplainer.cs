@@ -40,7 +40,7 @@ internal static class GameMcpEntityExplainer
             var known = world.EntityIdentities.TryGet(uuid, out var identity);
             var code = known ? "not_world_projected" : "uuid_unknown";
             var reason = known
-                ? "this known entity has no explainable published world row"
+                ? "this entity exists but has no detailed explanation; use world_search to find its category, then world_get"
                 : "nothing in this process knows this UUID; search entity_catalog by name";
             var remedy = new JObject { ["tool"] = "entity_catalog" };
             if (known && GameMcpEntityCapabilityMap.TryCategoryForNativeType(
@@ -119,10 +119,9 @@ internal static class GameMcpEntityExplainer
                 WorldLookup.TryFind(world.Structures, id, out var structure);
                 result["available"] = Verdict(
                     structure.Reading.Unlocked,
-                    "published_native_is_available",
                     "native_unavailable");
-                result["canPurchase"] =
-                    NativeVerdictNotPublished("native_can_purchase_not_published");
+                result["canPurchase"] = PurchaseVerdict(
+                    world, id, structure.Reading.Unlocked, "native_unavailable");
                 break;
             }
             case EntityKind.Upgrade:
@@ -130,10 +129,10 @@ internal static class GameMcpEntityExplainer
                 WorldLookup.TryFind(world.Upgrades, id, out var upgrade);
                 result["available"] = Verdict(
                     upgrade.Reading.Available,
-                    "published_native_is_available",
                     "native_unavailable");
-                result["canPurchase"] =
-                    NativeVerdictNotPublished("native_can_purchase_not_published");
+                result["canPurchase"] = PurchaseVerdict(
+                    world, id, upgrade.Reading.Available && !upgrade.IsExhausted,
+                    upgrade.IsExhausted ? "already_maxed" : "native_unavailable");
                 break;
             }
             case EntityKind.Research:
@@ -141,11 +140,9 @@ internal static class GameMcpEntityExplainer
                 WorldLookup.TryFind(world.Research, id, out var research);
                 result["visible"] = Verdict(
                     research.Visible,
-                    "published_native_is_visible",
                     "native_hidden");
                 result["available"] = Verdict(
                     research.Available,
-                    "published_native_is_available",
                     research.Complete ? "research_complete" : "native_unavailable");
                 var reason = research.Complete
                     ? "research_complete"
@@ -166,7 +163,6 @@ internal static class GameMcpEntityExplainer
                                                 : "native_can_develop_refused";
                 result["canDevelop"] = Verdict(
                     research.CanDevelop,
-                    "published_native_can_develop",
                     reason);
                 break;
             }
@@ -176,13 +172,11 @@ internal static class GameMcpEntityExplainer
                 var offered = IsCurrentDiscoveryOffer(world, id);
                 var visible = Verdict(
                     spell.Discovered || !spell.HiddenDiscovery || offered,
-                    offered ? "published_discovery_offer" : "published_discovery_visibility",
                     "hidden_discovery");
                 result["visible"] = visible;
                 result["available"] = visible;
                 result["canDiscover"] = Verdict(
                     !spell.Discovered && (!spell.HiddenDiscovery || offered),
-                    offered ? "published_discovery_offer" : "published_discovery_state",
                     spell.Discovered ? "already_discovered" : "hidden_discovery");
                 result["canUse"] = SpellCanUse(world, id);
                 break;
@@ -198,13 +192,11 @@ internal static class GameMcpEntityExplainer
                 WorldLookup.TryFind(world.CraftingRecipes, id, out var recipe);
                 var visible = Verdict(
                     recipe.Reading.Visible,
-                    "published_native_is_visible",
                     recipe.Reading.VisibilityReasonCode);
                 result["visible"] = visible;
                 result["available"] = visible;
                 result["canPurchase"] = Verdict(
                     recipe.Reading.CanBuyAtStartingQuantity,
-                    "published_native_can_buy_at_starting_quantity",
                     recipe.Reading.NativePurchaseReasonCode);
                 break;
             }
@@ -213,16 +205,12 @@ internal static class GameMcpEntityExplainer
                 WorldLookup.TryFind(world.Consumables, id, out var consumable);
                 var visible = Verdict(
                     consumable.Visible,
-                    "published_native_visibility_field",
                     "not_visible");
                 result["visible"] = visible;
                 result["available"] = visible;
-                result["canUse"] = new JObject
-                {
-                    ["evaluated"] = false,
-                    ["reasonCode"] = "native_can_fire_not_published",
-                    ["evidenceSource"] = "explicit_collector_gap",
-                };
+                result["canUse"] = Verdict(
+                    consumable.CanFire,
+                    consumable.Quantity <= 0 ? "none_owned" : "native_can_fire_refused");
                 break;
             }
             case EntityKind.Resource:
@@ -230,7 +218,6 @@ internal static class GameMcpEntityExplainer
                 WorldLookup.TryFind(world.Resources, id, out var resource);
                 var visible = Verdict(
                     resource.Reading.Visible,
-                    "published_native_is_visible",
                     "not_visible");
                 result["visible"] = visible;
                 result["available"] = visible;
@@ -275,12 +262,10 @@ internal static class GameMcpEntityExplainer
         var visible = discovered || offered;
         result["visible"] = Verdict(
             visible,
-            offered ? "published_discovery_offer" : "published_discovery_state",
             "not_discovered_or_offered");
         result["available"] = result["visible"]!;
         result["canDiscover"] = Verdict(
             !discovered && nativeDiscoverable,
-            offered ? "published_discovery_offer" : "published_discovery_state",
             discovered
                 ? "already_discovered"
                 : !nativeDiscoverable
@@ -329,7 +314,6 @@ internal static class GameMcpEntityExplainer
         }
         var result = Verdict(
             found && ready,
-            "published_native_spell_can_cast",
             found ? reason : "not_equipped");
         if (slots.Count > 0) result["slots"] = slots;
         return result;
@@ -422,13 +406,14 @@ internal static class GameMcpEntityExplainer
             }
         }
 
-        return new JObject
+        var requirements = new JObject
         {
             ["checkLevel"] = checkLevel,
             ["suiteVerdict"] = suite.ToString(),
             ["root"] = root,
-            ["nativeParity"] = parity,
         };
+        if (parityFailure is not null) requirements["nativeParity"] = parity;
+        return requirements;
     }
 
     private static JObject ProjectRequirementContainer(
@@ -601,6 +586,14 @@ internal static class GameMcpEntityExplainer
     private static JObject? Purchase(GameWorldState world, Guid id, EntityKind kind)
     {
         if (kind is not EntityKind.Structure and not EntityKind.Upgrade)
+            return null;
+        if (kind == EntityKind.Structure &&
+            (!WorldLookup.TryFind(world.Structures, id, out var structure) ||
+             !structure.Reading.Unlocked))
+            return null;
+        if (kind == EntityKind.Upgrade &&
+            (!WorldLookup.TryFind(world.Upgrades, id, out var upgrade) ||
+             !upgrade.Reading.Available || upgrade.IsExhausted))
             return null;
         if (!WorldPurchaseCostLookup.TryFindRange(
                 world.PurchaseCosts, id, out var start, out var count))
@@ -988,25 +981,33 @@ internal static class GameMcpEntityExplainer
 
     private static JObject Verdict(
         bool value,
-        string evidenceSource,
         string falseReason) => new()
     {
         ["value"] = value,
         ["reasonCode"] = value ? "passed" : falseReason,
-        ["evidenceSource"] = evidenceSource,
     };
+
+    private static JObject PurchaseVerdict(
+        GameWorldState world,
+        Guid id,
+        bool available,
+        string unavailableReason)
+    {
+        if (!available) return Verdict(false, unavailableReason);
+        if (!WorldPurchaseCostLookup.TryFindRange(
+                world.PurchaseCosts, id, out var start, out var count) || count == 0)
+            return Verdict(false, "price_unavailable");
+        var cost = world.PurchaseCosts[start];
+        if (!cost.AffordabilityEvaluated)
+            return Verdict(false, "affordability_unavailable");
+        return Verdict(cost.Affordable,
+            cost.Affordable ? "passed" : "unaffordable");
+    }
 
     private static JObject Blocker(bool blocked, string reasonCode) => new()
     {
         ["blocked"] = blocked,
         ["reasonCode"] = reasonCode,
-    };
-
-    private static JObject NativeVerdictNotPublished(string reasonCode) => new()
-    {
-        ["evaluated"] = false,
-        ["reasonCode"] = reasonCode,
-        ["evidenceSource"] = "explicit_collector_gap",
     };
 
     private static JObject Refusal(string code, Guid ownerId, int tierIndex) => new()

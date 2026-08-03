@@ -37,7 +37,7 @@ public sealed class GameMcpSpellLoadoutTests
         Assert.Equal(
             new[] { "add", "remove", "move" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
-        Assert.NotNull(schema["properties"]!["spellRecipeUuid"]);
+        Assert.NotNull(schema["properties"]!["uuid"]);
         Assert.NotNull(schema["properties"]!["glyphs"]);
         Assert.NotNull(schema["properties"]!["destination"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
@@ -58,7 +58,7 @@ public sealed class GameMcpSpellLoadoutTests
                 ["arguments"] = new JObject
                 {
                     ["mode"] = "move",
-                    ["spellInstanceUuid"] = FirstInstanceId.ToString("D"),
+                    ["uuid"] = FirstInstanceId.ToString("D"),
                 },
             }));
         var unexpected = router.Handle(GameMcpAcceptanceFixture.Request(
@@ -70,7 +70,7 @@ public sealed class GameMcpSpellLoadoutTests
                 ["arguments"] = new JObject
                 {
                     ["mode"] = "remove",
-                    ["spellInstanceUuid"] = FirstInstanceId.ToString("D"),
+                    ["uuid"] = FirstInstanceId.ToString("D"),
                     ["destination"] = 1,
                 },
             }));
@@ -98,11 +98,11 @@ public sealed class GameMcpSpellLoadoutTests
             .Values<JObject>()
             .Select(error => (string?)error["field"])
             .ToArray();
-        Assert.Equal(new[] { "spellRecipeUuid", "glyphs" }, fields);
+        Assert.Equal(new[] { "uuid", "glyphs" }, fields);
     }
 
     [Fact]
-    public void SpellSlotReadCarriesNamedHoldingsAndEveryNextLoadoutDecision()
+    public void SpellSlotListIsLeanAndRetainsTheActionableRuntimeHandle()
     {
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.ListRows(
             GameMcpTestHarness.Context(World()),
@@ -112,34 +112,22 @@ public sealed class GameMcpSpellLoadoutTests
         var rows = response["rows"]!.Values<JObject>().ToArray();
         Assert.Equal(3, rows.Length);
 
-        var first = Assert.IsType<JObject>(rows[0]);
+        var firstSummary = Assert.IsType<JObject>(rows[0]);
+        Assert.Equal(0, (int)firstSummary["slotIndex"]!);
+        Assert.Equal(FirstInstanceId.ToString("D"), (string?)firstSummary["spellInstance"]!["uuid"]);
+        Assert.Equal("Gather Knowledge", (string?)firstSummary["spellRecipe"]!["name"]);
+        Assert.True((bool)firstSummary["occupied"]!);
+        Assert.Null(firstSummary["remove"]);
         var second = Assert.IsType<JObject>(rows[1]);
         var empty = Assert.IsType<JObject>(rows[2]);
-        Assert.Equal(0, (int)first["slot"]!);
-        Assert.True((bool)first["occupied"]!);
-        Assert.Equal(FirstInstanceId.ToString("D"), (string?)first["spellInstance"]!["uuid"]);
-        Assert.Equal("Gather Knowledge", (string?)first["spellInstance"]!["name"]);
-        Assert.Equal("Gather Knowledge", (string?)first["spellRecipe"]!["name"]);
-        Assert.True((bool)first["remove"]!["available"]!);
-        Assert.True((bool)first["move"]!["available"]!);
-        var destinations = response["moveDestinations"]!.Values<JObject>().ToArray();
-        Assert.Equal(
-            new[] { 0, 1, 2 },
-            destinations.Select(row => (int)row["slot"]!));
-        var occupiedDestination = destinations[1];
-        var emptyDestination = destinations[2];
-        Assert.Equal("Whirling Sorcery", (string?)occupiedDestination["occupant"]!["name"]);
-        Assert.True((bool)emptyDestination["empty"]!);
-
-        Assert.False((bool)second["remove"]!["available"]!);
-        Assert.Equal("native_remove_refused", (string?)second["remove"]!["reasonCode"]);
-        Assert.True((bool)second["casting"]!);
+        Assert.Equal(1, (int)second["slotIndex"]!);
+        Assert.Equal("Whirling Sorcery", (string?)second["spellRecipe"]!["name"]);
         Assert.False((bool)empty["occupied"]!);
-        Assert.Null(empty["spellInstance"]);
+        Assert.Null(response["moveDestinations"]);
     }
 
     [Fact]
-    public void CommittedMutationReturnsOnlyTheCompleteNamedLoadoutPostState()
+    public void CommittedMutationReturnsOnlyTheNamedSlotDelta()
     {
         var submission = new SpellLoadoutSubmission(
             SpellLoadoutPreflight.Proceeded,
@@ -148,7 +136,10 @@ public sealed class GameMcpSpellLoadoutTests
             new NativeMutationCallOutcome(2, 1, 1),
             "the exact requested swap is observable");
         var mapped = SpellLoadoutActionResultMapper.Map(in submission);
-        var command = Command("move", destinationSlot: 1);
+        var command = Command(
+            "move",
+            destinationSlot: 1,
+            frameContext: GameMcpTestHarness.Context(World()));
         var terminal = GameMcpCommandResult.FromAction(
             in mapped,
             command.Kind,
@@ -156,25 +147,20 @@ public sealed class GameMcpSpellLoadoutTests
             3,
             submission.Reason,
             GameMcpSpellLoadoutProjection.Project(in submission));
-        terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectSpellLoadoutPostState(
-            GameMcpTestHarness.Context(World(moved: true))));
+        terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(World(moved: true)), command, terminal));
 
         var success = GameMcpTestHarness.Json(terminal.Project(command));
 
-        Assert.Equal(new[] { "status", "code", "loadout", "augmentOptions", "moveDestinations" },
+        Assert.Equal(
+            new[] { "status", "uuid", "name", "internalName", "category", "nativeType", "slot" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
-        Assert.Equal("committed", (string?)success["code"]);
-        Assert.Equal(2, (int)success["loadout"]!["loadBudget"]!["used"]!);
-        Assert.Equal(3, (int)success["loadout"]!["loadBudget"]!["maximum"]!);
-        Assert.True((bool)success["loadout"]!["loadBudget"]!["fitsAnotherSpell"]!);
-        var slots = success["loadout"]!["slots"]!.Values<JObject>().ToArray();
-        var firstSlot = Assert.IsType<JObject>(slots[0]);
-        var secondSlot = Assert.IsType<JObject>(slots[1]);
-        Assert.Equal("Whirling Sorcery", (string?)firstSlot["spellInstance"]!["name"]);
-        Assert.Equal("Gather Knowledge", (string?)secondSlot["spellInstance"]!["name"]);
-        Assert.NotNull(success["moveDestinations"]);
-        Assert.NotNull(firstSlot["remove"]);
+        Assert.Equal("Gather Knowledge", (string?)success["name"]);
+        Assert.Equal(0, (int)success["slot"]!["before"]!);
+        Assert.Equal(1, (int)success["slot"]!["after"]!);
+        Assert.Null(success["code"]);
+        Assert.Null(success["loadout"]);
         Assert.Null(success["preflight"]);
         Assert.Null(success["before"]);
         Assert.Null(success["receipt"]);
@@ -226,7 +212,10 @@ public sealed class GameMcpSpellLoadoutTests
         Assert.False(ownership.TryCaptureSpellLoadoutMutationPermit());
     }
 
-    private static GameMcpCommand Command(string mode, int destinationSlot = 0) => new(
+    private static GameMcpCommand Command(
+        string mode,
+        int destinationSlot = 0,
+        GameMcpFrameContext? frameContext = null) => new(
         1,
         GameMcpCommandKind.SpellLoadout,
         9,
@@ -240,7 +229,8 @@ public sealed class GameMcpSpellLoadoutTests
         string.Empty,
         string.Empty,
         false,
-        false);
+        false,
+        frameContext: frameContext);
 
     private static GameWorldState World(bool moved = false)
     {

@@ -32,14 +32,14 @@ public sealed class GameMcpEquipmentLoadoutTests
     }
 
     [Fact]
-    public void Validation_names_missing_mode_and_ignores_echoed_generation_metadata()
+    public void Validation_names_missing_mode_and_rejects_removed_generation_metadata()
     {
         var inbox = new GameMcpFrameInbox();
         var router = new GameMcpProtocolRouter(inbox);
         var id = Guid.NewGuid().ToString("D");
         var missing = router.Handle(GameMcpAcceptanceFixture.Request(1, "tools/call",
             new JObject { ["name"] = "game_equipment", ["arguments"] = new JObject { ["uuid"] = id } }));
-        var accepted = router.Handle(GameMcpAcceptanceFixture.Request(2, "tools/call",
+        var rejected = router.Handle(GameMcpAcceptanceFixture.Request(2, "tools/call",
             new JObject
             {
                 ["name"] = "game_equipment",
@@ -49,7 +49,11 @@ public sealed class GameMcpEquipmentLoadoutTests
         var missingErrors = Assert.IsType<JArray>(missing.Body!["error"]!["data"]!["validationErrors"]);
         Assert.Contains(missingErrors.Values<JObject>(),
             error => (string?)error!["code"] == "missing_required" && (string?)error["field"] == "mode");
-        Assert.NotEqual(-32602, (int?)accepted.Body?["error"]?["code"]);
+        Assert.Equal(-32602, (int?)rejected.Body?["error"]?["code"]);
+        Assert.Contains(
+            rejected.Body!["error"]!["data"]!["validationErrors"]!.Values<JObject>(),
+            error => (string?)error["code"] == "unexpected_field" &&
+                     (string?)error["field"] == "worldGeneration");
         Assert.Empty(inbox.ClaimPending());
     }
 
@@ -89,8 +93,8 @@ public sealed class GameMcpEquipmentLoadoutTests
         Assert.Equal(1, (int)row["unequip"]!["stacks"]!);
         var cost = Assert.Single(row["equip"]!["usageCosts"]!).Value<JObject>()!;
         Assert.Equal("Focus", (string?)cost["resource"]!["name"]);
-        Assert.Equal("2e1", (string?)cost["cost"]);
-        Assert.Equal("8e1", (string?)cost["amount"]);
+        Assert.Equal("20", (string?)cost["cost"]);
+        Assert.Equal("80", (string?)cost["amount"]);
         Assert.Null(row["receipt"]);
         Assert.Null(row["payment"]);
     }

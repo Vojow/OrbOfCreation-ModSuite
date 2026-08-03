@@ -26,7 +26,7 @@ public sealed class GameMcpTargetingTests
         Assert.Equal(new[] { "mode" }, schema["required"]!.Values<string>());
         Assert.Equal(new[] { "submit", "randomize" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>());
-        Assert.NotNull(schema["properties"]!["targetUuid"]);
+        Assert.NotNull(schema["properties"]!["uuid"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
         Assert.Null(schema["properties"]!["receipt"]);
     }
@@ -38,11 +38,11 @@ public sealed class GameMcpTargetingTests
         var missing = Call(router, 1, new JObject { ["mode"] = "submit" });
         var unexpected = Call(router, 2, new JObject
         {
-            ["mode"] = "randomize", ["targetUuid"] = First.ToString("D"),
+            ["mode"] = "randomize", ["uuid"] = First.ToString("D"),
         });
-        Assert.Equal("targetUuid", (string?)missing.Body!["error"]!["data"]!["validationErrors"]![0]!["field"]);
+        Assert.Equal("uuid", (string?)missing.Body!["error"]!["data"]!["validationErrors"]![0]!["field"]);
         Assert.Equal("missing_required", (string?)missing.Body["error"]!["data"]!["validationErrors"]![0]!["code"]);
-        Assert.Equal("targetUuid", (string?)unexpected.Body!["error"]!["data"]!["validationErrors"]![0]!["field"]);
+        Assert.Equal("uuid", (string?)unexpected.Body!["error"]!["data"]!["validationErrors"]![0]!["field"]);
         Assert.Equal("unexpected_for_mode", (string?)unexpected.Body["error"]!["data"]!["validationErrors"]![0]!["code"]);
     }
 
@@ -83,10 +83,10 @@ public sealed class GameMcpTargetingTests
             GameMcpTargetingProjection.SubmittedTarget(terminal.Details)));
 
         var success = GameMcpTestHarness.Json(terminal.Project(command));
-        Assert.Equal(new[] { "status", "code", "submittedTarget", "targeting" },
+        Assert.Equal(new[] { "status", "submittedTarget", "targeting" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
-        Assert.Equal("committed", (string?)success["code"]);
+        Assert.Null(success["code"]);
         Assert.Equal("Alchemic Ability", (string?)success["submittedTarget"]!["name"]);
         Assert.NotNull(success["targeting"]!["candidates"]);
         Assert.Null(success["receipt"]);

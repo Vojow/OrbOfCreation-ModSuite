@@ -109,7 +109,7 @@ public sealed class GameMcpFrameRoutingContractTests
             new JObject
             {
                 ["mode"] = "offer_initiate",
-                ["treeUuid"] = Guid.NewGuid().ToString("D"),
+                ["uuid"] = Guid.NewGuid().ToString("D"),
             });
         Assert.Equal(GameMcpOperationClass.Gameplay, gameplay.Classification);
         Assert.Equal(
@@ -162,22 +162,22 @@ public sealed class GameMcpFrameRoutingContractTests
         "game_purchase" => new JObject { ["uuid"] = Guid.NewGuid().ToString("D") },
         "game_cast" => new JObject
         {
-            ["spellRecipeUuid"] = Guid.NewGuid().ToString("D"),
+            ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "fire",
             ["slotIndex"] = 0,
         },
         "game_concept" => new JObject
         {
-            ["recipeUuid"] = Guid.NewGuid().ToString("D"),
+            ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "add",
         },
         "game_harvest" => new JObject
         {
-            ["plotNodeUuid"] = Guid.NewGuid().ToString("D"),
+            ["uuid"] = Guid.NewGuid().ToString("D"),
         },
         "game_spell_level" => new JObject
         {
-            ["spellRecipeUuid"] = Guid.NewGuid().ToString("D"),
+            ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "single",
         },
         "game_discover" => new JObject
@@ -210,12 +210,12 @@ public sealed class GameMcpFrameRoutingContractTests
         },
         "game_consumable" => new JObject
         {
-            ["consumableUuid"] = Guid.NewGuid().ToString("D"),
+            ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "use",
         },
         "game_craft" => new JObject
         {
-            ["recipeUuid"] = Guid.NewGuid().ToString("D"),
+            ["uuid"] = Guid.NewGuid().ToString("D"),
         },
         "game_casting_dial" => new JObject
         {
@@ -224,7 +224,7 @@ public sealed class GameMcpFrameRoutingContractTests
         },
         "game_spell_loadout" => new JObject
         {
-            ["spellInstanceUuid"] = Guid.NewGuid().ToString("D"),
+            ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "remove",
         },
         "game_targeting" => new JObject
@@ -233,19 +233,17 @@ public sealed class GameMcpFrameRoutingContractTests
         },
         "suite_config_set" => new JObject
         {
-            ["configurationGeneration"] = 1,
             ["section"] = "AutoCast",
             ["key"] = "Mode",
             ["serializedValue"] = "Disabled",
         },
         "suite_emergency_stop" => new JObject
         {
-            ["configurationGeneration"] = 1,
             ["mode"] = "engage",
         },
         "game_navigate" => new JObject
         {
-            ["tab"] = "Magic",
+            ["screen"] = "Magic",
         },
         "game_probe" => new JObject { ["probe"] = "runtime" },
         "game_tooltips" => new JObject(),

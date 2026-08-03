@@ -656,19 +656,15 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             return null;
         }
 
-        return "the native upgrade purchase was skipped while published UpgradeSO.cachedCostLevel " +
-            upgrade.Reading.CachedCostLevel + " disagreed with purchase level " +
-            upgrade.Reading.Level + "; the game's upstream value cache stays stale until the " +
-            "corresponding screen is viewed";
+        return "This upgrade's live price is still refreshing; open its game screen and retry.";
     }
 
     internal static string? HarvestPrerequisiteEvidenceReason(
         string mode,
         PlotActionPrerequisiteEvidence prerequisites) =>
         prerequisites == PlotActionPrerequisiteEvidence.Unknown
-            ? "the native " + mode +
-              " harvest was rejected because no plot-action prerequisite latch evidence was " +
-              "published for an exact current action instance"
+            ? "The exact " + mode +
+              " harvest prerequisite cannot be confirmed right now."
             : null;
 
     private sealed class GameMcpActionUnavailableException : Exception

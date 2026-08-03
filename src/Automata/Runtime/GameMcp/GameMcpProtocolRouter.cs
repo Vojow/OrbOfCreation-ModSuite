@@ -255,27 +255,27 @@ internal sealed class GameMcpProtocolRouter
                 builder.Amount = OptionalIntInRange(arguments, "count", 1, 1, 1000);
                 break;
             case "game_cast":
-                builder.Uuid = RequireUuid(arguments, "spellRecipeUuid");
+                builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "fire", "release");
                 builder.SlotIndex = RequiredInt(arguments, "slotIndex", 0, 255);
                 break;
             case "game_concept":
-                builder.Uuid = RequireUuid(arguments, "recipeUuid");
+                builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "add", "remove_owned");
                 builder.Amount = OptionalIntInRange(
                     arguments, "amount", 1, 1, 1_000_000);
                 break;
             case "game_harvest":
-                builder.Uuid = RequireUuid(arguments, "plotNodeUuid");
+                builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
             case "game_spell_level":
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "single", "all");
                 builder.Uuid = builder.Mode == "single"
-                    ? RequireUuid(arguments, "spellRecipeUuid")
+                    ? RequireUuid(arguments, "uuid")
                     : Guid.Empty;
                 break;
             case "game_casting_dial":
@@ -288,17 +288,17 @@ internal sealed class GameMcpProtocolRouter
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode == "add")
                 {
-                    builder.Uuid = RequireUuid(arguments, "spellRecipeUuid");
+                    builder.Uuid = RequireUuid(arguments, "uuid");
                     builder.UuidCounts = RequireUuidCountArray(arguments, "glyphs", 64);
                 }
-                else builder.Uuid = RequireUuid(arguments, "spellInstanceUuid");
+                else builder.Uuid = RequireUuid(arguments, "uuid");
                 if (builder.Mode == "move")
                     builder.SlotIndex = RequiredInt(arguments, "destination", 0, 255);
                 break;
             case "game_targeting":
                 builder.Mode = RequireOneOf(arguments, "mode", "submit", "randomize");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
-                if (builder.Mode == "submit") builder.Uuid = RequireUuid(arguments, "targetUuid");
+                if (builder.Mode == "submit") builder.Uuid = RequireUuid(arguments, "uuid");
                 break;
             case "game_consumable":
                 builder.Mode = RequireOneOf(
@@ -309,7 +309,7 @@ internal sealed class GameMcpProtocolRouter
                     "discard",
                     "set_randomization",
                     "move");
-                builder.Uuid = RequireUuid(arguments, "consumableUuid");
+                builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode == "discard")
                     builder.Amount = RequiredInt(arguments, "amount", 1, int.MaxValue);
@@ -325,7 +325,7 @@ internal sealed class GameMcpProtocolRouter
                 break;
             case "game_craft":
                 builder.Mode = "craft";
-                builder.Uuid = RequireUuid(arguments, "recipeUuid");
+                builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
             case "game_discover":
@@ -334,13 +334,15 @@ internal sealed class GameMcpProtocolRouter
                     "offer_initiate", "offer_select", "offer_confirm", "offer_reroll");
                 if (builder.Mode is "preview" or "confirm")
                 {
-                    builder.Key = RequireOneOf(arguments, "surface",
-                        "spellcraft", "glyphcraft", "devote", "runecraft", "alchemy", "artifacts");
+                    builder.Key = builder.Mode == "preview" && !arguments.ContainsKey("surface")
+                        ? string.Empty
+                        : RequireOneOf(arguments, "surface", "spellcraft", "glyphcraft",
+                            "devote", "runecraft", "alchemy", "artifacts", "concepts");
                     builder.UuidCounts = RequireUuidCountArray(arguments, "components", 64);
                 }
                 else
                 {
-                    builder.Uuid = RequireUuid(arguments, "treeUuid");
+                    builder.Uuid = RequireUuid(arguments, "uuid");
                     builder.SecondaryUuid = OptionalUuid(arguments, "offerUuid");
                 }
                 break;
@@ -373,15 +375,11 @@ internal sealed class GameMcpProtocolRouter
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
             case "suite_config_set":
-                builder.ConfigurationGeneration = RequiredUlong(
-                    arguments, "configurationGeneration");
                 builder.Section = RequireString(arguments, "section");
                 builder.Key = RequireString(arguments, "key");
                 builder.SerializedValue = RequireRawString(arguments, "serializedValue");
                 break;
             case "suite_emergency_stop":
-                builder.ConfigurationGeneration = RequiredUlong(
-                    arguments, "configurationGeneration");
                 builder.Mode = RequireOneOf(arguments, "mode", "engage", "resume");
                 break;
             case "game_screenshot":
@@ -392,10 +390,10 @@ internal sealed class GameMcpProtocolRouter
                         "maxWidth must be between 320 and 4096 pixels");
                 break;
             case "game_navigate":
-                builder.Tab = ParseNavigationSelector(RequireSelector(arguments, "tab"));
+                builder.Tab = ParseNavigationSelector(RequireSelector(arguments, "screen"));
                 if (arguments.TryGetValue("subtab", out _))
                     builder.Subtab = ParseNavigationSelector(RequireSelector(arguments, "subtab"));
-                builder.Uuid = OptionalUuid(arguments, "plotNodeUuid");
+                builder.Uuid = OptionalUuid(arguments, "uuid");
                 builder.Capture = OptionalBool(arguments, "capture", false);
                 builder.Amount = OptionalInt(arguments, "maxWidth", 1280);
                 if (builder.Amount < 320 || builder.Amount > 4096)
@@ -518,7 +516,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "world_get",
                 "Get exact world rows",
-                "Read one or more stable UUIDs as one ordered result list from exactly one immutable world generation. expectedNativeType is an optional fail-closed assertion.",
+                "Read one or more stable UUIDs as one ordered result list from one immutable published world. expectedNativeType is an optional fail-closed assertion.",
                 WorldGetSchema()),
             Tool(
                 "entity_catalog",
@@ -534,7 +532,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "explain_entity",
                 "Explain one entity",
-                "Evaluate visibility, availability, player verbs, recursive prerequisites, thresholds, exact costs, affordability, and typed blockers for one UUID from exactly one immutable world generation.",
+                "Evaluate visibility, availability, player verbs, recursive prerequisites, thresholds, exact costs, affordability, and typed blockers for one UUID from one immutable published world.",
                 ObjectSchema(
                     new JObject
                     {
@@ -557,7 +555,7 @@ internal sealed class GameMcpProtocolRouter
                 "Read suite runtime health",
                 "Read one compact scene/runtime/STOP/native-contract line plus feature and service names grouped by state.",
                 ObjectSchema()),
-            Tool("suite_configuration", "Read committed configuration", "Read the committed writable setting catalog, current serialized values, and configuration generation.", ObjectSchema()),
+            Tool("suite_configuration", "Read committed configuration", "Read the writable setting catalog and current serialized values.", ObjectSchema()),
             Tool(
                 "trace_health",
                 "Read trace-writer health",
@@ -583,9 +581,9 @@ internal sealed class GameMcpProtocolRouter
                     {
                         ["mode"] = EnumSchema("fire", "release"),
                         ["slotIndex"] = IntegerSchema(0, 255),
-                        ["spellRecipeUuid"] = StringSchema("Spell recipe UUID currently occupying the slot."),
+                        ["uuid"] = StringSchema("Spell recipe UUID currently occupying the slot."),
                     },
-                    "mode", "slotIndex", "spellRecipeUuid")),
+                    "mode", "slotIndex", "uuid")),
             Tool(
                 "game_concept",
                 "Assign or remove a concept",
@@ -594,10 +592,10 @@ internal sealed class GameMcpProtocolRouter
                     new JObject
                     {
                         ["mode"] = EnumSchema("add", "remove_owned"),
-                        ["recipeUuid"] = StringSchema("Alchemy recipe UUID."),
+                        ["uuid"] = StringSchema("Alchemy recipe UUID."),
                         ["amount"] = IntegerSchema(1, 1_000_000),
                     },
-                    "mode", "recipeUuid")),
+                    "mode", "uuid")),
             Tool(
                 "game_harvest",
                 "Harvest an audited plot",
@@ -605,20 +603,22 @@ internal sealed class GameMcpProtocolRouter
                 ActionSchema(
                     new JObject
                     {
-                        ["plotNodeUuid"] = StringSchema("Published plot-node UUID."),
+                        ["uuid"] = StringSchema("Published plot-node UUID."),
                     },
-                    "plotNodeUuid")),
+                    "uuid")),
             Tool(
                 "game_spell_level",
                 "Buy spell mastery",
                 "Apply one exact mastery purchase or the native level-all operation inline.",
-                ActionSchema(
+                ModeSchema(ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema("single", "all"),
-                        ["spellRecipeUuid"] = StringSchema("Published spell-recipe UUID."),
+                        ["uuid"] = StringSchema("Required only for single; a published spell-recipe UUID."),
                     },
-                    "mode")),
+                    "mode"),
+                    ModeRule("single", new[] { "uuid" }),
+                    ModeRule("all", forbidden: new[] { "uuid" }))),
             Tool(
                 "game_casting_dial",
                 "Set a global casting dial",
@@ -635,13 +635,12 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_spell_loadout",
                 "Add, remove, or move a spell",
-                "Add a discovered recipe with its glyph layout baked in, remove one exact runtime spell, or move it to another loadout slot. Success returns the complete newer loadout.",
-                ActionSchema(
+                "Add a discovered recipe with its glyph layout baked in, remove one exact runtime spell, or move it to another loadout slot. Success returns the settled slot change.",
+                ModeSchema(ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema("add", "remove", "move"),
-                        ["spellRecipeUuid"] = StringSchema("Required for add; a discovered SpellRecipeSO UUID."),
-                        ["spellInstanceUuid"] = StringSchema("Required for remove and move; an equipped runtime spell UUID."),
+                        ["uuid"] = StringSchema("A discovered recipe UUID for add; an equipped spell-instance UUID for remove or move."),
                         ["glyphs"] = ArraySchema(
                             ObjectSchema(new JObject
                             {
@@ -651,76 +650,92 @@ internal sealed class GameMcpProtocolRouter
                         ["destination"] = IntegerSchema(0, 255),
                     },
                     "mode"),
+                    ModeRule("add", new[] { "uuid", "glyphs" }, new[] { "destination" }),
+                    ModeRule("remove", new[] { "uuid" }, new[] { "glyphs", "destination" }),
+                    ModeRule("move", new[] { "uuid", "destination" }, new[] { "glyphs" })),
                 readOnly: false,
                 idempotent: false),
             Tool(
                 "game_targeting",
                 "Submit or randomize the pending target",
-                "Resolve the game's one current target request. Success returns the exact submitted structure and the complete next pending request inline.",
-                ActionSchema(
+                "Resolve the game's one current target request. Success returns the exact submitted structure.",
+                ModeSchema(ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema("submit", "randomize"),
-                        ["targetUuid"] = StringSchema("Required only for submit; use an eligible named targeting candidate UUID."),
+                        ["uuid"] = StringSchema("Required only for submit; use an eligible named targeting candidate UUID."),
                     },
                     "mode"),
+                    ModeRule("submit", new[] { "uuid" }),
+                    ModeRule("randomize", forbidden: new[] { "uuid" })),
                 readOnly: false,
                 idempotent: false),
             Tool(
                 "game_consumable",
                 "Use or organize consumables",
-                "Use, cancel, discard, randomize, or reorder one published consumable. Success returns the newer named holding, ordered inventory and hotbar, and next decisions inline.",
-                ActionSchema(
+                "Use, cancel, discard, randomize, or reorder one consumable. Success returns the changed amount, flag, or slot.",
+                ModeSchema(ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema(
                             "use", "cancel", "discard", "set_randomization", "move"),
-                        ["consumableUuid"] = StringSchema("Published ConsumableSO UUID."),
+                        ["uuid"] = StringSchema("Published ConsumableSO UUID."),
                         ["amount"] = IntegerSchema(1, int.MaxValue),
                         ["enabled"] = BooleanSchema("Requested randomization state."),
                         ["list"] = EnumSchema("inventory", "hotbar"),
                         ["destination"] = IntegerSchema(0, int.MaxValue),
                     },
-                    "mode", "consumableUuid"),
+                    "mode", "uuid"),
+                    ModeRule("discard", new[] { "amount" }, new[] { "enabled", "list", "destination" }),
+                    ModeRule("set_randomization", new[] { "enabled" }, new[] { "amount", "list", "destination" }),
+                    ModeRule("move", new[] { "list", "destination" }, new[] { "amount", "enabled" }),
+                    ModeRule("use", forbidden: new[] { "amount", "enabled", "list", "destination" }),
+                    ModeRule("cancel", forbidden: new[] { "amount", "enabled", "list", "destination" })),
                 readOnly: false,
                 idempotent: false),
             Tool(
                 "game_craft",
                 "Craft one recipe",
-                "Execute the exact published direct or queued one-shot recipe. Success returns the newer named recipe, exact next cost and holdings, queue state, and next decision inline.",
+                "Execute one exact direct or queued recipe. Success returns the changed recipe quantity or queue fact.",
                 ActionSchema(
                     new JObject
                     {
-                        ["recipeUuid"] = StringSchema("Published CraftingRecipeSO UUID."),
+                        ["uuid"] = StringSchema("Published CraftingRecipeSO UUID."),
                     },
-                    "recipeUuid"),
+                    "uuid"),
                 readOnly: false,
                 idempotent: false),
             Tool(
                 "game_discover",
                 "Preview or confirm discovery",
                 "Compose the components shown by a discovery screen, or drive a transient Discovery Tree offer. Component modes resolve the output; they never accept an output UUID.",
-                ActionSchema(
+                ModeSchema(ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema("preview", "confirm", "offer_initiate", "offer_select", "offer_confirm", "offer_reroll"),
-                        ["surface"] = EnumSchema("spellcraft", "glyphcraft", "devote", "runecraft", "alchemy", "artifacts"),
+                        ["surface"] = EnumSchema("spellcraft", "glyphcraft", "devote", "runecraft", "alchemy", "artifacts", "concepts"),
                         ["components"] = ArraySchema(
                             ObjectSchema(new JObject
                             {
                                 ["uuid"] = StringSchema("A component UUID selected on the discovery screen."),
                                 ["count"] = IntegerSchema(1, int.MaxValue),
                             }, "uuid", "count"), 1, 64),
-                        ["treeUuid"] = StringSchema("Required for offer modes; a published DiscoveryTreeSO UUID."),
+                        ["uuid"] = StringSchema("Required for offer modes; a published DiscoveryTreeSO UUID."),
                         ["offerUuid"] = StringSchema("Required for offer_select and offer_confirm."),
                     },
                     "mode"),
+                    ModeRule("preview", new[] { "components" }, new[] { "uuid", "offerUuid" }),
+                    ModeRule("confirm", new[] { "surface", "components" }, new[] { "uuid", "offerUuid" }),
+                    ModeRule("offer_initiate", new[] { "uuid" }, new[] { "surface", "components", "offerUuid" }),
+                    ModeRule("offer_reroll", new[] { "uuid" }, new[] { "surface", "components", "offerUuid" }),
+                    ModeRule("offer_select", new[] { "uuid", "offerUuid" }, new[] { "surface", "components" }),
+                    ModeRule("offer_confirm", new[] { "uuid", "offerUuid" }, new[] { "surface", "components" })),
                 readOnly: false,
                 idempotent: false),
             Tool(
                 "game_equipment",
                 "Equip or unequip an artifact",
-                "Apply one native equipment click using the live multi-buy, slot, type-slot, stack, and usage-cost decision. Success returns the newer fully named artifact row and every next loadout decision inline.",
+                "Apply one native equipment click using the live multi-buy, slot, type-slot, stack, and usage-cost decision. Success returns the stack count before and after.",
                 ActionSchema(
                     new JObject
                     {
@@ -733,14 +748,19 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_challenge",
                 "Select, queue, abandon, or fetch challenges",
-                "Drive the exact native challenge decision. Success returns ordered named selections and offers, rerolls, the target state, and every next decision inline.",
-                ActionSchema(
+                "Drive one exact native challenge decision. Target modes return the changed state; fetch modes return the named offers needed for the next decision.",
+                ModeSchema(ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema("select", "activate", "abandon", "fetch_time", "fetch_prestige"),
                         ["uuid"] = StringSchema("Required for select, activate, and abandon; a published ChallengeSO UUID."),
                     },
                     "mode"),
+                    ModeRule("select", new[] { "uuid" }),
+                    ModeRule("activate", new[] { "uuid" }),
+                    ModeRule("abandon", new[] { "uuid" }),
+                    ModeRule("fetch_time", forbidden: new[] { "uuid" }),
+                    ModeRule("fetch_prestige", forbidden: new[] { "uuid" })),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -758,7 +778,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_research",
                 "Develop or manage research",
-                "Develop, queue, pause, resume, cancel, or apply a free bonus level to one exact published research. Success returns its newer state and every next decision inline.",
+                "Develop, queue, pause, resume, cancel, or apply a free bonus level to one exact research. Success returns the changed level or state.",
                 ActionSchema(
                     new JObject
                     {
@@ -775,12 +795,11 @@ internal sealed class GameMcpProtocolRouter
                 ObjectSchema(
                     new JObject
                     {
-                        ["configurationGeneration"] = UlongSchema("Exact generation returned by suite_configuration."),
                         ["section"] = StringSchema("Exact BepInEx configuration section."),
                         ["key"] = StringSchema("Exact BepInEx configuration key."),
                         ["serializedValue"] = StringSchema("Ordinary BepInEx serialized value."),
                     },
-                    "configurationGeneration", "section", "key", "serializedValue"),
+                    "section", "key", "serializedValue"),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -790,10 +809,9 @@ internal sealed class GameMcpProtocolRouter
                 ObjectSchema(
                     new JObject
                     {
-                        ["configurationGeneration"] = UlongSchema("Exact generation returned by suite_configuration."),
                         ["mode"] = EnumSchema("engage", "resume"),
                     },
-                    "configurationGeneration", "mode"),
+                    "mode"),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -826,13 +844,13 @@ internal sealed class GameMcpProtocolRouter
                 ObjectSchema(
                     new JObject
                     {
-                        ["tab"] = StringSchema("Exact player-facing tab name."),
+                        ["screen"] = StringSchema("Exact player-facing top-level screen name."),
                         ["subtab"] = StringSchema("Optional exact player-facing subtab name."),
-                        ["plotNodeUuid"] = StringSchema("Optional published plot UUID to select after navigation."),
+                        ["uuid"] = StringSchema("Optional published plot UUID to select after navigation."),
                         ["capture"] = BooleanSchema("Return an inline PNG after arrival."),
                         ["maxWidth"] = IntegerSchema(320, 4096),
                     },
-                    "tab"),
+                    "screen"),
                 readOnly: false,
                 idempotent: false,
                 classification: "UI-only, no gameplay/save mutation"),
@@ -848,7 +866,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_tooltip",
                 "Read a visible tooltip",
-                "Read typed authored/computed TooltipNode trees, nested links, and open inspected panels for one exact path; optionally capture the opened tooltip.",
+                "Read compact plain screen text for one path from the current game_tooltips catalog; paths are volatile screen-state handles, so refresh the catalog after navigation or mutation. Optionally capture the opened tooltip.",
                 ObjectSchema(
                     new JObject
                     {
@@ -931,9 +949,6 @@ internal sealed class GameMcpProtocolRouter
 
         foreach (var supplied in arguments.Properties())
         {
-            if (string.Equals(supplied.Name, "worldGeneration", StringComparison.Ordinal) &&
-                IsActionTool(name))
-                continue;
             if (properties.ContainsKey(supplied.Name)) continue;
             errors.Add(ValidationError(
                 "unexpected_field",
@@ -947,23 +962,24 @@ internal sealed class GameMcpProtocolRouter
             var mode = (string?)arguments["mode"];
             var hasSurface = arguments.ContainsKey("surface");
             var hasComponents = arguments.ContainsKey("components");
-            var hasTree = arguments.ContainsKey("treeUuid");
+            var hasTree = arguments.ContainsKey("uuid");
             var hasOffer = arguments.ContainsKey("offerUuid");
             if (mode is "preview" or "confirm")
             {
-                if (!hasSurface) errors.Add(ValidationError("missing_required", "surface",
-                    "required field 'surface' is missing for mode '" + mode + "'"));
+                if (mode == "confirm" && !hasSurface)
+                    errors.Add(ValidationError("missing_required", "surface",
+                        "required field 'surface' is missing for mode 'confirm'"));
                 if (!hasComponents) errors.Add(ValidationError("missing_required", "components",
                     "required field 'components' is missing for mode '" + mode + "'"));
-                if (hasTree) errors.Add(ValidationError("unexpected_for_mode", "treeUuid",
-                    "field 'treeUuid' is accepted only for offer modes"));
+                if (hasTree) errors.Add(ValidationError("unexpected_for_mode", "uuid",
+                    "field 'uuid' is accepted only for offer modes"));
                 if (hasOffer) errors.Add(ValidationError("unexpected_for_mode", "offerUuid",
                     "field 'offerUuid' is accepted only for offer_select or offer_confirm"));
             }
             else
             {
-                if (!hasTree) errors.Add(ValidationError("missing_required", "treeUuid",
-                    "required field 'treeUuid' is missing for mode '" + mode + "'"));
+                if (!hasTree) errors.Add(ValidationError("missing_required", "uuid",
+                    "required field 'uuid' is missing for mode '" + mode + "'"));
                 if (hasSurface) errors.Add(ValidationError("unexpected_for_mode", "surface",
                     "field 'surface' is accepted only for preview or confirm"));
                 if (hasComponents) errors.Add(ValidationError("unexpected_for_mode", "components",
@@ -994,38 +1010,33 @@ internal sealed class GameMcpProtocolRouter
             arguments["mode"]?.Type == JTokenType.String)
         {
             var mode = (string?)arguments["mode"];
-            var hasRecipe = arguments.ContainsKey("spellRecipeUuid");
+            var hasRecipe = arguments.ContainsKey("uuid");
             if (mode == "single" && !hasRecipe)
-                errors.Add(ValidationError("missing_required", "spellRecipeUuid",
-                    "required field 'spellRecipeUuid' is missing for mode 'single'"));
+                errors.Add(ValidationError("missing_required", "uuid",
+                    "required field 'uuid' is missing for mode 'single'"));
             if (mode == "all" && hasRecipe)
-                errors.Add(ValidationError("unexpected_for_mode", "spellRecipeUuid",
-                    "field 'spellRecipeUuid' is not accepted for mode 'all'"));
+                errors.Add(ValidationError("unexpected_for_mode", "uuid",
+                    "field 'uuid' is not accepted for mode 'all'"));
         }
 
         if (string.Equals(name, "game_spell_loadout", StringComparison.Ordinal) &&
             arguments["mode"]?.Type == JTokenType.String)
         {
             var mode = (string?)arguments["mode"];
-            var recipe = arguments.ContainsKey("spellRecipeUuid");
-            var spell = arguments.ContainsKey("spellInstanceUuid");
+            var subject = arguments.ContainsKey("uuid");
             var glyphs = arguments.ContainsKey("glyphs");
             var destination = arguments.ContainsKey("destination");
             if (mode == "add")
             {
-                if (!recipe) errors.Add(ValidationError("missing_required", "spellRecipeUuid",
-                    "required field 'spellRecipeUuid' is missing for mode 'add'"));
+                if (!subject) errors.Add(ValidationError("missing_required", "uuid",
+                    "required field 'uuid' is missing for mode 'add'"));
                 if (!glyphs) errors.Add(ValidationError("missing_required", "glyphs",
                     "required field 'glyphs' is missing for mode 'add'"));
-                if (spell) errors.Add(ValidationError("unexpected_for_mode", "spellInstanceUuid",
-                    "field 'spellInstanceUuid' is not accepted for mode 'add'"));
             }
             else
             {
-                if (!spell) errors.Add(ValidationError("missing_required", "spellInstanceUuid",
-                    "required field 'spellInstanceUuid' is missing for mode '" + mode + "'"));
-                if (recipe) errors.Add(ValidationError("unexpected_for_mode", "spellRecipeUuid",
-                    "field 'spellRecipeUuid' is accepted only for mode 'add'"));
+                if (!subject) errors.Add(ValidationError("missing_required", "uuid",
+                    "required field 'uuid' is missing for mode '" + mode + "'"));
                 if (glyphs) errors.Add(ValidationError("unexpected_for_mode", "glyphs",
                     "field 'glyphs' is accepted only for mode 'add'"));
             }
@@ -1041,13 +1052,13 @@ internal sealed class GameMcpProtocolRouter
             arguments["mode"]?.Type == JTokenType.String)
         {
             var mode = (string?)arguments["mode"];
-            var target = arguments.ContainsKey("targetUuid");
+            var target = arguments.ContainsKey("uuid");
             if (mode == "submit" && !target)
-                errors.Add(ValidationError("missing_required", "targetUuid",
-                    "required field 'targetUuid' is missing for mode 'submit'"));
+                errors.Add(ValidationError("missing_required", "uuid",
+                    "required field 'uuid' is missing for mode 'submit'"));
             else if (mode == "randomize" && target)
-                errors.Add(ValidationError("unexpected_for_mode", "targetUuid",
-                    "field 'targetUuid' is not accepted for mode '" + mode + "'"));
+                errors.Add(ValidationError("unexpected_for_mode", "uuid",
+                    "field 'uuid' is not accepted for mode '" + mode + "'"));
         }
 
         if (string.Equals(name, "game_consumable", StringComparison.Ordinal) &&
@@ -1121,6 +1132,40 @@ internal sealed class GameMcpProtocolRouter
         JObject properties,
         params string[] required) => ObjectSchema(properties, required);
 
+    private static JObject ModeSchema(JObject schema, params JObject[] rules)
+    {
+        schema["allOf"] = new JArray(rules);
+        return schema;
+    }
+
+    private static JObject ModeRule(
+        string mode,
+        string[]? required = null,
+        string[]? forbidden = null)
+    {
+        var then = new JObject();
+        if (required is { Length: > 0 }) then["required"] = new JArray(required);
+        if (forbidden is { Length: > 0 })
+        {
+            var any = new JArray();
+            for (var index = 0; index < forbidden.Length; index++)
+                any.Add(new JObject { ["required"] = new JArray(forbidden[index]) });
+            then["not"] = new JObject { ["anyOf"] = any };
+        }
+        return new JObject
+        {
+            ["if"] = new JObject
+            {
+                ["properties"] = new JObject
+                {
+                    ["mode"] = new JObject { ["const"] = mode },
+                },
+                ["required"] = new JArray("mode"),
+            },
+            ["then"] = then,
+        };
+    }
+
     private static bool IsActionTool(string name) => name is
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
         "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
@@ -1134,7 +1179,7 @@ internal sealed class GameMcpProtocolRouter
             Resource("orb://world/overview", "world-overview", "Compact published-world strategy overview."),
             Resource("orb://world/categories", "world-categories", "Discoverable world table inventory and collection status."),
             Resource("orb://suite/health", "suite-health", "Compact feature, service, emergency, collection, and MCP health."),
-            Resource("orb://suite/configuration", "suite-configuration", "Committed suite configuration generation."),
+            Resource("orb://suite/configuration", "suite-configuration", "Committed suite configuration and writable setting catalog."),
             Resource("orb://trace/health", "trace-health", "Trace-writer health and retained volume."),
         },
     };

@@ -30,15 +30,15 @@ public sealed class GameMcpCraftingTests
 
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         var schema = tool["inputSchema"]!;
-        Assert.Equal(new[] { "recipeUuid" }, schema["required"]!.Values<string>());
-        Assert.NotNull(schema["properties"]!["recipeUuid"]);
+        Assert.Equal(new[] { "uuid" }, schema["required"]!.Values<string>());
+        Assert.NotNull(schema["properties"]!["uuid"]);
         Assert.NotNull(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
         Assert.Null(schema["properties"]!["amount"]);
     }
 
     [Fact]
-    public void ValidationNamesMissingRecipeUuidAndIgnoresEchoedGenerationMetadata()
+    public void ValidationNamesMissingUuidAndRejectsRemovedGenerationMetadata()
     {
         var inbox = new GameMcpFrameInbox();
         var router = new GameMcpProtocolRouter(inbox);
@@ -58,7 +58,7 @@ public sealed class GameMcpCraftingTests
                 ["name"] = "game_craft",
                 ["arguments"] = new JObject
                 {
-                    ["recipeUuid"] = RecipeId.ToString("D"),
+                    ["uuid"] = RecipeId.ToString("D"),
                     ["worldGeneration"] = 17,
                 },
             }));
@@ -68,8 +68,12 @@ public sealed class GameMcpCraftingTests
         Assert.Contains(
             missingErrors.Values<JObject>(),
             error => (string?)error!["code"] == "missing_required" &&
-                     (string?)error["field"] == "recipeUuid");
-        Assert.NotEqual(-32602, (int?)accepted.Body?["error"]?["code"]);
+                     (string?)error["field"] == "uuid");
+        Assert.Equal(-32602, (int?)accepted.Body?["error"]?["code"]);
+        Assert.Contains(
+            accepted.Body!["error"]!["data"]!["validationErrors"]!.Values<JObject>(),
+            error => (string?)error!["code"] == "unexpected_field" &&
+                     (string?)error["field"] == "worldGeneration");
         Assert.Empty(inbox.ClaimPending());
     }
 
@@ -83,7 +87,7 @@ public sealed class GameMcpCraftingTests
             "CraftingRecipeSO"));
 
         Assert.Equal("available", (string?)result["status"]);
-        Assert.Equal((ulong)2201, (ulong)result["worldGeneration"]!);
+        Assert.Null(result["worldGeneration"]);
         var row = result["row"]!;
         Assert.Equal("Craft Sigils", (string?)row["name"]);
         Assert.Equal(RecipeId.ToString("D"), (string?)row["uuid"]);
@@ -96,21 +100,27 @@ public sealed class GameMcpCraftingTests
         Assert.Equal(3, (int)row["queue"]!["maximum"]!);
         var cost = Assert.Single(row["nextCosts"]!).Value<JObject>()!;
         Assert.Equal("Arcane Dust", (string?)cost["resource"]!["name"]);
-        Assert.Equal("7.5e1", (string?)cost["cost"]);
-        Assert.Equal("9e2", (string?)cost["amount"]);
+        Assert.Equal("75", (string?)cost["cost"]);
+        Assert.Equal("900", (string?)cost["amount"]);
         Assert.True((bool)cost["affordable"]!);
     }
 
     [Fact]
-    public void CommittedPostStateIsTheNamedNextDecisionWithoutAuditCeremony()
+    public void CommittedPostStateIsTheNamedQueueDeltaWithoutAuditCeremony()
     {
-        var postState = Json(GameMcpWorldQuery.ProjectPostState(
-            Context(), "crafting-recipes", RecipeId));
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Crafting, 15, 8, "craft", RecipeId, Guid.Empty,
+            "CraftingRecipeSO", string.Empty, 1, string.Empty, string.Empty,
+            false, false, frameContext: Context(queuedAmount: 4));
+        var committed = GameMcpCommandResult.Committed("committed", 15, 8);
+        var postState = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            Context(queuedAmount: 6), command, committed));
 
         Assert.Equal("Craft Sigils", (string?)postState["name"]);
-        Assert.Equal("queue_stack", (string?)postState["execution"]);
-        Assert.NotNull(postState["nextCosts"]);
-        Assert.NotNull(postState["queue"]);
+        Assert.Equal("4", (string?)postState["queued"]!["before"]!);
+        Assert.Equal("6", (string?)postState["queued"]!["after"]!);
+        Assert.Null(postState["nextCosts"]);
+        Assert.Null(postState["queue"]);
         Assert.Null(postState["receipt"]);
         Assert.Null(postState["payment"]);
         Assert.Null(postState["worldGeneration"]);
@@ -142,16 +152,16 @@ public sealed class GameMcpCraftingTests
         Assert.Empty(success.Properties());
     }
 
-    private static GameMcpFrameContext Context()
+    private static GameMcpFrameContext Context(int queuedAmount = 4)
     {
         using var publisher =
             new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
-        publisher.Publish(World(), new WorldGeneration(2201));
+        publisher.Publish(World(queuedAmount), new WorldGeneration(2201));
         return GameMcpTestHarness.Context(
             publisher.ReadLatest(), configurationGeneration: 8, lifecycleGeneration: 15);
     }
 
-    private static GameWorldState World()
+    private static GameWorldState World(int queuedAmount = 4)
     {
         var reading = new RawCraftingRecipeSample(
             RecipeId,
@@ -185,7 +195,7 @@ public sealed class GameMcpCraftingTests
                     RecipeId,
                     WorldCraftingPipeline.QueueStack,
                     new BigDouble(2),
-                    new BigDouble(4),
+                    new BigDouble(queuedAmount),
                     QueueId,
                     queueUsed: 1,
                     queueMaximum: 3,

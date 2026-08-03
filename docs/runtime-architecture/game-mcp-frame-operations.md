@@ -152,7 +152,7 @@ claimed operation on Unity's main thread; it is never retained as an MCP snapsho
 | Entity catalog: `uuid`, `name`, optional differing `internalName`, `nativeType`, and addressable `category` | Lifecycle-structural | Common enumerates `IdScriptableObject.RuntimeLookup` once on Unity at the first shared Playing capture after `RuntimeReady`, validates stable generation/count and `value.GetGuid() == key`, and attaches the one UUID-sorted immutable snapshot to every world in the lifecycle. MCP only filters the exact snapshot reference pinned by the answering world; hidden loaded entities remain searchable, while pre-bind/failed bind is explicitly unavailable. |
 | Tool/resource schemas, protocol versions, operation classification, entity category/native-type/capability descriptors | Build-time | Compiled finite tables in the router and `GameMcpEntityCapabilityMap`. |
 | Writable configuration metadata: section, key, setting type, description, accepted constraint/domain | Lifecycle-structural | Created once from bound BepInEx entries at perf-debug startup. No request enumerates settings or properties. |
-| Configuration values and `configurationGeneration` | Request-time | One existing immutable `ConfigurationPublication` pinned in the frame context. Each writable value is selected by the static typed mapping; no mutable `ConfigEntry` value is read. |
+| Configuration values | Request-time | One existing immutable `ConfigurationPublication` pinned in the frame context. Each writable value is selected by the static typed mapping; no mutable `ConfigEntry` value is read and no caller generation is required. |
 | Requirement authoring: owner UUID/type/level, container/group/condition order, `AND`/`OR`, condition kind, requirement UUID/type, comparison/value selector, base requirement, per-level scaling, modifier-per-level scaling, prerequisite-link target and expanded tier/link order | Lifecycle-structural | `WorldEntityRequirementReader` and prerequisite-link structural readers traverse once per lifecycle. |
 | Requirement evaluation: selected current value, required scaled/effective threshold, met/unmet, native `Check(ConditionInfo)` owner/level/verdict, availability/visibility/discovery/mastery/quantity/level inputs | 250-ms dynamic | Structural graph is re-derived against current published entity rows; `WorldRequirementNativeVerdictReader` invokes only compiled live verdict delegates each ordinary capture. Native/suite disagreement fails loud. |
 | Research gates and adjustments: base/effective required level, leeway, visible/available/canDevelop, adjustment amount/order/passive state and source UUID/type | 250-ms dynamic | Research/challenge/modifier state in the shared world; explanation consumes the one generation and never re-queries from HTTP. |
@@ -161,13 +161,13 @@ claimed operation on Unity's main thread; it is never retained as an MCP snapsho
 | Crafting family/recipe authoring: recipe UUID, crafting type UUIDs, input/output resource UUID+amount edges, consumable output UUID/effect kind, engagement effect/block identities | Lifecycle-structural | `WorldCraftingRecipeTypeReader` and `WorldCraftingRecipeAuthoringReader` traverse once per lifecycle. |
 | Crafting live state: visible, starting quantity, `CanBuyAt`, output-capacity verdict, necessary drain ratio/block, time, joined resource visibility/quantity/capacity/bandwidth/usage/headroom | 250-ms dynamic | `WorldCraftingRecipeReader` invokes compiled live evaluators; worker joins current resource rows. Authored lists are not traversed again. |
 | Discovery decision state: tree UUID, visibility, mode, rerolls/used flag, remaining/immediate-required state, ordered current offer UUIDs, selected UUID, exact next-item cost components, resource true quantities, and native `HasEnough` | 250-ms dynamic | The lifecycle-bound `WorldDiscoveryTreeBinder` copies only native-free values during the ordinary world capture. MCP derives initiate/reroll verdicts and resolves offers against the same immutable generation; it performs no direct or speculative read. |
-| Entity explanation envelope and predicates: world/lifecycle generations; visible, available, canDevelop, canPurchase, canDiscover, canUse; stable false reason codes; queue/cap/leeway/discovery/bandwidth/drain blockers | 250-ms dynamic | Pure typed evaluation over one pinned world, plus the structural tables retained in that world. No snapshot token crosses calls. |
+| Entity explanation and predicates: visible, available, canDevelop, canPurchase, canDiscover, canUse; stable false reason codes; queue/cap/leeway/discovery/bandwidth/drain blockers | 250-ms dynamic | Pure typed evaluation over one pinned world, plus the structural tables retained in that world. No snapshot token or generation crosses calls. |
 | World row/list/search/batch fields, resource quantities/rates/capacities, levels/quantities, queue/slot occupancy, discovery state, recipe state, affordability and collection-category status | 250-ms dynamic | Existing shared world collector and worker deriver. MCP only selects/projects requested rows. |
 | Feature health fields: feature name/state/reason; service name/runner phase/fault; emergency state; scene; native-contract health | Request-time | One requested `suite_health` operation reads `FeatureStatusRegistry` and the ServiceCycle frame facts already owned by the pump, then renders grouped compact text because it exposes no reusable handle. Scene and native-contract facts are read only because this operation declares them. No MCP registry/revision exists. |
 | Trace health fields: writer state/result, accepted/written/discarded records, bytes, written/retained segments, pending/peak blocks, artifact, fault site/message, writer revision | Request-time | One `trace_health` operation reads `DecisionJournalStatusRegistry` and renders compact text; scope is writer health only. No event stream or gameplay trace is mirrored. |
-| Tooltip catalog paths; compact typed `TooltipNode` kind/text/children; semantic alternate-tree deltas; nested/computed/inspected panels | Request-time | `game_tooltips`/`game_tooltip` only, through lifecycle-bound tooltip accessors on Unity. Rich-text and projection ceremony are removed after the one requested read; unrelated operations make zero tooltip calls. |
+| Tooltip catalog paths and plain screen text, including nested/computed/inspected panels | Request-time | `game_tooltips`/`game_tooltip` only, through lifecycle-bound tooltip accessors on Unity. Paths are explicitly volatile screen-state handles. Rich-text and node-tree ceremony are removed after the one requested read; unrelated operations make zero tooltip calls. |
 | Screen tab/subtab catalog, independent subtab-strip active states, navigation destination/candidates, exact probe value, Continue scene/runtime result, framebuffer PNG and optional generated save path | Request-time | Only the matching screen/navigation/probe/continue/screenshot operation. These are UI/diagnostic facts, never shared-world state. |
-| Response status, one read generation, requested rows or mutation post-state, stable mutation code, and exact failure reason | Request-time | Typed terminal document on Unity; encoded once by the waiting HTTP worker. Reads name the immutable world that answered; action results carry no generation. Success omits reasons, payment stanzas, counters, null/default fields, timestamps, and mailbox fields. Failure adds only the facts that explain its reason; explicitly written empty decision collections remain present. |
+| Response status, requested rows or mutation delta, and exact failure reason | Request-time | Typed terminal document on Unity; encoded once by the waiting HTTP worker. The frame pins one immutable world without exposing its generation. Success omits restating codes, reasons, payment stanzas, counters, null/default fields, timestamps, and mailbox fields. Failure adds a stable code and only the facts that explain its reason. |
 
 ### Why authored collection is no longer ordinary work
 
@@ -191,12 +191,12 @@ configured on. UUID category and expected native type come from the one
 
 ## Minimal terminal protocol
 
-Reads use `available`/`unavailable`, one `worldGeneration`, and the requested rows. Mutations use
-`committed`/`refused`/`faulted` plus a stable `code`. Success returns only the newer settled
-post-state. Failure adds one actionable `reason` and only the identity or outcome fact that made
-that reason true; it does not assemble a general-purpose receipt. Action results never expose a
-world generation. The exceptional case where a committed outcome cannot be observed in a newer
-publication within one second retains `committed` plus only
+Reads use `available`/`unavailable` and the requested rows from one pinned world. Mutations use
+`committed`/`refused`/`faulted`; success returns only the settled delta and omits a code that would
+merely repeat `committed`. Failure adds one stable `code`, one actionable `reason`, and only the
+identity or outcome fact that made that reason true; it does not assemble a general-purpose
+receipt. No result exposes a world generation. The exceptional case where a committed outcome
+cannot be observed in a world captured after the action within one second retains `committed` plus only
 `postStateUnavailable / post_state_timeout`; it never substitutes the older world. `content` is
 reserved for text-first tools and actual image media; structured data appears once in
 `structuredContent`. Committed, refused, and faulted GameAction results are all successful MCP tool
@@ -229,7 +229,7 @@ The replacement removed, rather than deprecated, the following old mechanisms:
 | `ObserveEmergencyStop` command-bus admission and general priority scheduling | Emergency stop executes at submission position and synchronously closes later admission. |
 | `RefreshForGameMcp`, `allowManualMcpActions` | One exact per-operation family scope. |
 | Router `ReadLatest()`/shadow fast paths and state parse-back | Every stateful tool submits one typed operation. |
-| `submittedAtUtc`, `processedAtUtc`, `respondedAtUtc`, `collectedAtUtc`, `structuralEpoch`, `collectedEpoch`, queue/capacity response fields | One read generation or a settled mutation post-state plus one exact failure reason. |
+| `worldGeneration`, `configurationGeneration`, `submittedAtUtc`, `processedAtUtc`, `respondedAtUtc`, `collectedAtUtc`, `structuralEpoch`, `collectedEpoch`, queue/capacity response fields | One pinned read context or a settled mutation delta plus one exact failure reason. |
 
 ## Hard boundary
 

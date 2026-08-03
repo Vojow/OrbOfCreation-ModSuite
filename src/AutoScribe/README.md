@@ -57,9 +57,9 @@ until lifecycle replacement. Nothing attempts rollback of game-owned irreversibl
 The same `AutoScribeOneShotCraftGameAction` also owns the manual one-shot player capability exposed
 as `game_craft`. Its player overload leaves the Auto Scribe planner and mutation boundary unchanged, but
 widens exact live revalidation to every concrete `CraftingRecipeSO`: native direct `Execute`, or the
-authored page's stack/new/instant queue route. MCP success returns the newer named recipe decision
-with next costs, holdings, affordability, and queue state; payment accounting is not a player-action
-success gate. The installed mechanism and live checklist are documented in
+authored page's stack/new/instant queue route. MCP success returns the named recipe plus the
+smallest observable delta: queue length before and after, or direct completion. Payment accounting
+is not a player-action success gate. The installed mechanism and live checklist are documented in
 [native action surfaces](../../docs/reverse-engineering/native-action-surfaces.md).
 
 Configuration is additive:

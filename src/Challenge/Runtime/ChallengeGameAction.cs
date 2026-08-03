@@ -204,13 +204,12 @@ internal sealed class ChallengeGameAction : IDisposable
             ? native.State(target!) == 1
             : before.TargetState == 1 && native.State(target!) == 0,
         ChallengeActionKind.Abandon => native.State(target!) == 4,
-        ChallengeActionKind.FetchTime => HasOffers(native, context.TimeOffers),
-        ChallengeActionKind.FetchPrestige => HasOffers(native, context.PrestigeOffers),
+        ChallengeActionKind.FetchTime or ChallengeActionKind.FetchPrestige =>
+            before.ChallengesFetched
+                ? native.AsInt(context.RerollsLeft) < before.RerollsLeft
+                : native.GetBool(context.Fetched),
         _ => false,
     };
-
-    private static bool HasOffers(ChallengeNativeBindings native, object list) =>
-        native.Values(list) is { Count: > 0 };
 
     private static bool OutcomeLandedBestEffort(ChallengeActionKind kind,
         ChallengeNativeBindings native, in NativeContext context, object? target,

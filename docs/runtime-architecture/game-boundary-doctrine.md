@@ -220,9 +220,9 @@ The format is the simplest one that carries the signal. Compact text is the defa
 agent reads it faster than structured data; JSON is for responses whose handles feed the next
 call. One vocabulary, one spelling, one numeric rendering per concept, whatever the media.
 
-Read tools carry one `worldGeneration` naming the immutable publication that answered. Action
-schemas and results carry none: the GameAction revalidates live, and a committed response's
-post-state names the newer settled world it came from.
+Every read operation pins one immutable publication for its whole answer, but the wire does not
+expose its internal generation counter. Action schemas and results likewise carry no generation:
+the GameAction revalidates live, and settlement accepts only a world captured after the action.
 
 ## The UI defines the verb surface
 
@@ -264,11 +264,10 @@ lifecycle quarantine; the next request revalidates live again. This does not rel
 policy, and MCP capability registration does not depend on whether the owning automation is enabled.
 
 All committed gameplay actions pass through one post-state settlement path. It waits up to one
-second for a shared world publication strictly newer than the world used for mutation admission,
-then delegates to one command-to-world projector. The successful response stamps that observed
-`worldGeneration` and returns the complete next-decision state. If no newer publication arrives, the
-response stays `committed` and emits one exceptional `postStateUnavailable` fact with
-`reasonCode=post_state_timeout` — it never labels an older world as committed state and never adds a
-ceremonial lag explanation. Navigation uses the same one-second freshness rule for the arrived UI
-state. Domain-specific readiness may strengthen the shared predicate only when the requested outcome
-is event-driven, as discovery offers are.
+second for a shared world captured after the action completed, then delegates to one
+command-to-world delta projector. The successful response returns only what changed. If no such
+publication arrives, the response stays `committed` and emits one exceptional
+`postStateUnavailable` fact with `reasonCode=post_state_timeout`; it never labels an older world as
+committed state and never adds a ceremonial lag explanation. Domain-specific readiness may
+strengthen the shared predicate only when the requested outcome itself requires it, as the casting
+dials and discovery events do.

@@ -15,6 +15,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         SpellRecipeSO.All.Clear();
         IdScriptableObject.RuntimeLookup.Clear();
         SpellManager.instance = new SpellManager();
+        GlyphSO.CreationCostOverride = null;
     }
 
     [Fact]
@@ -87,13 +88,14 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         var paymentResource = new ResourceSO { quantity = new BigDouble(10) };
         var createCost = new ResourceCostList();
         createCost.costs.Add(new ResourceTuple(paymentResource, new BigDouble(2)));
-        SpellManager.instance!.CreateCostOverride = createCost;
+        GlyphSO.CreationCostOverride = createCost;
         var augment = new GlyphSO
         {
             DisplayName = "Bright",
             NativeAvailable = true,
             augmentsSpells = true,
             maxUsages = new ValueModifierRecord(new BigDouble(2)),
+            level = 1,
         };
         IdScriptableObject.RuntimeLookup[augment.GetGuid()] = augment;
         var stagedAugment = Augment();
@@ -141,12 +143,15 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     [Fact]
     public void LoadoutAddRefusesUnmetGlyphAndRecipeRequirementsBeforePayment()
     {
-        var (recipe, _, _) = Recipe(discovered: true);
+        var (recipe, stagedCore, _) = Recipe(discovered: true);
         recipe.NativeUsageRequirementsMet = false;
         var augment = Augment();
         augment.requiresDuration = true;
         var payment = new ResourceCostList();
-        SpellManager.instance!.CreateCostOverride = payment;
+        GlyphSO.CreationCostOverride = payment;
+        var stagedAugment = Augment();
+        SpellManager.instance!.selectedCoreGlyphs.value.Add(stagedCore);
+        SpellManager.instance.selectedAugmentGlyphs.value.Add(stagedAugment);
         using var action = Action();
 
         var glyphResult = action.Submit(new SpellWorkbenchAction(
@@ -164,6 +169,8 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         Assert.Equal(SpellWorkbenchPreflight.UsageRequirementsUnavailable, recipeResult.Preflight);
         Assert.Equal(0, payment.PerformCalls);
         Assert.Empty(SpellManager.instance.activeSpells.value);
+        Assert.Equal(new[] { stagedCore }, SpellManager.instance.selectedCoreGlyphs.value);
+        Assert.Equal(new[] { stagedAugment }, SpellManager.instance.selectedAugmentGlyphs.value);
     }
 
     [Fact]
@@ -173,7 +180,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         var usageResource = new ResourceSO { quantity = BigDouble.Zero };
         recipe.baseUsageCost.costs.Add(new ResourceTuple(usageResource, BigDouble.One));
         var payment = new ResourceCostList();
-        SpellManager.instance!.CreateCostOverride = payment;
+        GlyphSO.CreationCostOverride = payment;
         using var action = Action();
 
         var budget = action.Submit(new SpellWorkbenchAction(
@@ -194,10 +201,13 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     [Fact]
     public void LoadoutAddFaultsWhenPaymentRunsWithoutTheExactRequestedOutcome()
     {
-        var (recipe, _, _) = Recipe(discovered: true);
+        var (recipe, stagedCore, _) = Recipe(discovered: true);
         var payment = new ResourceCostList();
-        SpellManager.instance!.CreateCostOverride = payment;
+        GlyphSO.CreationCostOverride = payment;
         SpellManager.instance.SuppressCreation = true;
+        var stagedAugment = Augment();
+        SpellManager.instance.selectedCoreGlyphs.value.Add(stagedCore);
+        SpellManager.instance.selectedAugmentGlyphs.value.Add(stagedAugment);
         using var action = Action();
 
         var result = action.Submit(new SpellWorkbenchAction(
@@ -207,6 +217,8 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         Assert.Equal(SpellWorkbenchPreflight.VerificationFailed, result.Preflight);
         Assert.Equal(1, payment.PerformCalls);
         Assert.Empty(SpellManager.instance.activeSpells.value);
+        Assert.Equal(new[] { stagedCore }, SpellManager.instance.selectedCoreGlyphs.value);
+        Assert.Equal(new[] { stagedAugment }, SpellManager.instance.selectedAugmentGlyphs.value);
     }
 
     [Fact]
@@ -221,6 +233,33 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
             CoreLayout(first, second), Array.Empty<SpellWorkbenchGlyphStack>()));
 
         Assert.True(result.Verified);
+    }
+
+    [Fact]
+    public void LoadoutAddUsesTheResolvedRecipePipelineAndRejectsUnownedAugments()
+    {
+        var (recipe, _, _) = Recipe(discovered: true);
+        var owned = Augment();
+        var unowned = Augment();
+        unowned.level = 0;
+        SpellManager.instance!.SuppressSelectionResolution = true;
+        using var action = Action();
+
+        var refused = action.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout,
+            recipe.GetGuid(), Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(),
+            new[] { new SpellWorkbenchGlyphStack(unowned.GetGuid(), 1) }));
+        var committed = action.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout,
+            recipe.GetGuid(), Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(),
+            new[] { new SpellWorkbenchGlyphStack(owned.GetGuid(), 1) }));
+
+        Assert.Equal(SpellWorkbenchPreflight.SelectionUnavailable, refused.Preflight);
+        Assert.Contains("not owned", refused.Reason);
+        Assert.True(committed.Verified, committed.Reason);
+        Assert.Single(SpellManager.instance.activeSpells.value);
     }
 
     [Theory]
@@ -327,6 +366,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
             NativeAvailable = true,
             augmentsSpells = true,
             maxUsages = new ValueModifierRecord(new BigDouble(maximum)),
+            level = 1,
         };
         IdScriptableObject.RuntimeLookup[augment.GetGuid()] = augment;
         return augment;
@@ -352,6 +392,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     {
         SpellRecipeSO.All.Clear();
         IdScriptableObject.RuntimeLookup.Clear();
+        GlyphSO.CreationCostOverride = null;
         SpellManager.instance = null;
     }
 }

@@ -411,9 +411,9 @@ internal static class GameMcpActionResultCodeNames
         if (code == SpellLevelActionResultCodes.ProgressionLocked)
             return "native spell-level progression is not unlocked";
         if (code == SpellLevelActionResultCodes.LevelNotAffordable)
-            return "the live spell-level cost is not affordable";
+            return "This spell has no ready mastery level whose cost you can afford.";
         if (code == AutoHarvestActionResultCodes.PairContractUnavailable)
-            return "the published plot/action pair contract is unavailable";
+            return "The current plot and harvest action cannot be matched safely.";
         if (code == AutoHarvestActionResultCodes.FeatureContractUnavailable)
             return "the native harvest feature contract is unavailable";
         if (code == AutoHarvestActionResultCodes.PairFaulted)

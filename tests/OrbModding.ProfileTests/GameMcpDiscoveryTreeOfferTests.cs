@@ -56,7 +56,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                 ["arguments"] = new JObject
                 {
                     ["mode"] = "offer_select",
-                    ["treeUuid"] = Guid.NewGuid().ToString("D"),
+                    ["uuid"] = Guid.NewGuid().ToString("D"),
                 },
             }));
 
@@ -223,12 +223,12 @@ public sealed class GameMcpDiscoveryTreeOfferTests
             },
             Guid.NewGuid(), Guid.NewGuid(), 9, 17, true, 2, 8, true, true, false));
 
-        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.ListRows(
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 82),
             "discovery-trees",
-            0,
-            10));
-        var row = Assert.Single(response["rows"]!).Value<JObject>()!;
+            treeId.ToString("D"),
+            "DiscoveryTreeSO"));
+        var row = (JObject)response["row"]!;
 
         Assert.Equal("Glyph Discoveries", (string?)row["name"]);
         Assert.Equal(treeId.ToString("D"), (string?)row["uuid"]);
@@ -268,7 +268,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
             (string?)unaffordable["row"]!["initiate"]!["reasonCode"]);
         Assert.Equal("1.1e24",
             (string?)unaffordable["row"]!["initiate"]!["costs"]![0]!["cost"]);
-        Assert.Equal("1e2",
+        Assert.Equal("100",
             (string?)unaffordable["row"]!["initiate"]!["costs"]![0]!["amount"]);
     }
 
@@ -582,7 +582,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                     response.ToString(Newtonsoft.Json.Formatting.None));
             }
             Assert.Equal(
-                new[] { 573, 748, 490 },
+                new[] { 573, 662, 441 },
                 new[]
                 {
                     CommittedBytes(rerollResponse),
@@ -672,11 +672,11 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         Assert.Equal(new[]
             {
                 "status", "uuid", "name", "internalName", "category", "nativeType",
-                "code", "mode", "rerollsLeft", "discoveredCount", "hasRemainingDiscoveries",
+                "mode", "rerollsLeft", "discoveredCount", "hasRemainingDiscoveries",
                 "initiate",
             },
             projected.Properties().Select(property => property.Name));
-        Assert.Equal("committed", (string?)projected["code"]);
+        Assert.Null(projected["code"]);
         Assert.Equal("idle", (string?)projected["mode"]);
         Assert.Equal(5, (int)projected["discoveredCount"]!);
         Assert.True((bool)projected["initiate"]!["available"]!);
@@ -745,11 +745,11 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         Assert.Equal(new[]
             {
                 "status", "uuid", "name", "internalName", "category", "nativeType",
-                "code", "mode", "rerollsLeft", "discoveredCount", "hasRemainingDiscoveries",
+                "mode", "rerollsLeft", "discoveredCount", "hasRemainingDiscoveries",
                 "offers", "rerollAvailable",
             },
             projected.Properties().Select(property => property.Name));
-        Assert.Equal("committed", (string?)projected["code"]);
+        Assert.Null(projected["code"]);
         Assert.Equal("choice", (string?)projected["mode"]);
         Assert.Equal(
             new[] { "Weak", "Magnified" },
@@ -838,9 +838,9 @@ public sealed class GameMcpDiscoveryTreeOfferTests
 
             Assert.Equal("committed", result.Status);
             Assert.Equal(1, tree.initiateCalls);
-            Assert.Equal(new[] { "status", "code" },
+            Assert.Equal(new[] { "status" },
                 projected.Properties().Select(property => property.Name));
-            Assert.Equal("committed", (string?)projected["code"]);
+            Assert.Null(projected["code"]);
             Assert.Null(projected["nativeCallsAttempted"]);
         }
         finally

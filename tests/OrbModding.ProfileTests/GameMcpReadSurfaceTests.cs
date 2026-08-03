@@ -147,7 +147,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
                     ["arguments"] = new JObject
                     {
                         ["mode"] = "offer_initiate",
-                        ["treeUuid"] = tree.ToString("D"),
+                        ["uuid"] = tree.ToString("D"),
                     },
                 }));
         request.Headers.Add(
@@ -492,7 +492,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
 
         Assert.Equal("available", (string?)result["status"]);
         Assert.Equal(0, (int)result["total"]!);
-        Assert.Equal(0, (int)result["returned"]!);
+        Assert.Null(result["returned"]);
         Assert.Empty(result["matches"]!);
         Assert.Null(result["query"]);
         Assert.Null(result["limit"]);
@@ -507,8 +507,8 @@ public sealed class GameMcpStreamableHttpProtocolTests
             "a",
             1).Freeze());
 
-        Assert.True((int)result["total"]! > (int)result["returned"]!);
-        Assert.Equal(1, (int)result["returned"]!);
+        Assert.True((int)result["total"]! > result["matches"]!.Count());
+        Assert.Null(result["returned"]);
         Assert.Equal(1, (int)result["nextOffset"]!);
         Assert.Null(result["hasMore"]);
         Assert.Null(result["truncated"]);
@@ -786,26 +786,14 @@ public sealed class GameMcpWorldEnvelopeTests
             Snapshot(publisher.ReadLatest()), "purchase-costs", 0, 10));
 
         Assert.Equal("available", (string?)result["status"]);
-        Assert.Equal((ulong)912, (ulong)result["worldGeneration"]!);
+        Assert.Null(result["worldGeneration"]);
         var row = Assert.Single(result["rows"]!.Values<JObject>())!;
-        Assert.Equal(entityId.ToString("D"), (string?)row["target"]!["uuid"]);
+        Assert.Equal(entityId.ToString("D"), (string?)row["uuid"]);
         Assert.Equal(resourceId.ToString("D"), (string?)row["resource"]!["uuid"]);
-        Assert.Equal("1e2", (string?)row["baseCost"]);
-        Assert.Equal("2.5e2", (string?)row["effectiveCost"]);
-        Assert.Equal("2.5e2", (string?)row["totalCost"]);
-        Assert.Equal("3e2", (string?)row["amount"]);
-        Assert.True((bool)row["resourceAffordable"]!);
-        Assert.True((bool)row["purchaseAffordable"]!);
-        Assert.Null(row["affordabilityEvaluated"]);
-        Assert.Null(row["affordabilityReasonCode"]);
-        var source = Assert.Single(row["costModifiers"]!.Values<JObject>())!;
-        Assert.Equal(sourceId.ToString("D"), (string?)source["source"]!["uuid"]);
-        Assert.Equal(
-            "modifier scaled by cost scaling and committed quantity",
-            (string?)source["effect"]);
-        Assert.Equal("1.25e0", (string?)source["value"]);
-        Assert.Null(source["hasModifierType"]);
-        Assert.Null(source["modifierType"]);
+        Assert.Equal("100", (string?)row["baseExactAmount"]);
+        Assert.Equal("250", (string?)row["effectiveExactAmount"]);
+        Assert.Null(row["amount"]);
+        Assert.Null(row["costModifiers"]);
     }
 
     [Fact]
@@ -867,13 +855,13 @@ public sealed class GameMcpWorldEnvelopeTests
             operation => GameMcpTestHarness.ExecuteRead(operation, pinned));
         var result = (JObject)response.Body!["result"]!["structuredContent"]!;
 
-        Assert.Equal((ulong)909, (ulong)result["worldGeneration"]!);
+        Assert.Null(result["worldGeneration"]);
         Assert.Null(result["requested"]);
         Assert.Null(result["found"]);
         var rows = result["results"]!.OfType<JObject>().ToArray();
         Assert.All(rows, row => Assert.Null(row["inputIndex"]));
         Assert.Null(rows[0]["uuid"]);
-        Assert.Equal("available", (string?)rows[0]["status"]);
+        Assert.Null(rows[0]["status"]);
         Assert.False((bool)rows[0]["row"]!["value"]!);
         Assert.Equal("unknown_uuid", (string?)rows[1]["reasonCode"]);
         Assert.Equal(missingId.ToString("D"), (string?)rows[1]["uuid"]);
@@ -913,7 +901,7 @@ public sealed class GameMcpWorldEnvelopeTests
 
         var categories = GameMcpTestHarness.Json(GameMcpWorldQuery.ListCategories(state));
         Assert.Equal("available", (string?)categories["status"]);
-        Assert.Equal((ulong)901, (ulong)categories["worldGeneration"]!);
+        Assert.Null(categories["worldGeneration"]);
         Assert.Null(categories["lifecycleGeneration"]);
         Assert.Null(categories["structuralEpoch"]);
         Assert.Null(categories["collectedEpoch"]);
@@ -1145,7 +1133,7 @@ public sealed class GameMcpWorldEnvelopeTests
         Assert.Null(batch["found"]);
         Assert.Null(batch["incomplete"]);
         var batchRows = batch["results"]!.OfType<JObject>().ToArray();
-        Assert.Equal("available", (string?)batchRows[0]["status"]);
+        Assert.Null(batchRows[0]["status"]);
         Assert.Equal("unavailable", (string?)batchRows[1]["status"]);
         Assert.Equal("entity_data_incomplete", (string?)batchRows[1]["reasonCode"]);
         Assert.Single(batchRows[1]["implicatedSkippedRows"]!.Values<JObject>());
@@ -1226,7 +1214,7 @@ public sealed class GameMcpWorldEnvelopeTests
             10));
         Assert.Equal("available", (string?)search["status"]);
         Assert.Equal(0, (int)search["total"]!);
-        Assert.Equal(0, (int)search["returned"]!);
+        Assert.Null(search["returned"]);
         Assert.Empty(search["matches"]!);
         Assert.Null(search["partialMatches"]);
         Assert.Null(search["implicatedSkippedRows"]);
@@ -1513,7 +1501,7 @@ public sealed class GameMcpWorldEnvelopeTests
         Assert.Equal(challengeId.ToString("D"), (string?)projected["source"]!["uuid"]);
         Assert.Equal("Improved Scribing", (string?)projected["source"]!["name"]);
         Assert.Equal("ChallengeSO", (string?)projected["sourceNativeType"]);
-        Assert.Equal("-5e0", (string?)projected["amount"]);
+        Assert.Equal("-5", (string?)projected["amount"]);
         Assert.True((bool)projected["passive"]!);
     }
 
@@ -1595,7 +1583,7 @@ public sealed class GameMcpWorldEnvelopeTests
             "CraftingRecipeSO"));
 
         Assert.Equal("available", (string?)result["status"]);
-        Assert.Equal((ulong)911, (ulong)result["worldGeneration"]!);
+        Assert.Null(result["worldGeneration"]);
         var row = (JObject)result["row"]!;
         Assert.Equal(recipeId.ToString("D"), (string?)row["uuid"]);
         Assert.False((bool)row["visible"]!);
@@ -1613,15 +1601,15 @@ public sealed class GameMcpWorldEnvelopeTests
         var input = Assert.Single(row["inputs"]!.Values<JObject>())!;
         Assert.Equal(resourceId.ToString("D"), (string?)input["resource"]!["uuid"]);
         Assert.True((bool)input["bandwidth"]!);
-        Assert.Equal("3e0", (string?)input["cost"]);
-        Assert.Equal("2e1", (string?)input["amount"]);
-        Assert.Equal("1e2", (string?)input["capacity"]);
+        Assert.Equal("3", (string?)input["cost"]);
+        Assert.Equal("20", (string?)input["amount"]);
+        Assert.Equal("100", (string?)input["capacity"]);
         Assert.True((bool)input["affordable"]!);
         var output = Assert.Single(row["consumableOutputs"]!.Values<JObject>())!;
         Assert.Equal(consumableId.ToString("D"), (string?)output["uuid"]);
         var drain = Assert.Single(row["drainBlockers"]!.Values<JObject>())!;
         Assert.Equal("engagement_drain_limited", (string?)drain["reasonCode"]);
-        Assert.Equal("7.5e-1", (string?)drain["availableRatio"]);
+        Assert.Equal("0.75", (string?)drain["availableRatio"]);
 
         var incompleteWorld = new GameWorldState
         {

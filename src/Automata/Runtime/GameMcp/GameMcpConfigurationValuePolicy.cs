@@ -78,10 +78,13 @@ internal static class GameMcpConfigurationValuePolicy
         var acceptable = entry.Description.AcceptableValues;
         if (acceptable is not null && !acceptable.IsValid(parsed!))
         {
+            var domain = acceptable.ToDescriptionString().Trim();
+            const string marker = "# Acceptable value range:";
+            if (domain.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+                domain = domain.Substring(marker.Length).Trim();
             reason =
                 entry.Definition.Section + "/" + entry.Definition.Key +
-                " is outside its declared domain: " +
-                acceptable.ToDescriptionString();
+                " must be " + domain;
             return false;
         }
         reason = string.Empty;

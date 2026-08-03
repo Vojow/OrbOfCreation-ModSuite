@@ -18,7 +18,7 @@ public sealed class SpellWorkbenchContractTests
         Assert.Equal(0x040007DF, assembly.GetFieldToken("Spell", "guidContainer"));
         Assert.Equal(0x04000A6F, assembly.GetFieldToken("AbstractListVariable`1", "value"));
 
-        Assert.Equal(0x0600073F, assembly.GetMethodToken("SpellManager", "CreateSpell"));
+        Assert.Equal(0x06000740, assembly.GetMethodToken("SpellManager", "CreateRecipe"));
         Assert.Equal(0x06000741, assembly.GetMethodToken("SpellManager", "DiscoverSpell"));
         Assert.Equal(0x06000747, assembly.GetMethodToken("SpellManager", "GetSpellFromRecipe"));
         Assert.Equal(0x0600074A, assembly.GetMethodToken("SpellManager", "GetSpellCreateCost"));
@@ -32,6 +32,7 @@ public sealed class SpellWorkbenchContractTests
         Assert.Equal(0x06001451, assembly.GetMethodToken("SpellRecipeSO", "CanDiscover"));
         Assert.Equal(0x06000BB6, assembly.GetMethodToken("GlyphSO", "IsAvailable"));
         Assert.Equal(0x06000BB8, assembly.GetMethodToken("GlyphSO", "IsSpellAugment"));
+        Assert.Equal(0x06000C05, assembly.GetMethodToken("GlyphSO", "GetCreationCostOfList"));
         Assert.Equal(0x06001569, assembly.GetMethodToken("GenericListVariable`1", "Empty"));
         Assert.Equal(0x06001563, assembly.GetMethodToken("GenericListVariable`1", "Add"));
         Assert.Equal(0x0600155C, assembly.GetMethodToken("EmptyTypeListVariable`1", "HasEmptySpot"));

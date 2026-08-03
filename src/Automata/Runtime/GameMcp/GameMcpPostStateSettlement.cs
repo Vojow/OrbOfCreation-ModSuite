@@ -9,9 +9,13 @@ internal static class GameMcpPostStateSettlement
     internal static bool IsStrictlyNewer(ulong candidate, ulong mutationWorld) =>
         candidate > mutationWorld;
 
-    internal static bool HasFreshWorld(GameMcpFrameContext? state, ulong mutationWorld) =>
+    internal static bool HasSettledWorld(
+        GameMcpFrameContext? state,
+        ulong mutationWorld,
+        long actionCompletedAtUtcTicks) =>
         state?.World is not null &&
-        IsStrictlyNewer(state.World.Generation.Value, mutationWorld);
+        IsStrictlyNewer(state.World.Generation.Value, mutationWorld) &&
+        state.World.Snapshot.CollectedAtUtcTicks > actionCompletedAtUtcTicks;
 
     /// <summary>
     /// The single settlement predicate used by mutation response dispatch. Most actions settle
@@ -21,8 +25,10 @@ internal static class GameMcpPostStateSettlement
     internal static bool IsReady(
         GameMcpFrameContext? state,
         ulong mutationWorld,
+        long actionCompletedAtUtcTicks,
         GameMcpCommand command) =>
-        HasFreshWorld(state, mutationWorld) &&
+        HasSettledWorld(state, mutationWorld, actionCompletedAtUtcTicks) &&
+        HasRequestedOutcome(state!, command) &&
         (command.Kind != GameMcpCommandKind.DiscoveryTreeOffer ||
          GameMcpWorldQuery.HasDiscoveryPostState(
              state!,
@@ -30,9 +36,38 @@ internal static class GameMcpPostStateSettlement
              command.Mode,
              command.SecondaryId));
 
-    internal static GameMcpValue TimedOut() =>
-        GameMcpWorldQuery.PostStateUnavailable(
+    private static bool HasRequestedOutcome(
+        GameMcpFrameContext state,
+        GameMcpCommand command)
+    {
+        if (command.Kind != GameMcpCommandKind.SpellComposition) return true;
+        var workbench = state.World!.Snapshot.SpellWorkbench;
+        return command.Mode switch
+        {
+            "set_output_level" => workbench.OutputLevel == command.Amount,
+            "set_reserve_level" => workbench.ReserveLevel == command.Amount,
+            _ => false,
+        };
+    }
+
+    internal static GameMcpValue TimedOut(
+        GameMcpCommand command,
+        GameMcpFrameContext? latest)
+    {
+        if (command.Kind == GameMcpCommandKind.SpellComposition && latest?.World is not null)
+        {
+            var workbench = latest.World.Snapshot.SpellWorkbench;
+            var observed = command.Mode == "set_output_level"
+                ? workbench.OutputLevel
+                : workbench.ReserveLevel;
+            return GameMcpWorldQuery.PostStateUnavailable(
+                "requested_state_not_reached",
+                "the settled " + command.PayloadKey + " dial is " + observed +
+                ", not the requested " + command.Amount);
+        }
+        return GameMcpWorldQuery.PostStateUnavailable(
             "post_state_timeout",
-            "no strictly newer published world exposed the committed post-state within one second");
+            "no world captured after the action exposed its committed post-state within one second");
+    }
 }
 #endif

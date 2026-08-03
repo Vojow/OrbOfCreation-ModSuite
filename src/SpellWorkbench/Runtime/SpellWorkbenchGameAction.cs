@@ -124,10 +124,10 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 "The resolved spell recipe is already discovered.");
         if (!native.CanDiscover(recipe))
             return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.DiscoveryUnavailable,
-                "SpellRecipeSO.CanDiscover() refused the resolved recipe.");
+                "The resolved spell cannot be discovered right now.");
         if (!native.IsCreatable(recipe))
             return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.RecipeUnavailable,
-                "SpellRecipeSO.IsCreatable() refused the resolved recipe.");
+                "The resolved spell is not currently craftable.");
         var nativeComponents = NativeGlyphList(native, components);
         var resolved = native.ResolveRecipe(manager, nativeComponents);
         if (resolved is null || resolved.GetType() != native.RecipeType ||
@@ -139,7 +139,7 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         if (!native.HasEnough(resolvedCost))
             return SpellWorkbenchSubmission.Reject(
                 SpellWorkbenchPreflight.Unaffordable,
-                "GetDiscoverCost().HasEnough() refused the resolved recipe.");
+                "The resolved spell's discovery cost is not affordable.");
 
         if (!TryCapturePermit(out var permitReason))
             return SpellWorkbenchSubmission.Reject(
@@ -270,7 +270,7 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             native.PerformCost(createCost!);
             nativeCalls++;
             stage = SpellWorkbenchNativeStage.Create;
-            native.Create(manager);
+            native.Create(manager, recipe);
             nativeCalls++;
             var restored = RestoreSelection(
                 native, manager, previousCore, previousAugments, ref nativeCalls);
@@ -351,15 +351,7 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 out refusal, out reason);
         if (!native.IsCreatable(recipe))
             return Refuse(SpellWorkbenchPreflight.RecipeUnavailable,
-                "SpellRecipeSO.IsCreatable() refused the requested recipe.",
-                out refusal, out reason);
-
-        var nativeCore = NativeGlyphList(native, core);
-        var resolved = native.ResolveRecipe(manager, nativeCore);
-        if (resolved is null || resolved.GetType() != native.RecipeType ||
-            native.ReadIdentity(resolved) != native.ReadIdentity(recipe))
-            return Refuse(SpellWorkbenchPreflight.WrongSelection,
-                "The authored core layout no longer resolves to the requested recipe.",
+                "The requested spell is not currently craftable.",
                 out refusal, out reason);
 
         var candidate = native.CreateEmptySpell(recipe, 0);
@@ -394,10 +386,11 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         var combined = new List<object>(core.Count + augments.Count);
         for (var index = 0; index < core.Count; index++) combined.Add(core[index]);
         for (var index = 0; index < augments.Count; index++) combined.Add(augments[index]);
-        createCost = native.GetCreateCost(manager, NativeGlyphList(native, combined));
+        createCost = native.GetCreationCost(
+            native.CreateCostList(), NativeGlyphList(native, combined));
         if (createCost is null || !native.HasEnough(createCost))
             return Refuse(SpellWorkbenchPreflight.Unaffordable,
-                "GetSpellCreateCost().HasEnough() refused the requested layout.",
+                "The requested spell layout's creation cost is not affordable.",
                 out refusal, out reason);
         refusal = SpellWorkbenchPreflight.Proceeded;
         reason = string.Empty;
@@ -497,8 +490,14 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             }
             if (!native.IsGlyphAvailable(glyph))
             {
-                reason = "GlyphSO.IsAvailable() refused " +
-                    EntityIdentityFormatter.Format(glyphId) + ".";
+                reason = EntityIdentityFormatter.Format(glyphId) +
+                    " is not available for this spell layout.";
+                return false;
+            }
+            if (expectAugment && native.ReadGlyphLevel(glyph) <= 0)
+            {
+                reason = EntityIdentityFormatter.Format(glyphId) +
+                    " is not owned; spell augments require an owned level above zero.";
                 return false;
             }
             var maximum = native.GetGlyphMaximumUsages(glyph);

@@ -4977,7 +4977,8 @@
       "static": false,
       "valueType": "System.Int32",
       "owners": [
-        "Automata world collection"
+        "Automata world collection",
+        "Spell workbench action"
       ],
       "usages": [
         "reflection"
@@ -16948,25 +16949,6 @@
       "place": "action"
     },
     {
-      "id": "discovery-tree-offer.item-is-required",
-      "assembly": "assembly-csharp",
-      "type": "IDiscoverable",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "IsDiscoverRequired",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Boolean",
-      "parameters": [],
-      "owners": [
-        "Automata Discovery Tree offer GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
       "id": "discovery-tree-offer.tree-all",
       "assembly": "assembly-csharp",
       "type": "DiscoveryTreeSO",
@@ -16976,24 +16958,6 @@
       "visibility": "public",
       "static": true,
       "valueType": "System.Collections.Generic.List`1<DiscoveryTreeSO>",
-      "owners": [
-        "Automata Discovery Tree offer GameAction"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "action"
-    },
-    {
-      "id": "discovery-tree-offer.tree-mode",
-      "assembly": "assembly-csharp",
-      "type": "DiscoveryTreeSO",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "actionMode",
-      "visibility": "public",
-      "static": false,
-      "valueType": "DiscoveryTreeSO+DiscoveryTreeModes",
       "owners": [
         "Automata Discovery Tree offer GameAction"
       ],
@@ -17399,17 +17363,18 @@
       "place": "capture"
     },
     {
-      "id": "spell-workbench.manager-get-create-cost-action",
+      "id": "spell-workbench.glyph-creation-cost-action",
       "assembly": "assembly-csharp",
-      "type": "SpellManager",
+      "type": "GlyphSO",
       "typeVisibility": "public",
       "kind": "method",
-      "member": "GetSpellCreateCost",
+      "member": "GetCreationCostOfList",
       "visibility": "public",
-      "static": false,
+      "static": true,
       "returnType": "ResourceCostList",
       "parameters": [
-        "System.Collections.Generic.List`1<GlyphSO>"
+        "ResourceCostList",
+        "System.Collections.Generic.IEnumerable`1<GlyphSO>"
       ],
       "owners": [
         "Automata spell workbench GameAction"
@@ -17486,11 +17451,13 @@
       "type": "SpellManager",
       "typeVisibility": "public",
       "kind": "method",
-      "member": "CreateSpell",
+      "member": "CreateRecipe",
       "visibility": "public",
       "static": false,
       "returnType": "System.Void",
-      "parameters": [],
+      "parameters": [
+        "SpellRecipeSO"
+      ],
       "owners": [
         "Automata spell workbench GameAction"
       ],
@@ -19526,21 +19493,6 @@
       "typeVisibility": "public",
       "kind": "method",
       "member": "IsDiscovered",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Boolean",
-      "parameters": [],
-      "owners": ["Automata generic discovery GameAction"],
-      "usages": ["reflection"],
-      "place": "action"
-    },
-    {
-      "id": "generic-discovery.is-required-action",
-      "assembly": "assembly-csharp",
-      "type": "IDiscoverable",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "IsDiscoverRequired",
       "visibility": "public",
       "static": false,
       "returnType": "System.Boolean",

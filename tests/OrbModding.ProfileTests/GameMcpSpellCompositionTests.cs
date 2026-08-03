@@ -19,6 +19,10 @@ public sealed class GameMcpSpellCompositionTests
         Guid.Parse("81894d9f-4e91-43da-9f47-2a97d77a2294");
     private static readonly Guid SecondGlyphId =
         Guid.Parse("0f38b02c-b81a-4fcd-9e07-73e09bd38dee");
+    private static readonly Guid FirstCoreGlyphId =
+        Guid.Parse("1c002d3e-a0f0-4980-b6a8-e0f396a68934");
+    private static readonly Guid SecondCoreGlyphId =
+        Guid.Parse("cd38cfe0-14d9-44be-9621-de4b6874449b");
     private static readonly Guid ResourceId =
         Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
     private static readonly Guid SpellInstanceId =
@@ -100,7 +104,8 @@ public sealed class GameMcpSpellCompositionTests
         var applied = Assert.Single(equipped["glyphs"]!.Values<JObject>())!;
         Assert.Equal("Brew", (string?)applied["glyph"]!["name"]);
         Assert.Equal(2, (int)applied["count"]!);
-        var options = response["augmentOptions"]!.Values<JObject>().ToArray();
+        Assert.Null(response["augmentOptions"]);
+        var options = row["loadoutAdd"]!["augmentOptions"]!.Values<JObject>().ToArray();
         Assert.Equal(new[] { "Insight", "Brew" },
             options.Select(option => (string?)option!["glyph"]!["name"]));
         Assert.Equal(new[] { 2, 3 }, options.Select(option => (int)option!["usableCount"]!));
@@ -112,12 +117,12 @@ public sealed class GameMcpSpellCompositionTests
         Assert.Equal("9e6", (string?)cast["amount"]);
         Assert.True((bool)cast["affordable"]!);
         var drain = Assert.Single(equipped["drainCostsPerSecond"]!.Values<JObject>())!;
-        Assert.Equal("2.5e2", (string?)drain["cost"]);
+        Assert.Equal("250", (string?)drain["cost"]);
         Assert.Equal("9e6", (string?)drain["amount"]);
     }
 
     [Fact]
-    public void CommittedMutationReturnsOnlyTheCompleteNamedPostState()
+    public void CommittedMutationReturnsOnlyTheSettledDialDelta()
     {
         var submission = new SpellCompositionSubmission(
             SpellCompositionPreflight.Proceeded,
@@ -126,7 +131,9 @@ public sealed class GameMcpSpellCompositionTests
             new NativeMutationCallOutcome(1, 1, 1),
             "the global output level is observable");
         var mapped = SpellCompositionActionResultMapper.Map(in submission);
-        var command = Command("set_output_level");
+        var command = Command(
+            "set_output_level",
+            GameMcpTestHarness.Context(World(outputLevel: 4)));
         var terminal = GameMcpCommandResult.FromAction(
             in mapped,
             command.Kind,
@@ -134,28 +141,21 @@ public sealed class GameMcpSpellCompositionTests
             3,
             submission.Reason,
             GameMcpSpellCompositionProjection.Project(in submission));
-        terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectSpellCompositionPostState(
-            GameMcpTestHarness.Context(World()),
-            SpellInstanceId));
+        terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(World(outputLevel: 5)), command, terminal));
 
         var success = GameMcpTestHarness.Json(terminal.Project(command));
 
         Assert.Equal(
-            new[] { "status", "code", "casting", "equipped", "augmentOptions", "moveDestinations" },
+            new[] { "status", "dial", "before", "after", "maximum" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
-        Assert.Equal("committed", (string?)success["code"]);
-        Assert.Equal(3, (int)success["casting"]!["reserve"]!["current"]!);
-        var equipped = Assert.Single(success["equipped"]!.Values<JObject>())!;
-        Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
-        Assert.Equal(2, (int)Assert.Single(
-            equipped["glyphs"]!.Values<JObject>())!["count"]!);
-        Assert.NotNull(success["augmentOptions"]);
-        Assert.NotNull(equipped["castCosts"]);
-        Assert.NotNull(equipped["drainCostsPerSecond"]);
+        Assert.Equal("output", (string?)success["dial"]);
+        Assert.Equal(4, (int)success["before"]!);
+        Assert.Equal(5, (int)success["after"]!);
+        Assert.Equal(12, (int)success["maximum"]!);
+        Assert.Null(success["code"]);
         Assert.Null(success["preflight"]);
-        Assert.Null(success["before"]);
-        Assert.Null(success["after"]);
         Assert.Null(success["receipt"]);
         Assert.DoesNotContain("payment", success.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("attempt", success.ToString(), StringComparison.OrdinalIgnoreCase);
@@ -206,7 +206,9 @@ public sealed class GameMcpSpellCompositionTests
         Assert.False(ownership.TryCaptureSpellCompositionMutationPermit());
     }
 
-    private static GameMcpCommand Command(string mode) => new(
+    private static GameMcpCommand Command(
+        string mode,
+        GameMcpFrameContext? frameContext = null) => new(
         1,
         GameMcpCommandKind.SpellComposition,
         9,
@@ -217,17 +219,18 @@ public sealed class GameMcpSpellCompositionTests
         "IntVariable",
         string.Empty,
         5,
-        string.Empty,
+        mode == "set_output_level" ? "output" : "reserve",
         string.Empty,
         false,
-        false);
+        false,
+        frameContext: frameContext);
 
-    private static GameWorldState World()
+    private static GameWorldState World(int outputLevel = 4)
     {
         var recipeGlyphs = PublicationTable<WorldSpellRecipeGlyph>.Create(new[]
         {
-            new WorldSpellRecipeGlyph(0, FirstGlyphId),
-            new WorldSpellRecipeGlyph(1, SecondGlyphId),
+            new WorldSpellRecipeGlyph(0, FirstCoreGlyphId),
+            new WorldSpellRecipeGlyph(1, SecondCoreGlyphId),
         });
         var applied = PublicationTable<WorldSpellSlotGlyph>.Create(new[]
         {
@@ -275,8 +278,10 @@ public sealed class GameMcpSpellCompositionTests
             Glyphs = PublicationTable<WorldGlyph>.Create(new[]
             {
                 Glyph(SecondGlyphId, 3, 2, 2),
+                CoreGlyph(FirstCoreGlyphId),
                 Glyph(FirstGlyphId, 7, 1, 3),
-            }),
+                CoreGlyph(SecondCoreGlyphId),
+            }.OrderBy(glyph => glyph.EntityId).ToArray()),
             SpellWorkbench = new WorldSpellWorkbench(
                 PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
                 PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
@@ -285,7 +290,7 @@ public sealed class GameMcpSpellCompositionTests
                 1,
                 3,
                 true,
-                4,
+                outputLevel,
                 12,
                 3,
                 9),
@@ -342,6 +347,24 @@ public sealed class GameMcpSpellCompositionTests
         new BigDouble(maximum, 0),
         true,
         maximum);
+
+    private static WorldGlyph CoreGlyph(Guid id) => new(
+        id,
+        1,
+        0,
+        0,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        0,
+        BigDouble.Zero,
+        BigDouble.Zero,
+        BigDouble.One,
+        true,
+        1);
 
     private static WorldResource Resource()
     {

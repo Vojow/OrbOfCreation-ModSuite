@@ -63,7 +63,7 @@ public sealed class GameMcpPrestigeTests
         Assert.Equal(6, (int)prestige["changeFromPrevious"]!);
         Assert.Equal(4, (int)prestige["resetCount"]!);
         Assert.Equal("Persistent Light", (string?)prestige["persistentResource"]!["resource"]!["name"]);
-        Assert.Equal("8e1", (string?)prestige["persistentResource"]!["amount"]);
+        Assert.Equal("80", (string?)prestige["persistentResource"]!["amount"]);
         Assert.Equal("Prismatic Trial", (string?)prestige["survivingChallengeSelections"]![0]!["name"]);
         Assert.Equal("Reward Trial", (string?)prestige["survivingChallengeRewards"]![0]!["name"]);
         Assert.True((bool)prestige["reset"]!["available"]!);

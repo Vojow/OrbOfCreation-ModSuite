@@ -69,7 +69,8 @@ internal sealed partial class AutoItemsConsumableUseGameAction
         if (!native.IsVisible(item))
             return ConsumablePlayerSubmission.Reject(
                 in action, ConsumablePlayerPreflight.NotVisible,
-                "ConsumableSO.IsVisible() refused the exact UUID-resolved item.");
+                EntityIdentityFormatter.Format(action.ConsumableId) +
+                " is not visible or owned right now.");
         if (native.IsTargeting())
             return ConsumablePlayerSubmission.Reject(
                 in action, ConsumablePlayerPreflight.TargetingInProgress,
@@ -77,11 +78,12 @@ internal sealed partial class AutoItemsConsumableUseGameAction
         if (!native.CanUse())
             return ConsumablePlayerSubmission.Reject(
                 in action, ConsumablePlayerPreflight.InventoryBusy,
-                "Inventory.CanUseConsumable() refused while consumable preparation is busy.");
+                "Another consumable is still being prepared.");
         if (!native.CanFire(item))
             return ConsumablePlayerSubmission.Reject(
                 in action, ConsumablePlayerPreflight.CanFireRefused,
-                "ConsumableSO.CanFire() refused the exact UUID-resolved item.");
+                EntityIdentityFormatter.Format(action.ConsumableId) +
+                " cannot be used right now.");
         var beforeQueued = native.GetQueued(item);
         if (!TryPlayerPermit(in action, out var permitFailure)) return permitFailure;
         if (!NativeMultiBuyScope.TryEnterOne(out var multiBuy, out var reason))

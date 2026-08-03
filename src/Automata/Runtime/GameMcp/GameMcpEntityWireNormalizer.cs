@@ -75,7 +75,14 @@ internal static class GameMcpEntityWireNormalizer
             else if (status is "committed" or "refused" or "rejected" or "skipped" or "faulted")
             {
                 if (item["code"] is JValue mutationCode)
-                    item["code"] = Snake((string?)mutationCode ?? string.Empty);
+                {
+                    var normalizedCode = Snake((string?)mutationCode ?? string.Empty);
+                    if (string.Equals(normalizedCode, (string?)item["status"],
+                            StringComparison.Ordinal))
+                        item.Remove("code");
+                    else
+                        item["code"] = normalizedCode;
+                }
             }
             else if (item["code"] is JToken readCode)
             {
@@ -193,7 +200,8 @@ internal static class GameMcpEntityWireNormalizer
         EntityIdentityCatalogSnapshot catalog)
     {
         var result = new JObject { ["uuid"] = uuid.ToString("D") };
-        AddIdentityFields(result, uuid, catalog);
+        var identity = EntityIdentityFormatter.Describe(uuid, catalog);
+        if (identity.HasName) result["name"] = identity.Name;
         return result;
     }
 

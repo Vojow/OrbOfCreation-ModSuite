@@ -10,7 +10,7 @@ namespace OrbModding.ProfileTests;
 public sealed class GameMcpTooltipProjectorTests
 {
     [Fact]
-    public void TypedTreeIncludesNestedComputedAndInspectedContent()
+    public void ProseIncludesNestedComputedAndInspectedScreenText()
     {
         var computations = 0;
         var linked = new FakeTooltip("Linked", new TooltipNode("linked row"));
@@ -43,57 +43,19 @@ public sealed class GameMcpTooltipProjectorTests
             new[] { nested },
             new[] { inspected }));
 
-        Assert.Equal("unity_main_thread", (string?)result["source"]);
-        Assert.Null(result["collectorGap"]);
-        Assert.Null(result["nodeLimit"]);
-        Assert.Null(result["depthLimit"]);
-        Assert.Null(result["tooltip"]?["role"]);
-        var rootRow = Assert.IsType<JObject>(
-            Assert.Single(result["tooltip"]!["nodes"]!.Children()));
-        Assert.Equal("parent", (string?)rootRow["kind"]);
-        Assert.Null(rootRow["parentKind"]);
-        var children = rootRow["children"]!.OfType<JObject>();
-        Assert.Collection(
-            children,
-            authored =>
-            {
-                var row = Assert.IsType<JObject>(authored);
-                Assert.Equal("authored child", (string?)row["text"]);
-                Assert.Null(row["textKind"]);
-                Assert.Null(row["authoredText"]);
-            },
-            live =>
-            {
-                var row = Assert.IsType<JObject>(live);
-                Assert.Equal("live value 42", (string?)row["text"]);
-                Assert.Null(row["computationStatus"]);
-                var reference = (string?)row["linkedTooltip"]?["ref"];
-                Assert.False(string.IsNullOrWhiteSpace(reference));
-                Assert.Equal("Linked", (string?)result["referencedTooltips"]![reference!]!["name"]);
-            });
+        Assert.Single(result.Properties());
+        var text = (string?)result["text"];
+        Assert.NotNull(text);
+        Assert.Contains("Primary\nFixture\nPrimary description", text, StringComparison.Ordinal);
+        Assert.Contains("section\nauthored child\nlive value 42", text, StringComparison.Ordinal);
+        Assert.Contains("Linked\nFixture\nLinked description\nlinked row", text, StringComparison.Ordinal);
+        Assert.Contains("Nested\nFixture\nNested description\nnested row", text, StringComparison.Ordinal);
+        Assert.Contains("Inspected\nFixture\nInspected description\npanel row", text, StringComparison.Ordinal);
         Assert.Equal(1, computations);
-        var nestedRef = (string?)Assert.Single(result["nestedTooltips"]!.Values<JObject>())!["ref"];
-        Assert.Equal("Nested", (string?)result["referencedTooltips"]![nestedRef!]!["name"]);
-        var inspectedRef = (string?)Assert.Single(result["inspectedPanels"]!.Values<JObject>())!["ref"];
-        var inspectedRow = result["referencedTooltips"]![inspectedRef!];
-        Assert.Equal("panel row", (string?)inspectedRow["nodes"]![0]!["text"]);
-        Assert.All(
-            result.DescendantsAndSelf().OfType<JObject>(),
-            row =>
-            {
-                Assert.Null(row["path"]);
-                Assert.Null(row["depth"]);
-                Assert.Null(row["ordinal"]);
-                Assert.Null(row["color"]);
-                Assert.Null(row["textColor"]);
-                Assert.Null(row["hasIcon"]);
-                Assert.Null(row["iconBacked"]);
-                Assert.Null(row["size"]);
-            });
     }
 
     [Fact]
-    public void TooltipCyclesSerializeAsStableReferencesWithoutRecursiveCopies()
+    public void TooltipCyclesStopAfterTheFirstScreenTextCopy()
     {
         var tooltip = new FakeTooltip("Cycle");
         var node = new TooltipNode("cycle") { tooltipable = tooltip };
@@ -102,16 +64,8 @@ public sealed class GameMcpTooltipProjectorTests
         var result = GameMcpTestHarness.Json(
             GameMcpTooltipProjector.Project(tooltip, null, null));
 
-        var cycle = result["tooltip"]!["nodes"]![0]!["linkedTooltip"]!;
-        Assert.Equal("tooltip_1", (string?)cycle["ref"]);
-        Assert.Empty(result["nestedTooltips"]!);
-        Assert.Empty(result["inspectedPanels"]!);
-        Assert.Null(result["referencedTooltips"]);
-        Assert.Null(result["truncation"]);
-        Assert.Null(result["tooltip"]!["altNodes"]);
-        Assert.Empty(result["tooltip"]!["nodes"]![0]!["children"]!);
-        Assert.Empty(result["tooltip"]!["nodes"]![0]!["subTooltips"]!);
-        Assert.Null(result["tooltip"]!["nodes"]![0]!["reason"]);
+        Assert.Equal("Cycle\nFixture\nCycle description\ncycle", (string?)result["text"]);
+        Assert.Single(result.Properties());
     }
 
     [Fact]
@@ -129,10 +83,9 @@ public sealed class GameMcpTooltipProjectorTests
         var result = GameMcpTestHarness.Json(
             GameMcpTooltipProjector.Project(tooltip, null, null));
 
-        Assert.Equal("Essence Resource", (string?)result["tooltip"]!["displayType"]);
-        Assert.Equal("Spendable List<T> supply.", (string?)result["tooltip"]!["description"]);
-        Assert.Equal("Quantity:", (string?)result["tooltip"]!["nodes"]![0]!["text"]);
-        Assert.Null(result["tooltip"]!["altNodes"]);
+        Assert.Equal(
+            "Resource\nEssence Resource\nSpendable List<T> supply.\nQuantity:",
+            (string?)result["text"]);
         Assert.True(result.ToString(Newtonsoft.Json.Formatting.None).Length < 500);
     }
 
@@ -151,10 +104,10 @@ public sealed class GameMcpTooltipProjectorTests
             GameMcpTooltipProjector.Project(tooltip, null, null));
         var encoded = result.ToString(Newtonsoft.Json.Formatting.None);
 
-        Assert.Null(result["tooltip"]!["altNodes"]);
-        Assert.Equal(40, result["tooltip"]!["nodes"]!.Count());
+        Assert.Single(result.Properties());
+        Assert.Equal(1, encoded.Split("Fact 0:", StringSplitOptions.None).Length - 1);
         Assert.DoesNotContain("<emph>", encoded, StringComparison.Ordinal);
-        Assert.True(encoded.Length <= 3_412, "compact tooltip was " + encoded.Length + " characters");
+        Assert.Equal(754, System.Text.Encoding.UTF8.GetByteCount(encoded));
     }
 
     private sealed class FakeTooltip : ITooltipable

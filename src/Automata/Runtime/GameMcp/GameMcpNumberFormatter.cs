@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace OrbAutomata.GameMcp;
 
-/// <summary>Canonical compact wire representation for game-domain large numbers.</summary>
+/// <summary>The game's Scientific display style: plain below 1,000, compact exponent above it.</summary>
 internal static class GameMcpNumberFormatter
 {
     internal static string Format(object value)
@@ -23,6 +23,12 @@ internal static class GameMcpNumberFormatter
         if (mantissa == 0d) return "0";
 
         Normalize(ref mantissa, ref exponent);
+        if (exponent < 3 && exponent >= -1)
+        {
+            var plain = mantissa * Math.Pow(10d, exponent);
+            var roundedPlain = Math.Round(plain, 2, MidpointRounding.AwayFromZero);
+            return roundedPlain.ToString("0.##", CultureInfo.InvariantCulture);
+        }
         return Scientific(mantissa, exponent);
     }
 
@@ -36,7 +42,7 @@ internal static class GameMcpNumberFormatter
             rounded /= 10d;
             checked { exponent++; }
         }
-        if (rounded == 0d) return "0e0";
+        if (rounded == 0d) return "0";
         return rounded.ToString("0.##", CultureInfo.InvariantCulture) +
             "e" + exponent.ToString(CultureInfo.InvariantCulture);
     }

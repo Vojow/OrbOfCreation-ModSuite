@@ -8,7 +8,7 @@ using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 namespace OrbModding.Common.Runtime.World;
 
 /// <summary>One recipe named by the native ConceptRecipes registry.</summary>
-internal readonly struct WorldConceptRecipe
+internal readonly struct WorldConceptRecipe : IWorldEntity
 {
     internal WorldConceptRecipe(Guid recipeId, Guid coreTypeId, bool canAddNow = true)
     {
@@ -18,6 +18,8 @@ internal readonly struct WorldConceptRecipe
     }
 
     internal Guid RecipeId { get; }
+
+    public Guid EntityId => RecipeId;
 
     /// <summary>The native slot family that prevents two incompatible concepts sharing one slot.</summary>
     internal Guid CoreTypeId { get; }

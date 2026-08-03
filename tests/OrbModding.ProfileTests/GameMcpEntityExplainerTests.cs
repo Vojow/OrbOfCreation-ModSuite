@@ -109,7 +109,7 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         var blockedCrafting = GameMcpTestHarness.Json(
             GameMcpEntityExplainer.Explain(pinned, BlockedCraftingId.ToString("D")));
 
-        Assert.Equal((ulong)909, (ulong)readySpell["worldGeneration"]!);
+        Assert.Null(readySpell["worldGeneration"]);
         Assert.Null(readySpell["lifecycleGeneration"]);
         Assert.Equal(3, (int)readySpell["state"]!["masteryLevel"]!);
         Assert.Null(readySpell["predicates"]!["visible"]);
@@ -266,16 +266,14 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         Assert.Equal(2, leaves.Length);
         Assert.Equal(wizardryId.ToString("D"), (string?)leaves[0]["requirement"]!["uuid"]);
         Assert.Equal("total_level", (string?)leaves[0]["selectedValueKind"]);
-        Assert.Equal("5e0", (string?)leaves[0]["current"]);
-        Assert.Equal("5e0", (string?)leaves[0]["required"]);
+        Assert.Equal("5", (string?)leaves[0]["current"]);
+        Assert.Equal("5", (string?)leaves[0]["required"]);
         Assert.True((bool)leaves[0]["met"]!);
         Assert.Equal(expansionId.ToString("D"), (string?)leaves[1]["requirement"]!["uuid"]);
         Assert.Equal("0", (string?)leaves[1]["current"]);
-        Assert.Equal("1.5e1", (string?)leaves[1]["required"]);
+        Assert.Equal("15", (string?)leaves[1]["required"]);
         Assert.False((bool)leaves[1]["met"]!);
-        Assert.Equal(
-            "native_verdict_matched",
-            (string?)requirements["nativeParity"]!["reasonCode"]);
+        Assert.Null(requirements["nativeParity"]);
 
         var predicates = result["predicates"]!;
         Assert.False((bool)predicates["available"]!["value"]!);
@@ -577,18 +575,11 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         var craftingResult = GameMcpTestHarness.Json(
             GameMcpEntityExplainer.Explain(state, ReadyCraftingId.ToString("D")));
 
-        Assert.Equal("matched", (string?)upgradeResult["requirements"]!["nativeParity"]!["status"]);
-        Assert.False((bool)upgradeResult["predicates"]!["canPurchase"]!["evaluated"]!);
-        Assert.Equal(
-            "native_can_purchase_not_published",
+        Assert.Null(upgradeResult["requirements"]!["nativeParity"]);
+        Assert.False((bool)upgradeResult["predicates"]!["canPurchase"]!["value"]!);
+        Assert.Equal("already_maxed",
             (string?)upgradeResult["predicates"]!["canPurchase"]!["reasonCode"]);
-        Assert.Equal("unaffordable", (string?)upgradeResult["purchase"]!["affordability"]);
-        Assert.Null(upgradeResult["purchase"]!["mathLineage"]);
-        var costRow = Assert.Single(upgradeResult["purchase"]!["rows"]!.Values<JObject>())!;
-        Assert.Equal("1e2", (string?)costRow["baseCost"]);
-        Assert.Equal("2.5e2", (string?)costRow["effectiveCost"]);
-        Assert.Equal(modifierId.ToString("D"),
-            (string?)Assert.Single(costRow["costModifiers"]!.Values<JObject>())!["source"]!["uuid"]);
+        Assert.Null(upgradeResult["purchase"]);
         Assert.True((bool)upgradeResult["blockers"]!["queue"]!["blocked"]!);
         Assert.True((bool)upgradeResult["blockers"]!["cap"]!["blocked"]!);
 
@@ -607,8 +598,8 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         Assert.True((bool)craftingResult["blockers"]!["bandwidth"]!["blocked"]!);
         var bandwidthRow = Assert.Single(
             craftingResult["blockers"]!["bandwidth"]!["rows"]!.Values<JObject>())!;
-        Assert.Equal("2.5e1", (string?)bandwidthRow["cost"]);
-        Assert.Equal("1e1", (string?)bandwidthRow["amount"]);
+        Assert.Equal("25", (string?)bandwidthRow["cost"]);
+        Assert.Equal("10", (string?)bandwidthRow["amount"]);
         Assert.True((bool)bandwidthRow["bandwidth"]!);
         Assert.Null(bandwidthRow["headroom"]);
         Assert.True((bool)craftingResult["blockers"]!["drain"]!["blocked"]!);

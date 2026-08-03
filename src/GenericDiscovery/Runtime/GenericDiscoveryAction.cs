@@ -66,6 +66,7 @@ internal static class GenericDiscoverySurfaces
             "devote" => "RitualSO",
             "runecraft" => "TimeRuneSO",
             "alchemy" => "AlchemyRecipeSO",
+            "concepts" => "AlchemyRecipeSO",
             "artifacts" => "EquipmentSO",
             _ => string.Empty,
         };
@@ -75,6 +76,7 @@ internal static class GenericDiscoverySurfaces
             "devote" => "rituals",
             "runecraft" => "time-runes",
             "alchemy" => "alchemy-recipes",
+            "concepts" => "alchemy-recipes",
             "artifacts" => "equipment",
             _ => string.Empty,
         };

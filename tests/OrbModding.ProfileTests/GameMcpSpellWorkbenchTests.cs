@@ -67,7 +67,7 @@ public sealed class GameMcpSpellWorkbenchTests
     }
 
     [Fact]
-    public void ListAndGetExposeTheSameComponentFirstDiscoveryDecision()
+    public void ListIsLeanWhileGetExposesTheComponentFirstDiscoveryDecision()
     {
         var context = GameMcpTestHarness.Context(World(
             discovered: false,
@@ -82,29 +82,27 @@ public sealed class GameMcpSpellWorkbenchTests
             context, "spell-recipes", RecipeId.ToString("D"), "SpellRecipeSO"));
         var exact = (JObject)get["row"]!;
 
-        Assert.Equal(
-            listed.Properties().Select(property => property.Name),
-            exact.Properties().Select(property => property.Name));
         Assert.Equal("Gather Knowledge", (string?)listed["name"]);
+        Assert.Equal(0, (int)listed["masteryLevel"]!);
+        Assert.False((bool)listed["discovered"]!);
         Assert.Equal("spell-recipes", (string?)listed["category"]);
-        Assert.Null(listed["selected"]);
-        Assert.Null(listed["select"]);
-        Assert.True((bool)listed["discover"]!["available"]!);
-        Assert.True((bool)listed["discover"]!["affordable"]!);
-        Assert.Equal("spellcraft", (string?)listed["discover"]!["surface"]);
+        Assert.Null(listed["discover"]);
+        Assert.True((bool)exact["discover"]!["available"]!);
+        Assert.True((bool)exact["discover"]!["affordable"]!);
+        Assert.Equal("spellcraft", (string?)exact["discover"]!["surface"]);
         Assert.Equal(
             new[] { "Brew", "Insight" },
-            listed["discover"]!["components"]!.Values<JObject>()
+            exact["discover"]!["components"]!.Values<JObject>()
                 .Select(component => (string?)component!["component"]!["name"]));
         Assert.All(
-            listed["discover"]!["components"]!.Values<JObject>(),
+            exact["discover"]!["components"]!.Values<JObject>(),
             component => Assert.Equal(1, (int)component!["count"]!));
-        var glyphs = listed["coreGlyphs"]!.Values<JObject>().ToArray();
+        var glyphs = exact["coreGlyphs"]!.Values<JObject>().ToArray();
         Assert.Equal(new[] { "Brew", "Insight" },
             glyphs.Select(glyph => (string?)glyph!["glyph"]!["name"]));
         Assert.Equal(new[] { "7", "3" },
             glyphs.Select(glyph => (string?)glyph!["ownedLevel"]));
-        var cost = Assert.Single(listed["discover"]!["costs"]!.Values<JObject>())!;
+        var cost = Assert.Single(exact["discover"]!["costs"]!.Values<JObject>())!;
         Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
         Assert.Equal("4.4e3", (string?)cost["cost"]);
         Assert.Equal("9e6", (string?)cost["amount"]);
@@ -127,12 +125,10 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Null(row["selected"]);
         Assert.Null(row["select"]);
         Assert.True((bool)row["loadoutAdd"]!["available"]!);
-        Assert.True((bool)row["loadoutAdd"]!["affordable"]!);
+        Assert.True((bool)row["loadoutAdd"]!["requiresGlyphLayout"]!);
+        Assert.Null(row["loadoutAdd"]!["affordable"]);
         Assert.Null(row["loadoutAdd"]!["reasonCode"]);
-        var cost = Assert.Single(row["loadoutAdd"]!["costs"]!.Values<JObject>())!;
-        Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
-        Assert.Equal("7.5e2", (string?)cost["cost"]);
-        Assert.Equal("9e6", (string?)cost["amount"]);
+        Assert.Null(row["loadoutAdd"]!["costs"]);
         Assert.Equal(1, (int)row["loadBudget"]!["used"]!);
         Assert.Equal(3, (int)row["loadBudget"]!["maximum"]!);
         Assert.True((bool)row["loadBudget"]!["fitsAnotherSpell"]!);
@@ -171,7 +167,17 @@ public sealed class GameMcpSpellWorkbenchTests
             new NativeMutationCallOutcome(1, 1, 1),
             "the requested recipe is discovered");
         var mapped = SpellWorkbenchActionResultMapper.Map(in submission);
-        var command = Command("discover");
+        var before = World(
+            discovered: false,
+            discoveryAffordable: true,
+            creationAffordable: true,
+            hasEmptySlot: true);
+        var after = World(
+            discovered: true,
+            discoveryAffordable: true,
+            creationAffordable: true,
+            hasEmptySlot: true);
+        var command = Command("discover", "spellcraft", before);
         var terminal = GameMcpCommandResult.FromAction(
             in mapped,
             command.Kind,
@@ -179,27 +185,21 @@ public sealed class GameMcpSpellWorkbenchTests
             3,
             submission.Reason,
             GameMcpSpellWorkbenchProjection.Project(in submission));
-        terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectPostState(
-            GameMcpTestHarness.Context(World(
-                discovered: true,
-                discoveryAffordable: true,
-                creationAffordable: true,
-                hasEmptySlot: true)),
-            "spell-recipes",
-            RecipeId));
+        terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after), command, terminal));
 
         var success = GameMcpTestHarness.Json(terminal.Project(command));
         Assert.Equal(new[]
             {
-                "status", "uuid", "name", "internalName", "category", "nativeType", "code",
-                "discovered", "masteryLevel", "coreGlyphs", "loadBudget", "loadoutAdd",
+                "status", "uuid", "name", "internalName", "category", "nativeType",
+                "discovered", "surface",
             },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
-        Assert.Equal("committed", (string?)success["code"]);
         Assert.Equal("Gather Knowledge", (string?)success["name"]);
-        Assert.True((bool)success["loadoutAdd"]!["available"]!);
-        Assert.Null(success["loadoutAdd"]!["reasonCode"]);
+        Assert.False((bool)success["discovered"]!["before"]!);
+        Assert.True((bool)success["discovered"]!["after"]!);
+        Assert.Equal("spellcraft", (string?)success["surface"]);
         Assert.Null(success["preflight"]);
         Assert.Null(success["before"]);
         Assert.Null(success["after"]);
@@ -270,7 +270,10 @@ public sealed class GameMcpSpellWorkbenchTests
                 GameMcpCommandKind.SpellWorkbench));
     }
 
-    private static GameMcpCommand Command(string mode) => new(
+    private static GameMcpCommand Command(
+        string mode,
+        string payloadKey = "",
+        GameWorldState? before = null) => new(
         1,
         GameMcpCommandKind.SpellWorkbench,
         9,
@@ -281,10 +284,11 @@ public sealed class GameMcpSpellWorkbenchTests
         "SpellRecipeSO",
         string.Empty,
         1,
-        string.Empty,
+        payloadKey,
         string.Empty,
         false,
-        false);
+        false,
+        frameContext: before is null ? null : GameMcpTestHarness.Context(before));
 
     private static GameWorldState World(
         bool discovered,
@@ -409,5 +413,7 @@ public sealed class GameMcpSpellWorkbenchTests
         0,
         BigDouble.Zero,
         BigDouble.Zero,
-        BigDouble.Zero);
+        BigDouble.Zero,
+        available: true,
+        maximumUsages: 1);
 }

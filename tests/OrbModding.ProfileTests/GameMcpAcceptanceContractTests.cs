@@ -34,7 +34,7 @@ public sealed class GameMcpPublicationConsistencyTests
             GameMcpAcceptanceFixture.SpellId.ToString("D"),
             string.Empty));
 
-        Assert.Equal((ulong)1001, (ulong)result["worldGeneration"]!);
+        Assert.Null(result["worldGeneration"]);
         Assert.Null(result["lifecycleGeneration"]);
         Assert.Equal(3, (int)result["row"]!["masteryLevel"]!);
     }
@@ -116,7 +116,7 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(row["rateInputs"]);
         Assert.Null(row["traits"]);
         Assert.Null(row["modifiers"]);
-        Assert.Equal(283, System.Text.Encoding.UTF8.GetByteCount(
+        Assert.Equal(239, System.Text.Encoding.UTF8.GetByteCount(
             response.ToString(Newtonsoft.Json.Formatting.None)));
     }
 
@@ -264,7 +264,6 @@ public sealed class GameMcpWorldQueryTests
         Assert.All(references, reference =>
         {
             Assert.False(string.IsNullOrWhiteSpace((string?)reference["name"]));
-            Assert.False(string.IsNullOrWhiteSpace((string?)reference["category"]));
             if (reference["internalName"] is JToken internalName)
             {
                 Assert.NotEqual(
@@ -313,7 +312,7 @@ public sealed class GameMcpWorldQueryTests
     }
 
     [Fact]
-    public void ListAndGetUseOneCuratedPlayerRelevantRowShape()
+    public void ListIsLeanAndGetCarriesTheCuratedDecisionDetail()
     {
         var state = GameMcpAcceptanceFixture.SpellSnapshot(4);
 
@@ -324,7 +323,33 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(scan["nameEvidence"]);
         Assert.Equal(4, (int)scan["masteryLevel"]!);
         Assert.Null(scan["spellPowerMod"]);
-        Assert.Equal("spell-recipes", (string?)scan["category"]);
+        Assert.Null(scan["category"]);
+        Assert.Null(scan["loadoutAdd"]);
+        Assert.Equal(124, System.Text.Encoding.UTF8.GetByteCount(
+            list.ToString(Newtonsoft.Json.Formatting.None)));
+
+        var reportNames = GameMcpWorldQuery.RegisteredCategoryNames().Concat(new[]
+            {
+                "plot-node-actions", "concept-instances", "plot-authoring",
+                "crafting-recipe-state", "crafting-decisions", "consumable-inventory",
+            })
+            .Distinct(StringComparer.Ordinal)
+            .Select(name => new WorldCollectionCategoryStatus(
+                name, WorldCategoryOutcome.Collected, 0, 0, string.Empty))
+            .ToArray();
+        var searchState = GameMcpAcceptanceFixture.Snapshot(
+            GameMcpAcceptanceFixture.SpellWorld(4, 30) with
+            {
+                CollectionCategories =
+                    PublicationTable<WorldCollectionCategoryStatus>.Create(reportNames),
+            });
+        var search = GameMcpTestHarness.Json(GameMcpWorldQuery.Search(
+            searchState,
+            GameMcpAcceptanceFixture.SpellId.ToString("D"),
+            5));
+        Assert.Single(search["matches"]!.Values<JObject>());
+        Assert.Equal(148, System.Text.Encoding.UTF8.GetByteCount(
+            search.ToString(Newtonsoft.Json.Formatting.None)));
 
         var exact = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,
@@ -332,9 +357,8 @@ public sealed class GameMcpWorldQueryTests
             GameMcpAcceptanceFixture.SpellId.ToString("D"),
             string.Empty));
         Assert.Null(exact["row"]!["spellPowerMod"]);
-        Assert.Equal(
-            scan.Properties().Select(property => property.Name),
-            exact["row"]!.Children<JProperty>().Select(property => property.Name));
+        Assert.Equal("spell-recipes", (string?)exact["row"]!["category"]);
+        Assert.NotNull(exact["row"]!["loadoutAdd"]);
     }
 }
 
@@ -388,7 +412,9 @@ public sealed class GameMcpActionFailureReasonTests
             PlotActionPrerequisiteEvidence.Unknown);
 
         Assert.NotNull(reason);
-        Assert.Contains("no plot-action prerequisite latch evidence", reason);
+        Assert.Equal(
+            "The exact fruit_tree harvest prerequisite cannot be confirmed right now.",
+            reason);
         Assert.DoesNotContain("unmet", reason);
         Assert.Null(AutomataServiceCycleRuntime.HarvestPrerequisiteEvidenceReason(
             "fruit_tree",
@@ -417,8 +443,8 @@ public sealed class GameMcpInlineCompletionTests
             }.Freeze());
         var projected = GameMcpTestHarness.Json(terminal.Project(command));
         Assert.Equal("committed", (string?)projected["status"]);
-        Assert.Equal("committed", (string?)projected["code"]);
-        Assert.Equal(new[] { "status", "code", "level", "available" },
+        Assert.Null(projected["code"]);
+        Assert.Equal(new[] { "status", "level", "available" },
             projected.Properties().Select(property => property.Name));
         Assert.Null(projected["receiptId"]);
     }
@@ -524,8 +550,9 @@ public sealed class GameMcpProtocolSurfaceTests
     public void TraceHealthIsWriterHealthOnly()
     {
         var result = GameMcpAcceptanceFixture.CallText("trace_health");
-        Assert.Contains("trace writer: unavailable", result, StringComparison.Ordinal);
-        Assert.Contains("records: accepted 0, written 0, discarded 0", result, StringComparison.Ordinal);
+        Assert.StartsWith("unavailable\n", result, StringComparison.Ordinal);
+        Assert.Contains("reason: the decision journal writer is not active", result,
+            StringComparison.Ordinal);
         Assert.DoesNotContain("scope", result, StringComparison.Ordinal);
         Assert.DoesNotContain("events", result, StringComparison.Ordinal);
         Assert.DoesNotContain("worldGeneration", result, StringComparison.Ordinal);
@@ -619,7 +646,7 @@ public sealed class GameMcpCommandPrimitiveTests
 public sealed class GameMcpConfigurationTests
 {
     [Fact]
-    public void QueryReturnsOneCommittedGenerationAndWritableCatalog()
+    public void QueryReturnsOnlyTheWritableCatalog()
     {
         var writable = new GameMcpWritableSettingDescriptor(
             "AutoCast",
@@ -633,7 +660,7 @@ public sealed class GameMcpConfigurationTests
         var result = GameMcpAcceptanceFixture.Call(
             "suite_configuration",
             context: GameMcpTestHarness.Context(writable: new[] { writable }));
-        Assert.Equal((ulong)3, (ulong)result["configurationGeneration"]!);
+        Assert.Null(result["configurationGeneration"]);
         Assert.Null(result["worldGeneration"]);
         Assert.Null(result["configuration"]);
         Assert.Single(result["writableSettings"]!.Values<JObject>());
@@ -677,7 +704,7 @@ public sealed class GameMcpConfigurationTests
                 (string?)item?["section"] == "AutoCast" &&
                 (string?)item?["key"] == "Mode")!;
 
-        Assert.Equal((ulong)12, (ulong)result["configurationGeneration"]!);
+        Assert.Null(result["configurationGeneration"]);
         Assert.Null(result["configuration"]);
         Assert.DoesNotContain(
             result.DescendantsAndSelf().OfType<JProperty>(),
@@ -723,7 +750,6 @@ public sealed class GameMcpEmergencyStopTests
             Classification = GameMcpOperationClass.SuiteAdministration,
             RequiredData = GameMcpFrameData.Configuration,
             Mode = "engage",
-            ConfigurationGeneration = 1,
         }.Freeze());
         var after = GameMcpAcceptanceFixture.SubmitHarvest(operations);
 

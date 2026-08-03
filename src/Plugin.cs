@@ -3,7 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.IO;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using BepInEx;
 using BepInEx.Bootstrap;
@@ -48,6 +50,7 @@ public sealed class Plugin : BaseUnityPlugin
     private const int StartStatusFailureLogFrameThreshold = 120;
 #if SERVICE_CYCLE_PROFILE
     private const bool AutoStartServiceCycleDiagnostics = true;
+    private static readonly string GameMcpDllSha256 = ComputeExecutingDllSha256();
     private GameMcpFrameInbox? _gameMcpOperations;
     private GameMcpHttpServer? _gameMcpServer;
     private GameMcpWritableSettingDescriptor[] _gameMcpWritableConfiguration =
@@ -1499,10 +1502,12 @@ public sealed class Plugin : BaseUnityPlugin
         }
         if (string.Equals(result.Status, "committed", StringComparison.Ordinal))
         {
+            var actionCompletedAtUtcTicks = DateTime.UtcNow.Ticks;
             StartCoroutine(CompleteGameMcpGameplayPostState(
                 command,
                 result,
-                context.World?.Generation.Value ?? 0));
+                context.World?.Generation.Value ?? 0,
+                actionCompletedAtUtcTicks));
             execution = null!;
             return false;
         }
@@ -1513,7 +1518,8 @@ public sealed class Plugin : BaseUnityPlugin
     private IEnumerator CompleteGameMcpGameplayPostState(
         GameMcpCommand command,
         GameMcpCommandResult committed,
-        ulong actionWorldGeneration)
+        ulong actionWorldGeneration,
+        long actionCompletedAtUtcTicks)
     {
         var deadline = Time.realtimeSinceStartup + GameMcpPostStateSettlement.MaximumWaitSeconds;
         GameMcpFrameContext? latest = null;
@@ -1525,20 +1531,20 @@ public sealed class Plugin : BaseUnityPlugin
                     ? GameMcpFrameData.World | GameMcpFrameData.Scene
                     : GameMcpFrameData.World);
             if (GameMcpPostStateSettlement.IsReady(
-                    latest, actionWorldGeneration, command))
+                    latest, actionWorldGeneration, actionCompletedAtUtcTicks, command))
                 break;
         }
 
         GameMcpValue state;
         if (GameMcpPostStateSettlement.IsReady(
-                latest, actionWorldGeneration, command))
+                latest, actionWorldGeneration, actionCompletedAtUtcTicks, command))
         {
             state = GameMcpWorldQuery.ProjectGameplayPostState(
                 latest!, command, committed);
         }
         else
         {
-            state = GameMcpPostStateSettlement.TimedOut();
+            state = GameMcpPostStateSettlement.TimedOut(command, latest);
         }
         CompleteGameMcpCommand(command, committed.WithDetails(state));
     }
@@ -1552,10 +1558,32 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommand command,
         GameMcpCommandResult result)
     {
+        if (command.Kind == GameMcpCommandKind.TooltipRead &&
+            result.InlinePng is null &&
+            string.Equals(result.Status, "committed", StringComparison.Ordinal) &&
+            result.Details is GameMcpObject tooltip &&
+            TryReadText(tooltip, out var text))
+            return GameMcpToolExecution.Text(text);
         return new GameMcpToolExecution(
             result.Project(command),
             result.InlinePng,
             result.IsProtocolError);
+    }
+
+    private static bool TryReadText(GameMcpObject document, out string text)
+    {
+        for (var index = 0; index < document.Properties.Count; index++)
+        {
+            var property = document.Properties[index];
+            if (property.Name == "text" && property.Value is GameMcpScalar scalar &&
+                scalar.Value is string value && value.Length > 0)
+            {
+                text = value;
+                return true;
+            }
+        }
+        text = string.Empty;
+        return false;
     }
 
     private GameMcpToolExecution ExecuteGameMcpResource(
@@ -1587,6 +1615,8 @@ public sealed class Plugin : BaseUnityPlugin
             context.Configuration.Snapshot.Safety.EmergencyDisable;
         var result = new StringBuilder()
             .AppendLine("available")
+            .Append("build: ").Append(PluginIds.Version).Append(" dll sha256 ")
+            .AppendLine(GameMcpDllSha256)
             .Append("scene: ").AppendLine(GameMcpTextFormatter.Plain(context.SceneName))
             .Append("runtime: ").AppendLine(context.RuntimeAvailable ? "available" : "unavailable")
             .Append("native contracts: ").AppendLine(
@@ -1663,7 +1693,6 @@ public sealed class Plugin : BaseUnityPlugin
             ["status"] = context.ConfigurationGeneration.IsValid
                 ? "available"
                 : "not_available",
-            ["configurationGeneration"] = context.ConfigurationGeneration.Value,
         };
         if (writable.Count > 0) result["writableSettings"] = writable;
         return result.Freeze();
@@ -1687,6 +1716,8 @@ public sealed class Plugin : BaseUnityPlugin
     internal static string ProjectGameMcpTraceHealthText(GameMcpFrameContext context)
     {
         var status = context.TraceWriterStatus;
+        if (status.State == DecisionJournalStatusState.Unavailable)
+            return "unavailable\nreason: the decision journal writer is not active in this runtime";
         var result = new StringBuilder()
             .AppendLine("available")
             .Append("trace writer: ").AppendLine(
@@ -1723,6 +1754,23 @@ public sealed class Plugin : BaseUnityPlugin
         result.Append("revision: ").Append(
             context.TraceWriterRevision.ToString(CultureInfo.InvariantCulture));
         return result.ToString();
+    }
+
+    private static string ComputeExecutingDllSha256()
+    {
+        try
+        {
+            var path = Assembly.GetExecutingAssembly().Location;
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return "unavailable";
+            using var stream = File.OpenRead(path);
+            using var sha = SHA256.Create();
+            return string.Concat(sha.ComputeHash(stream).Select(
+                value => value.ToString("x2", CultureInfo.InvariantCulture)));
+        }
+        catch (Exception)
+        {
+            return "unavailable";
+        }
     }
 
     private static bool TryPrepareGameMcpCommand(
@@ -1814,6 +1862,8 @@ public sealed class Plugin : BaseUnityPlugin
             payloadValue = request.SerializedValue;
             if (request.Mode == "move") amount = checked(request.SlotIndex + 1);
         }
+        else if (kind == GameMcpCommandKind.Crafting)
+            nativeType = "CraftingRecipeSO";
         else if (kind == GameMcpCommandKind.GenericDiscovery)
         {
             payloadKey = request.Key;
@@ -1948,17 +1998,25 @@ public sealed class Plugin : BaseUnityPlugin
                 var identity = EntityIdentityFormatter.Format(
                     targetId,
                     context.World.Snapshot.EntityIdentities);
-                if (owningTool.Length > 0)
+                if (owningTool.Length > 0 && !string.Equals(
+                        owningTool, request.ToolName, StringComparison.Ordinal))
                 {
                     code = "wrong_action_tool";
                     reason = identity + " is a " + owningNativeType + " in " +
                         owningCategory + "; use " + owningTool + " for its player action";
                 }
+                else if (owningTool.Length > 0)
+                {
+                    code = "action_target_unavailable";
+                    if (reason.Length == 0)
+                        reason = identity + " does not satisfy the live " +
+                            request.ToolName + " admission constraint";
+                }
                 else
                 {
                     code = "read_only_entity";
-                    reason = identity + " is published in " + owningCategory +
-                        " but has no MCP gameplay verb; read it with world_get";
+                    reason = identity + " is available under " + owningCategory +
+                        " but has no gameplay verb; inspect it with world_get";
                 }
             }
             failure = GameMcpCommandResult.Rejected(
@@ -2398,7 +2456,6 @@ public sealed class Plugin : BaseUnityPlugin
 
     private IEnumerator NavigateGameMcpAcrossFrames(GameMcpCommand command)
     {
-        var mutationWorldGeneration = command.FrameContext?.World?.Generation.Value ?? 0;
         if (!TryBeginNavigateGameMcp(
                 command,
                 out var subtabSelector,
@@ -2430,7 +2487,7 @@ public sealed class Plugin : BaseUnityPlugin
                         details,
                         "subtabCandidates",
                         subtabs.Select(candidate => candidate.Label)),
-                    mutationWorldGeneration);
+                    capture: false);
                 yield break;
             }
             if (!subtab.TrySelect(out var selectionReason))
@@ -2439,9 +2496,10 @@ public sealed class Plugin : BaseUnityPlugin
                     command,
                     GadgetRejected("subtab_selection_failed", selectionReason)
                         .WithDetails(details.Freeze()),
-                    mutationWorldGeneration);
+                    capture: false);
                 yield break;
             }
+            details["activeSubtab"] = subtab.Label;
             yield return null;
         }
         if (command.TargetId != Guid.Empty)
@@ -2454,7 +2512,7 @@ public sealed class Plugin : BaseUnityPlugin
                 yield return CompleteNavigateGameMcpAfterSettlement(
                     command,
                     plotResult.WithDetails(details.Freeze()),
-                    mutationWorldGeneration);
+                    capture: false);
                 yield break;
             }
             details["plotNodeUuid"] = command.TargetId.ToString("D");
@@ -2465,53 +2523,21 @@ public sealed class Plugin : BaseUnityPlugin
         yield return CompleteNavigateGameMcpAfterSettlement(
             command,
             result,
-            mutationWorldGeneration,
-            includeDestinationState: true,
             capture: command.Capture);
     }
 
     private IEnumerator CompleteNavigateGameMcpAfterSettlement(
         GameMcpCommand command,
         GameMcpCommandResult result,
-        ulong mutationWorldGeneration,
-        bool includeDestinationState = false,
         bool capture = false)
     {
-        var deadline = Time.realtimeSinceStartup + GameMcpPostStateSettlement.MaximumWaitSeconds;
-        GameMcpFrameContext? state = null;
-        do
+        yield return null;
+        if (capture && string.Equals(result.Status, "committed", StringComparison.Ordinal))
         {
-            yield return null;
-            state = CaptureGameMcpFrameContext(GameMcpFrameData.World | GameMcpFrameData.Scene);
-        }
-        while (Time.realtimeSinceStartup < deadline &&
-               !GameMcpPostStateSettlement.HasFreshWorld(
-                   state, mutationWorldGeneration));
-
-        var details = new GameMcpObjectBuilder();
-        if (result.Details is GameMcpObject existing) details.CopyFrom(existing);
-        var fresh = GameMcpPostStateSettlement.HasFreshWorld(
-            state, mutationWorldGeneration);
-        if (fresh && includeDestinationState)
-        {
-            var destinationSubtabs = CaptureSubtabs();
-            if (destinationSubtabs.Count > 0)
-                details["subtabStrips"] = ProjectSubtabStrips(destinationSubtabs);
-        }
-        else if (!fresh &&
-                 includeDestinationState &&
-                 string.Equals(result.Status, "committed", StringComparison.Ordinal))
-        {
-            details.CopyFrom((GameMcpObject)GameMcpPostStateSettlement.TimedOut());
-        }
-
-        var settled = result.WithDetails(details.Freeze());
-        if (capture && string.Equals(settled.Status, "committed", StringComparison.Ordinal))
-        {
-            yield return CaptureGameMcpAtEndOfFrame(command, settled);
+            yield return CaptureGameMcpAtEndOfFrame(command, result);
             yield break;
         }
-        CompleteGameMcpCommand(command, settled);
+        CompleteGameMcpCommand(command, result);
     }
 
     private GameMcpCommandResult NavigateExactPlot(
@@ -2778,19 +2804,14 @@ public sealed class Plugin : BaseUnityPlugin
             }
             projected.Add(new GameMcpObjectBuilder
             {
-                ["index"] = index,
                 ["path"] = NativeObjectPath.BuildIndexed(hover),
                 ["name"] = item.GetName(),
-                ["displayType"] = item.GetDisplayType(),
-                ["hasAltTooltips"] = item.HasAltTooltips(),
-                ["nestedTooltipCount"] = GameMcpTooltipProjector.CountReachable(item, children),
             });
         }
         var details = new GameMcpObjectBuilder
         {
             ["scene"] = SceneManager.GetActiveScene().name,
             ["total"] = entries.Count,
-            ["returned"] = projected.Count,
             ["tooltips"] = projected,
         };
         if (end < entries.Count) details["nextOffset"] = end;

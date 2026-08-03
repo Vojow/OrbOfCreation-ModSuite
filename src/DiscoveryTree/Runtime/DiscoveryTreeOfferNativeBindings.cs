@@ -21,13 +21,11 @@ internal sealed class DiscoveryTreeOfferNativeBindings
     internal static readonly string[] ContractIds =
     {
         "discovery-tree-offer-tree-type",
-        "discovery-tree-offer-mode-type",
         "discovery-tree-offer-guid-container-type",
         "discovery-tree-offer-discoverable-type",
         "discovery-tree-offer-has-guid-type",
         "discovery-tree-offer-resource-cost-type",
         "discovery-tree-offer-all-field",
-        "discovery-tree-offer-mode-field",
         "discovery-tree-offer-rerolls-field",
         "discovery-tree-offer-current-choices-field",
         "discovery-tree-offer-selected-field",
@@ -47,7 +45,6 @@ internal sealed class DiscoveryTreeOfferNativeBindings
         "discovery-tree-offer-reroll-method",
         "discovery-tree-offer-item-identity-method",
         "discovery-tree-offer-item-discovered-method",
-        "discovery-tree-offer-item-required-method",
         "discovery-tree-offer-cost-enough-method",
         "discovery-tree-offer-cost-perform-method",
     };
@@ -58,7 +55,6 @@ internal sealed class DiscoveryTreeOfferNativeBindings
         Type costType,
         Func<IList> readTrees,
         Func<object, Guid> readTreeIdentity,
-        Func<object, int> readMode,
         Func<object, int> readRerolls,
         Func<object, IList> readCurrentChoices,
         Func<object, object> readSelected,
@@ -77,7 +73,6 @@ internal sealed class DiscoveryTreeOfferNativeBindings
         Action<object> reroll,
         Func<object, Guid> readItemIdentity,
         Func<object, bool> isItemDiscovered,
-        Func<object, bool> isItemRequired,
         Func<object, bool> hasEnough,
         Action<object> performCost)
     {
@@ -86,7 +81,6 @@ internal sealed class DiscoveryTreeOfferNativeBindings
         CostType = costType;
         ReadTrees = readTrees;
         ReadTreeIdentity = readTreeIdentity;
-        ReadMode = readMode;
         ReadRerolls = readRerolls;
         ReadCurrentChoices = readCurrentChoices;
         ReadSelected = readSelected;
@@ -105,7 +99,6 @@ internal sealed class DiscoveryTreeOfferNativeBindings
         Reroll = reroll;
         ReadItemIdentity = readItemIdentity;
         IsItemDiscovered = isItemDiscovered;
-        IsItemRequired = isItemRequired;
         HasEnough = hasEnough;
         PerformCost = performCost;
     }
@@ -115,7 +108,6 @@ internal sealed class DiscoveryTreeOfferNativeBindings
     internal Type CostType { get; }
     internal Func<IList> ReadTrees { get; }
     internal Func<object, Guid> ReadTreeIdentity { get; }
-    internal Func<object, int> ReadMode { get; }
     internal Func<object, int> ReadRerolls { get; }
     internal Func<object, IList> ReadCurrentChoices { get; }
     internal Func<object, object> ReadSelected { get; }
@@ -134,7 +126,6 @@ internal sealed class DiscoveryTreeOfferNativeBindings
     internal Action<object> Reroll { get; }
     internal Func<object, Guid> ReadItemIdentity { get; }
     internal Func<object, bool> IsItemDiscovered { get; }
-    internal Func<object, bool> IsItemRequired { get; }
     internal Func<object, bool> HasEnough { get; }
     internal Action<object> PerformCost { get; }
 
@@ -183,43 +174,39 @@ internal sealed class DiscoveryTreeOfferNativeBindings
             }
 
             var tree = T(ContractIds[0], "DiscoveryTreeSO");
-            var mode = T(ContractIds[1], "DiscoveryTreeSO+DiscoveryTreeModes");
-            var guidContainer = T(ContractIds[2], "GuidContainer");
-            var item = T(ContractIds[3], "IDiscoverable");
-            var hasGuid = T(ContractIds[4], "IHasGuid");
-            var cost = T(ContractIds[5], "ResourceCostList");
+            var guidContainer = T(ContractIds[1], "GuidContainer");
+            var item = T(ContractIds[2], "IDiscoverable");
+            var hasGuid = T(ContractIds[3], "IHasGuid");
+            var cost = T(ContractIds[4], "ResourceCostList");
 
-            var all = F(ContractIds[6], tree, "All", typeof(List<>).MakeGenericType(tree), isStatic: true);
-            var modeField = F(ContractIds[7], tree, "actionMode", mode);
-            var rerolls = F(ContractIds[8], tree, "rerollsLeft", typeof(int));
-            var currentChoices = F(ContractIds[9], tree, "currentChoiceIds", typeof(List<>).MakeGenericType(guidContainer));
-            var selected = F(ContractIds[10], tree, "selectedChoiceId", guidContainer);
+            var all = F(ContractIds[5], tree, "All", typeof(List<>).MakeGenericType(tree), isStatic: true);
+            var rerolls = F(ContractIds[6], tree, "rerollsLeft", typeof(int));
+            var currentChoices = F(ContractIds[7], tree, "currentChoiceIds", typeof(List<>).MakeGenericType(guidContainer));
+            var selected = F(ContractIds[8], tree, "selectedChoiceId", guidContainer);
 
-            var identity = MH(ContractIds[11], tree, "GetGuid", typeof(Guid));
-            var guidValue = M(ContractIds[12], guidContainer, "get_guid", typeof(Guid));
-            var visible = M(ContractIds[13], tree, "IsVisible", typeof(bool));
-            var idle = M(ContractIds[14], tree, "IsInIdleMode", typeof(bool));
-            var crafting = M(ContractIds[15], tree, "IsInCraftingMode", typeof(bool));
-            var choice = M(ContractIds[16], tree, "IsInChoiceMode", typeof(bool));
-            var remaining = M(ContractIds[17], tree, "HasCurrentlyRemMainPoolDiscoveries", typeof(bool));
-            var immediate = M(ContractIds[18], tree, "HasImmediateRequiredDiscover", typeof(bool));
-            var nextCost = M(ContractIds[19], tree, "GetNextItemCost", cost);
-            var resolveItem = M(ContractIds[20], tree, "GetItemFromGuid", item, typeof(Guid));
-            var initiate = M(ContractIds[21], tree, "InitiateCraftingMode", typeof(void));
-            var select = M(ContractIds[22], tree, "SelectItemId", typeof(void), typeof(Guid));
-            var confirm = M(ContractIds[23], tree, "DiscoverSelectedItem", typeof(void));
-            var reroll = M(ContractIds[24], tree, "RerollChoices", typeof(void));
-            var itemIdentity = M(ContractIds[25], hasGuid, "GetGuid", typeof(Guid));
-            var discovered = M(ContractIds[26], item, "IsDiscovered", typeof(bool));
-            var required = M(ContractIds[27], item, "IsDiscoverRequired", typeof(bool));
-            var enough = M(ContractIds[28], cost, "HasEnough", typeof(bool));
-            var perform = M(ContractIds[29], cost, "PerformCost", typeof(void));
+            var identity = MH(ContractIds[9], tree, "GetGuid", typeof(Guid));
+            var guidValue = M(ContractIds[10], guidContainer, "get_guid", typeof(Guid));
+            var visible = M(ContractIds[11], tree, "IsVisible", typeof(bool));
+            var idle = M(ContractIds[12], tree, "IsInIdleMode", typeof(bool));
+            var crafting = M(ContractIds[13], tree, "IsInCraftingMode", typeof(bool));
+            var choice = M(ContractIds[14], tree, "IsInChoiceMode", typeof(bool));
+            var remaining = M(ContractIds[15], tree, "HasCurrentlyRemMainPoolDiscoveries", typeof(bool));
+            var immediate = M(ContractIds[16], tree, "HasImmediateRequiredDiscover", typeof(bool));
+            var nextCost = M(ContractIds[17], tree, "GetNextItemCost", cost);
+            var resolveItem = M(ContractIds[18], tree, "GetItemFromGuid", item, typeof(Guid));
+            var initiate = M(ContractIds[19], tree, "InitiateCraftingMode", typeof(void));
+            var select = M(ContractIds[20], tree, "SelectItemId", typeof(void), typeof(Guid));
+            var confirm = M(ContractIds[21], tree, "DiscoverSelectedItem", typeof(void));
+            var reroll = M(ContractIds[22], tree, "RerollChoices", typeof(void));
+            var itemIdentity = M(ContractIds[23], hasGuid, "GetGuid", typeof(Guid));
+            var discovered = M(ContractIds[24], item, "IsDiscovered", typeof(bool));
+            var enough = M(ContractIds[25], cost, "HasEnough", typeof(bool));
+            var perform = M(ContractIds[26], cost, "PerformCost", typeof(void));
 
             bindings = new DiscoveryTreeOfferNativeBindings(
                 tree, item, cost,
                 StaticListGetter(all),
                 InstanceFunc<Guid>(identity),
-                EnumFieldGetter(modeField),
                 FieldGetter<int>(rerolls),
                 ListFieldGetter(currentChoices),
                 ObjectFieldGetter(selected),
@@ -238,7 +225,6 @@ internal sealed class DiscoveryTreeOfferNativeBindings
                 InstanceAction(reroll),
                 InstanceFunc<Guid>(itemIdentity),
                 InstanceFunc<bool>(discovered),
-                InstanceFunc<bool>(required),
                 InstanceFunc<bool>(enough),
                 InstanceAction(perform));
             reason = string.Empty;

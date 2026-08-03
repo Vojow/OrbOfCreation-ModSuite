@@ -1966,7 +1966,13 @@ public class SpellManager
     public void CreateSpell()
     {
         var recipe = GetSpellFromRecipe(selectedCoreGlyphs.GetFilledElements());
-        if (recipe is null || !recipe.IsDiscovered() || SuppressCreation || !activeSpells.HasEmptySpot()) return;
+        if (recipe is null) return;
+        CreateRecipe(recipe);
+    }
+
+    public void CreateRecipe(SpellRecipeSO recipe)
+    {
+        if (!recipe.IsDiscovered() || SuppressCreation || !activeSpells.HasEmptySpot()) return;
         var spell = recipe.CreateEmpty(0);
         spell.SetLevel(recipe.GetSelectedSpellLevel());
         spell.SetAugmentGlyphs(new Stacked.StackedIdRecord<GlyphSO>(

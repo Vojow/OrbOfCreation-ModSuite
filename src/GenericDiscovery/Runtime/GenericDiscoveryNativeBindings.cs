@@ -31,7 +31,6 @@ internal sealed class GenericDiscoveryNativeBindings
         "generic-discovery.is-visible-action",
         "generic-discovery.can-discover-action",
         "generic-discovery.is-discovered-action",
-        "generic-discovery.is-required-action",
         "generic-discovery.discover-action",
         "generic-discovery.cost-enough-action",
         "generic-discovery.cost-perform-action",
@@ -48,7 +47,6 @@ internal sealed class GenericDiscoveryNativeBindings
         Func<object, bool> isVisible,
         Func<object, bool> canDiscover,
         Func<object, bool> isDiscovered,
-        Func<object, bool> isRequired,
         Action<object> discover,
         Func<object, bool> hasEnough,
         Action<object> performCost,
@@ -63,7 +61,6 @@ internal sealed class GenericDiscoveryNativeBindings
         IsVisible = isVisible;
         CanDiscover = canDiscover;
         IsDiscovered = isDiscovered;
-        IsRequired = isRequired;
         Discover = discover;
         HasEnough = hasEnough;
         PerformCost = performCost;
@@ -80,7 +77,6 @@ internal sealed class GenericDiscoveryNativeBindings
     internal Func<object, bool> IsVisible { get; }
     internal Func<object, bool> CanDiscover { get; }
     internal Func<object, bool> IsDiscovered { get; }
-    internal Func<object, bool> IsRequired { get; }
     internal Action<object> Discover { get; }
     internal Func<object, bool> HasEnough { get; }
     internal Action<object> PerformCost { get; }
@@ -138,17 +134,16 @@ internal sealed class GenericDiscoveryNativeBindings
             var visible = M(ContractIds[9], discoverable, "IsDiscoverVisible", typeof(bool));
             var canDiscover = M(ContractIds[10], discoverable, "CanDiscover", typeof(bool));
             var discovered = M(ContractIds[11], discoverable, "IsDiscovered", typeof(bool));
-            var required = M(ContractIds[12], discoverable, "IsDiscoverRequired", typeof(bool));
-            var discover = M(ContractIds[13], discoverable, "Discover", typeof(void));
-            var enough = M(ContractIds[14], cost, "HasEnough", typeof(bool));
-            var perform = M(ContractIds[15], cost, "PerformCost", typeof(void));
+            var discover = M(ContractIds[12], discoverable, "Discover", typeof(void));
+            var enough = M(ContractIds[13], cost, "HasEnough", typeof(bool));
+            var perform = M(ContractIds[14], cost, "PerformCost", typeof(void));
             var glyphRecipe = M(
-                ContractIds[16],
+                ContractIds[15],
                 discoverable,
                 "GetGlyphRecipe",
                 typeof(List<>).MakeGenericType(supported["GlyphSO"]));
             var resourceRecipe = M(
-                ContractIds[17],
+                ContractIds[16],
                 discoverable,
                 "GetResourceRecipe",
                 typeof(List<>).MakeGenericType(resource));
@@ -162,7 +157,6 @@ internal sealed class GenericDiscoveryNativeBindings
                 InstanceFunc<bool>(visible),
                 InstanceFunc<bool>(canDiscover),
                 InstanceFunc<bool>(discovered),
-                InstanceFunc<bool>(required),
                 InstanceAction(discover),
                 InstanceFunc<bool>(enough),
                 InstanceAction(perform),

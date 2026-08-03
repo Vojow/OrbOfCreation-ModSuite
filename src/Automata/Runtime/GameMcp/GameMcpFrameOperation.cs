@@ -64,7 +64,6 @@ internal sealed class GameMcpOperationRequest
         Limit = source.Limit;
         Amount = source.Amount;
         SlotIndex = source.SlotIndex;
-        ConfigurationGeneration = source.ConfigurationGeneration;
         Section = source.Section ?? string.Empty;
         Key = source.Key ?? string.Empty;
         SerializedValue = source.SerializedValue ?? string.Empty;
@@ -92,7 +91,6 @@ internal sealed class GameMcpOperationRequest
     internal int Limit { get; }
     internal int Amount { get; }
     internal int SlotIndex { get; }
-    internal ulong? ConfigurationGeneration { get; }
     internal string Section { get; }
     internal string Key { get; }
     internal string SerializedValue { get; }
@@ -122,7 +120,6 @@ internal sealed class GameMcpOperationRequestBuilder
     internal int Limit { get; set; } = 1;
     internal int Amount { get; set; } = 1;
     internal int SlotIndex { get; set; }
-    internal ulong? ConfigurationGeneration { get; set; }
     internal string Section { get; set; } = string.Empty;
     internal string Key { get; set; } = string.Empty;
     internal string SerializedValue { get; set; } = string.Empty;

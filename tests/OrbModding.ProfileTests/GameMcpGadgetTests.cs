@@ -84,14 +84,13 @@ public sealed class GameMcpGadgetTests
     }
 
     [Fact]
-    public void TooltipReadAdvertisesTypedComputedAndInspectedDepth()
+    public void TooltipReadAdvertisesCompactProseAndVolatileScreenAddressing()
     {
         var tooltip = Tool("game_tooltip");
         var description = (string?)tooltip["description"];
 
-        Assert.Contains("TooltipNode", description, System.StringComparison.Ordinal);
-        Assert.Contains("computed", description, System.StringComparison.Ordinal);
-        Assert.Contains("inspected", description, System.StringComparison.Ordinal);
+        Assert.Contains("plain screen text", description, System.StringComparison.Ordinal);
+        Assert.Contains("current game_tooltips catalog", description, System.StringComparison.Ordinal);
     }
 
     [Fact]
@@ -100,11 +99,11 @@ public sealed class GameMcpGadgetTests
         var navigation = Tool("game_navigate");
         var properties = (JObject)navigation["inputSchema"]!["properties"]!;
         Assert.Equal(
-            new[] { "tab", "subtab", "plotNodeUuid", "capture", "maxWidth" },
+            new[] { "screen", "subtab", "uuid", "capture", "maxWidth" },
             properties.Properties().Select(property => property.Name));
         Assert.Null(properties["operation"]);
         Assert.Null(properties["tabIndex"]);
-        Assert.Equal("string", (string?)properties["tab"]!["type"]);
+        Assert.Equal("string", (string?)properties["screen"]!["type"]);
         Assert.Equal("string", (string?)properties["subtab"]!["type"]);
         Assert.Equal(
             "UI-only, no gameplay/save mutation",

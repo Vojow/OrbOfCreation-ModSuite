@@ -797,14 +797,6 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
         return "An Auto Scribe live identity was unavailable.";
     }
 
-    private static int CountNonNull(IList values)
-    {
-        var count = 0;
-        foreach (var value in values)
-            if (value is not null) count++;
-        return count;
-    }
-
     private static IList RequireList(object? value, string contract) =>
         value as IList ??
         throw new InvalidOperationException(contract + " was not a native list.");

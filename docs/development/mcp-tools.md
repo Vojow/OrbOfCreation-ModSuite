@@ -77,9 +77,9 @@ return a pending receipt, and never introduce polling. UI changes are classified
 gameplay. A missing or partially collected read returns `unavailable` with an exact `reasonCode`
 and reason.
 
-World reads contain one decision-relevant `worldGeneration`, status/refusal evidence, and the
-requested data. They do not repeat lifecycle/configuration generations, request fields,
-capture/respond timestamps, or mailbox internals. Gameplay
+World reads pin one immutable publication for the whole answer and return status/refusal evidence
+plus the requested data. They do not expose world/lifecycle/configuration generations, request
+fields, capture/respond timestamps, or mailbox internals. Gameplay
 operations re-resolve UUID/native type and invoke the same canonical GameAction as features/tests,
 including current lifecycle/configuration/emergency/ownership/native admission and one observable
 outcome sentinel. Save deletion, save import/export, run reset, arbitrary clicks, arbitrary keys,
@@ -93,14 +93,14 @@ point exists: `game_concept` offers only `add` and `remove_owned`, because rotat
 out for another is automation policy rather than a control; `game_targeting` offers no cancel,
 because the visible Close button only dismisses presentation; there is no in-place augment editor
 and no way to select a discovery output by UUID; and `game_spell_level` requires
-`spellRecipeUuid` for `single` while rejecting it for `all`, because the native Level All button
+`uuid` for `single` while rejecting it for `all`, because the native Level All button
 takes no target.
 
 Every game-domain `BigDouble` is one JSON string produced by the shared MCP number formatter, never
-a JSON number or a text/mantissa/exponent object. Zero is `"0"`. Every nonzero magnitude uses a
-normalized mantissa with at most two decimal places and a lowercase `e` exponent without a plus
-sign: `"1.4e4"`, `"7.82e4"`, `"1.1e24"`, and `"1.23e-3"`. This is the only numeric notation and has
-no precision or verbosity option.
+a JSON number or a text/mantissa/exponent object. Zero is `"0"`. The formatter follows the screen:
+ordinary player-scale values are plain with at most two decimals (`"26"`, `"2.2"`), while large or
+small magnitudes use a normalized mantissa and lowercase `e` exponent without a plus sign
+(`"1.66e8"`, `"1.23e-3"`). There is one formatter and no precision or verbosity option.
 
 The game aggressively caches some derived values until their screen has been viewed. That upstream
 behavior is not silently worked around here. If a stale cache prevents a native action, the
@@ -117,9 +117,9 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `world_overview` | Compact collection, economy, progression, and running-state summary |
 | `world_categories` | Discover every published table and exact collection availability |
 | `world_list` | Page compact identity-plus-scan rows in one category |
-| `world_get` | Read an ordered 1–200 UUID list from one immutable generation; optional native-type assertion |
+| `world_get` | Read an ordered 1–200 UUID list from one pinned immutable publication; optional native-type assertion |
 | `entity_catalog` | Search every live-registry identity and available player-facing name, including loaded entities hidden by progression |
-| `explain_entity` | Evaluate one UUID's gates, requirement graph, exact costs, and blockers from one immutable generation |
+| `explain_entity` | Evaluate one UUID's gates, requirement graph, exact costs, and blockers from one pinned immutable publication |
 | `world_search` | Search stable-UUID entity categories; composite diagnostic rows are excluded |
 | `suite_health` | One compact runtime, feature, service, STOP, scene, and contract-health shape |
 | `suite_configuration` | Read the single committed configuration and writable setting catalog |
@@ -146,7 +146,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_screen_catalog` | Read compact named tabs with the active tab/subtab marked and grouped |
 | `game_navigate` | Navigate a catalog tab/subtab and optional published plot UUID |
 | `game_tooltips` | Page through active tooltip-bearing elements by exact indexed path |
-| `game_tooltip` | Read typed authored/computed node trees, nested links, and open inspected panels |
+| `game_tooltip` | Read compact plain screen text, including nested/computed and inspected content |
 | `game_probe` | Read one fixed native fact not carried by `WORLD` |
 
 `world_overview` deliberately contains only facts a strategist normally wants before choosing a
@@ -166,12 +166,12 @@ cannot be addressed by an arbitrary related UUID; use `world_list`.
 
 Supply `uuids` with 1–200 canonical UUIDs. Results preserve input order without repeating an index or UUID on
 successful rows. A typed not-found or invalid result repeats the implicated UUID because that is
-failure evidence. Every row shares the response's one `worldGeneration`; the server does not issue
-or retain a snapshot token across calls.
+failure evidence. Every row comes from the same pinned publication; the server does not issue a
+generation or retain a snapshot token across calls.
 
-Every paged read uses one pagination vocabulary: `total`, `returned`, and — only when more rows
-remain — `nextOffset`. There is no `hasMore` flag; a caller compares `returned` with `total` or
-looks for `nextOffset`. The collection itself is always present, including when it is empty.
+Every paged read uses one pagination vocabulary: `total` and — only when more rows remain —
+`nextOffset`. There is no redundant `returned` or `hasMore`; the collection length and
+`nextOffset` say both. The collection itself is always present, including when it is empty.
 
 `entity_catalog` complements `world_search` with the game's complete live runtime identity registry.
 At the first stable Playing world capture after `RuntimeReady`, the suite validates and copies that
@@ -199,7 +199,7 @@ surface.
 `purchase-costs` is the only modifier-adjusted live cost category. Spell and alchemy cost rows are
 immediate/drain observations and are not mislabeled as purchase prices. Each structure/upgrade cost
 row exposes `baseCost`, verified `effectiveCost`, optional `groupLevels`/`groupCost`, and named
-`costModifiers`. It also exposes the resource's same-generation canonical spendable `amount`, the
+`costModifiers`. It also exposes the resource's same-publication canonical spendable `amount`, the
 `totalCost` after duplicate-resource rows are combined, `resourceAffordable`, and
 `purchaseAffordable`, with reason codes only when false. Ordinary resources spend true holdings;
 bandwidth resources spend headroom. These fields use the same exact combiner as Auto Buy and do not
@@ -220,13 +220,13 @@ the research tooltip and native availability evaluator apply the challenge adjus
 research modifiers are included in the native effective result but are not misattributed as direct
 members of the research row.
 
-The same row is the complete pre-decision surface for `game_research`. It names the immediate or
+The same detailed row is the complete pre-decision surface for `game_research`. It names the immediate or
 queue route, live multi-buy maximum, exact number of levels the native cumulative loop will accept,
 and ordered named costs paired with each resource's canonical current `amount`. While development
 is active it includes elapsed/required/remaining progress and per-resource investment; associated
 research types carry their remaining free bonus levels and investment caps. Only currently
 UI-reachable next verbs appear: `develop`, `pause`, `resume`, `cancel`, and `bonus`. A committed
-mutation returns this complete newer row inline, so planning never requires a follow-up read.
+mutation returns the changed level or state; read detail remains in `world_get`.
 
 `crafting-recipe-types` describes the game's crafting families; `crafting-recipes` contains the
 actual recipes and is the pre-decision surface for `game_craft`. A recipe row leads with `visible`,
@@ -279,7 +279,7 @@ metadata and applicable discovery predicates.
 Every `alchemy-recipes`, `equipment`, `glyphs`, `rituals`, `spell-recipes`, and `time-runes` row
 has one `discover` decision from the native `IDiscoverable` evaluator. It names whether the entity
 is visible, already discovered, required for downstream play, currently discoverable, and
-affordable. Its ordered `costs` pair each named resource's scientific-string `cost` with the same
+affordable. Its ordered `costs` pair each named resource's screen-formatted `cost` with the same
 canonical spendable `amount` used everywhere else. Failed decision axes carry a stable reason;
 attempting a mutation is never required to learn affordability.
 
@@ -287,7 +287,7 @@ attempting a mutation is never required to learn affordability.
 compose pages let the player select components and then resolve exactly one output; the MCP
 reproduces that direction and never accepts the desired output UUID as the decision.
 `mode:"preview"` and `mode:"confirm"` take one `surface` from
-`spellcraft|glyphcraft|devote|runecraft|alchemy|artifacts` plus ordered `components` of
+`spellcraft|glyphcraft|devote|runecraft|alchemy|artifacts|concepts` plus ordered `components` of
 `{uuid,count}`. The server derives the target and its native type from the live resolver; the
 `expectedNativeType` assertion is still accepted, but there is no target argument to select with.
 Zero or multiple resolutions refuse (`discovery_recipe_unresolved`, `discovery_recipe_ambiguous`)
@@ -295,12 +295,13 @@ instead of guessing, and a component that is neither an available glyph nor a pu
 or that asks for more uses than the glyph permits, refuses as `component_unavailable`. This is why a
 partial component write can never claim a target it did not resolve.
 
-Spellcraft resolves core glyphs through the audited spell resolver; the other five surfaces use the
+Spellcraft resolves core glyphs through the audited spell resolver; the other six surfaces use the
 installed `UIDiscoverablePage` count-plus-membership semantics against exactly one published
 category — Glyphcraft→`glyphs`, Devote→`rituals`, Runecraft→`time-runes`, Alchemy→`alchemy-recipes`,
-Artifacts→`equipment`. `preview` is classified read-only and never mutates; `confirm` repeats the
+Artifacts→`equipment`, Concepts→`alchemy-recipes`. When `surface` is omitted from `preview`, all
+seven resolvers are tried and a unique match reports its surface. `preview` is classified read-only and never mutates; `confirm` repeats the
 whole resolution live at the action boundary before permit, payment, or discovery. The
-`offer_initiate`, `offer_select`, `offer_confirm`, and `offer_reroll` modes take `treeUuid` instead,
+`offer_initiate`, `offer_select`, `offer_confirm`, and `offer_reroll` modes take the tree `uuid` instead,
 and are the only modes that accept a UUID choice, because the transient offer UI really does show
 and select those exact entities.
 
@@ -308,8 +309,8 @@ The `equipment` category is also the artifact-loadout pre-decision surface. Each
 artifact and its primary equipment type, current/maximum stacks, global and type-slot occupancy,
 live multi-buy, usage-cost resources with current holdings, and the exact next equip/unequip amount
 or refusal. Call `game_equipment` with `mode:"equip"` or `mode:"unequip"`; there is no amount
-argument because one call reproduces one native player click. A committed call returns the complete
-newer equipment row inline, so no read-back is required. Usage reservations, effects, and
+argument because one call reproduces one native player click. A committed call returns the stack
+count before and after. Usage reservations, effects, and
 attunement are post-state evidence, never payment-verification gates.
 
 ### Challenge decision loop
@@ -320,7 +321,7 @@ maximum level, native next difficulty/reward, availability/completion verdicts, 
 membership, and explicit `select`, `activate`, and, when active, `abandon` decisions. Challenge
 selection has no resource price, so a row does not invent empty costs or affordability.
 
-Every challenge list/get/search response also carries one same-generation `challengeState`: ordered
+Every detailed challenge get/search response also carries one same-publication `challengeState`: ordered
 fully named `selected`, `timeOffers`, and `prestigeOffers`; selection capacity; first-fetch state;
 rerolls; and explicit `fetchTime`/`fetchPrestige` availability. This shared state is captured once
 on Unity's main thread with the ordinary world and projected by reference.
@@ -335,8 +336,8 @@ The MCP-only sequence is:
 
 1. Page `challenges`; compare next difficulty/reward and the named ordered offers from
    `challengeState`.
-2. Call `game_challenge(mode="select", uuid=...)`; its terminal response returns the updated
-   target plus ordered selection and offers.
+2. Call `game_challenge(mode="select", uuid=...)`; its terminal response returns the changed target
+   state.
 3. Call `activate` to toggle an offered target's activation state, or `abandon` for an active
    target.
 4. Call `fetch_time` or `fetch_prestige` without a UUID. The terminal response returns the complete
@@ -350,7 +351,7 @@ The MCP-only offer sequence is seven calls when two offers need explanations:
 
 1. `world_list(category="discovery-trees")` and choose a named Idle row whose
    `initiate.available` is true.
-2. Call `game_discover(mode="offer_initiate", treeUuid=...)`; its terminal response waits for and
+2. Call `game_discover(mode="offer_initiate", uuid=...)`; its terminal response waits for and
    returns the named ordered Choice offers.
 3. Call `offer_reroll` when `rerollAvailable=true`; its terminal response returns the replacement
    offers.
@@ -378,9 +379,9 @@ The MCP-only base-recipe sequence is:
 2. For an undiscovered recipe, call
    `game_discover(mode="preview", surface="spellcraft", components=[...])` with that row's
    components and check the resolved output, then repeat the call with `mode:"confirm"`. The
-   returned newer row reports discovered state and the loadout-add economics for the next decision.
+   response reports the resolved target and discovery transition.
 3. If an equipped instance is wanted, call
-   `game_spell_loadout(mode="add", spellRecipeUuid=..., glyphs=[...])`. Adding is the only place a
+   `game_spell_loadout(mode="add", uuid=..., glyphs=[...])`. Adding is the only place a
    glyph layout is chosen; it is baked into the created runtime spell.
 
 Every referenced entity is named inline. No catalog join, world-generation argument, payment
@@ -397,39 +398,34 @@ tool only moves the value inside the live native range.
 `game_casting_dial(dial="output"|"reserve", value=N)` is the whole surface. `value` is a positive
 integer checked against the live native maximum at the action boundary, which reads the exact global
 `IntVariable` for that dial and verifies the requested value became observable. A committed result
-returns the newer `casting` block plus every equipped spell's affected facts, so one call answers
-the next decision.
+returns the changed dial as `before` and `after` plus its maximum.
 
 There is deliberately no in-place augment editor. The visible game has none: glyph layout is chosen
-on the library candidate before add, and changing it is remove → relayout → re-add. `augmentOptions`
-in a loadout or dial post-state names every spell-augment glyph with owned/bonus level,
-availability, `usableCount`, and mastery/duration/toggle restrictions so the next `add` can be
-planned without a trial mutation.
+on the library candidate before add, and changing it is remove → relayout → re-add. A discovered
+recipe's `loadoutAdd.augmentOptions` names owned spell-augment glyphs only where choosing them is the
+next decision.
 
 ### Spell loadout loop
 
-`spell-slots` is the pre-decision surface for `game_spell_loadout`. Each occupied row contains the
-named runtime spell and recipe, exact slot, active cast/ready/attune state when applicable, and the
-game's current remove verdict. The response hoists `moveDestinations` and `augmentOptions` once
-instead of repeating them under every row; each destination is a slot with either its named
-occupant or an `empty` marker. `loadBudget` — `used`, `maximum`, and
-`fitsAnotherSpell` — rides on every `spell-recipes` row and on every committed loadout post-state,
-so capacity is never inferred from a failed mutation.
+`spell-slots` is the pre-decision surface for `game_spell_loadout`. Each occupied detail row contains
+the named runtime spell and recipe, exact slot, active cast/ready/attune state when applicable, the
+game's current remove verdict, and that spell's move destinations. Augment choices appear only on a
+discovered recipe's `loadoutAdd` decision. `loadBudget` — `used`, `maximum`, and
+`fitsAnotherSpell` — rides on every detailed `spell-recipes` row, so capacity is known before add.
 
 The MCP-only loadout sequence is:
 
 1. Read `world_list(category="spell-slots")` and choose one exact runtime `spellInstance.uuid`, or
    read a discovered `spell-recipes` row's `loadoutAdd` decision to add a new one.
-2. Call `game_spell_loadout(mode="add", spellRecipeUuid=..., glyphs=[{uuid,count}, ...])`; `[]` is
+2. Call `game_spell_loadout(mode="add", uuid=..., glyphs=[{uuid,count}, ...])`; `[]` is
    a valid intentional empty layout, not "reuse whatever the UI last selected".
-3. Call `game_spell_loadout(mode="move", spellInstanceUuid=..., destination=...)`; success returns
-   the complete newer named loadout and all next decisions.
-4. Call `game_spell_loadout(mode="remove", spellInstanceUuid=...)` only when that row's
-   `remove.available` is true; success returns the complete newer named loadout with the target
-   absent.
+3. Call `game_spell_loadout(mode="move", uuid=..., destination=...)`; success returns the slot
+   change.
+4. Call `game_spell_loadout(mode="remove", uuid=...)` only when that row's `remove.available` is
+   true; success returns the removed spell's former slot.
 
-`spellRecipeUuid` and `glyphs` belong to `add` only; `spellInstanceUuid` belongs to `remove` and
-`move` only; `destination` belongs to `move` only. Anything else is a named `unexpected_for_mode`
+The `uuid` means a recipe for `add` and a runtime spell instance for `remove`/`move`. `glyphs`
+belongs to `add` only; `destination` belongs to `move` only. Anything else is a named `unexpected_for_mode`
 validation failure rather than a silently ignored field.
 
 Add reproduces the library button's own admission order: it creates the native candidate, applies
@@ -452,14 +448,12 @@ work-in-flight state. Costs and affordability are absent because targeting spend
 The MCP-only targeting sequence is:
 
 1. Read `world_list(category="targeting")` and compare its named ordered candidates.
-2. Call `game_targeting(mode="submit", targetUuid=...)` to submit one exact candidate, or
+2. Call `game_targeting(mode="submit", uuid=...)` to submit one exact candidate, or
    `game_targeting(mode="randomize")` to let the native request choose and immediately submit.
 
 There are only those two modes. The visible Close button dismisses the targeting presentation and
 does not cancel the gameplay request, so MCP exposes no cancel verb rather than reaching past the UI
-into the owning effect result. Submit and randomize success return the named submitted structure
-plus the complete newer target state: the next named request and candidates, or `pending:false`. No
-follow-up read is needed.
+into the owning effect result. Submit and randomize success return the named submitted structure.
 
 ### Consumable decision loop
 
@@ -473,15 +467,14 @@ The MCP-only consumable sequence is:
 
 1. Read `world_list(category="consumables")` and choose from named costs, holdings, usages, and
    action verdicts.
-2. Call `game_consumable(mode="use", consumableUuid=...)` or
-   `game_consumable(mode="cancel", consumableUuid=...)`.
-3. Call `game_consumable(mode="discard", consumableUuid=..., amount=...)` for a positive amount,
-   `game_consumable(mode="set_randomization", consumableUuid=..., enabled=...)`, or
-   `game_consumable(mode="move", consumableUuid=..., list="inventory|hotbar",
+2. Call `game_consumable(mode="use", uuid=...)` or
+   `game_consumable(mode="cancel", uuid=...)`.
+3. Call `game_consumable(mode="discard", uuid=..., amount=...)` for a positive amount,
+   `game_consumable(mode="set_randomization", uuid=..., enabled=...)`, or
+   `game_consumable(mode="move", uuid=..., list="inventory|hotbar",
    destination=...)` for a zero-based same-list position.
 
-Every committed mode returns the newer named target row, the complete newer named inventory and
-hotbar, and all next decisions. Use also returns targeting state if it opened a request. There is no
+Every committed mode returns the changed amount, flag, or slot. There is no
 payment stanza, receipt, world-generation argument, catalog join, or post-mutation read-back.
 
 ### One-shot crafting decision loop
@@ -492,9 +485,9 @@ identity/room/current quantity, outputs, and blockers. The MCP-only sequence is:
 
 1. Read `world_list(category="crafting-recipes")` or batch exact recipes through `world_get`.
 2. Choose a row whose `canStart` is true after comparing `nextCosts`, outputs, and queue state.
-3. Call `game_craft(recipeUuid=...)`.
+3. Call `game_craft(uuid=...)`.
 
-Success returns the complete newer named recipe decision, including the next cost and queue state.
+Success returns the changed recipe quantity or queue fact.
 It has no receipt, payment stanza, world-generation argument, or read-back requirement. A timed
 recipe without one stable loaded authored page refuses rather than guessing a queue; failure after
 native work names the one missing direct, instant-stock, or queued-recipe outcome. Auto Scribe calls the same GameAction with
@@ -503,8 +496,8 @@ its own existing planner, so MCP crafting does not create a second Scribe implem
 ### Entity explanation
 
 `explain_entity` accepts one canonical `uuid` and pins the latest immutable world publication before
-it resolves or evaluates anything. The envelope's `worldGeneration`, entity
-row, predicates, requirements, costs, and blockers all come from that one publication;
+it resolves or evaluates anything. Its entity row, predicates, requirements, costs, and blockers
+all come from that one publication;
 the tool neither retains a snapshot token nor follows a newer publication during the call.
 Named identity appears once. When the resolved native entity implements the audited `ITooltipable`
 contract, its authored `GetDescription()` text leads the explanation after identity; no description
@@ -512,15 +505,12 @@ is invented when that source is absent. The `state` row uses the same curated pl
 world reads rather than serializing the collector's complete internal struct.
 
 Only applicable predicate slots are present: `visible`, `available`, `canDevelop`, `canPurchase`,
-`canDiscover`, and `canUse`. Presence means applicable. An evaluated slot carries `value`, a stable
-`reasonCode`, and its evidence source; a known collector gap instead carries `evaluated=false` and
-its exact gap code. Absence means the predicate does not apply, not false. Published native verdicts remain visibly native: crafting
-purchase uses `CraftingRecipeSO.CanBuyAt(GetStartingQuantity())`, and spell use uses the equipped
-`Spell.CanCast()` reading. Structure and upgrade `CanPurchase()` are not published, so their predicate
-is deliberately `evaluated=false` with `native_can_purchase_not_published`; the exact requirement,
-availability, queue, cap, cost, and affordability evidence remains present for diagnosis without
-assembling a rival purchase oracle. Consumable `CanFire()` is likewise a named collector gap,
-`native_can_fire_not_published`, rather than a collection-time call or reconstructed verdict.
+`canDiscover`, and `canUse`. Presence means applicable. Each slot carries `value` and a stable
+`reasonCode`; absence means the predicate does not apply, not false. Crafting purchase uses the
+published `CraftingRecipeSO.CanBuyAt(GetStartingQuantity())` verdict, spell use uses the equipped
+`Spell.CanCast()` reading, and structure/upgrade purchase combines published native availability
+with the one exact-cost affordability lineage. No predicate emits implementation provenance or a
+permanent never-evaluated apology.
 
 Discovery trees are explainable entities: their explanation carries the same decision row as
 `world_get(discovery-trees)`. A UUID absent from the live identity registry returns `uuid_unknown`
@@ -536,7 +526,7 @@ scaled, and effective thresholds. Unsupported comparisons return a structured un
 
 The collector also captures the safe parameterized
 `Prerequisites.Container.Check(Requirements.ConditionInfo)` answer at the exact next-purchase level.
-The worker compares its graph verdict with that same-generation native answer. Missing inputs,
+The worker compares its graph verdict with that same-publication native answer. Missing inputs,
 unevaluable suite math, a different owner/level, or a disagreement makes the whole explanation
 `unavailable`; a disagreement returns both verdicts and `native_verdict_mismatch`. The installed
 v1.05 contract additionally pins that a structure quantity requirement reads purchased `quantity`,
@@ -587,9 +577,9 @@ Every action, configuration write, STOP transition, and gadget waits for Unity's
 returns its terminal result in the same MCP tool call.
 
 A committed gameplay mutation then goes through one shared settlement rather than a per-tool sleep
-or poll: it waits up to one second for a strictly newer published world and projects the post-state
-from exactly that immutable world. A prompt publication returns immediately, and there is no routine
-lag field on the ordinary path. If no strictly newer world arrives in time, the mutation stays
+or poll: it waits up to one second for a world captured after the action completed and projects the
+changed fact from exactly that immutable world. A prompt publication returns immediately, and there
+is no routine lag field on the ordinary path. If no such world arrives in time, the mutation stays
 committed and the response carries the single exceptional
 `postStateUnavailable / post_state_timeout` fact instead of an empty success or the pre-mutation
 world. Reaching that path repeatedly in live play means a missing publication trigger to diagnose,
@@ -597,8 +587,9 @@ not a timeout to lengthen.
 
 A successful read uses `available`; an unavailable domain read uses `unavailable`. A successful
 mutation uses `committed`; a refused mutation uses `refused`; infrastructure or native divergence
-uses `faulted`. Mutations carry a stable `code`; success adds only the live post-state. Refusals and
-faults add one actionable `reason` and only the identity, admission, or missing-outcome facts that
+uses `faulted`. Success adds only the settled delta and omits a code that would restate
+`committed`. Refusals and faults add a stable `code`, one actionable `reason`, and only the identity,
+admission, or missing-outcome facts that
 made it true. Counters, request echoes, generations, payment stanzas, and decomposed receipts are
 absent. There is one canonical shape per tool and no verbosity option.
 
@@ -620,10 +611,9 @@ atomically canceled as `request_canceled_before_claim` and can never execute. On
 it, the operation owns execution and the worker waits for the real terminal result; a local timeout
 cannot precede a hidden later mutation. There is no pending fallback.
 
-Action schemas accept no `worldGeneration` argument. Generations advance independently every
-250 ms, so an action revalidates live identity and mutable facts at its GameAction boundary instead
-of accepting an inevitably stale caller generation. Action results carry no generation; reads alone
-stamp the immutable world that answered them.
+No schema accepts `worldGeneration`. An operation pins its current world internally, actions
+revalidate live identity and mutable facts at the GameAction boundary, and the generation counter
+never becomes caller ceremony.
 
 Where a target UUID is supplied, the server derives its native type and action kind from that UUID;
 where components are supplied, it derives the target from the live resolver instead:
@@ -632,24 +622,24 @@ where components are supplied, it derives the target from the live resolver inst
 tools/game-mcp-client.py call game_purchase --arguments \
   '{"uuid":"STRUCTURE_OR_UPGRADE_UUID","count":1}'
 tools/game-mcp-client.py call game_harvest --arguments \
-  '{"plotNodeUuid":"PLOT_UUID"}'
+  '{"uuid":"PLOT_UUID"}'
 tools/game-mcp-client.py call game_cast --arguments \
-  '{"mode":"fire","slotIndex":0,"spellRecipeUuid":"SPELL_UUID"}'
+  '{"mode":"fire","slotIndex":0,"uuid":"SPELL_UUID"}'
 tools/game-mcp-client.py call game_discover --arguments \
   '{"mode":"preview","surface":"spellcraft","components":[{"uuid":"GLYPH_UUID","count":2}]}'
 tools/game-mcp-client.py call game_discover --arguments \
-  '{"mode":"offer_select","treeUuid":"TREE_UUID","offerUuid":"OFFER_UUID"}'
+  '{"mode":"offer_select","uuid":"TREE_UUID","offerUuid":"OFFER_UUID"}'
 tools/game-mcp-client.py call game_casting_dial --arguments \
   '{"dial":"output","value":4}'
 tools/game-mcp-client.py call game_spell_loadout --arguments \
-  '{"mode":"add","spellRecipeUuid":"SPELL_RECIPE_UUID","glyphs":[{"uuid":"GLYPH_UUID","count":2}]}'
+  '{"mode":"add","uuid":"SPELL_RECIPE_UUID","glyphs":[{"uuid":"GLYPH_UUID","count":2}]}'
 tools/game-mcp-client.py call game_challenge --arguments \
   '{"mode":"select","uuid":"CHALLENGE_UUID"}'
 ```
 
-`game_discover`'s offer modes require `treeUuid`, require `offerUuid` for `offer_select` and
+`game_discover`'s offer modes require the tree `uuid`, require `offerUuid` for `offer_select` and
 `offer_confirm`, and reject it for `offer_initiate` and `offer_reroll`; `surface` and `components`
-are rejected for every offer mode, and `treeUuid`/`offerUuid` are rejected for `preview` and
+are rejected for every offer mode, and `uuid`/`offerUuid` are rejected for `preview` and
 `confirm`. Initiate and reroll verify the exact tree/type and immediate transition to Crafting;
 select verifies the requested offered UUID became selected; confirm verifies that exact UUID became
 discovered. Payment deltas, reroll values, counters, flags, timers, list cleanup, and selection
@@ -664,42 +654,42 @@ name only the failed admission or missing transition and the fact that explains 
 Output Level and Reserve Level are single global variables. The boundary reads the exact global
 variable and its purchased maximum on the Unity main thread, rejects a value outside that live
 range, and verifies that the requested value became observable. Success is the exact requested
-global value; a committed result is the newer casting state and every affected equipped spell.
+global value; a committed result is the dial's `before` and `after` value plus its maximum.
 
-`game_spell_loadout` requires `mode`. `add` requires `spellRecipeUuid` plus an explicit `glyphs`
-array and rejects `spellInstanceUuid`; `remove` and `move` require `spellInstanceUuid` and reject
-`spellRecipeUuid`/`glyphs`; `move` additionally requires a zero-based `destination`, which no other
-mode accepts. Add builds the native candidate, applies the selected level, bakes the glyph layout
+`game_spell_loadout` requires `mode` and `uuid`. For `add`, `uuid` is a spell-recipe identity and an
+explicit `glyphs` array is required. For `remove` and `move`, `uuid` is a runtime spell-instance
+identity and `glyphs` is rejected; `move` additionally requires a zero-based `destination`, which no
+other mode accepts. Add builds the native candidate, applies the selected level, bakes the glyph layout
 with `Spell.SetAugmentGlyphs` before the manager add route, pays last, and verifies the exact
 requested loadout outcome. Remove rechecks the game's live `Spell.CanRemove()` verdict; move
 re-resolves the source slot and invokes the same native swap-plus-notify path as the spellbook.
-Success is the exact added instance, exact target absence with survivor order preserved, or the
-complete slot sequence with exactly source and destination exchanged. A committed result is the
-complete newer named loadout; a failure names only the unmet admission or missing outcome.
+Success is the exact added instance, exact target absence, or the exact target at its destination.
+A committed result returns only the recipe identity and slot change; a failure names only the unmet
+admission or missing outcome.
 
-`game_targeting` has two conditional shapes. `submit` requires one `targetUuid`; `randomize` rejects
+`game_targeting` has two conditional shapes. `submit` requires one target `uuid`; `randomize` rejects
 it. Submit re-resolves that UUID within the live native candidate list and reruns the request's
 native target verdict immediately before mutation. Randomize invokes the game's own random choice
 and immediately submits that result; it is not a candidate-only shuffle. Success is exact
-submitted-object identity plus retirement of the original request. A committed result includes the
-complete newer target state; a failure names only the rejected target or missing submission.
+submitted-object identity plus retirement of the original request. A committed result names the
+submitted target; a failure names only the rejected target or missing submission.
 
 `game_consumable` has five conditional shapes. `use` and `cancel` require only a
-`consumableUuid`; `discard` also requires positive `amount`; `set_randomization` requires
+consumable `uuid`; `discard` also requires positive `amount`; `set_randomization` requires
 `enabled`; and `move` requires `list` plus zero-based `destination`. Fields belonging to another
 mode are rejected. The boundary re-resolves the exact `ConsumableSO`, all live verb predicates,
 and the current list/source/destination on the Unity main thread, then captures the shared
 ConsumableUse/MultiBuy permit last. Success is the requested queue, exact usage cancellation,
-clamped holding removal, randomization flag, or complete same-list order. Payment and downstream
-effect accounting do not gate success; a committed result is the full newer decision state.
+clamped holding removal, randomization flag, or exact destination. Payment and downstream effect
+accounting do not gate success; a committed result returns only the changed amount, flag, or slot.
 
-`game_craft` requires one `recipeUuid`; `expectedNativeType`, when supplied, must be
+`game_craft` requires one recipe `uuid`; `expectedNativeType`, when supplied, must be
 `CraftingRecipeSO`. The boundary re-resolves the exact recipe, authored page/queue route, native
 purchase amount, affordability, and room on Unity's main thread, then captures the shared crafting
 permit last. Direct recipes invoke native `CraftingRecipeSO.Execute`; page recipes re-drive the
 audited stack/new/instant `UICraftingPage.QueueCraft` sequence. Queue success is the exact recipe
-quantity and instance outcome. Payment accounting never gates success. A committed result is the
-newer full crafting decision row.
+quantity and instance outcome. Payment accounting never gates success. A committed result returns
+the changed recipe quantity or queue fact.
 
 `game_discover`'s composition modes require `surface` plus `components` and accept no target UUID;
 optional `expectedNativeType` remains an exact assertion, not a selector. `preview` resolves the
@@ -709,8 +699,8 @@ output, its costs, holdings, affordability, and blockers; it is a read and mutat
 native recipes and every exact live component before repeating native visibility,
 already-discovered, `CanDiscover`, exact cost, and affordability checks on Unity's main thread. It
 captures the shared family permit last, then preserves the UI's `PerformCost`-before-`Discover`
-ordering. Success is the exact resolved target becoming discovered and returns its complete newer
-named world row inline. It carries no receipt or payment stanza. A refusal occurs before payment and
+ordering. Success is the exact resolved target becoming discovered and returns that named target
+plus its discovered transition and surface. It carries no receipt or payment stanza. A refusal occurs before payment and
 restores any temporary UI selection staged for native resolution. A fault names the single missing
 discovery outcome. A composition that resolves differently than the caller expected is
 preview or refusal evidence, never a wrong-target mutation.
@@ -719,8 +709,8 @@ preview or refusal evidence, never a wrong-target mutation.
 `expectedNativeType`, when supplied, must be `EquipmentSO`. On Unity's main thread it re-resolves
 the exact artifact and repeats creation, current stacks, global and primary-type slot room, live
 multi-buy, maximum stacks, and native usage-affordability checks before taking the family permit.
-Success is only the exact requested target-stack transition. It returns the complete newer named
-equipment row with both next decisions and no receipt or payment/usage stanza. A missing transition
+Success is only the exact requested target-stack transition. It returns the target's stack count
+before and after, with no receipt or payment/usage stanza. A missing transition
 faults that attempt; a throw after the exact transition commits.
 
 `game_challenge` requires one of `select`, `activate`, `abandon`, `fetch_time`, or
@@ -731,11 +721,11 @@ Unity's main thread, checks offer membership, selection room/restrictions, activ
 world-cycle completion, and rerolls, then captures the `ChallengeLifecycle` permit last. Select
 verifies exact membership inversion; activate verifies the exact idle/queued toggle; abandon
 verifies the exact
-target becomes failed. A fetch verifies that its requested ordered offer surface materialized and
-every offer entered the native queued state. Rerolls, fetched flags, rewards, effects, and other
-accounting are neither success gates nor response data. Committed target modes return the complete
-newer named challenge row plus shared challenge state; fetch returns the shared state. No success
-receipt or follow-up read is required.
+target becomes failed. The first fetch verifies the game's fetched flag; later fetches verify that
+the reroll count decreased. Offer contents, rewards, effects, and other accounting are neither
+success gates nor response data. Fetch returns the new named offer state because it is the next
+decision; target modes return the changed challenge state. No success receipt or follow-up read is
+required.
 
 `game_prestige` requires `confirm:true`. The boundary rereads the reset manager's world-cycle
 completion and challenge-fetch flags plus the persistent reset count on Unity's main
@@ -757,8 +747,8 @@ pause, resume, cancel, and bonus call their exact native methods. Success is onl
 identity/outcome: active development or increased total queued levels, paused/resumed state, idle
 with an empty queue, or one added self-bonus level. Cost, investment, resource, type-counter, and
 progress-clock movements never gate success. A missing transition faults that attempt; a throw
-after the exact outcome commits. Every committed mode returns the full newer named research row
-and every next decision with no receipt, payment stanza, or read-back.
+after the exact outcome commits. Every committed mode returns the changed level or state with no
+receipt, payment stanza, or read-back.
 
 No MCP fault installs a persistent family quarantine. A faulted or refused request leaves nothing
 behind: the next call returns to the same action boundary and revalidates current identity, native
@@ -784,12 +774,12 @@ mutation proof.
 STOP closes MCP native admission exactly as it closes automation. Resume still requires the host's
 ordinary fresh-world gate.
 
-`suite_configuration` returns `configurationGeneration` plus the startup-built
-`writableSettings` catalog and its current serialized values. It never reflectively serializes the
+`suite_configuration` returns the startup-built `writableSettings` catalog and its current
+serialized values. It never reflectively serializes the
 runtime configuration record or exposes compiler metadata and internal nested policy objects.
 
-`suite_config_set` requires the current `configurationGeneration` and commits through
-`AutomataConfigurationStore`, the same single publication path as the in-game controls. BepInEx
+`suite_config_set` commits through `AutomataConfigurationStore`, the same single publication path
+as the in-game controls. BepInEx
 parse/domain validation runs before publication. Compatibility acknowledgements, shortcuts, and
 STOP are not generic writable settings.
 
@@ -819,7 +809,7 @@ its `label` and `active` flag; the active tab additionally carries `subtabStrips
 independent strip names its `active` label and its ordered `labels`. Unity hierarchy paths and
 unstable numeric indexes are deliberately absent.
 
-`game_navigate(tab, subtab?, plotNodeUuid?, capture?, maxWidth?)` accepts exact labels only. Name matching is
+`game_navigate(screen, subtab?, uuid?, capture?, maxWidth?)` accepts exact labels only. Name matching is
 ordinal and closed-world: zero or multiple matches reject with the exact candidate labels. Plot selection resolves
 the supplied UUID as a published `PlotNodeSO` and invokes the one audited active
 `UIPlotNodeList.OnNodeClick(PlotNodeSO)`. It is not a hardcoded Fruit Tree command.
@@ -848,21 +838,13 @@ The current game build makes the exploration loop feasible. Active `HoverTooltip
 an `ITooltipable`, core name/type/description methods, and a private authored `subTooltips` list;
 `OpenTooltip` renders the selected element. `game_tooltips` pages through current-screen elements by
 an exact native hierarchy path whose sibling indices disambiguate repeated Unity clone rows.
-`game_tooltip` requires one exact path and returns the native tooltip as compact typed
-`TooltipNode` rows. Each row keeps native kind, evaluated text, children, linked tooltip, and
-sub-tooltip documents. Per-node paths, ordinals, paint, icon ceremony, success stanzas, and
-authored/evaluated duplicates are absent. Alternate nodes appear only when their semantic tree
-differs from the primary tree. Every nested or linked tooltipable is emitted as a `ref` handle into
-one shared referenced map, so a document that appears in several places is projected exactly once
-and a cycle terminates instead of expanding forever. The
-same response expands authored nested tooltips and currently open inspected
-panels, with explicit cycle, depth, and node-count refusal rows. Unity rich-text markup is stripped
-from every MCP string. Stable UUID identity is attached when the tooltipable is an
-`IdScriptableObject`; names that cannot resolve uniquely are never guessed. Computed text
-delegates run inline on the Unity thread; the reader never clicks a node or
-renders a panel. The result labels its `unity_main_thread` source. Core tooltip identity and
-description remain alongside the node tree,
-and the tool can return an inline screenshot with the tooltip open.
+`game_tooltip` requires one exact path and returns the tooltip as compact plain screen text. The
+reader walks the native node, linked-tooltip, nested-tooltip, and currently inspected-panel graph
+on Unity's main thread, but its node structure, repeated paint, empty arrays, duplicate authored
+text, and identical alternate tree are wire-internal ceremony and never ship. A cycle or hard
+depth/node bound is rendered as one explanatory line rather than recursively expanding forever.
+Unity rich-text markup is stripped. Computed text delegates run inline; the reader never clicks a
+node or renders a panel. The tool can return an inline screenshot with the tooltip open.
 
 ```sh
 tools/game-mcp-client.py tooltips --limit 25
@@ -872,9 +854,9 @@ tools/game-mcp-client.py tooltip 'EXACT/PATH/FROM/CATALOG' \
 ```
 
 The audited manifest covers the native tooltip carrier/open/nesting shape, while the real-reference
-build and the installed tooltip contract test verify the interface and `TooltipNode` shape against
-the pinned game assemblies. The same audited `ITooltipable.GetDescription()` contract supplies
-authored descriptions for `explain_entity` when the resolved entity implements that interface.
+build and installed contracts verify the source node graph that the prose renderer consumes. The
+same audited `ITooltipable.GetDescription()` contract supplies authored descriptions for
+`explain_entity` when the resolved entity implements that interface.
 
 ## Trace health and probes
 
