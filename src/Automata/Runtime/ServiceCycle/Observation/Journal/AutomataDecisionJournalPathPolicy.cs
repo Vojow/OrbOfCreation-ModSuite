@@ -29,12 +29,14 @@ internal sealed class AutomataDecisionJournalPathPolicy : IAutomataDecisionJourn
     private static int _storageClaimed;
     private readonly string _rootDirectory;
 
+    internal static string DirectoryPath => AutomataTraceRunRoot.Stable(ArtifactName);
+
     private AutomataDecisionJournalPathPolicy(string rootDirectory) => _rootDirectory = rootDirectory;
 
     internal static AutomataDecisionJournalOptions Create(DecisionJournalStatusRegistry status)
     {
         if (status is null) throw new ArgumentNullException(nameof(status));
-        var root = AutomataTraceRunRoot.Stable(ArtifactName);
+        var root = DirectoryPath;
         return new AutomataDecisionJournalOptions(
             status,
             new AutomataDecisionJournalPathPolicy(root),

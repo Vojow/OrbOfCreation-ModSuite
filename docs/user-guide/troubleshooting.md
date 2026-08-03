@@ -14,7 +14,7 @@ Gameplay runtime quarantined: the installed game build does not match an audited
 
 The line names the observed `Assembly-CSharp` and `Assembly-CSharp-firstpass` hashes and the audited baselines. A refusal beginning `Refusing to load even the diagnostic control plane` means the pair could not be discovered completely, so even a hash-bound acknowledgement would be unsafe.
 
-Run **Mods > Runtime > Run differential verification** while quarantined and report the results. If a player chooses to proceed before an audited release, press **Resume all** on General or the top-left STOP button. That immediate action accepts only the exact observed pair and resumes in the same step. This is an explicit risk acknowledgement, not audit evidence, and either assembly changing resets it. **Advanced > Allow this unverified game build** is the alternative when the player wants to acknowledge the pair but keep STOP engaged for a later one-click resume. Turning that acknowledgement off immediately re-engages STOP; restart to unload patches already installed during that session.
+Run **Mods > Runtime > Check game math** while quarantined and report the results. If a player chooses to proceed before an audited release, press **Resume all** on General or the top-left STOP button. That immediate action accepts only the exact observed pair and resumes in the same step. This is an explicit risk acknowledgement, not audit evidence, and either assembly changing resets it. **Advanced > Allow this unverified game build** is the alternative when the player wants to acknowledge the pair but keep STOP engaged for a later one-click resume. Turning that acknowledgement off immediately re-engages STOP; restart to unload patches already installed during that session.
 
 Players should still report the new game version on the [issue tracker](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/issues). Maintainers re-audit a build with `script/re-audit --game-dir <path>` to see what changed, then `--stamp` to record the new baseline once every verification stage passes.
 
@@ -40,7 +40,7 @@ Expected on the upgrade to 0.4.0. The suite has one configuration file named aft
 
 ## Auto Concept repeatedly removes and re-adds one concept
 
-Current builds reject a positive concept drain when its authoritative resource is at zero, so an unsafe recipe cannot monopolize mutation work or prevent another acquired compatible slot from being filled. If churn remains, capture the Runtime page's recent events and full trace, then include those records plus the affected resource name.
+Current builds reject a positive concept drain when its authoritative resource is at zero, so an unsafe recipe cannot monopolize mutation work or prevent another acquired compatible slot from being filled. If churn remains, press **Create bug report** immediately after it happens and include the resulting zip plus the affected resource name.
 
 If Auto Concept repeatedly logs `Auto Concept did not complete`, the line names the active and
 proposed replacement UUIDs and says whether the live slot, quantity, or prospective resource drain
@@ -50,7 +50,7 @@ snapshot is missing a native constraint, not a reason to skip ahead or add a ret
 
 ## Checking the suite against the live game
 
-**Run differential verification** on Mods -> Runtime runs the diagnostic: it compares the suite's own economy math against the game's results for every structure and resource, checks its world collection against the game's own accessors, and checks its verdict on whether each upgrade and structure may be bought at its next level against the game's own per-level prerequisite check. It reports one verdict per pass in `BepInEx/LogOutput.log`, and reads and compares only; it changes nothing in the game.
+**Check game math** on Mods -> Runtime runs the diagnostic: it compares the suite's own economy math against the game's results for every structure and resource, checks its world collection against the game's own accessors, and checks its verdict on whether each upgrade and structure may be bought at its next level against the game's own per-level prerequisite check. It reports one verdict per pass in `BepInEx/LogOutput.log`, and reads and compares only; it changes nothing in the game.
 
 A requirement pass that reports `INCOMPLETE` names a condition class the suite does not model. That is not a wrong answer — an unmodelled condition already stops the purchase being planned — but it is worth reporting, because it makes Auto Buy skip something the game would have allowed.
 
@@ -60,6 +60,9 @@ Schema 5 removes the retired `Diagnostics/VerifyGameMathShortcut`; differential 
 
 ## Reporting a bug
 
-Include game, Unity, BepInEx, and plugin versions, sanitized reproduction steps, and the relevant log section. Do not attach private saves or logs containing usernames, email addresses, or unrelated local paths.
+Press **Create bug report** on Mods -> Runtime immediately after the problem. The suite flushes the
+evidence it already holds and creates one timestamped zip no larger than 10 MiB. Text files are
+redacted for usernames and absolute paths; the included save remains a byte-exact private game file,
+so share the zip only with a recipient you trust. Include sanitized reproduction steps with it.
 
 If recovery requires removing the mod, follow [uninstalling](uninstalling.md).

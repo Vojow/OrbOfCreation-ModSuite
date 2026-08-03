@@ -10,9 +10,9 @@ registered ServiceCycle services and share the frame pump with world collection.
 a fixed 16-action turn per Unity frame; the other feature services retain a bounded one-action
 turn. Fruit and treasure capabilities cannot mask an eligible sibling. A feature-neutral host owns
 the ServiceCycle registry, frame pump, lifecycle, emergency control, timing publication, and
-pump-shutdown lease. That host also owns the observation products — the optional manual full-trace
-session, the normally-on compact decision journal, and the profiling build's performance profile —
-so no feature owns them and gameplay is independent of all three. Every native operation passes
+pump-shutdown lease. That host also owns the observation products — the always-held recent-event ring,
+the normally-on compact decision journal, and the profiling build's correlated full trace and
+performance profile — so no feature owns them and gameplay is independent of all four. Every native operation passes
 through fail-closed family adapters, normalized admission facts, lifecycle isolation, and
 capture-execute-capture postconditions.
 
@@ -124,13 +124,12 @@ Saved configuration publishes only after a successful Apply and affects the next
 
 The Runtime page projects pair health from immutable ServiceCycle state without inventing a legacy cycle identity. A worker response requests one full service projection; a zero-wait contended read remains pending until a later frame succeeds. Emergency-stop and action-family conditions remain immediate.
 
-The separate Runtime-page full-trace control records incremental diagnostic-only sessions under that
-launch's own `BepInEx/config/OrbOfCreation-ModSuite/trace/run-<timestamp>/full/` folder, beside the
-performance profile from the same launch. Each launch prunes all but the newest eight run folders.
-`./script/trace --full <session-directory> [report.md]` strictly validates and reports those sessions.
-Profiler-enabled debug builds start both this full trace and the ServiceCycle performance profile
-when the shared runtime is created. Closing the game stops both with the runtime-shutdown reason
-and flushes their accepted prefixes; release builds retain manual, opt-in recording.
+Profiler-enabled debug builds start a full semantic trace and the ServiceCycle performance profile
+when the shared runtime is created. They write correlated sessions under that launch's own
+`BepInEx/config/OrbOfCreation-ModSuite/trace/run-<timestamp>/` folder, and each launch prunes all but
+the newest eight run folders. `./script/trace --full <session-directory> [report.md]` strictly validates
+and reports a trace. Closing the game stops both products with the runtime-shutdown reason and flushes
+their accepted prefixes. Release composition has no record-forward full-trace control.
 
 The compact decision journal starts once with the lifecycle-bound ServiceCycle runtime under the stable
 `BepInEx/config/OrbOfCreation-ModSuite/trace/journal/` directory, which is deliberately not per-launch so
@@ -313,7 +312,7 @@ Enabling the feature initializes the scoped shared classifier and snapshots curr
 
 Transient shared classifier readiness failures use the existing 30-second Auto Concept warning gate. A contradictory or permanently invalid concept-domain contract blocks Auto Concept for that lifecycle and is logged once; `Unknown` evidence never falls back to ordinary names or broad alchemy membership.
 
-Warnings and errors are always emitted. Deeper troubleshooting is deliberate and bounded: use the Mods Runtime actions to capture a full trace, inspect recent events and the decision journal, or run differential verification. Schema 5 retires the old global logging switches, rejection cap, and detailed-logging preferences because ServiceCycle does not consume them.
+Warnings and errors are always emitted. After a problem, use **Create bug report** on Mods Runtime to flush and package the recent-event ring, decision journal, configuration, identifiable save files, and redacted log into one capped zip. **Check game math** remains a separate read-only diagnostic. Schema 5 retires the old global logging switches, rejection cap, and detailed-logging preferences because ServiceCycle does not consume them.
 
 Auto Buy decisions use append-only Common codes rather than parsing diagnostic text. Candidate threshold parking, rejection telemetry, the latest tooltip status, and Runtime presentation all consume the same immutable decision. Observed quantities and wording can change without producing a new condition; stable thresholds, identities, policy, queue limits, and native states do produce a transition. Equivalent conditions are not republished to future Insights subscribers.
 

@@ -200,6 +200,7 @@ internal sealed class ServiceActionOutcomeWindowProjection :
     }
 
     public void Advance(MonotonicTimestamp now) => AdvanceTimeline(now);
+    public void Flush(MonotonicTimestamp now) => AdvanceTimeline(now);
     public void Stop(MonotonicTimestamp now) => AdvanceTimeline(now);
 
     private void ObserveTimeline(

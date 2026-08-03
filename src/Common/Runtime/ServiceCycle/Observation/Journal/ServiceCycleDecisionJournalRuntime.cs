@@ -140,6 +140,24 @@ internal sealed class ServiceCycleDecisionJournalRuntime : IDisposable
         RefreshTerminalState();
     }
 
+    internal DecisionJournalRuntimeSnapshot Flush()
+    {
+        EnsureOwner();
+        if (_disposed || IsTerminal(_state) || _stopRequested || !_attached) return Snapshot;
+
+        _observer.Flush(_pump.DiagnosticsNow);
+        if (_observer.IsFaulted)
+        {
+            BeginFaultStop();
+            return Snapshot;
+        }
+
+        var transport = _sink.TransportMetrics;
+        var consumer = _sink.ConsumerMetrics;
+        RefreshTerminalState(transport.Status);
+        return CreateSnapshot(in transport, in consumer);
+    }
+
     public void Dispose()
     {
         EnsureOwner();

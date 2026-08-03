@@ -133,6 +133,11 @@ internal sealed class AutomataServiceCycleHost : IDisposable
         _pump.SetEmergencyStop(engaged, reason);
     }
 
+    internal AutomataDiagnosticsRuntimeEvidence CaptureDiagnostics() =>
+        _observability?.CaptureDiagnostics() ??
+        AutomataDiagnosticsRuntimeEvidence.Unavailable(
+            "The automation runtime has no diagnostics source.");
+
     internal bool TryReplaceLifecycle(long nativeGeneration)
     {
         ThrowIfDisposed();

@@ -24,6 +24,12 @@ internal static class AutomataLoggingExtensions
     internal static string WithTimestamp(object data, DateTimeOffset timestamp) =>
         $"[{timestamp.ToString(TimestampFormat, CultureInfo.InvariantCulture)}] {data}";
 
+    internal static void Flush(ManualLogSource log)
+    {
+        if (log is null) throw new ArgumentNullException(nameof(log));
+        if (RepeatCollapsers.TryGetValue(log, out var collapser)) collapser.FlushAll();
+    }
+
     private static void Write(ManualLogSource log, AutomataLogSeverity severity, object data)
     {
         var message = Convert.ToString(data, CultureInfo.CurrentCulture) ?? string.Empty;

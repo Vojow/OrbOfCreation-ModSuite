@@ -63,6 +63,16 @@ internal sealed class AutomataRepeatCollapser
         }
     }
 
+    internal void FlushAll()
+    {
+        lock (_gate)
+        {
+            Flush(AutomataLogSeverity.Info, _info);
+            Flush(AutomataLogSeverity.Warning, _warning);
+            Flush(AutomataLogSeverity.Error, _error);
+        }
+    }
+
     private RepeatState StateFor(AutomataLogSeverity severity) => severity switch
     {
         AutomataLogSeverity.Info => _info,

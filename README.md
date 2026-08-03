@@ -35,7 +35,7 @@ Spell Leveling, Auto Cast, Auto Concept, and Mentor are its nine registered serv
 
 Three separate diagnostics help investigate different problems:
 
-- manual full traces show exactly what happened and in what order;
+- one bug-report file captures the suite's already-held evidence after a problem;
 - the rolling decision journal summarizes what services decided; and
 - opt-in performance profiles show where time was spent.
 

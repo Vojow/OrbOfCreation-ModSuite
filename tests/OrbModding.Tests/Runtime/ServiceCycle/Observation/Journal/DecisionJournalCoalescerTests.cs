@@ -164,6 +164,23 @@ public sealed class DecisionJournalCoalescerTests
         Assert.Equal(0, sink.FlushCount);
     }
 
+    [Fact]
+    public void ExplicitFlushPublishesOpenPastEvidenceWithoutStoppingTheJournal()
+    {
+        var sink = new RecordingSink();
+        var journal = Create(sink);
+        journal.Observe(CreateObservation(1, 1));
+
+        journal.Flush(new MonotonicTimestamp(2));
+
+        Assert.Single(sink.Records);
+        Assert.Equal(1, sink.FlushCount);
+        Assert.False(sink.Stopped);
+        journal.Observe(CreateObservation(2, 3));
+        journal.Stop(new MonotonicTimestamp(4));
+        Assert.Equal(2, sink.Records.Count);
+    }
+
     private static DecisionJournalCoalescer Create(RecordingSink sink, int serviceCapacity = 1) =>
         new(
             serviceCapacity,

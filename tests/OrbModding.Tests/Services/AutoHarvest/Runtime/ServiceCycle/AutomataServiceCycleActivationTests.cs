@@ -184,6 +184,8 @@ public sealed class AutomataServiceCycleActivationTests
             Publications++;
         public void InvalidateLifecycle() => Invalidations++;
         public void CancelPreparedWork() => Cancellations++;
+        public AutomataDiagnosticsRuntimeEvidence CaptureDiagnostics() =>
+            AutomataDiagnosticsRuntimeEvidence.Unavailable("test runtime");
         public void Dispose() => Disposals++;
     }
 

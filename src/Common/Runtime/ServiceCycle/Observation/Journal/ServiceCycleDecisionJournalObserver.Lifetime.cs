@@ -12,6 +12,13 @@ internal sealed partial class ServiceCycleDecisionJournalObserver
         catch (Exception exception) when (CanContain(exception)) { Fault(exception, nameof(Advance)); }
     }
 
+    internal void Flush(MonotonicTimestamp observedAt)
+    {
+        if (IsFaulted) return;
+        try { _journal.Flush(observedAt); }
+        catch (Exception exception) when (CanContain(exception)) { Fault(exception, nameof(Flush)); }
+    }
+
     public void Stop(MonotonicTimestamp observedAt)
     {
         if (!_faulted)

@@ -22,9 +22,10 @@ Keyboard shortcuts are parsed and validated while staged. Text-backed dependenci
 The Mods catalog is reused across ordinary refreshes and unchanged scene rebuilds. Late plugin/config-definition additions or removals invalidate it at the existing integrity check, rebuild it once, and restore navigation by stable plugin and section identity.
 
 Runtime starts with a two-column summary of all seven suite features; failures and attention states
-sort before waiting and healthy features. Recent events and differential verification follow, then
-full trace, optional profiling, the automation activity timeline, the decision journal, and
-detailed service cards. The
+sort before waiting and healthy features. One **Create bug report** action packages the suite's recent
+activity, settings, log, and identifiable save files into a shareable zip; it captures what already
+happened and does not start recording. The separate game-math check follows, then optional profiling,
+the automation activity timeline, the decision journal, and detailed service cards. The
 Runtime footer reports whether the Mods refresh is pending and how long ago it last completed. Mods
 maintenance admits at most one pass per Unity frame and continues pending work on later frames.
 
@@ -45,7 +46,7 @@ release, and selection transitions cannot repaint it as a second state.
 
 The top-left safety control is always present in gameplay, including when the automation master switch is off or the worker host failed. **STOP ALL** engages the suite emergency stop with one click and discards prepared automation work; pressing it again clears the stop immediately. The Mods **General** page exposes the same immediate **Stop all**/**Resume all** command, with no staged Apply or resume confirmation. The second closed quick button opens the seven feature toggles in a transient drawer to the right. If a contained feature is faulted or blocked while the drawer is closed, the disclosure gains both a red color and a separate exclamation marker. **Automation enabled** remains on General so the whole suite can be turned off and back on without editing the file.
 
-After a game update produces a complete but unaudited assembly pair, the suite opens in compatibility quarantine instead of disappearing. Mods and **Run differential verification** remain available, while no Harmony patch, automation service, Mentor service, or feature quick control is installed. Emergency stop starts engaged. Clearing it from the quick button or General is the player's explicit acknowledgement for the exact two-file hash pair: it records the pair and permits runtime composition at the player's own risk in the same action. The acknowledgement survives restarts only for that exact pair and automatically resets after either game assembly changes. **Advanced > Allow this unverified game build** remains available as a separate acknowledgement path when the player wants to permit composition but leave STOP engaged for a later one-click resume. Turning that acknowledgement off re-engages STOP immediately; restart the game to unload patches already installed during that session.
+After a game update produces a complete but unaudited assembly pair, the suite opens in compatibility quarantine instead of disappearing. Mods and **Check game math** remain available, while no Harmony patch, automation service, Mentor service, or feature quick control is installed. Emergency stop starts engaged. Clearing it from the quick button or General is the player's explicit acknowledgement for the exact two-file hash pair: it records the pair and permits runtime composition at the player's own risk in the same action. The acknowledgement survives restarts only for that exact pair and automatically resets after either game assembly changes. **Advanced > Allow this unverified game build** remains available as a separate acknowledgement path when the player wants to permit composition but leave STOP engaged for a later one-click resume. Turning that acknowledgement off re-engages STOP immediately; restart the game to unload patches already installed during that session.
 
 If the shared automation host cannot start, desired-On features report that runtime fault while desired-Off features remain Off. Configuration changes are retained while the host is absent. One automatic retry is made on the next eligible frame; after that bounded attempt, the fault remains visible instead of retrying indefinitely.
 
@@ -73,7 +74,7 @@ Default input inventory:
 
 - Auto Cast is polled once per Unity frame and defaults to `F8`; the central collision audit verifies that chord has no audited native default.
 - Mentor is polled once per Unity frame and defaults to `Left Alt + M`. It intentionally remains configurable and the audit warns that its modifier is also the native More Info modifier.
-- Differential verification has no key listener. Run it with **Run differential verification** on Mods -> Runtime.
+- Differential verification has no key listener. Run it with **Check game math** on Mods -> Runtime.
 - Auto Buy, Auto Concept, Auto Harvest, Auto Items, Auto Scribe, emergency stop, Mods navigation, and Runtime diagnostic actions are buttons, not global key listeners. Auto Items and Auto Scribe expose the same feature-wide mode through their Mods command and registered quick control.
 
 Auto Buy defaults to Active with 100x affordability thresholds. Auto Cast, Auto Concept, Auto
@@ -86,8 +87,8 @@ audited Scroll per publication, yields to native automatic Scribe work, and quar
 unverified paid transaction. When enabled, Auto Cast fully charges charge-capable spells by
 default; turn off `Auto Cast > Full charge` to fire them immediately. Auto Concept uses a 10%
 positive-rate reserve, 10% finite-resource quantity floor, and 0.95 native drain-ratio watchdog by
-default. Warnings and errors are always emitted. Use the Runtime page's explicit trace, event,
-journal, and verification actions when deeper evidence is needed; there is no global
+default. Warnings and errors are always emitted. Use **Create bug report** after a problem to package
+the recent evidence, or **Check game math** for a read-only live comparison; there is no global
 detailed-logging mode.
 
 Back up saves before risky configuration changes and run only one automatic buyer. The complete scheduling, affordability, reserve, and queue-ownership contract is in the [automation reference](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/src/Automata/README.md).

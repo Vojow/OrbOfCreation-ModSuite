@@ -142,6 +142,23 @@ public sealed class AutomataLoggingTests
         Assert.Contains(": warning wait", entries[4].Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ExplicitFlushPublishesEveryHeldSeverityBeforeABundleReadsTheLog()
+    {
+        var entries = new List<Entry>();
+        var collapser = Collapser(entries);
+        collapser.Write(AutomataLogSeverity.Info, "info", Start);
+        collapser.Write(AutomataLogSeverity.Info, "info", Start.AddSeconds(1));
+        collapser.Write(AutomataLogSeverity.Warning, "warning", Start);
+        collapser.Write(AutomataLogSeverity.Warning, "warning", Start.AddSeconds(2));
+
+        collapser.FlushAll();
+
+        Assert.Equal(4, entries.Count);
+        Assert.Contains(": info", entries[2].Message, StringComparison.Ordinal);
+        Assert.Contains(": warning", entries[3].Message, StringComparison.Ordinal);
+    }
+
     private static AutomataRepeatCollapser Collapser(List<Entry> entries) =>
         new(Heartbeat, (severity, message, timestamp) => entries.Add(new Entry(severity, message, timestamp)));
 

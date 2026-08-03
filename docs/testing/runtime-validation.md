@@ -128,9 +128,10 @@ outside the authorized test profile requires explicit owner approval.
 
 ## Diagnostic captures
 
-Manual full traces, performance profiles, the rolling decision journal, and
-recent-event dumps are evidence tools, not gameplay dependencies. Capture the
-smallest useful window, stop finite sessions, wait for completion, close the
-game, and decode with `./script/trace`. Missing manifests, invalid checksums,
-writer faults, or gameplay changes are diagnostic-product failures and must be
-reported explicitly.
+Bug-report bundles, performance profiles, the rolling decision journal, and the
+recent-event ring are evidence tools, not gameplay dependencies. The release
+button captures evidence already held and produces one zip no larger than 10 MiB;
+it does not begin a session. Profiling builds still produce correlated full-trace
+and profile sessions for `./script/trace`. Missing manifests, invalid checksums,
+writer faults, dropped inputs, reveal failures, or gameplay changes are explicit
+diagnostic-product outcomes and must not be inferred away.
