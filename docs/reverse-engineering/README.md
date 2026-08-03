@@ -34,7 +34,7 @@ assets, or a live registry read belongs here.
 - [Native action surfaces](native-action-surfaces.md) — the purchase, consumable and crafting paths, already decompiled.
 
 The product-version-pinned authored model, progression graph, and census live under
-[`data/`](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/data/README.md).
-Use the uv-managed [`tools/`](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/tools/README.md) project to extract, verify, query, or render
+[`data/`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/README.md).
+Use the uv-managed [`tools/`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/tools/README.md) project to extract, verify, query, or render
 the local exhaustive progression atlas. These tools read installed files only; live state remains
 the responsibility of running-game probes.

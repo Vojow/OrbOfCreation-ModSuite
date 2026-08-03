@@ -32,7 +32,7 @@ WINEDLLOVERRIDES="winhttp=n,b" %command%
 
 ## 3. Install the supported suite
 
-1. Download the recommended archive from the project's [Releases page](https://github.com/Vojow/OrbOfCreation-ModSuite/releases).
+1. Download the recommended archive from the project's [Releases page](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/releases).
 2. Extract it into the game directory and merge the included `BepInEx` folder.
 3. Confirm the following layout:
 

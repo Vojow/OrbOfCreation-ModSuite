@@ -10,7 +10,7 @@
          every shipped (real-reference) binary carries neutral /_/ source paths. -->
     <PathMap Condition="'$(UseGameStubs)' != 'true'">$(MSBuildThisFileDirectory)=/_/</PathMap>
     <Authors>Vojow</Authors>
-    <RepositoryUrl>https://github.com/Vojow/OrbOfCreation-ModSuite</RepositoryUrl>
+    <RepositoryUrl>https://github.com/OrbAutomata/OrbOfCreation-ModSuite</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <SuiteVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</SuiteVersion>
     <GameRoot>$(OOC_GAME_DIR)</GameRoot>

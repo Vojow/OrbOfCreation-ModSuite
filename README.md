@@ -1,7 +1,7 @@
 # OrbOfCreation ModSuite
 
-[![CI](https://github.com/Vojow/OrbOfCreation-ModSuite/actions/workflows/ci.yml/badge.svg)](https://github.com/Vojow/OrbOfCreation-ModSuite/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/Vojow/OrbOfCreation-ModSuite?include_prereleases)](https://github.com/Vojow/OrbOfCreation-ModSuite/releases)
+[![CI](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/actions/workflows/ci.yml/badge.svg)](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/OrbAutomata/OrbOfCreation-ModSuite?include_prereleases)](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Unofficial BepInEx mods, tests, and reverse-engineering notes for the Windows Mono build of [Orb of Creation](https://store.steampowered.com/app/1910680/Orb_of_Creation/).

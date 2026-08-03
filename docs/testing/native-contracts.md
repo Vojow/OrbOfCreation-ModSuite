@@ -3,7 +3,7 @@
 [Testing doctrine](README.md) ·
 [Reverse-engineering audit](../reverse-engineering/audited-build.md)
 
-[`data/native-contracts.json`](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/data/native-contracts.json) is the audited
+[`data/native-contracts.json`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/native-contracts.json) is the audited
 compatibility boundary for reflection and Harmony. It admits complete
 `Assembly-CSharp.dll`/`Assembly-CSharp-firstpass.dll` hash pairs and records each
 target's exact metadata, owner, use, source tokens, and place: `capture`,

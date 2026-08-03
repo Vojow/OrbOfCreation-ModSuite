@@ -53,7 +53,7 @@ apply it, then call `ClearNans()`.
 2. Base64-decode it, then decompress; the result is plain JSON and is recognizable immediately if
    you got both steps right.
 3. Pretty-print it and look at `savedData`: each entry's `GuidContainer` gives you a UUID.
-4. Resolve those UUIDs against [`data/entity-mappings.tsv`](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/data/entity-mappings.tsv) —
+4. Resolve those UUIDs against [`data/entity-mappings.tsv`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/entity-mappings.tsv) —
    `tools/find-entity.py` takes UUIDs as well as names — to learn which asset and managed type each
    row belongs to. The save itself carries no type information.
 5. Read the row's fields against that type's `*SaveData` shape in IL. Quantities are `BigDouble`
