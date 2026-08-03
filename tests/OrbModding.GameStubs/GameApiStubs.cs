@@ -1302,6 +1302,20 @@ public class ResourceCostList
         affordable &= other.affordable;
         return this;
     }
+    public ResourceCostList Apply(ValueModifier modifier)
+    {
+        var result = new ResourceCostList
+        {
+            WithinCapacity = WithinCapacity,
+            affordable = affordable,
+            AffordableLevels = AffordableLevels,
+        };
+        for (var index = 0; index < costs.Count; index++)
+            result.costs.Add(new ResourceTuple(
+                costs[index].resource,
+                modifier.Adjust(costs[index].GetValue())));
+        return result;
+    }
     public void PerformCost()
     {
         PerformCalls++;
@@ -1775,6 +1789,20 @@ public struct ValueModifier
         this.order = order;
         reference = null;
     }
+
+    public BigDouble Adjust(BigDouble value) => type switch
+    {
+        ValueModifierType.Raw => value + adjustReal,
+        ValueModifierType.MultiDiminishing => value * (BigDouble.One + adjustReal),
+        ValueModifierType.MultiStacking => value * adjustReal,
+        ValueModifierType.Reduction => value / (BigDouble.One + adjustReal),
+        ValueModifierType.Exponent => BigDouble.Pow(
+            value,
+            value > BigDouble.Zero && value < BigDouble.One
+                ? BigDouble.One / adjustReal
+                : adjustReal),
+        _ => value,
+    };
 }
 
 /// <summary>
@@ -1949,8 +1977,9 @@ public class SpellManager
     public ResourceCostList GetSpellCreateCost(List<GlyphSO> glyphs)
     {
         var recipe = GetSpellFromRecipe(glyphs);
-        return CreateCostOverride ??
-            (recipe is null ? new ResourceCostList() : recipe.baseUsageCost);
+        if (recipe is null) return new ResourceCostList();
+        return CreateCostOverride ?? GlyphSO.GetCreationCostOfList(
+            new ResourceCostList(), glyphs.Where(glyph => glyph.IsSpellAugment()));
     }
 
     public void DiscoverSpell()

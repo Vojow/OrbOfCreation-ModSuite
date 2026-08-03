@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using OrbAutomata;
+using OrbModding.Common.Runtime.World;
 using Xunit;
 
 namespace OrbModding.Tests.Services.SpellWorkbench;
@@ -15,7 +16,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         SpellRecipeSO.All.Clear();
         IdScriptableObject.RuntimeLookup.Clear();
         SpellManager.instance = new SpellManager();
-        GlyphSO.CreationCostOverride = null;
+        EntityIdentityCatalogPublication.Publish(EntityIdentityCatalogSnapshot.Unbound(Epoch));
     }
 
     [Fact]
@@ -31,7 +32,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         Assert.True(result.Verified);
         Assert.True(recipe.discovered);
         Assert.Empty(SpellManager.instance!.selectedCoreGlyphs.value);
-        Assert.Single(SpellManager.instance.activeSpells.value);
+        Assert.Single(SpellManager.instance!.activeSpells.value);
     }
 
     [Fact]
@@ -88,7 +89,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         var paymentResource = new ResourceSO { quantity = new BigDouble(10) };
         var createCost = new ResourceCostList();
         createCost.costs.Add(new ResourceTuple(paymentResource, new BigDouble(2)));
-        GlyphSO.CreationCostOverride = createCost;
+        SpellManager.instance!.CreateCostOverride = createCost;
         var augment = new GlyphSO
         {
             DisplayName = "Bright",
@@ -148,7 +149,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         var augment = Augment();
         augment.requiresDuration = true;
         var payment = new ResourceCostList();
-        GlyphSO.CreationCostOverride = payment;
+        SpellManager.instance!.CreateCostOverride = payment;
         var stagedAugment = Augment();
         SpellManager.instance!.selectedCoreGlyphs.value.Add(stagedCore);
         SpellManager.instance.selectedAugmentGlyphs.value.Add(stagedAugment);
@@ -180,7 +181,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         var usageResource = new ResourceSO { quantity = BigDouble.Zero };
         recipe.baseUsageCost.costs.Add(new ResourceTuple(usageResource, BigDouble.One));
         var payment = new ResourceCostList();
-        GlyphSO.CreationCostOverride = payment;
+        SpellManager.instance!.CreateCostOverride = payment;
         using var action = Action();
 
         var budget = action.Submit(new SpellWorkbenchAction(
@@ -203,7 +204,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     {
         var (recipe, stagedCore, _) = Recipe(discovered: true);
         var payment = new ResourceCostList();
-        GlyphSO.CreationCostOverride = payment;
+        SpellManager.instance!.CreateCostOverride = payment;
         SpellManager.instance.SuppressCreation = true;
         var stagedAugment = Augment();
         SpellManager.instance.selectedCoreGlyphs.value.Add(stagedCore);
@@ -236,13 +237,12 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     }
 
     [Fact]
-    public void LoadoutAddUsesTheResolvedRecipePipelineAndRejectsUnownedAugments()
+    public void LoadoutAddUsesTheScreenPriceResolverAndRejectsUnownedAugments()
     {
         var (recipe, _, _) = Recipe(discovered: true);
         var owned = Augment();
         var unowned = Augment();
         unowned.level = 0;
-        SpellManager.instance!.SuppressSelectionResolution = true;
         using var action = Action();
 
         var refused = action.Submit(new SpellWorkbenchAction(
@@ -259,7 +259,102 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
         Assert.Equal(SpellWorkbenchPreflight.SelectionUnavailable, refused.Preflight);
         Assert.Contains("not owned", refused.Reason);
         Assert.True(committed.Verified, committed.Reason);
-        Assert.Single(SpellManager.instance.activeSpells.value);
+        Assert.Single(SpellManager.instance!.activeSpells.value);
+    }
+
+    [Fact]
+    public void EveryCoreAndDiscoveryComponentRequiresAnOwnedLevel()
+    {
+        var (undiscovered, first, second) = Recipe();
+        first.level = 0;
+        using var discoveryAction = Action();
+
+        var discovery = discoveryAction.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.Discover,
+            undiscovered.GetGuid(),
+            Epoch,
+            CoreLayout(first, second),
+            Array.Empty<SpellWorkbenchGlyphStack>()));
+
+        discoveryAction.Dispose();
+        SpellRecipeSO.All.Clear();
+        SpellManager.instance = new SpellManager();
+        IdScriptableObject.RuntimeLookup.Clear();
+        var (discovered, core, _) = Recipe(discovered: true);
+        core.level = 0;
+        using var loadoutAction = Action();
+        var loadout = loadoutAction.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout,
+            discovered.GetGuid(),
+            Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(),
+            Array.Empty<SpellWorkbenchGlyphStack>()));
+
+        Assert.Equal(SpellWorkbenchPreflight.SelectionUnavailable, discovery.Preflight);
+        Assert.Contains("not owned", discovery.Reason);
+        Assert.Equal(SpellWorkbenchPreflight.RecipeUnavailable, loadout.Preflight);
+        Assert.Contains("not owned", loadout.Reason);
+        Assert.Empty(SpellManager.instance.activeSpells.value);
+    }
+
+    [Fact]
+    public void LoadoutAddUsesTheScreenPriceAndNamesTheShortResourceBeforePayment()
+    {
+        var (recipe, _, _) = Recipe(discovered: true);
+        var knowledge = new ResourceSO
+        {
+            name = "Knowledge",
+            quantity = new BigDouble(2),
+        };
+        var price = new ResourceCostList();
+        price.costs.Add(new ResourceTuple(knowledge, new BigDouble(3)));
+        EntityIdentityCatalogPublication.Publish(EntityIdentityCatalogSnapshot.Bound(
+            Epoch,
+            new[]
+            {
+                new EntityIdentityName(
+                    knowledge.GetGuid(), nameof(ResourceSO), "Knowledge", "Knowledge"),
+            }));
+        SpellManager.instance!.CreateCostOverride = price;
+        using var action = Action();
+
+        var result = action.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout,
+            recipe.GetGuid(),
+            Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(),
+            Array.Empty<SpellWorkbenchGlyphStack>()));
+
+        Assert.Equal(SpellWorkbenchPreflight.Unaffordable, result.Preflight);
+        Assert.Contains("Knowledge", result.Reason);
+        Assert.Equal(0, price.PerformCalls);
+        Assert.Empty(SpellManager.instance.activeSpells.value);
+    }
+
+    [Fact]
+    public void PortableCreationCostCombinerDependsOnTheSubmittedGlyphs()
+    {
+        var resource = new ResourceSO();
+        var starting = new ResourceCostList();
+        starting.costs.Add(new ResourceTuple(resource, new BigDouble(10)));
+        var free = new GlyphSO
+        {
+            creationCostMod = new ValueModifier(
+                ValueModifier.ValueModifierType.Raw,
+                BigDouble.Zero),
+        };
+        var expensive = new GlyphSO
+        {
+            creationCostMod = new ValueModifier(
+                ValueModifier.ValueModifierType.Raw,
+                new BigDouble(5)),
+        };
+
+        var freePrice = GlyphSO.GetCreationCostOfList(starting, new[] { free });
+        var expensivePrice = GlyphSO.GetCreationCostOfList(starting, new[] { expensive });
+
+        Assert.Equal(new BigDouble(10), Assert.Single(freePrice.costs).GetValue());
+        Assert.Equal(new BigDouble(15), Assert.Single(expensivePrice.costs).GetValue());
     }
 
     [Theory]
@@ -334,12 +429,14 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
             DisplayName = "Form",
             NativeAvailable = true,
             maxUsages = new ValueModifierRecord(new BigDouble(4)),
+            level = 1,
         };
         var second = new GlyphSO
         {
             DisplayName = "Bolt",
             NativeAvailable = true,
             maxUsages = new ValueModifierRecord(new BigDouble(4)),
+            level = 1,
         };
         var recipe = new SpellRecipeSO { discovered = discovered };
         recipe.coreRecipe.Add(first);
@@ -392,7 +489,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     {
         SpellRecipeSO.All.Clear();
         IdScriptableObject.RuntimeLookup.Clear();
-        GlyphSO.CreationCostOverride = null;
+        EntityIdentityCatalogPublication.Publish(EntityIdentityCatalogSnapshot.Unbound(Epoch));
         SpellManager.instance = null;
     }
 }

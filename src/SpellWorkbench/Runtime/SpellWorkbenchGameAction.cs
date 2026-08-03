@@ -317,10 +317,18 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         for (var index = 0; index < authored.Count; index++)
         {
             var glyph = authored[index];
-            if (glyph is null || glyph.GetType() != native.GlyphType ||
-                native.IsGlyphAugment(glyph) || !native.IsGlyphAvailable(glyph))
+            if (glyph is null)
             {
                 reason = "The recipe's authored core glyphs are not currently usable.";
+                return false;
+            }
+            if (!TryValidateGlyph(
+                    native,
+                    glyph,
+                    native.ReadIdentity(glyph),
+                    expectAugment: false,
+                    out reason))
+            {
                 return false;
             }
             core.Add(glyph);
@@ -386,11 +394,21 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         var combined = new List<object>(core.Count + augments.Count);
         for (var index = 0; index < core.Count; index++) combined.Add(core[index]);
         for (var index = 0; index < augments.Count; index++) combined.Add(augments[index]);
-        createCost = native.GetCreationCost(
-            native.CreateCostList(), NativeGlyphList(native, combined));
-        if (createCost is null || !native.HasEnough(createCost))
+        var nativeLayout = NativeGlyphList(native, combined);
+        var resolved = native.ResolveRecipe(manager, nativeLayout);
+        if (resolved is null || resolved.GetType() != native.RecipeType ||
+            native.ReadIdentity(resolved) != native.ReadIdentity(recipe))
+            return Refuse(SpellWorkbenchPreflight.WrongSelection,
+                "The exact live glyph layout no longer resolves to the requested spell.",
+                out refusal, out reason);
+        createCost = native.GetCreationCost(manager, nativeLayout);
+        if (createCost is null)
+            return Refuse(SpellWorkbenchPreflight.ContractUnavailable,
+                "The game did not provide a creation price for this spell layout.",
+                out refusal, out reason);
+        if (!native.HasEnough(createCost))
             return Refuse(SpellWorkbenchPreflight.Unaffordable,
-                "The requested spell layout's creation cost is not affordable.",
+                UnaffordableReason(native, createCost),
                 out refusal, out reason);
         refusal = SpellWorkbenchPreflight.Proceeded;
         reason = string.Empty;
@@ -480,26 +498,8 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 return false;
             }
             var glyph = resolution.Value!;
-            if (native.IsGlyphAugment(glyph) != expectAugment)
-            {
-                reason = EntityIdentityFormatter.Format(glyphId) +
-                    (expectAugment
-                        ? " is not a spell augment."
-                        : " is an augment and cannot be a core discovery component.");
+            if (!TryValidateGlyph(native, glyph, glyphId, expectAugment, out reason))
                 return false;
-            }
-            if (!native.IsGlyphAvailable(glyph))
-            {
-                reason = EntityIdentityFormatter.Format(glyphId) +
-                    " is not available for this spell layout.";
-                return false;
-            }
-            if (expectAugment && native.ReadGlyphLevel(glyph) <= 0)
-            {
-                reason = EntityIdentityFormatter.Format(glyphId) +
-                    " is not owned; spell augments require an owned level above zero.";
-                return false;
-            }
             var maximum = native.GetGlyphMaximumUsages(glyph);
             var requested = totals[glyphId];
             if (requested > maximum)
@@ -519,6 +519,65 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         }
         reason = string.Empty;
         return true;
+    }
+
+    private static bool TryValidateGlyph(
+        SpellWorkbenchNativeBindings native,
+        object glyph,
+        Guid glyphId,
+        bool expectAugment,
+        out string reason)
+    {
+        if (glyph.GetType() != native.GlyphType)
+        {
+            reason = "The resolved spell component has the wrong native type.";
+            return false;
+        }
+        if (native.IsGlyphAugment(glyph) != expectAugment)
+        {
+            reason = EntityIdentityFormatter.Format(glyphId) +
+                (expectAugment
+                    ? " is not a spell augment."
+                    : " is an augment and cannot be a core discovery component.");
+            return false;
+        }
+        if (!native.IsGlyphAvailable(glyph))
+        {
+            reason = EntityIdentityFormatter.Format(glyphId) +
+                " is not available for this spell layout.";
+            return false;
+        }
+        if (native.ReadGlyphLevel(glyph) <= 0)
+        {
+            reason = EntityIdentityFormatter.Format(glyphId) +
+                " is not owned; spell glyphs require an owned level above zero.";
+            return false;
+        }
+        reason = string.Empty;
+        return true;
+    }
+
+    private static string UnaffordableReason(
+        SpellWorkbenchNativeBindings native,
+        object createCost)
+    {
+        var totals = new Dictionary<Guid, (object Resource, BigDouble Cost)>();
+        var rows = native.ReadCostEntries(createCost);
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var row = rows[index];
+            if (row is null) continue;
+            var resource = native.ReadCostResource(row);
+            if (resource is null) continue;
+            var id = native.ReadIdentity(resource);
+            totals.TryGetValue(id, out var current);
+            totals[id] = (resource, current.Cost + native.ReadCostValue(row));
+        }
+        foreach (var pair in totals)
+            if (!native.HasResourceAmount(pair.Value.Resource, pair.Value.Cost))
+                return EntityIdentityFormatter.Format(pair.Key) +
+                    " is short for this spell layout.";
+        return "The requested spell layout is not affordable with the current resources.";
     }
 
     private static void ApplySelection(

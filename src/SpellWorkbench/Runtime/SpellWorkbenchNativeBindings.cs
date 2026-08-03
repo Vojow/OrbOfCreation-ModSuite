@@ -17,7 +17,7 @@ internal sealed class SpellWorkbenchNativeBindings
         "spell-workbench.manager-selected-augments-action",
         "spell-manager.active-spells",
         "spell-workbench.manager-get-from-recipe",
-        "spell-workbench.glyph-creation-cost-action",
+        "spell-workbench.manager-get-create-cost-action",
         "spell-workbench.manager-get-usage-cost-action",
         "spell-workbench.manager-discover",
         "spell-workbench.manager-create",
@@ -33,6 +33,10 @@ internal sealed class SpellWorkbenchNativeBindings
         "spell-workbench.recipe-get-discover-cost-action",
         "resource-cost-list.has-enough",
         "resource-cost-list.perform-cost",
+        "resource-cost-list.get-entries",
+        "resource-tuple.get-value",
+        "resource-tuple.resource-concept",
+        "spell-workbench.resource-has-amount-action",
         "spell-workbench.glyph-is-available",
         "spell-workbench.glyph-is-augment",
         "glyph.level",
@@ -62,13 +66,14 @@ internal sealed class SpellWorkbenchNativeBindings
         Func<object, bool> canDiscover, Func<object, bool> creatable,
         Func<object, object> discoverCost,
         Func<object, bool> hasEnough, Action<object> performCost,
+        Func<object, IList> costEntries, Func<object, BigDouble> costValue,
+        Func<object, object?> costResource, Func<object, BigDouble, bool> resourceHasAmount,
         Func<IList> createGlyphList, Func<object, bool> glyphAvailable,
         Func<object, int> glyphLevel,
         Func<object, bool> glyphAugment, Func<object, int> glyphMaximumUsages,
         Action<object> empty,
         Action<object, object> add, Func<object, bool> hasEmpty,
-        Func<object, object, object?> resolveRecipe, Func<object> createCostList,
-        Func<object, IList, object> creationCost,
+        Func<object, object, object?> resolveRecipe, Func<object, object, object> creationCost,
         Func<object, object> usageCost,
         Action<object> discover,
         Action<object, object> create, Func<object, int, object> createEmpty,
@@ -97,6 +102,10 @@ internal sealed class SpellWorkbenchNativeBindings
         GetDiscoverCost = discoverCost;
         HasEnough = hasEnough;
         PerformCost = performCost;
+        ReadCostEntries = costEntries;
+        ReadCostValue = costValue;
+        ReadCostResource = costResource;
+        HasResourceAmount = resourceHasAmount;
         CreateGlyphList = createGlyphList;
         IsGlyphAvailable = glyphAvailable;
         ReadGlyphLevel = glyphLevel;
@@ -106,7 +115,6 @@ internal sealed class SpellWorkbenchNativeBindings
         Add = add;
         HasEmpty = hasEmpty;
         ResolveRecipe = resolveRecipe;
-        CreateCostList = createCostList;
         GetCreationCost = creationCost;
         GetUsageCost = usageCost;
         Discover = discover;
@@ -143,6 +151,10 @@ internal sealed class SpellWorkbenchNativeBindings
     internal Func<object, object> GetDiscoverCost { get; }
     internal Func<object, bool> HasEnough { get; }
     internal Action<object> PerformCost { get; }
+    internal Func<object, IList> ReadCostEntries { get; }
+    internal Func<object, BigDouble> ReadCostValue { get; }
+    internal Func<object, object?> ReadCostResource { get; }
+    internal Func<object, BigDouble, bool> HasResourceAmount { get; }
     internal Func<IList> CreateGlyphList { get; }
     internal Func<object, bool> IsGlyphAvailable { get; }
     internal Func<object, int> ReadGlyphLevel { get; }
@@ -152,8 +164,7 @@ internal sealed class SpellWorkbenchNativeBindings
     internal Action<object, object> Add { get; }
     internal Func<object, bool> HasEmpty { get; }
     internal Func<object, object, object?> ResolveRecipe { get; }
-    internal Func<object> CreateCostList { get; }
-    internal Func<object, IList, object> GetCreationCost { get; }
+    internal Func<object, object, object> GetCreationCost { get; }
     internal Func<object, object> GetUsageCost { get; }
     internal Action<object> Discover { get; }
     internal Action<object, object> Create { get; }
@@ -193,11 +204,14 @@ internal sealed class SpellWorkbenchNativeBindings
             var identityType = T("IdScriptableObject");
             var glyphType = T("GlyphSO");
             var costType = T("ResourceCostList");
+            var costTupleType = T("ResourceTuple");
+            var resourceType = T("ResourceSO");
+            var bigDoubleType = T("BigDouble");
             var spellType = T("Spell");
             var guidType = T("GuidContainer");
             var openStackedType = T("Stacked.StackedIdRecord`1");
             var glyphList = typeof(List<>).MakeGenericType(glyphType);
-            var glyphEnumerable = typeof(IEnumerable<>).MakeGenericType(glyphType);
+            var costTupleList = typeof(List<>).MakeGenericType(costTupleType);
             var recipeList = typeof(List<>).MakeGenericType(recipeType);
             var spellList = typeof(List<>).MakeGenericType(spellType);
             var stackedType = openStackedType.MakeGenericType(glyphType);
@@ -220,6 +234,10 @@ internal sealed class SpellWorkbenchNativeBindings
             var usageRequirements = Method(recipeType, "HasMetUsageRequirements", typeof(bool));
             var enough = Method(costType, "HasEnough", typeof(bool));
             var performCost = Method(costType, "PerformCost", typeof(void));
+            var costEntries = Method(costType, "GetEntries", costTupleList);
+            var costValue = Method(costTupleType, "GetValue", bigDoubleType);
+            var costResource = Field(costTupleType, "resource", resourceType, false);
+            var hasResourceAmount = Method(resourceType, "HasAmount", typeof(bool), bigDoubleType);
             var glyphAvailable = Method(glyphType, "IsAvailable", typeof(bool));
             var glyphAugment = Method(glyphType, "IsSpellAugment", typeof(bool));
             var glyphLevel = Field(glyphType, "level", typeof(int), false);
@@ -230,10 +248,7 @@ internal sealed class SpellWorkbenchNativeBindings
             var add = HierarchyMethod(glyphListType, "Add", typeof(void), glyphType);
             var hasEmpty = HierarchyMethod(spellListType, "HasEmptySpot", typeof(bool));
             var resolve = Method(managerType, "GetSpellFromRecipe", recipeType, glyphList);
-            var costConstructor = costType.GetConstructor(Type.EmptyTypes) ??
-                throw new InvalidOperationException(costType.Name + ".ctor was unavailable.");
-            var creationCost = StaticMethod(
-                glyphType, "GetCreationCostOfList", costType, costType, glyphEnumerable);
+            var creationCost = Method(managerType, "GetSpellCreateCost", costType, glyphList);
             var usageCost = StaticMethod(managerType, "GetUsageCostOfSpell", costType, spellType);
             var discover = Method(managerType, "DiscoverSpell", typeof(void));
             var create = Method(managerType, "CreateRecipe", typeof(void), recipeType);
@@ -257,13 +272,14 @@ internal sealed class SpellWorkbenchNativeBindings
                 InstanceList(recipeGlyphs), InstanceFunc<bool>(discovered),
                 InstanceFunc<bool>(canDiscover), InstanceFunc<bool>(creatable),
                 InstanceObject(discoverCost), InstanceFunc<bool>(enough), InstanceAction(performCost),
+                InstanceList(costEntries), InstanceFunc<BigDouble>(costValue),
+                ObjectNullableField(costResource), InstanceValueFunc<BigDouble, bool>(hasResourceAmount),
                 NewList(glyphList),
                 InstanceFunc<bool>(glyphAvailable), IntField(glyphLevel),
                 InstanceFunc<bool>(glyphAugment),
                 InstanceFunc<int>(glyphMaximumUsages),
                 InstanceAction(empty), InstanceObjectAction(add), InstanceFunc<bool>(hasEmpty),
-                InstanceObjectObject(resolve), NewObject(costConstructor),
-                StaticObjectListObject(creationCost),
+                InstanceObjectObject(resolve), InstanceObjectObjectRequired(creationCost),
                 StaticObjectObject(usageCost), InstanceAction(discover), InstanceObjectAction(create),
                 InstanceIntObject(createEmpty), InstanceFunc<int>(selectedLevel),
                 InstanceFunc<bool>(usageRequirements), InstanceIntAction(setLevel),
@@ -388,6 +404,19 @@ internal sealed class SpellWorkbenchNativeBindings
             Expression.Convert(Expression.Call(Expression.Convert(target, method.DeclaringType!), method), typeof(T)), target).Compile();
     }
 
+    private static Func<object, TValue, TResult> InstanceValueFunc<TValue, TResult>(
+        MethodInfo method)
+    {
+        var target = Expression.Parameter(typeof(object), "target");
+        var value = Expression.Parameter(typeof(TValue), "value");
+        return Expression.Lambda<Func<object, TValue, TResult>>(
+            Expression.Convert(Expression.Call(
+                Expression.Convert(target, method.DeclaringType!), method,
+                Expression.Convert(value, method.GetParameters()[0].ParameterType)),
+                typeof(TResult)),
+            target, value).Compile();
+    }
+
     private static Func<object, object> InstanceObject(MethodInfo method)
     {
         var target = Expression.Parameter(typeof(object), "target");
@@ -455,6 +484,16 @@ internal sealed class SpellWorkbenchNativeBindings
                 Expression.Convert(value, method.GetParameters()[0].ParameterType)), typeof(object)), target, value).Compile();
     }
 
+    private static Func<object, object, object> InstanceObjectObjectRequired(MethodInfo method)
+    {
+        var target = Expression.Parameter(typeof(object), "target");
+        var value = Expression.Parameter(typeof(object), "value");
+        return Expression.Lambda<Func<object, object, object>>(
+            Expression.Convert(Expression.Call(Expression.Convert(target, method.DeclaringType!), method,
+                Expression.Convert(value, method.GetParameters()[0].ParameterType)), typeof(object)),
+            target, value).Compile();
+    }
+
     private static Action<object, object, int> InstanceObjectIntAction(MethodInfo method)
     {
         var target = Expression.Parameter(typeof(object), "target");
@@ -473,18 +512,6 @@ internal sealed class SpellWorkbenchNativeBindings
             Expression.Convert(Expression.Call(
                 method, Expression.Convert(value, method.GetParameters()[0].ParameterType)),
                 typeof(object)), value).Compile();
-    }
-
-    private static Func<object, IList, object> StaticObjectListObject(MethodInfo method)
-    {
-        var value = Expression.Parameter(typeof(object), "value");
-        var list = Expression.Parameter(typeof(IList), "list");
-        return Expression.Lambda<Func<object, IList, object>>(
-            Expression.Convert(Expression.Call(
-                method,
-                Expression.Convert(value, method.GetParameters()[0].ParameterType),
-                Expression.Convert(list, method.GetParameters()[1].ParameterType)),
-                typeof(object)), value, list).Compile();
     }
 
     private static Func<IList, object, bool> StaticListObjectBoolean(MethodInfo method)

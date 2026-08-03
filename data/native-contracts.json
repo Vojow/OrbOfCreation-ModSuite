@@ -5531,7 +5531,9 @@
       "parameters": [],
       "owners": [
         "Automata Auto Buy refusal diagnostics",
-        "Automata Auto Buy destination-capacity admission"
+        "Automata Auto Buy destination-capacity admission",
+        "Automata spell workbench GameAction",
+        "Automata challenge GameAction"
       ],
       "usages": [
         "reflection"
@@ -7859,7 +7861,8 @@
       "owners": [
         "Automata resource-cost decoding",
         "Automata Auto Concept drain",
-        "Automata Auto Buy refusal diagnostics"
+        "Automata Auto Buy refusal diagnostics",
+        "Automata spell workbench GameAction"
       ],
       "usages": [
         "reflection"
@@ -7961,7 +7964,8 @@
         "Automata resource-cost decoding",
         "Automata Auto Concept drain",
         "Automata cost-math verification",
-        "Automata Auto Buy refusal diagnostics"
+        "Automata Auto Buy refusal diagnostics",
+        "Automata spell workbench GameAction"
       ],
       "usages": [
         "reflection"
@@ -8001,7 +8005,8 @@
         "Automata world-collection verification",
         "Automata Auto Concept drain",
         "Automata cost-math verification",
-        "Automata Auto Buy refusal diagnostics"
+        "Automata Auto Buy refusal diagnostics",
+        "Automata spell workbench GameAction"
       ],
       "usages": [
         "reflection"
@@ -17363,18 +17368,38 @@
       "place": "capture"
     },
     {
-      "id": "spell-workbench.glyph-creation-cost-action",
+      "id": "spell-workbench.manager-get-create-cost-action",
       "assembly": "assembly-csharp",
-      "type": "GlyphSO",
+      "type": "SpellManager",
       "typeVisibility": "public",
       "kind": "method",
-      "member": "GetCreationCostOfList",
+      "member": "GetSpellCreateCost",
       "visibility": "public",
-      "static": true,
+      "static": false,
       "returnType": "ResourceCostList",
       "parameters": [
-        "ResourceCostList",
-        "System.Collections.Generic.IEnumerable`1<GlyphSO>"
+        "System.Collections.Generic.List`1<GlyphSO>"
+      ],
+      "owners": [
+        "Automata spell workbench GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "spell-workbench.resource-has-amount-action",
+      "assembly": "assembly-csharp",
+      "type": "ResourceSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "HasAmount",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [
+        "BigDouble"
       ],
       "owners": [
         "Automata spell workbench GameAction"

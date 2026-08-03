@@ -415,7 +415,7 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable
     public ValueModifierRecord freeUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord freeLoadoutUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord maxUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
-    public static ResourceCostList? CreationCostOverride { get; set; }
+    public ValueModifier creationCostMod;
 
     public string GetName() => DisplayName;
     public bool IsAvailable() => NativeAvailable;
@@ -439,7 +439,13 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable
     public int GetMaxUsages() => (int)maxUsages.GetValue().ToDouble();
     public static ResourceCostList GetCreationCostOfList(
         ResourceCostList startingCost,
-        IEnumerable<GlyphSO> glyphs) => CreationCostOverride ?? startingCost;
+        IEnumerable<GlyphSO> glyphs)
+    {
+        var result = startingCost;
+        foreach (var glyph in glyphs)
+            if (glyph is not null) result = result.Apply(glyph.creationCostMod);
+        return result;
+    }
     public static bool MeetsNonLvRequirements(List<GlyphSO> glyphs, Spell spell)
     {
         foreach (var glyph in glyphs)

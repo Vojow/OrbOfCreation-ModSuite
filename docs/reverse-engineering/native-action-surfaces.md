@@ -582,7 +582,7 @@ is evidence about the ledger, never proof about the action — see
 | Selection resolution | `SpellManager.GetSpellFromRecipe(List<GlyphSO>)` (`0x06000747`) |
 | Discover | `SpellManager.DiscoverSpell()` (`0x06000741`) → `SpellRecipeSO.Discover()` (`0x06001432`) |
 | Create | `SpellManager.CreateSpell()` (`0x0600073F`) → `CreateRecipe` → `SpellRecipeSO.CreateWith(...)` |
-| Costs | `SpellRecipeSO.GetDiscoverCost()` (`0x06001442`), `SpellManager.GetSpellCreateCost(List<GlyphSO>)` (`0x0600074A`) |
+| Costs | Discovery: `SpellRecipeSO.GetDiscoverCost()` (`0x06001442`); screen-priced creation: `SpellManager.GetSpellCreateCost(List<GlyphSO>)` (`0x0600074A`); lower-level modifier fold: `GlyphSO.GetCreationCostOfList(ResourceCostList, IEnumerable<GlyphSO>)` |
 | Verdicts | `SpellRecipeSO.CanDiscover()` (`0x06001451`), `IsCreatable()` (`0x0600144F`) |
 | Room | `EmptyTypeListVariable<T>.HasEmptySpot()` (`0x0600155C`), `GenericListVariable<T>.Empty()` (`0x06001569`) |
 | Instance identity | `Spell.guidContainer` (`0x040007DF`) |
@@ -626,6 +626,15 @@ asked to.
 the selected augments, calls `SpellRecipeSO.CreateWith(...)`, adds the result through `AddSpell`, and
 then clears the selection. The interface's own gate is `GetSpellCreateCost(...).HasEnough()` beside a
 discovered, `IsCreatable()` recipe and `activeSpells.HasEmptySpot()`.
+
+**StaticallyVerified (macOS v1.0.5-2 baseline):** `UICreateSpellButton.Render` concatenates the
+selected core and augment lists, resolves that full list with `GetSpellFromRecipe`, and passes the
+same list to `SpellManager.GetSpellCreateCost`. The manager returns an empty cost when resolution
+fails; otherwise it filters that list with `GlyphSO.IsSpellAugment` and folds only those augment
+glyphs through `GlyphSO.GetCreationCostOfList`, starting from a new empty `ResourceCostList`. The
+lower-level static combiner is therefore an implementation step, not an equivalent screen-pricing
+entry point for an unfiltered core-plus-augment list. The GameAction uses the manager lineage so its
+admission and payment match the price rendered by the button.
 
 The result is a runtime `Spell` carrying its own non-empty `guidContainer` UUID. **Recipe UUID and
 name are not instance identity**: two instances of one recipe are separate targets for every later
