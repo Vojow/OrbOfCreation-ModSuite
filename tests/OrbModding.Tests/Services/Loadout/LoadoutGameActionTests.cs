@@ -130,6 +130,24 @@ public sealed class LoadoutGameActionTests : IDisposable
     }
 
     [Fact]
+    public void SnapshotSaveRefusesAnEmptyActiveSectionBeforeAnyNativeWrite()
+    {
+        var owner = new EquipmentSnapshotListVariable();
+        owner.SetGuid(Guid.NewGuid());
+        var slot = new EquipmentSnapshot();
+        owner.value.Add(slot);
+        LoadoutManager.instance.equipmentLoadouts = owner;
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, owner.GetGuid(), LoadoutActionKind.SnapshotSave, slot: 0);
+
+        Assert.Equal(LoadoutPreflight.ActiveSectionEmpty, result.Preflight);
+        Assert.Contains("nothing staged", result.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, result.CallOutcome.MutationAttempts);
+        Assert.True(slot.IsEmpty());
+    }
+
+    [Fact]
     public async Task OffThreadSubmissionRefusesBeforeNativeState()
     {
         var target = Player("Current", selected: true);

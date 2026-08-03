@@ -33,6 +33,7 @@ internal static class LoadoutActionResultMapper
             LoadoutPreflight.SlotOutOfRange => LoadoutActionResultCodes.SlotOutOfRange,
             LoadoutPreflight.SlotEmpty => LoadoutActionResultCodes.SlotEmpty,
             LoadoutPreflight.SlotOccupied => LoadoutActionResultCodes.SlotOccupied,
+            LoadoutPreflight.ActiveSectionEmpty => LoadoutActionResultCodes.ActiveSectionEmpty,
             LoadoutPreflight.NameOutOfRange => LoadoutActionResultCodes.NameOutOfRange,
             LoadoutPreflight.MutationPermitUnavailable => LoadoutActionResultCodes.MutationPermitUnavailable,
             LoadoutPreflight.PostCommitFault => LoadoutActionResultCodes.PostCommitFault,

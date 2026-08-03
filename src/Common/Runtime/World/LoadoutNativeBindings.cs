@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 
 namespace OrbModding.Common.Runtime.World;
 
-/// <summary>One lifecycle binding set shared by loadout collection and mutation.</summary>
+/// <summary>Creates equivalent lifecycle binding sets for loadout collection and mutation.</summary>
 internal sealed class LoadoutNativeBindings
 {
     private const BindingFlags Instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -512,13 +512,6 @@ internal sealed class LoadoutNativeBindings
     private static Func<IList?> StaticList(MethodInfo method) =>
         Expression.Lambda<Func<IList?>>(
             Expression.Convert(Expression.Call(method), typeof(IList))).Compile();
-
-    private static Func<object, TResult> FuncField<TResult>(FieldInfo field)
-    {
-        var target = Expression.Parameter(typeof(object), "target");
-        return Expression.Lambda<Func<object, TResult>>(
-            Expression.Field(Expression.Convert(target, field.DeclaringType!), field), target).Compile();
-    }
 
     private static Action<object> ActionVoid(MethodInfo method)
     {

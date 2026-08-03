@@ -16,6 +16,7 @@ internal enum LoadoutPreflight
     SlotOutOfRange,
     SlotEmpty,
     SlotOccupied,
+    ActiveSectionEmpty,
     NameOutOfRange,
     MutationPermitUnavailable,
     PostCommitFault,

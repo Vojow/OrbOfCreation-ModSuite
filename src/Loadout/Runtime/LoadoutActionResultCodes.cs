@@ -18,4 +18,5 @@ internal static class LoadoutActionResultCodes
     internal static readonly ServiceActionResultCode MutationPermitUnavailable = new(2053);
     internal static readonly ServiceActionResultCode PostCommitFault = new(2054);
     internal static readonly ServiceActionResultCode VerificationFailed = new(2055);
+    internal static readonly ServiceActionResultCode ActiveSectionEmpty = new(2056);
 }

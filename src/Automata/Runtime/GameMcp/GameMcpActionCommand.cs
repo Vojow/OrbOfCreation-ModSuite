@@ -813,6 +813,7 @@ internal static class GameMcpActionResultCodeNames
             if (code == LoadoutActionResultCodes.SlotOutOfRange) return "slot_out_of_range";
             if (code == LoadoutActionResultCodes.SlotEmpty) return "slot_empty";
             if (code == LoadoutActionResultCodes.SlotOccupied) return "slot_occupied";
+            if (code == LoadoutActionResultCodes.ActiveSectionEmpty) return "active_section_empty";
             if (code == LoadoutActionResultCodes.NameOutOfRange) return "name_out_of_range";
             if (code == LoadoutActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == LoadoutActionResultCodes.PostCommitFault) return "post_commit_fault";
