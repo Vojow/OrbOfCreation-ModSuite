@@ -28,6 +28,10 @@ internal static class AutoScribeService
             () => new AutoScribeWorkerDefinition(profile),
             (in SuiteRuntimeConfiguration config, in ServiceCycleStartContext context) =>
                 ShouldStart(in config, in context, ownsActionFamily, isQuarantined),
+            static (in AutoScribeCycleAction action) =>
+                ServiceActionJournalAttribution.Native(
+                    action.RecipeId,
+                    ServiceActionNativeTypeId.CraftingRecipeSO),
             actions.TryExecute);
     }
 

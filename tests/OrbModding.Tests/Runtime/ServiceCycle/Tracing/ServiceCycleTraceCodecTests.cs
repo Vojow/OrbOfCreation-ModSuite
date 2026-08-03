@@ -268,11 +268,8 @@ public sealed class ServiceCycleTraceCodecTests
     [InlineData(ServiceCycleSemanticEventKind.ActionFaulted, 208, 1)]
     [InlineData(ServiceCycleSemanticEventKind.BatchCompleted, 160, 2)]
     [InlineData(ServiceCycleSemanticEventKind.BatchCompleted, 160, 1024)]
-    [InlineData(ServiceCycleSemanticEventKind.BatchCompleted, 208, 2)]
     [InlineData(ServiceCycleSemanticEventKind.BatchCompleted, 200, 2)]
     [InlineData(ServiceCycleSemanticEventKind.BatchAborted, 160, 1)]
-    [InlineData(ServiceCycleSemanticEventKind.BatchAborted, 208, 0)]
-    [InlineData(ServiceCycleSemanticEventKind.BatchOrphaned, 208, 0)]
     [InlineData(ServiceCycleSemanticEventKind.FaultObserved, 160, 5)]
     public void RecomputedCrcCannotSmuggleInvalidKindSpecificPayloads(
         ServiceCycleSemanticEventKind kind, int recordOffset, long value)
@@ -282,6 +279,17 @@ public sealed class ServiceCycleTraceCodecTests
             BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(64 + recordOffset, 4), checked((int)value));
         else
             BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(64 + recordOffset, 8), value);
+        RewriteChecksum(bytes);
+        Assert.Throws<FormatException>(() => ServiceCycleTraceCodec.Decode(bytes));
+    }
+
+    [Fact]
+    public void RecomputedCrcCannotReviveRetiredPublicationAccounting()
+    {
+        var bytes = Encode(new[] {
+            ServiceCycleTraceFixtures.Event(1, ServiceCycleSemanticEventKind.BatchCompleted),
+        });
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(64 + 36, 4), 1);
         RewriteChecksum(bytes);
         Assert.Throws<FormatException>(() => ServiceCycleTraceCodec.Decode(bytes));
     }

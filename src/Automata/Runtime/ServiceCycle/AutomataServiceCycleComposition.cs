@@ -158,7 +158,7 @@ internal static class AutomataServiceCycleComposition
             var configurationPublication = registry.Configuration;
             observability = AutomataServiceCycleObservability.Create(
                 registry.Clock,
-                traceActive: false,
+                traceActive: hostDependencies.Observability.FullTrace.Enabled,
                 log);
 #if SERVICE_CYCLE_PROFILE
             var profileProbe = observability.ProfileProbe;
@@ -182,8 +182,8 @@ internal static class AutomataServiceCycleComposition
                 hostDependencies.ReadFrameIdentity,
                 hostDependencies.PumpTiming,
                 // Always attached, never streaming: the ring holds the recent past in memory so a
-                // user can dump it after something goes wrong, rather than having to have armed a
-                // recorder before it did.
+                // bug report can snapshot it after something goes wrong, rather than requiring a
+                // diagnostics request to have been made before it did.
                 HostSemanticTrace.Create(
                     new ServiceCycleTraceSessionId(checked((ulong)DateTime.UtcNow.Ticks)),
                     features.Count),
@@ -191,6 +191,7 @@ internal static class AutomataServiceCycleComposition
 #if SERVICE_CYCLE_PROFILE
                 , profileProbe
 #endif
+                , message => log.LogAutomataError(message)
                 );
             var observabilityOptions = hostDependencies.Observability;
             host.AttachObservability(observability, in observabilityOptions);

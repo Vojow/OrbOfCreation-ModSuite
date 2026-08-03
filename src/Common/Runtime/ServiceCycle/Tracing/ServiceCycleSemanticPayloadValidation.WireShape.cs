@@ -43,7 +43,7 @@ internal static partial class ServiceCycleSemanticPayloadValidation
         ServiceCycleSemanticFields.Disposition | ServiceCycleSemanticFields.Code |
         ServiceCycleSemanticFields.ActionCount | ServiceCycleSemanticFields.CommittedCount |
         ServiceCycleSemanticFields.ActionIndex | ServiceCycleSemanticFields.UntouchedSuffixCount |
-        ServiceCycleSemanticFields.NativeCallTotals | ServiceCycleSemanticFields.PublishedCount |
+        ServiceCycleSemanticFields.NativeCallTotals |
         ServiceCycleSemanticFields.Timestamp;
     private const ServiceCycleSemanticFields ActionFields =
         ServiceCycleSemanticPayload.CycleFields | ServiceCycleSemanticFields.Batch |
@@ -145,7 +145,6 @@ internal static partial class ServiceCycleSemanticPayloadValidation
             (Has(f, ServiceCycleSemanticFields.UntouchedSuffixCount) || p.UntouchedSuffixCount == 0) &&
             (Has(f, ServiceCycleSemanticFields.OccurrenceCount) || p.OccurrenceCount == 0) &&
             (Has(f, ServiceCycleSemanticFields.NativeMutationOutcome) || p.NativeOutcomeCode == 0) &&
-            (Has(f, ServiceCycleSemanticFields.PublishedCount) || p.PublishedCount == 0) &&
             (Has(f, ServiceCycleSemanticFields.NativeCallTotals) || NativeTotalsAreZero(in p)) &&
             (Has(f, ServiceCycleSemanticFields.PumpCounts) || p.ResponsesAcquired == 0 && p.ActionsAttempted == 0 &&
                 p.CapturesAttempted == 0 && p.CyclesStarted == 0 && p.WorldGateDeferrals == 0 &&

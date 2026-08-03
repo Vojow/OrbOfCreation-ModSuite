@@ -33,8 +33,9 @@ public sealed class DecisionJournalReportTests
         Assert.Contains("3 ordinal positions precede this window", text);
         Assert.Contains("Sequences 1..4 absent", text);
         Assert.Contains("Writer terminal state: Unavailable", text);
+        Assert.Contains("Format: OSJD wire schema 3", text);
         Assert.Contains("## Numeric run/service view", text);
-        Assert.Contains("| `000000000000000b` | 1 | 1 / 1 / 1 | 1 / 0 / 0 / 0 / 0 |", text);
+        Assert.Contains("| `000000000000000b` | 1 | 1 / 1 / 1 | 1 | 0 / 0 / 0 / 0 / 0 |", text);
         Assert.Contains("## Retained record lineage", text);
         Assert.Contains("`#5`", text);
         Assert.Contains("ConfigurationChanged; generation `2`", text);

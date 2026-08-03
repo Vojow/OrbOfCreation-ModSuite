@@ -61,7 +61,7 @@ internal readonly struct WorldActionQueue : IWorldEntity
     /// </summary>
     internal int SlotCount { get; }
 
-    /// <summary>Occupancy as the game reports it, from <c>GetUsedSpots()</c>.</summary>
+    /// <summary>Occupancy derived from the queue list captured in the same pass.</summary>
     internal int UsedSlots { get; }
 
     /// <summary>
@@ -70,17 +70,66 @@ internal readonly struct WorldActionQueue : IWorldEntity
     /// </summary>
     internal int EmptySlots { get; }
 
-    /// <summary>Whether the game says a slot is free, from <c>HasEmptySpot()</c>.</summary>
+    /// <summary>Whether the captured slots or the collected maximum leave room.</summary>
     internal bool HasEmptySlot { get; }
 
     /// <summary>
-    /// Whether the reading contradicts itself. Where the slots are walked that is the game's own
-    /// occupancy against them — <c>UsedSlots == SlotCount - EmptySlots</c>; where they are not it is
-    /// occupancy no larger than the list it counts. A reading that contradicts itself is published as
-    /// contradictory rather than dropped, because a consumer that cannot see the disagreement would
-    /// act on either half of it.
+    /// Whether the captured list shape is internally coherent. Retained in the published shape for
+    /// compatibility; the derived occupancy and emptiness now share one raw source.
     /// </summary>
     internal bool Consistent { get; }
+}
+
+/// <summary>Raw queue shape; occupancy is derived from the same list walk that produced it.</summary>
+internal readonly struct RawWorldActionQueue : IWorldEntity
+{
+    internal RawWorldActionQueue(
+        Guid queueId,
+        Guid maxQueuedItemsId,
+        int slotCount,
+        int emptySlots,
+        bool slotsWereWalked)
+    {
+        QueueId = queueId;
+        MaxQueuedItemsId = maxQueuedItemsId;
+        SlotCount = slotCount;
+        EmptySlots = emptySlots;
+        SlotsWereWalked = slotsWereWalked;
+    }
+
+    public Guid EntityId => QueueId;
+    internal Guid QueueId { get; }
+    internal Guid MaxQueuedItemsId { get; }
+    internal int SlotCount { get; }
+    internal int EmptySlots { get; }
+    internal bool SlotsWereWalked { get; }
+}
+
+internal sealed class WorldActionQueueDeriver : WorldRowDeriver<RawWorldActionQueue, WorldActionQueue>
+{
+    private readonly PublicationTable<WorldNumberVariable> _intVariables;
+
+    internal WorldActionQueueDeriver(PublicationTable<WorldNumberVariable> intVariables) =>
+        _intVariables = intVariables;
+
+    internal override WorldActionQueue Derive(in RawWorldActionQueue sample)
+    {
+        var used = sample.SlotsWereWalked
+            ? sample.SlotCount - sample.EmptySlots
+            : sample.SlotCount;
+        var hasEmpty = sample.SlotsWereWalked
+            ? sample.EmptySlots > 0
+            : !WorldLookup.TryFind(_intVariables, sample.MaxQueuedItemsId, out var maximum) ||
+              used < maximum.Value.ToInt();
+        return new WorldActionQueue(
+            sample.QueueId,
+            sample.MaxQueuedItemsId,
+            sample.SlotCount,
+            used,
+            sample.EmptySlots,
+            hasEmpty,
+            used >= 0 && used <= sample.SlotCount);
+    }
 }
 
 /// <summary>One slot of one queue, and what is running in it.</summary>
@@ -273,8 +322,6 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
 
     private readonly Func<object, Guid>? _slotQueueId;
     private readonly Func<object, IList?>? _slotQueueSlots;
-    private readonly Func<object, int>? _slotQueueUsedSlots;
-    private readonly Func<object, bool>? _slotQueueHasEmptySlot;
     private readonly Func<object, bool>? _slotEmpty;
     private readonly Func<object, bool>? _slotEngaged;
     private readonly Func<object, int>? _slotQuantity;
@@ -283,8 +330,6 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
 
     private readonly Func<object, Guid>? _occupancyQueueId;
     private readonly Func<object, IList?>? _occupancyQueueEntries;
-    private readonly Func<object, int>? _occupancyQueueUsedSlots;
-    private readonly Func<object, bool>? _occupancyQueueHasEmptySlot;
     private readonly Func<object, Guid>? _occupancyQueueMaximumId;
 
     internal WorldActionQueueReader(
@@ -318,8 +363,6 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
         var plotActions = new WorldMemberBinding(slotQueueType, "PlotNodeActionInstanceListVariable");
         _slotQueueId = plotActions.Call<Guid>("GetGuid");
         _slotQueueSlots = plotActions.CollectionField("value");
-        _slotQueueUsedSlots = plotActions.Call<int>("GetUsedSpots");
-        _slotQueueHasEmptySlot = plotActions.Call<bool>("HasEmptySpot");
 
         _slotType = plotActions.CollectionElementType("value");
         var slot = plotActions.Elements(_slotType, "PlotNodeActionInstance");
@@ -332,8 +375,6 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
         var actionables = new WorldMemberBinding(occupancyQueueType, "ActionableListVariable");
         _occupancyQueueId = actionables.Call<Guid>("GetGuid");
         _occupancyQueueEntries = actionables.CollectionField("value");
-        _occupancyQueueUsedSlots = actionables.Call<int>("GetUsedSpots");
-        _occupancyQueueHasEmptySlot = actionables.Call<bool>("HasEmptySpot");
         _occupancyQueueMaximumId = actionables.ReferenceGuid("maxQueuedItems");
 
         _unavailable = plotActions.Failure.Length != 0 ? plotActions.Failure : actionables.Failure;
@@ -434,7 +475,7 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
     private string ReadSlotted(
         object queue,
         HashSet<Guid> claimed,
-        WorldSampleBuffer<WorldActionQueue, WorldActionQueue> queues,
+        WorldSampleBuffer<RawWorldActionQueue, WorldActionQueue> queues,
         WorldActionQueueSlotBuffer slots)
     {
         var queueId = _slotQueueId!(queue);
@@ -473,15 +514,12 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
                 _slotEngaged!(instance)));
         }
 
-        var used = _slotQueueUsedSlots!(queue);
-        queues.Append(new WorldActionQueue(
+        queues.Append(new RawWorldActionQueue(
             queueId,
             Guid.Empty,
             slotCount,
-            used,
             empty,
-            _slotQueueHasEmptySlot!(queue),
-            used >= 0 && used == slotCount - empty));
+            slotsWereWalked: true));
         return string.Empty;
     }
 
@@ -497,22 +535,19 @@ internal sealed class WorldActionQueueReader : IWorldCategoryReader
     private string ReadOccupancy(
         object queue,
         HashSet<Guid> claimed,
-        WorldSampleBuffer<WorldActionQueue, WorldActionQueue> queues)
+        WorldSampleBuffer<RawWorldActionQueue, WorldActionQueue> queues)
     {
         var queueId = _occupancyQueueId!(queue);
         if (queueId == Guid.Empty) return "carried no identity";
         if (!claimed.Add(queueId)) return $"identity {queueId} appeared more than once";
 
         var entryCount = _occupancyQueueEntries!(queue)?.Count ?? 0;
-        var used = _occupancyQueueUsedSlots!(queue);
-        queues.Append(new WorldActionQueue(
+        queues.Append(new RawWorldActionQueue(
             queueId,
             _occupancyQueueMaximumId!(queue),
             entryCount,
-            used,
-            Math.Max(entryCount - used, 0),
-            _occupancyQueueHasEmptySlot!(queue),
-            used >= 0 && used <= entryCount));
+            emptySlots: 0,
+            slotsWereWalked: false));
         return string.Empty;
     }
 

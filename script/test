@@ -12,6 +12,7 @@ fi
 
 results_directory="${repository_root}/artifacts/test-results/all"
 profile_results_directory="${repository_root}/artifacts/test-results/profile"
+il_inspect_results_directory="${repository_root}/artifacts/test-results/il-inspect"
 timeout_marker="$(mktemp "${TMPDIR:-/tmp}/orbmodding-test-timeout.XXXXXX")"
 rm -f "${timeout_marker}"
 
@@ -68,7 +69,7 @@ watch_for_timeout() {
 trap cleanup EXIT
 trap 'handle_signal 130' INT
 trap 'handle_signal 143' TERM
-mkdir -p "${results_directory}" "${profile_results_directory}"
+mkdir -p "${results_directory}" "${profile_results_directory}" "${il_inspect_results_directory}"
 
 ordinary_command=(
     dotnet test "${repository_root}/tests/OrbModding.Tests/OrbModding.Tests.csproj"
@@ -77,6 +78,13 @@ ordinary_command=(
     -p:UseGameStubs=true
     --results-directory "${results_directory}"
     --logger "trx;LogFileName=all.trx"
+)
+il_inspect_command=(
+    dotnet test "${repository_root}/tools/OrbModding.IlInspect/Tests/OrbModding.IlInspect.Tests.csproj"
+    --disable-build-servers
+    --configuration "${configuration}"
+    --results-directory "${il_inspect_results_directory}"
+    --logger "trx;LogFileName=il-inspect.trx"
 )
 profile_command=(
     dotnet test "${repository_root}/tests/OrbModding.ProfileTests/OrbModding.ProfileTests.csproj"
@@ -103,6 +111,7 @@ profile_tool_command=(
 # followed by a passing profile run reports the gate as green.
 run_all_tests() {
     "${ordinary_command[@]}" || return "$?"
+    "${il_inspect_command[@]}" || return "$?"
     "${profile_command[@]}" || return "$?"
     "${profile_tool_command[@]}" || return "$?"
 }

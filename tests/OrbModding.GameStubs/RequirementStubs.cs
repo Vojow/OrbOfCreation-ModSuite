@@ -157,8 +157,9 @@ public sealed class PrerequisiteLinkRequirement :
 }
 
 /// <summary>
-/// The two native composite shapes. Their nested lists must remain explicit because flattening an OR
-/// into the container's implicit AND changes the game's answer.
+/// The two native composite shapes. They pass the same condition info to every child, and their
+/// nested lists remain explicit because flattening an OR into the container's implicit AND changes
+/// the game's answer.
 /// </summary>
 public sealed class OrRequirement : IRequirementCondition
 {
@@ -172,5 +173,10 @@ public sealed class AndRequirement : IRequirementCondition
 
 /// <summary>A future native condition shape the suite deliberately has no binding for.</summary>
 public sealed class UnsupportedRequirement : IRequirementCondition
+{
+}
+
+/// <summary>An intentionally unmodelled leaf used to prove fail-closed publication and evaluation.</summary>
+public sealed class OpaqueRequirement : IRequirementCondition
 {
 }

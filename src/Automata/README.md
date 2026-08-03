@@ -10,9 +10,9 @@ registered ServiceCycle services and share the frame pump with world collection.
 a fixed 16-action turn per Unity frame; the other feature services retain a bounded one-action
 turn. Fruit and treasure capabilities cannot mask an eligible sibling. A feature-neutral host owns
 the ServiceCycle registry, frame pump, lifecycle, emergency control, timing publication, and
-pump-shutdown lease. That host also owns the observation products — the optional manual full-trace
-session, the normally-on compact decision journal, and the profiling build's performance profile —
-so no feature owns them and gameplay is independent of all three. Every native operation passes
+pump-shutdown lease. That host also owns the observation products — the always-held recent-event ring,
+the normally-on compact decision journal, and the profiling build's correlated full trace and
+performance profile — so no feature owns them and gameplay is independent of all four. Every native operation passes
 through fail-closed family adapters, normalized admission facts, lifecycle isolation, and
 capture-execute-capture postconditions.
 
@@ -50,7 +50,9 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Candidates rank by cost ratio and stable UUID; there is no UUID-list filter or structure-effect priority tier.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
 - Startup, warning, and error records remain enabled; explicit Runtime actions own deeper trace and journal evidence.
-- Suite automation logging emits the first info, warning, or error state immediately. Further
+- Routine per-action successes and ordinary no-ops do not enter the BepInEx log; the compact action
+  journal and Runtime outcome projection own them. Lifecycle, startup, shutdown, refusal, warning,
+  and error records remain. Suite automation logging emits the first retained state immediately. Further
   byte-identical occurrences collapse independently per severity: a changed message first emits the
   held count and span, then the new state, while an unchanged state emits a count-and-span heartbeat
   on the first occurrence at or beyond 60 seconds. Summaries repeat the exact original content for
@@ -123,23 +125,22 @@ Saved configuration publishes only after a successful Apply and affects the next
 
 The Runtime page projects pair health from immutable ServiceCycle state without inventing a legacy cycle identity. A worker response requests one full service projection; a zero-wait contended read remains pending until a later frame succeeds. Emergency-stop and action-family conditions remain immediate.
 
-The separate Runtime-page full-trace control records incremental diagnostic-only sessions under that
-launch's own `BepInEx/config/OrbOfCreation-ModSuite/trace/run-<timestamp>/full/` folder, beside the
-performance profile from the same launch. Each launch prunes all but the newest eight run folders.
-`./script/trace --full <session-directory> [report.md]` strictly validates and reports those sessions.
-Profiler-enabled debug builds start both this full trace and the ServiceCycle performance profile
-when the shared runtime is created. Closing the game stops both with the runtime-shutdown reason
-and flushes their accepted prefixes; release builds retain manual, opt-in recording.
+Profiler-enabled debug builds start a full semantic trace and the ServiceCycle performance profile
+when the shared runtime is created. They write correlated sessions under that launch's own
+`BepInEx/config/OrbOfCreation-ModSuite/trace/run-<timestamp>/` folder, and each launch prunes all but
+the newest eight run folders. `./script/trace --full <session-directory> [report.md]` strictly validates
+and reports a trace. Closing the game stops both products with the runtime-shutdown reason and flushes
+their accepted prefixes. Release composition has no record-forward full-trace control.
 
-The compact decision journal starts once with the lifecycle-bound ServiceCycle runtime and records coalesced
-numeric service decisions under the stable `BepInEx/config/OrbOfCreation-ModSuite/trace/journal/` directory,
-which is deliberately not per-launch so its size cap governs one directory. It owns ten reusable
-blocks, checkpoints the current span once per minute, and initially retains 10,080 rolling segments. Those are
-live-validation settings, not a stable disk quota: the Runtime page reports accepted and written records,
-bytes, retained and evicted segments, buffer pressure, and terminal faults so the quota can follow measured
-rates. Journal initialization or writer failure detaches only observation; it does not stop Auto Harvest,
-start a replacement writer, or switch formats. Shutdown seals the accepted prefix and returns without waiting
-for disk I/O on Unity's main thread.
+The compact decision journal starts once with the lifecycle-bound ServiceCycle runtime under the stable
+`BepInEx/config/OrbOfCreation-ModSuite/trace/journal/` directory, which is deliberately not per-launch so
+one 64 MiB envelope governs the retained store. Schema 3 writes one fixed 80-byte sentinel per attempted
+action with candidate UUID, exact native type, list/view route, and one outcome; zero-action decisions
+coalesce. It owns ten reusable blocks, checkpoints once per minute, and derives a 6,476-segment retained
+limit that leaves room for one maximum atomic-commit temporary. An older schema is discarded with a loud
+count and recording starts fresh; there is no migration or dual reader. Journal initialization or writer
+failure detaches only observation; it does not stop automation, start a replacement writer, or switch
+formats. Shutdown seals the accepted prefix and returns without waiting for disk I/O on Unity's main thread.
 
 Portable tests measure the warmed journal control tick, pump, and always-on diagnostics across 64 successful
 cycles and keep every owner and worker sample within its reviewed 64-byte ceiling. Installed-game frame cost
@@ -147,7 +148,7 @@ remains an interactive profiling gate.
 
 ## Auto Buy
 
-Auto Buy asks the game nothing while it decides. Its candidates *are* the shared world snapshot's structures and upgrades, and identity, availability, current and queued levels, prices, resource quantities and the economic priority a candidate's authored effects earn it all arrive as published rows. Each cycle projects that snapshot into a flat frame on the worker — no candidate index, no incremental reconcile, no dirty tracking — ranks the eligible ones by priority, then by cost ratio, then by uuid, and plans one purchase per eligible candidate in that order. The game is touched only where the purchase is made: `CanPurchase()` and the queue's remaining room are read there, and the boundary re-validates every level immediately before it mutates.
+Auto Buy asks the game nothing while it decides. Its candidates *are* the shared world snapshot's structures and upgrades, and identity, availability, current and queued levels, prices, resource quantities and the economic priority a candidate's authored effects earn it all arrive as published rows. Each cycle projects that snapshot into a flat frame on the worker — no candidate index, no incremental reconcile, no dirty tracking — ranks the eligible ones by priority, then by cost ratio, then by uuid, and plans one purchase per eligible candidate in that order. The game is touched only where the purchase is made: `CanPurchase()` and the queue's remaining room are read there, and the boundary re-validates every level immediately before it mutates. Because the native Structure `CanPurchase()` omits affordability, that path also asks its exact live `GetPurchaseCost().HasEnough()` term before `Purchase(true)`; an unread term fails closed.
 
 Owning-view reachability follows the game's authored list topology. Every view that carries the same
 list is part of that list route and must be available; this preserves parent-screen gates when a child
@@ -155,7 +156,7 @@ view has already unlocked. Distinct lists are alternate routes, so a proven avai
 still admit a candidate carried separately by a locked feature screen. The worker and live purchase
 boundary apply the same rule, and an incomplete or unreadable route is never admission evidence.
 
-`AutoLevelSpells=true` runs while Auto Buy is active and is configured in the Auto Buy section. Its capability follows native progression automatically: `Locked` while no discovered spell passes its own leveling prerequisites, `Single` after that contract unlocks, and `All` after the exact `UnlockLevelAllSpells` Upgrade has completed. Single mode pays the spell's live native cost and confirms one native `PurchaseLevel()` per mutation. All mode calls the game's native `SpellManager.TryLevelAllSpells()` action. Queued upgrades do not count, affordability and readiness are revalidated immediately before mutation, and any ambiguous failure after a cost attempt blocks further spell leveling for that lifecycle.
+`AutoLevelSpells=true` runs while Auto Buy is active and is configured in the Auto Buy section. Its capability follows native progression automatically: `Locked` while no discovered spell passes its own leveling prerequisites, `Single` after that contract unlocks, and `All` after the exact `UnlockLevelAllSpells` Upgrade has completed. Single mode pays the spell's live native cost and confirms one native `PurchaseLevel()` per mutation. All mode calls the game's native `SpellManager.TryLevelAllSpells()` action. Queued upgrades do not count. Readiness and the native cost's current affordability are published with each spell, so an already-known wait plans no action; the action boundary repeats both checks immediately before mutation. Any ambiguous failure after a cost attempt blocks further spell leveling for that lifecycle.
 
 A candidate's price is the published `WorldPurchaseCost` row for its next level, computed by the suite's own port of the game's cost chain and verified against the game entity by entity in a live session. Reserves and affordability are applied to that price against the published resource quantities, so what a purchase would leave behind is decided on the worker rather than discovered at the boundary. A candidate nobody could price is refused rather than treated as free. There is no per-candidate retry or backoff: a live affordability refusal skips that candidate and closes the world-freshness gate until another collection lands, while a structural native rejection terminates the batch. No decision is taken twice against facts that have moved. Save loads, gameplay-manager restarts, scene changes and NG+ start a new lifecycle; unknown cost, resource, lifecycle or identity state fails closed.
 
@@ -163,7 +164,7 @@ A value that could not be read is not evidence. A candidate whose every cost row
 
 Every active native mutation uses stable identity plus one observable outcome sentinel. Auto Buy checks the requested queued level, Auto Concept checks the requested assignment change, spell leveling checks native mastery advancement, Auto Cast checks the audited `Spell.Fire` hook for a new cast and native casting-state deactivation for a player-requested toggle-off, and Auto Harvest checks for exactly one engaged matching plot action. No boundary captures payment deltas or assembles a general before/after receipt. After a throw it rereads the same sentinel: an observable requested outcome commits; an absent or ambiguous transition blocks that candidate or feature for the current lifecycle. Recovery is deliberately limited to scene, save-load, reset, or NG+ lifecycle invalidation; ordinary evaluation and configuration polling cannot silently retry an ambiguous mutation.
 
-When the game refuses a purchase Auto Buy planned, the boundary first asks *which fact moved*. It reads `IsAvailable()`, `IsMaxLevel()`, `IsMaxQueuedLevel()`, the game's verdict on the price, every live cost row and its spendable amount, plus elapsed collection time, world-generation drift, and earlier same-batch purchases touching those resources. A price-only refusal is expected snapshot staleness: that candidate is skipped, Auto Buy stays enabled, and a newer world collection is required before it plans again. A structural contradiction or a refusal with every readable term passing remains an invariant violation; those still terminate the batch, write the same full bundle, and turn Auto Buy's own setting off through the central configuration path. One prior structural mismatch otherwise repeated 1,988 times.
+When the game refuses a purchase Auto Buy planned, the boundary first asks *which fact moved*. It reads `IsAvailable()`, `IsMaxLevel()`, `IsMaxQueuedLevel()`, the game's verdict on the price, every live cost row and its spendable amount, plus elapsed collection time, world-generation drift, and earlier same-batch purchases touching those resources. A price-only refusal is expected snapshot staleness: that candidate is skipped before any native mutation, Auto Buy stays enabled, a newer world collection is required before it plans again, and no synchronous bundle is written. A structural contradiction, a refusal with every readable term passing, or a native call whose queued-level sentinel does not advance remains an invariant violation; those terminate the batch, write one full bundle within the fixed eight-file/1 MiB diagnostic envelope, and turn Auto Buy's own setting off through the central configuration path. A refusal writes one actionable log line; bundle-capture failure stays in that line. One prior structural mismatch otherwise repeated 1,988 times.
 
 Feature health publishes Auto Buy, Auto Cast, Auto Concept, Spell Leveling, Auto Harvest, and Auto
 Items independently through Common. Controls and tooltips now separate saved configuration from
@@ -260,7 +261,7 @@ Every outcome waits for a new world publication; Auto Scribe has no cadence or r
 
 ## Auto Cast
 
-Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. Empty slots are skipped, active auras are treated as already satisfied, channels pause the rotation, and persistent spells are never turned off automatically.
+Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. Empty slots are skipped, active auras are treated as already satisfied, channels pause the rotation, and persistent spells are never turned off automatically. The published world carries both the manager-wide `SpellManager.CanCastASpell()` answer and each slot's `Spell.CanCast()` answer, so busy and unready periods are quiet planning backpressure rather than repeated boundary submissions.
 
 The player-driven `game_cast(mode="toggle_off")` command is separate from rotation policy. It
 reproduces the visible spell button's cancel path for one exact active toggle, including the native
@@ -270,7 +271,7 @@ The rotation cursor advances when a slot is chosen, not when its cast commits. W
 
 `FullCharge=true` holds charge-capable spells through the game's native charge-input contract until the full-charge point. While Auto Cast owns that hold, the rest of the rotation pauses. The hold is released when charging completes, Auto Cast is disabled or emergency-blocked, the setting is turned off, manual spell input occurs, or the plugin shuts down. Set `FullCharge=false` to fire charge-capable spells immediately without charging.
 
-A planned cast is advisory. Before firing, Auto Cast rediscovers the slot and requires the stable recipe UUID, exact native Spell reference, runtime type, and slot index to match. Scene changes, save implementation, and player-manager restarts discard prepared casts immediately.
+A planned cast is advisory. Before firing, Auto Cast rediscovers the slot and requires the stable recipe UUID, exact native Spell reference, runtime type, and slot index to match, then repeats manager and spell readiness. A manager or spell that became unready after publication is recorded with its exact reason as an expected skip; structural identity failures and genuine mutation failures remain rejected or faulted. Scene changes, save implementation, and player-manager restarts discard prepared casts immediately.
 
 Every finite-cap resource used by immediate or drain costs must meet `StartResourcePercent`. Immediate costs also pass the shared reserve policy. Manual casting pauses automation for `ManualPauseSeconds`, and an existing manual target prompt is never replaced.
 
@@ -287,6 +288,15 @@ Auto Concept uses the shared `OrbModding.Common.AlchemyGameplayDomainClassifier`
 Candidate quantity limits come from the native `AlchemyRecipeSO.GetMaxUsageSlots()` result. The
 collector does not interpret the raw `maxUsageSlots` modifier because its `-1` value is a sentinel
 that the game resolves to a mastery-derived or unlimited maximum.
+
+The same publication captures native prospective drain vectors for the exact quantity targets the
+boundary's halving ladder can choose. Planning compares each positive incremental drain through the
+published resource quality, true rate, current drain, capacity, and configured rate/quantity floors.
+A target the publication already says would violate a reserve is quiet backpressure and is not
+scheduled; a lower safe target may still be selected. The GameAction independently reconstructs the
+prospective vector and repeats every check against live native state before mutation. Boundary-time
+resource backpressure keeps its exact result code but counts as an expected skip, while an unavailable
+projection contract remains a loud rejection.
 
 `SlotManagementMode=TimedCycle` is the default once Auto Concept is enabled. It permits complete settled replacement across concept types, but every assigned concept receives its full configured settled-active period before rotation; catching the current highest mastery never ends that session early, and least-recently-assigned ordering prevents any unlocked concept from being starved. Before removal, the native boundary proves that releasing the exact active assignment will open either a matching typed slot or a typeless slot for the replacement. `RotateAll` instead removes one settled active concept only if a same-type inactive concept has strictly lower mastery, waits for native settlement, and then adds the exact planned replacement. Equal mastery never rotates on UUID ordering alone. `PreserveManual` never removes the quantity present when Auto Concept starts; it can rotate only assignments that Auto Concept added itself.
 
@@ -317,7 +327,7 @@ Enabling the feature initializes the scoped shared classifier and snapshots curr
 
 Transient shared classifier readiness failures use the existing 30-second Auto Concept warning gate. A contradictory or permanently invalid concept-domain contract blocks Auto Concept for that lifecycle and is logged once; `Unknown` evidence never falls back to ordinary names or broad alchemy membership.
 
-Warnings and errors are always emitted. Deeper troubleshooting is deliberate and bounded: use the Mods Runtime actions to capture a full trace, inspect recent events and the decision journal, or run differential verification. Schema 5 retires the old global logging switches, rejection cap, and detailed-logging preferences because ServiceCycle does not consume them.
+Warnings and errors are always emitted. After a problem, use **Create bug report** on Mods Runtime to flush and package the recent-event ring, decision journal, configuration, identifiable save files, and redacted log into one capped zip. **Check game math** remains a separate read-only diagnostic. Schema 5 retires the old global logging switches, rejection cap, and detailed-logging preferences because ServiceCycle does not consume them.
 
 Auto Buy decisions use append-only Common codes rather than parsing diagnostic text. Candidate threshold parking, rejection telemetry, the latest tooltip status, and Runtime presentation all consume the same immutable decision. Observed quantities and wording can change without producing a new condition; stable thresholds, identities, policy, queue limits, and native states do produce a transition. Equivalent conditions are not republished to future Insights subscribers.
 

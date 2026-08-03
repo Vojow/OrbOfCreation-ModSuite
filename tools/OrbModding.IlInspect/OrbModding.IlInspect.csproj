@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>OrbModding.IlInspect</AssemblyName>
+    <RootNamespace>OrbModding.IlInspect</RootNamespace>
+    <RequireGameReferences>false</RequireGameReferences>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Tests/**/*.cs" />
+    <InternalsVisibleTo Include="OrbModding.IlInspect.Tests" />
+  </ItemGroup>
+</Project>

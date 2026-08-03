@@ -277,7 +277,9 @@ public sealed class InstalledGameContractTests
         AssertMethod(assembly, "AlchemyInstance", ".ctor", false, "System.Void", "AlchemyRecipeSO");
         AssertMethod(assembly, "AlchemyInstance", "GetDrainCostMod", false, "BigDouble");
         AssertMethod(assembly, "ResourceDrain", "GetCurrentDrain", false, "ResourceCostList");
-        AssertMethod(assembly, "ResourceDrain", "GetRatio", false, "BigDouble");
+        Assert.Equal("System.Boolean", assembly.GetFieldType("ResourceDrain", "isDrainApplied"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ResourceDrain", "currentRatio"));
+        Assert.Equal("BigDouble", assembly.GetFieldType("ResourceDrain", "usageRatio"));
         AssertMethod(assembly, "ResourceCostList", "Subtract", false, "ResourceCostList", "ResourceCostList");
         AssertMethod(assembly, "ResourceCostList", "Multiply", false, "ResourceCostList", "BigDouble");
         AssertMethod(assembly, "ResourceSO", "GetTrueSpend", false, "BigDouble", "BigDouble");
@@ -349,7 +351,7 @@ public sealed class InstalledGameContractTests
             "GetIcon",
             false,
             "UnityEngine.Sprite");
-        AssertMethod(assembly, "ConsumableSO", "GetMaximumCarryLoad", false, "System.Int32");
+        Assert.Equal("IntVariable", assembly.GetFieldType("ConsumableTypeSO", "maximumCarryLoad"));
 
         Assert.Equal("System.Boolean", assembly.GetFieldType("ConsumableUsage", "en"));
         Assert.Equal("BigDouble", assembly.GetFieldType("ConsumableUsage", "dr"));

@@ -41,7 +41,7 @@ assets, or a live registry read belongs here.
 - [Clean-exit boundary](clean-exit-boundary.md) — the direct process-termination route and why it cannot produce a verified MCP receipt.
 
 The product-version-pinned authored model, progression graph, and census live under
-[`data/`](../../data/README.md).
-Use the uv-managed [`tools/`](../../tools/README.md) project to extract, verify, query, or render
+[`data/`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/README.md).
+Use the uv-managed [`tools/`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/tools/README.md) project to extract, verify, query, or render
 the local exhaustive progression atlas. These tools read installed files only; live state remains
 the responsibility of running-game probes.

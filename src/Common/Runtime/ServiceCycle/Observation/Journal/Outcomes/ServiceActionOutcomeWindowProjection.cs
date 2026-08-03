@@ -93,6 +93,8 @@ internal sealed class ServiceActionOutcomeWindowProjection :
     public long TimelineRevision => _timelineRevision;
     public bool IsFaulted => false;
 
+    public void ObserveAction(in DecisionJournalActionObservation observation) { }
+
     public ServiceActionOutcomeWindowCopyResult CopyTo(
         Span<ServiceActionOutcomeSnapshot> destination)
     {
@@ -198,6 +200,7 @@ internal sealed class ServiceActionOutcomeWindowProjection :
     }
 
     public void Advance(MonotonicTimestamp now) => AdvanceTimeline(now);
+    public void Flush(MonotonicTimestamp now) => AdvanceTimeline(now);
     public void Stop(MonotonicTimestamp now) => AdvanceTimeline(now);
 
     private void ObserveTimeline(

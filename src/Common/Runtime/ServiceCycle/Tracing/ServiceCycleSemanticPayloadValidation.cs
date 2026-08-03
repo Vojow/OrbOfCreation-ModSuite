@@ -28,8 +28,6 @@ internal static partial class ServiceCycleSemanticPayloadValidation
             Has(expected, ServiceCycleSemanticFields.CommittedCount) && payload.CommittedCount < 0 ||
             Has(expected, ServiceCycleSemanticFields.UntouchedSuffixCount) && payload.UntouchedSuffixCount < 0 ||
             Has(expected, ServiceCycleSemanticFields.OccurrenceCount) && payload.OccurrenceCount <= 0 ||
-            Has(expected, ServiceCycleSemanticFields.PublishedCount) &&
-                (payload.PublishedCount < 0 || payload.PublishedCount > payload.CommittedCount) ||
             Has(expected, ServiceCycleSemanticFields.NativeCallTotals) && !NativeTotalsAreCoherent(in payload))
             throw new ArgumentOutOfRangeException(nameof(payload));
 

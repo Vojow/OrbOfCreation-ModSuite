@@ -27,6 +27,23 @@ internal static class AutoBuyService
                 in metadata,
                 createWorker: static () => new AutoBuyWorkerDefinition(),
                 shouldStart: ShouldStart,
+                describeAction: static (in AutoBuyCycleAction action) =>
+                    action.OwningListId != Guid.Empty && action.OwningViewId != Guid.Empty
+                        ? ServiceActionJournalAttribution.Routed(
+                            action.Uuid,
+                            action.Kind == AutoBuyCandidateKind.Structure
+                                ? ServiceActionNativeTypeId.StructureSO
+                                : ServiceActionNativeTypeId.UpgradeSO,
+                            action.OwningListId,
+                            action.OwningViewId)
+                        : new ServiceActionJournalAttribution(
+                            action.Uuid,
+                            action.Kind == AutoBuyCandidateKind.Structure
+                                ? ServiceActionNativeTypeId.StructureSO
+                                : ServiceActionNativeTypeId.UpgradeSO,
+                            Guid.Empty,
+                            Guid.Empty,
+                            ServiceActionRouteStatus.Contradictory),
                 execute: actions.TryExecute);
 
         // Only Auto Buy's own policy. Whether the shared world is fresh enough to act on is not a

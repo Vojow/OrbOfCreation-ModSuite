@@ -371,7 +371,6 @@ public sealed class GameMcpSpellCompositionTests
             ResourceId,
             new BigDouble(9d, 6),
             new BigDouble(1d, 9),
-            BigDouble.Zero,
             true,
             BigDouble.Zero,
             BigDouble.Zero,

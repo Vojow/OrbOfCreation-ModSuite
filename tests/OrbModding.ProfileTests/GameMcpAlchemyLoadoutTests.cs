@@ -147,7 +147,7 @@ public sealed class GameMcpAlchemyLoadoutTests
         var traits = default(RawResourceTraits);
         var modifiers = default(RawResourceModifiers);
         var reading = new RawResourceSample(ResourceId, new BigDouble(80), new BigDouble(100),
-            BigDouble.Zero, true, BigDouble.Zero, BigDouble.Zero, new BigDouble(100),
+            true, BigDouble.Zero, BigDouble.Zero, new BigDouble(100),
             new BigDouble(100), BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, false, false,
             false, 0, Guid.Empty, in rateInputs, in traits, in modifiers);
         var resource = new WorldResource(in reading, true, new BigDouble(20), 0.8, false,

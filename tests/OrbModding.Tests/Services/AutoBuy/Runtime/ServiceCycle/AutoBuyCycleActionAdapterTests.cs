@@ -294,6 +294,40 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     }
 
     /// <summary>
+    /// StructureSO.CanPurchase() does not include affordability, so the action boundary must ask the
+    /// exact native cost list before calling Purchase(true). Otherwise the native method silently
+    /// declines the purchase and the verifier can report only an unexplained zero delta.
+    /// </summary>
+    [Fact]
+    public void Submit_StructureUnaffordable_RefusesBeforeTheNativeCall()
+    {
+        var resource = new global::ResourceSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            quantity = new BigDouble(1.0, 0),
+        };
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        structure.purchaseCost.costs.Add(
+            new global::ResourceTuple(resource, new BigDouble(2.0, 0)));
+        global::StructureSO.All.Add(structure);
+
+        var submission = NativeAdapter()
+            .Submit(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), count: 1);
+
+        Assert.Equal(AutoBuyPurchasePreflight.NotAdmissible, submission.Preflight);
+        Assert.False(submission.HasEvidence);
+        Assert.Equal(AutoBuyAdmissionTerm.Refused, submission.Diagnosis.HasEnough);
+        Assert.Equal(AutoBuyRefusalClassification.AffordabilityChanged, submission.Diagnosis.Classification);
+        Assert.Equal(0, structure.queuedQuantity);
+        Assert.Equal(0, structure.purchaseCost.PerformCalls);
+    }
+
+    /// <summary>
     /// The exact reported shape — affordable in the plan, price-only refusal at the boundary — is a
     /// pre-native skip. It records the disagreement but does not turn it into a structural rejection.
     /// </summary>
@@ -841,7 +875,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
-    public void Execute_MutationDidNotApply_SkipsWithZeroCommitEvidence()
+    public void Execute_MutationDidNotApply_FaultsWithZeroCommitEvidence()
     {
         var structure = new global::StructureSO
         {
@@ -855,8 +889,8 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
 
         var result = Execute(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), nativeEpoch: PlannedEpoch);
 
-        Assert.Equal(ServiceActionDisposition.Skipped, result.Disposition);
-        Assert.Equal(CommonActionResultCodes.Skipped, result.Code);
+        Assert.Equal(ServiceActionDisposition.Faulted, result.Disposition);
+        Assert.Equal(CommonActionResultCodes.AdapterFault, result.Code);
         Assert.True(result.HasNativeEvidence);
         Assert.NotEqual(NativeMutationOutcome.Verified, result.NativeEvidence.Outcome);
         Assert.Equal(1, result.NativeEvidence.CallOutcome.MutationAttempts);
@@ -1394,6 +1428,128 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
             Context());
 
         Assert.Equal(4, purchases.LastCount);
+    }
+
+    [Fact]
+    public void EarlierVerifiedOverspendSkipsTheNowUnpayableActionBeforeNativeDispatch()
+    {
+        var resource = Guid.NewGuid();
+        var purchases = new ReconciliationPurchasePort(resource, firstActualCost: new BigDouble(15));
+        var adapter = new AutoBuyCycleActionAdapter(
+            purchases,
+            new FakeQueueRoom(64, readable: true),
+            () => PlannedEpoch,
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance);
+
+        var first = adapter.TryExecute(
+            ReconciledAction(Guid.NewGuid(), resource, cost: 10, remaining: 20),
+            Config(structures: true, upgrades: true),
+            Context(actionIndex: 0));
+        var second = adapter.TryExecute(
+            ReconciledAction(Guid.NewGuid(), resource, cost: 10, remaining: 10),
+            Config(structures: true, upgrades: true),
+            Context(actionIndex: 1));
+
+        Assert.Equal(ServiceActionDisposition.Committed, first.Disposition);
+        Assert.Equal(ServiceActionDisposition.Skipped, second.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.BatchSpendDrift, second.Code);
+        Assert.False(second.HasNativeEvidence);
+        Assert.Equal(1, purchases.Submissions);
+    }
+
+    [Fact]
+    public void ARealBoundaryRefusalKeepsItsExactCodeAfterSpendReconciliation()
+    {
+        var resource = Guid.NewGuid();
+        var purchases = new ReconciliationPurchasePort(
+            resource,
+            firstActualCost: new BigDouble(10),
+            secondPreflight: AutoBuyPurchasePreflight.OwningViewUnavailable);
+        var adapter = new AutoBuyCycleActionAdapter(
+            purchases,
+            new FakeQueueRoom(64, readable: true),
+            () => PlannedEpoch,
+            () => AutoBuyCandidateKinds.All,
+            IgnoreRefusals.Instance);
+
+        adapter.TryExecute(
+            ReconciledAction(Guid.NewGuid(), resource, cost: 10, remaining: 30),
+            Config(structures: true, upgrades: true),
+            Context(actionIndex: 0));
+        var refused = adapter.TryExecute(
+            ReconciledAction(Guid.NewGuid(), resource, cost: 10, remaining: 20),
+            Config(structures: true, upgrades: true),
+            Context(actionIndex: 1));
+
+        Assert.Equal(ServiceActionDisposition.Rejected, refused.Disposition);
+        Assert.Equal(AutoBuyActionResultCodes.OwningViewUnavailable, refused.Code);
+        Assert.Equal(2, purchases.Submissions);
+    }
+
+    private static AutoBuyCycleAction ReconciledAction(
+        Guid candidate,
+        Guid resource,
+        double cost,
+        double remaining) =>
+        new(
+            AutoBuyCandidateKind.Upgrade,
+            candidate,
+            PlannedEpoch,
+            count: 1,
+            default,
+            default,
+            plannedSpend: PublicationTable<AutoBuyPlannedSpend>.Create(new[]
+            {
+                new AutoBuyPlannedSpend(
+                    resource,
+                    new BigDouble(cost),
+                    new BigDouble(remaining),
+                    default),
+            }));
+
+    private sealed class ReconciliationPurchasePort : IAutoBuyNativePurchasePort
+    {
+        private readonly Guid _resource;
+        private readonly BigDouble _firstActualCost;
+        private readonly AutoBuyPurchasePreflight _secondPreflight;
+
+        internal ReconciliationPurchasePort(
+            Guid resource,
+            BigDouble firstActualCost,
+            AutoBuyPurchasePreflight secondPreflight = AutoBuyPurchasePreflight.Proceeded)
+        {
+            _resource = resource;
+            _firstActualCost = firstActualCost;
+            _secondPreflight = secondPreflight;
+        }
+
+        internal int Submissions { get; private set; }
+
+        public AutoBuyPurchaseSubmission Submit(
+            AutoBuyCandidateKind kind,
+            Guid uuid,
+            int count,
+            long lifecycleEpoch)
+        {
+            Submissions++;
+            if (Submissions == 2 && _secondPreflight != AutoBuyPurchasePreflight.Proceeded)
+                return AutoBuyPurchaseSubmission.Rejected(_secondPreflight);
+
+            var queued = 0;
+            var evidence = NativeMutationVerifier.Execute(
+                "Auto Buy Upgrade",
+                uuid.ToString(),
+                "queued level +1",
+                () => queued,
+                () => queued++,
+                static (before, after) => after == before + 1);
+            var live = AutoBuyLiveCostSnapshot.Complete(new[]
+            {
+                new AutoBuyLiveCostRow(_resource, false, _firstActualCost, new BigDouble(100)),
+            });
+            return AutoBuyPurchaseSubmission.Attempted(evidence, requestedLevels: 1, in live);
+        }
     }
 
     private sealed class RecordingPurchasePort : IAutoBuyNativePurchasePort

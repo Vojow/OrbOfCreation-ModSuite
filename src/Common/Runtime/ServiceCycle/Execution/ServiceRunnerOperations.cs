@@ -66,21 +66,32 @@ internal readonly struct ServiceActionDispatch
 {
     internal ServiceActionDispatch(
         ServiceActionFact actionFact,
+        ServiceActionJournalAttribution attribution,
         bool batchTerminal,
         BatchReceipt receipt,
         ServiceFault fault = default,
         MonotonicTimestamp retryDue = default,
-        ServiceFaultRecoveryFact recoveredFault = default)
+        ServiceFaultRecoveryFact recoveredFault = default,
+        string? attributionFailureReason = null)
     {
+        var attributionFailed =
+            attribution.RouteStatus == ServiceActionRouteStatus.AttributionFailed;
+        if (attributionFailed != !string.IsNullOrWhiteSpace(attributionFailureReason))
+            throw new System.ArgumentException(
+                "An attribution failure requires exactly one non-empty diagnostic reason.",
+                nameof(attributionFailureReason));
         ActionFact = actionFact;
+        Attribution = attribution;
         BatchTerminal = batchTerminal;
         Receipt = receipt;
         Fault = fault;
         RetryDue = retryDue;
         RecoveredFault = recoveredFault;
+        AttributionFailureReason = attributionFailureReason;
     }
 
     internal ServiceActionFact ActionFact { get; }
+    internal ServiceActionJournalAttribution Attribution { get; }
     internal bool Attempted => ActionFact.IsPresent;
     internal ServiceActionResult Result => ActionFact.Result;
     internal bool BatchTerminal { get; }
@@ -88,4 +99,5 @@ internal readonly struct ServiceActionDispatch
     internal ServiceFault Fault { get; }
     internal MonotonicTimestamp RetryDue { get; }
     internal ServiceFaultRecoveryFact RecoveredFault { get; }
+    internal string? AttributionFailureReason { get; }
 }

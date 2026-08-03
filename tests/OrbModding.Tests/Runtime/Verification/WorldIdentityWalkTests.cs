@@ -148,6 +148,8 @@ public sealed class WorldIdentityWalkTests
         "HarvestElementControls",
         "HarvestActionControls",
         "HarvestLifecycleCosts",
+        "SpellAuthoredCosts",
+        "SpellRelations",
     };
 
     /// <summary>

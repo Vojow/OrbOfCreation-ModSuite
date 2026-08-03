@@ -116,6 +116,24 @@ public sealed class DifferentialVerificationSessionTests
     }
 
     [Fact]
+    public void ExpectedUninstantiatedSkipsStayVisibleWithoutDowngradingAPass()
+    {
+        var session = new DifferentialVerificationSession("Concept drain");
+        session.Start();
+        session.Run.Compare(Entity, Resource.ToString(), new BigDouble(10d), new BigDouble(10d));
+        session.RecordVerified();
+        session.RecordExpectedSkip();
+        session.RecordVerified();
+        session.EndTick();
+
+        var verdict = session.Complete();
+
+        Assert.Contains("PASSED", verdict, StringComparison.Ordinal);
+        Assert.Contains("[1 entities, 1 uninstantiated]", verdict, StringComparison.Ordinal);
+        Assert.DoesNotContain("INCOMPLETE", verdict, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ARealDisagreementOutranksUnreadableEntities()
     {
         // When both are present the verdict must lead with the disagreement: a wrong port is a

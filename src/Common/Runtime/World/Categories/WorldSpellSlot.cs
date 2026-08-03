@@ -20,6 +20,7 @@ namespace OrbModding.Common.Runtime.World;
 /// </para>
 /// <para>
 /// Every readiness member here is the game's own answer, not a reconstruction of one.
+/// <see cref="CasterAvailable"/> is <c>SpellManager.CanCastASpell()</c>,
 /// <see cref="CastReady"/> is <c>Spell.CanCast()</c>, and the three fields under it are the game's
 /// classification of why a refusal happened. Publishing the composite and its terms together is what
 /// lets a planner rank without guessing and still leaves the boundary the authority: a plan is made
@@ -49,7 +50,8 @@ internal readonly struct WorldSpellSlot
         bool resourcesCovered,
         int currentCharges,
         int maximumCharges,
-        BigDouble cooldownRemaining)
+        BigDouble cooldownRemaining,
+        bool casterAvailable = true)
         : this(
             slotIndex,
             Guid.Empty,
@@ -74,7 +76,9 @@ internal readonly struct WorldSpellSlot
             0,
             false,
             false,
-            PublicationTable<WorldSpellSlotGlyph>.Empty)
+            PublicationTable<WorldSpellSlotGlyph>.Empty,
+            false,
+            casterAvailable)
     {
     }
 
@@ -94,7 +98,8 @@ internal readonly struct WorldSpellSlot
         bool resourcesCovered,
         int currentCharges,
         int maximumCharges,
-        BigDouble cooldownRemaining)
+        BigDouble cooldownRemaining,
+        bool casterAvailable = true)
         : this(
             slotIndex,
             spellInstanceId,
@@ -119,7 +124,9 @@ internal readonly struct WorldSpellSlot
             0,
             false,
             false,
-            PublicationTable<WorldSpellSlotGlyph>.Empty)
+            PublicationTable<WorldSpellSlotGlyph>.Empty,
+            false,
+            casterAvailable)
     {
     }
 
@@ -146,7 +153,8 @@ internal readonly struct WorldSpellSlot
         int recipeMasteryLevel,
         bool durationSpell,
         bool usageRequirementsMet,
-        PublicationTable<WorldSpellSlotGlyph> augmentGlyphs)
+        PublicationTable<WorldSpellSlotGlyph> augmentGlyphs,
+        bool casterAvailable = true)
         : this(
             slotIndex,
             spellInstanceId,
@@ -171,7 +179,9 @@ internal readonly struct WorldSpellSlot
             recipeMasteryLevel,
             durationSpell,
             usageRequirementsMet,
-            augmentGlyphs)
+            augmentGlyphs,
+            false,
+            casterAvailable)
     {
     }
 
@@ -200,7 +210,8 @@ internal readonly struct WorldSpellSlot
         bool durationSpell,
         bool usageRequirementsMet,
         PublicationTable<WorldSpellSlotGlyph> augmentGlyphs,
-        bool cancellationEnabled = false)
+        bool cancellationEnabled = false,
+        bool casterAvailable = true)
     {
         SlotIndex = slotIndex;
         SpellInstanceId = spellInstanceId;
@@ -228,6 +239,7 @@ internal readonly struct WorldSpellSlot
         CancellationEnabled = cancellationEnabled;
         AugmentGlyphs = augmentGlyphs ??
             throw new ArgumentNullException(nameof(augmentGlyphs));
+        CasterAvailable = casterAvailable;
     }
 
     /// <summary>
@@ -248,6 +260,9 @@ internal readonly struct WorldSpellSlot
 
     /// <summary>Whether the slot holds a spell at all.</summary>
     internal bool Occupied { get; }
+
+    /// <summary>Whether the game says its one spell caster is available for another cast.</summary>
+    internal bool CasterAvailable { get; }
 
     /// <summary>Whether a cast is under way in this slot right now.</summary>
     internal bool Casting { get; }
@@ -409,7 +424,8 @@ internal static class WorldSpellSlotDeriver
 /// loadout hangs off <c>SpellManager.instance</c>, but the list holding it is an ordinary list
 /// variable with a uuid, so it is reached through the identity registry every other lookup in the
 /// suite already goes through — the same route <c>WorldActionQueueReader</c> takes, and for the same
-/// reason. Nothing here touches the spell manager.
+/// reason. The manager's static readiness answer is sampled once beside that list because it gates
+/// every slot together; the action boundary asks the same question again immediately before firing.
 /// </para>
 /// <para>
 /// One reader fills two tables. The costs come from <c>GetCost()</c> and <c>GetDrainCost()</c> on the
@@ -427,11 +443,14 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
 {
     private const BindingFlags Instance =
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+    private const BindingFlags Static =
+        BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
     private readonly Type? _registryType;
     private readonly RuntimeIdentityRegistryBinding _registryBinding;
     private readonly Type? _listType;
     private readonly Type? _spellType;
+    private readonly Type? _managerType;
     private readonly string _unavailable;
 
     private readonly Func<object, IList?>? _slots;
@@ -465,6 +484,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
 
     private readonly MethodInfo? _getCost;
     private readonly MethodInfo? _getDrainCost;
+    private readonly MethodInfo? _canCastASpell;
     private readonly Func<object, IList?>? _costEntries;
     private readonly Func<object, Guid>? _entryResource;
     private readonly Func<object, BigDouble>? _entryValue;
@@ -477,6 +497,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         _registryBinding = new RuntimeIdentityRegistryBinding(
             () => registryType, requireStableIdentityContract: false);
         _listType = listType;
+        _managerType = resolveType("SpellManager");
         if (registryType is null)
         {
             _unavailable = "the IdScriptableObject type was not found on this build";
@@ -543,6 +564,8 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         // off the declared return type the same way the upgrade reader binds its authored costs.
         _getCost = _spellType?.GetMethod("GetCost", Instance, null, Type.EmptyTypes, null);
         _getDrainCost = _spellType?.GetMethod("GetDrainCost", Instance, null, Type.EmptyTypes, null);
+        _canCastASpell = _managerType?.GetMethod(
+            "CanCastASpell", Static, null, Type.EmptyTypes, null);
 
         var costListType = _getCost?.ReturnType;
         var entryType = NativeAccessorBinder.CollectionElementType(costListType, "costs");
@@ -556,10 +579,11 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
             return;
         }
 
-        _unavailable = IsCostBound() && IsCompositionBound() && _canCancelSpells is not null &&
-            _canCancelSpells.ReturnType == typeof(bool)
+        _unavailable = IsCostBound() && IsCompositionBound() &&
+            _canCancelSpells?.ReturnType == typeof(bool) &&
+            _canCastASpell?.ReturnType == typeof(bool)
             ? string.Empty
-            : "Spell did not expose its complete cast, level, and augment state on this build";
+            : "Spell did not expose its complete cast, level, augment, cancellation, or manager readiness state on this build";
     }
 
     public string Category => "spell slots";
@@ -595,10 +619,12 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
 
         IList? values;
         bool cancellationEnabled;
+        bool casterAvailable;
         try
         {
             values = _slots!(loadout);
             cancellationEnabled = _canCancelSpells!.Invoke(null, Array.Empty<object>()) is true;
+            casterAvailable = (bool)_canCastASpell!.Invoke(null, null)!;
         }
         catch (Exception ex)
         {
@@ -622,7 +648,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
 
             try
             {
-                Read(entry, index, cancellationEnabled, slots, costs);
+                Read(entry, index, cancellationEnabled, casterAvailable, slots, costs);
                 sampled++;
             }
             catch (Exception ex)
@@ -642,6 +668,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         object spell,
         int index,
         bool cancellationEnabled,
+        bool casterAvailable,
         WorldSpellSlotBuffer slots,
         WorldSpellCostBuffer costs)
     {
@@ -650,7 +677,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         {
             slots.Append(new WorldSpellSlot(
                 index, Guid.Empty, Guid.Empty, false, false, false, false, false, false, false, false, false,
-                false, 0, 0, default));
+                false, 0, 0, default, casterAvailable));
             return;
         }
 
@@ -680,7 +707,8 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
             _durationSpell!(spell),
             _usageRequirementsMet!(spell),
             glyphs,
-            cancellationEnabled));
+            cancellationEnabled,
+            casterAvailable));
 
         Append(spell, index, WorldSpellCostKind.Immediate, _getCost!, costs);
         Append(spell, index, WorldSpellCostKind.Drain, _getDrainCost!, costs);

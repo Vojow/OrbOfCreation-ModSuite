@@ -96,12 +96,16 @@ history in the active reading path.
 
 - **Performance profile:** compile-time opt-in measurements for owner and worker
   stages; absent from release builds.
-- **Manual full trace:** opt-in semantic events plus configuration and strategy
-  publication stores. Raw world payloads are not recorded.
+- **Bug-report bundle:** one player action flushes and packages the suite's existing
+  evidence, configuration, identifiable save files, and redacted log into one
+  shareable zip no larger than 10 MiB. It captures the past rather than arming a
+  future recording.
 - **Decision journal:** bounded rolling numeric service decisions with durable
   health and lifecycle evidence.
-- **Recent-event dump:** an on-demand bounded snapshot of current host evidence
-  for a bug report.
+- **Recent-event ring:** an always-held bounded host history that the bug-report
+  bundle snapshots without changing its recording behavior.
+- **Profiling capture:** compile-time opt-in measurements plus their correlated
+  detailed semantic trace; absent from release composition.
 
 Observation may fail without changing gameplay, but it must report that failure
 and may not start a substitute writer or format. Runtime replay is not a product

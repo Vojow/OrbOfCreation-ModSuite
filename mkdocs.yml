@@ -1,0 +1,146 @@
+site_name: Orb Of Creation ModSuite
+site_url: https://orbautomata.github.io/OrbOfCreation-ModSuite/
+repo_url: https://github.com/OrbAutomata/OrbOfCreation-ModSuite
+repo_name: OrbAutomata/OrbOfCreation-ModSuite
+
+docs_dir: docs
+site_dir: artifacts/docs-site
+strict: true
+
+theme:
+  name: material
+  logo: assets/orb-logo.svg
+  favicon: assets/orb-logo.svg
+  palette:
+    scheme: slate
+  features:
+    - navigation.indexes
+    - search.highlight
+    - search.suggest
+
+plugins:
+  - search
+
+extra_css:
+  - assets/orb-theme.css
+
+markdown_extensions:
+  - toc:
+      permalink: true
+
+exclude_docs: |
+  **/AGENTS.md
+  **/CLAUDE.md
+
+nav:
+  - Home: README.md
+  - User guide:
+      - user-guide/README.md
+      - user-guide/installation.md
+      - user-guide/configuration.md
+      - user-guide/troubleshooting.md
+      - user-guide/uninstalling.md
+  - Game systems:
+      - game-systems/README.md
+      - game-systems/achievement-strength.md
+      - game-systems/advancement-currencies.md
+      - game-systems/agromancy.md
+      - game-systems/allocations.md
+      - game-systems/artifacts.md
+      - game-systems/aspects.md
+      - game-systems/attributes-and-upgrades.md
+      - game-systems/augments.md
+      - game-systems/auto-buy.md
+      - game-systems/capacity.md
+      - game-systems/carry-limits.md
+      - game-systems/cast-modes.md
+      - game-systems/casting-level.md
+      - game-systems/challenges.md
+      - game-systems/concepts.md
+      - game-systems/consumables.md
+      - game-systems/cost-pipeline.md
+      - game-systems/cost-scaling.md
+      - game-systems/crafting.md
+      - game-systems/development-queue.md
+      - game-systems/disciplines.md
+      - game-systems/discovery-pricing.md
+      - game-systems/discovery.md
+      - game-systems/effect-grammar.md
+      - game-systems/emblems.md
+      - game-systems/growth-levers.md
+      - game-systems/growth-terms.md
+      - game-systems/lazy-evaluation.md
+      - game-systems/modifiers.md
+      - game-systems/numbers-and-rounding.md
+      - game-systems/open-questions.md
+      - game-systems/orbs.md
+      - game-systems/output-and-reserve.md
+      - game-systems/overcap.md
+      - game-systems/per-level-scaling.md
+      - game-systems/pool-unlockers.md
+      - game-systems/research.md
+      - game-systems/reset-and-ng-plus.md
+      - game-systems/resource-behaviours.md
+      - game-systems/resource-types.md
+      - game-systems/screens.md
+      - game-systems/scribing.md
+      - game-systems/spell-levels.md
+      - game-systems/spell-loadout.md
+      - game-systems/spell-mastery.md
+      - game-systems/spell-types.md
+      - game-systems/spells.md
+      - game-systems/splash.md
+      - game-systems/tab-and-orb-xp.md
+      - game-systems/time-advancements.md
+      - game-systems/time-runes.md
+      - game-systems/toxicity.md
+      - game-systems/ui-behaviours.md
+      - game-systems/unmapped-systems.md
+      - game-systems/vocabulary.md
+  - Strategy:
+      - strategy/README.md
+      - strategy/decision-rules.md
+      - strategy/reservations.md
+      - strategy/resource-lifecycle.md
+      - strategy/run-capital.md
+      - strategy/run-opening.md
+      - strategy/scoring.md
+      - strategy/spend-modes.md
+  - Runtime architecture:
+      - runtime-architecture/README.md
+      - runtime-architecture/architecture.md
+      - runtime-architecture/deferrals.md
+      - runtime-architecture/game-boundary-doctrine.md
+      - runtime-architecture/goals-and-invariants.md
+      - runtime-architecture/observability.md
+      - runtime-architecture/service-cycle-runtime.md
+      - runtime-architecture/service-data-flow.md
+      - runtime-architecture/world-collection-decisions.md
+      - runtime-architecture/world-collection.md
+  - Testing:
+      - testing/README.md
+      - testing/native-contracts.md
+      - testing/runtime-validation.md
+  - Development:
+      - development/README.md
+      - development/setup.md
+      - development/engineering-doctrine.md
+      - development/mcp-tools.md
+      - development/releases.md
+  - Reverse engineering:
+      - reverse-engineering/README.md
+      - reverse-engineering/architecture.md
+      - reverse-engineering/audited-build.md
+      - reverse-engineering/decompiling-workflow.md
+      - reverse-engineering/identity-and-registries.md
+      - reverse-engineering/modding-hooks.md
+      - reverse-engineering/naming-traps.md
+      - reverse-engineering/native-action-surfaces.md
+      - reverse-engineering/requirements.md
+      - reverse-engineering/resources-and-bigdouble.md
+      - reverse-engineering/save-system.md
+      - reverse-engineering/type-model.md
+      - reverse-engineering/ui-internals.md
+      - reverse-engineering/ui-patterns.md
+  - Releasing: releasing.md
+  - North star: north-star.md

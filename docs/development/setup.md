@@ -1,6 +1,6 @@
 # Development setup
 
-[Back to documentation](../README.md) · [Contributing](../../CONTRIBUTING.md) ·
+[Back to documentation](../README.md) · [Contributing](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/CONTRIBUTING.md) ·
 [Engineering doctrine](engineering-doctrine.md)
 
 ## Repository flow
@@ -64,6 +64,17 @@ dotnet test tests/OrbModding.GameContractTests/OrbModding.GameContractTests.cspr
 
 Keep absolute local paths out of tracked files. Building does not authorize an
 installation into the game.
+
+## Documentation preview
+
+From the repository root, serve the published documentation with its locked dependency group:
+
+```bash
+NO_MKDOCS_2_WARNING=1 uv run --project tools --locked --only-group docs mkdocs serve --config-file mkdocs.yml
+```
+
+The local URL is printed when the server starts. The preview reloads when a file under `docs/` or
+the site configuration changes.
 
 ## Development gate
 

@@ -88,10 +88,14 @@ internal sealed class AutomataDifferentialVerificationControl : IDifferentialVer
         // check afterwards would have it survey a cache the verifier had just warmed, and report a
         // staleness figure that says more about the verifier than about the game.
         RunWorldCollectionCheck();
+        RunPass(new ConceptDrainPass());
+        RunPass(new SpellLevelPass(compareAffordability: false));
+        RunPass(new SpellLevelPass(compareAffordability: true));
         RunPass(new CostPass());
         RunPass(new RatePass());
         RunPass(new RequirementPass("Upgrade requirement", "UpgradeSO", isUpgrade: true));
         RunPass(new RequirementPass("Structure requirement", "StructureSO", isUpgrade: false));
+        RunPass(new UsagePrerequisitePass());
 
         whole.Stop();
         _report($"Verification finished in {whole.Elapsed.TotalMilliseconds:0.###} ms.");
@@ -273,6 +277,118 @@ internal sealed class AutomataDifferentialVerificationControl : IDifferentialVer
         }
     }
 
+    private sealed class ConceptDrainPass : IVerificationPass
+    {
+        private AutomataConceptDrainVerifier? _verifier;
+        private GameWorldState? _world;
+
+        public string Subject => "Concept drain";
+
+        public bool TryBegin(out IList entities, out string failure)
+        {
+            entities = Array.Empty<object>();
+            var recipeType = FindType("AlchemyRecipeSO");
+            var instanceType = FindType("AlchemyInstance");
+            if (recipeType is null || instanceType is null)
+            {
+                failure = "the AlchemyRecipeSO or AlchemyInstance type could not be resolved.";
+                return false;
+            }
+            _verifier = new AutomataConceptDrainVerifier(recipeType, instanceType);
+            if (!_verifier.IsAvailable)
+            {
+                failure = "this build does not expose the expected Concept drain oracle.";
+                return false;
+            }
+            var all = ReadStaticList(recipeType, "All");
+            if (all is null || all.Count == 0)
+            {
+                failure = "no Concept recipes were available. Load a save first.";
+                return false;
+            }
+            var collector = new GameWorldCollector();
+            collector.Collect();
+            _world = collector.Build();
+            entities = all;
+            failure = string.Empty;
+            return true;
+        }
+
+        public bool TryVerify(
+            object entity,
+            DifferentialRun run,
+            DifferentialVerificationSession session,
+            out string failure)
+        {
+            if (_verifier is null || _world is null)
+            {
+                failure = "the Concept drain verifier was not started.";
+                return false;
+            }
+            return _verifier.TryVerify(entity, _world, run, session, out failure);
+        }
+    }
+
+    private sealed class SpellLevelPass : IVerificationPass
+    {
+        private readonly bool _compareAffordability;
+        private AutomataSpellLevelVerifier? _verifier;
+        private GameWorldState? _world;
+
+        internal SpellLevelPass(bool compareAffordability) =>
+            _compareAffordability = compareAffordability;
+
+        public string Subject => _compareAffordability
+            ? "Spell level affordability"
+            : "Spell level cost";
+
+        public bool TryBegin(out IList entities, out string failure)
+        {
+            entities = Array.Empty<object>();
+            var spellType = FindType("SpellRecipeSO");
+            var costListType = FindType("ResourceCostList");
+            if (spellType is null || costListType is null)
+            {
+                failure = "the SpellRecipeSO or ResourceCostList type could not be resolved.";
+                return false;
+            }
+            _verifier = new AutomataSpellLevelVerifier(spellType, costListType);
+            if (!_verifier.IsAvailable)
+            {
+                failure = "this build does not expose the expected spell level oracle.";
+                return false;
+            }
+            var all = ReadStaticList(spellType, "All");
+            if (all is null || all.Count == 0)
+            {
+                failure = "no spell recipes were available. Load a save first.";
+                return false;
+            }
+            var collector = new GameWorldCollector();
+            collector.Collect();
+            _world = collector.Build();
+            entities = all;
+            failure = string.Empty;
+            return true;
+        }
+
+        public bool TryVerify(
+            object entity,
+            DifferentialRun run,
+            DifferentialVerificationSession session,
+            out string failure)
+        {
+            if (_verifier is null || _world is null)
+            {
+                failure = "the spell level verifier was not started.";
+                return false;
+            }
+            return _compareAffordability
+                ? _verifier.TryVerifyAffordability(entity, _world, run, session, out failure)
+                : _verifier.TryVerifyCost(entity, _world, run, session, out failure);
+        }
+    }
+
     /// <summary>
     /// Checks the suite's own answer to "may this be bought at its next level" against the game's, for
     /// one kind of owner.
@@ -346,6 +462,62 @@ internal sealed class AutomataDifferentialVerificationControl : IDifferentialVer
             if (_verifier is null || _world is null)
             {
                 failure = "the requirement verifier was not started.";
+                return false;
+            }
+
+            return _verifier.TryVerify(entity, _world, run, out failure);
+        }
+    }
+
+    /// <summary>Checks every captured Concept usage-prerequisite program against its native answer.</summary>
+    private sealed class UsagePrerequisitePass : IVerificationPass
+    {
+        private AutomataUsagePrerequisiteVerifier? _verifier;
+        private GameWorldState? _world;
+
+        public string Subject => "Concept usage prerequisite";
+
+        public bool TryBegin(out IList entities, out string failure)
+        {
+            entities = Array.Empty<object>();
+            var ownerType = FindType("AlchemyRecipeSO");
+            if (ownerType is null)
+            {
+                failure = "the AlchemyRecipeSO type could not be resolved.";
+                return false;
+            }
+
+            _verifier = new AutomataUsagePrerequisiteVerifier(ownerType);
+            if (!_verifier.IsAvailable)
+            {
+                failure = "this build does not expose the expected usage-prerequisite oracle.";
+                return false;
+            }
+
+            var all = ReadStaticList(ownerType, "All");
+            if (all is null || all.Count == 0)
+            {
+                failure = "no AlchemyRecipeSO entities were available. Load a save first.";
+                return false;
+            }
+
+            var collector = new GameWorldCollector();
+            collector.Collect();
+            _world = collector.Build();
+            entities = all;
+            failure = string.Empty;
+            return true;
+        }
+
+        public bool TryVerify(
+            object entity,
+            DifferentialRun run,
+            DifferentialVerificationSession session,
+            out string failure)
+        {
+            if (_verifier is null || _world is null)
+            {
+                failure = "the usage-prerequisite verifier was not started.";
                 return false;
             }
 

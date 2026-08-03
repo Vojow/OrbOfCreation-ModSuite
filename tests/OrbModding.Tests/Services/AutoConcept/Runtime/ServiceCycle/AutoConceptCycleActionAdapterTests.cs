@@ -43,6 +43,18 @@ public sealed class AutoConceptCycleActionAdapterTests
     }
 
     [Fact]
+    public void BoundaryTimeResourceBackpressureIsAnExactQuietSkip()
+    {
+        var result = Execute(AutoConceptSubmission.Rejected(
+            AutoConceptPreflight.ResourceBackpressure,
+            "resource would fall below reserve"));
+
+        Assert.Equal(ServiceActionDisposition.Skipped, result.Disposition);
+        Assert.Equal(AutoConceptActionResultCodes.ProjectionRefused, result.Code);
+        Assert.False(result.HasNativeEvidence);
+    }
+
+    [Fact]
     public void AnAttemptedButUnverifiedMutationFaultsWithEvidence()
     {
         var submission = AutoConceptSubmission.Attempted(

@@ -31,6 +31,10 @@ internal static class AutoCastService
                 in metadata,
                 createWorker: static () => new AutoCastWorkerDefinition(),
                 shouldStart: ShouldStart,
+                describeAction: static (in AutoCastCycleAction action) =>
+                    ServiceActionJournalAttribution.Native(
+                        action.SpellRecipeId,
+                        ServiceActionNativeTypeId.SpellRecipeSO),
                 execute: actions.TryExecute);
 
         // Auto Cast's own configuration, plus the one piece of runtime state that is the suite's

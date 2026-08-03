@@ -1,6 +1,6 @@
 # Service-cycle observability
 
-The four observation products, their artifacts and retention, and how to read a capture.
+The observation products, their artifacts and retention, and how to read a capture.
 
 [Back to dossier](README.md) · [Service-cycle runtime](service-cycle-runtime.md)
 
@@ -9,41 +9,48 @@ The four observation products, their artifacts and retention, and how to read a 
 Per [the north star](../north-star.md), observability is four systems and each has one job. That
 document wins wherever this one drifts from it.
 
-1. **Profiler** — debug builds only, compiled out of release entirely. Measured spans over every
-   pump-frame phase and worker stage, reported through the dashboard script. Internal tooling;
-   pre-allocation is welcome here as a performance detail.
-2. **Full trace** — the bug-report recorder, available in release builds: record, reproduce, share the
-   artifact. Its mandate is four streams — raw capture data, configuration publications, strategy
-   publications, action outcomes — plus the runtime events needed to follow a session. Near-zero cost
-   while idle; extra cost and allocation are acceptable while recording, and in debug builds its own
-   overhead must never appear inside profiler spans. **What exists records three of the four:** the
-   raw-capture stream has no store, an open decision filed under [deferrals](deferrals.md).
-3. **Decision log** — always on, high signal, low noise: lifecycle boundaries, strategy changes,
-   configuration saves, emergency stops, service health transitions, not per-cycle minutiae. The
+1. **Bug-report bundle** — one release-safe Runtime action captures evidence the suite already holds,
+   copies the configuration, identifiable save files, and redacted BepInEx log, then fills the remaining
+   sharing budget with the newest decision-journal segments. It does not arm a recorder or ask the
+   player to reproduce the problem.
+2. **Decision log** — always on, high signal, low noise: lifecycle boundaries, strategy changes,
+   configuration saves, emergency stops, service health transitions, and one compact sentinel per
+   attempted action rather than accounting summaries. The
    mandate is that the suite — BepInEx's own logs included — keeps at most ~100 MB on disk however long
-   it runs unattended. What exists covers the suite's own writing; nothing constrains BepInEx's
-   `LogOutput.log`, so the mandate as written is not met.
-4. **Replay** — retired as a runtime system. Hand-crafted scenario fixtures serve its testing value,
-   and the full trace records exactly the inputs a future recompute harness would need without the
-   runtime carrying a line of machinery for it.
+   it runs unattended. The journal has a 64 MiB envelope and routine action success/no-op narration
+   is absent; BepInEx still owns `LogOutput.log` retention, so the combined mandate is not a hard
+   suite-enforced cap.
+3. **Profiler and detailed trace** — debug builds only, compiled out of release composition. Measured
+   spans and the correlated full semantic trace start together for developer captures. Extra cost and
+   pre-allocation are acceptable here; trace overhead must never appear inside profiler spans. The
+   detailed trace records three of its four intended streams; raw world capture remains an explicit
+   [deferral](deferrals.md).
+4. **Replay** — retired as a runtime system. Hand-crafted scenario fixtures serve its testing value
+   without the runtime carrying a line of replay machinery.
 
-These products share one mechanical foundation: identity value types, atomic file storage, and reusable
-block transport. Each owns a separate pool, queue, sleeping writer, control state, format, retention
-policy, status, and failure boundary. One product cannot consume another's buffers or backpressure its
-producer, and a compact journal never claims to be a complete trace.
+The bundle coordinates explicit flush and snapshot ports but does not merge their runtime ownership.
+Each underlying product keeps its own pool, queue, writer, format, retention policy, status, and failure
+boundary. One product cannot consume another's buffers or backpressure its producer, and a compact
+journal never claims to be a complete trace.
 
 | Product | Producer behaviour | Storage behaviour | Disabled behaviour |
 |---|---|---|---|
-| Full trace | Manual start/stop, exact facts | Complete explicit sessions | No pool or writer |
+| Bug-report bundle | Player-requested snapshot of past evidence | One capped zip; old zips are retained | No background bundle writer |
 | Decision journal | Always-on coalesced decisions | Capped rolling retention | Not normally disabled |
-| Performance profile | Finite capture in a profiling build | Explicit profile sessions | Absent from normal builds |
+| Performance profile + full trace | Automatic profiling-build capture | Correlated explicit sessions | Absent from release composition |
 
 ## Sizing and transport
 
-An armed full trace runs about 1.15 MiB/minute at schema v7's 288-byte record, or roughly 69 MiB/hour.
-That rate is set by the schema storing one fixed record per accepted pump, not by any feature copying a
-large game state: in the first installed-game session about 79% of records were pump summaries and 95%
-of those pumps were otherwise idle. It is why an always-on full trace is not the design.
+The release bundle is capped at 10 MiB after compression. Configuration, identifiable save files, and
+the log are fixed inputs; the builder measures each compressed zip entry and admits newest journal
+segments greedily until the remaining budget is exhausted. Journal selection never reaches beyond four
+hours of the newest durable current-run record. If the fixed inputs and manifest cannot fit, the whole
+bug-report request fails loudly rather than writing an oversized or misleading file.
+
+Profiling full-trace volume is workload-dependent at schema v7's fixed 288-byte record. It stores every
+accepted pump and semantic event and has no byte or time cutoff. Profiling builds start it automatically
+so cold-start and sustained-cost evidence is complete. Completed sessions are retained as whole run
+folders rather than thinned while live.
 
 The shared transport is a single-producer block lane plus a format-owned writer, encoder, and storage
 port — code reuse, not a shared sink. A product with facts from more than one thread owns one lane per
@@ -59,19 +66,34 @@ and never changes gameplay. Unity never waits for diagnostics, telemetry, or I/O
 only invokes each mode's neutral control port and renders status — it never owns a pump, worker,
 exporter, or filesystem path.
 
-## Mode 1: manual full trace
+## Mode 1: bug-report bundle
 
-The Runtime page provides momentary **Start full trace** and **Stop trace** controls plus state,
-duration, bytes written, segment count, and any failure result, distinguishing `Arming`, `Recording`,
-`Stopping`, `Complete`, and `Incomplete`. In a release build that control is the only way a trace
-begins; a profiling build starts one automatically at construction alongside the profile, which is also
-the only way the cold-start frames are observable at all.
+The Runtime page provides one **Create bug report** action. On the next main-thread tick it flushes
+repeat-collapsed suite log messages, seals the decision journal's open coalesced spans, snapshots the
+already-running recent-event ring, and returns. Later frames let the journal writer drain up to a
+bounded wedge guard; zip measurement and file I/O run off the Unity thread. The result lands under
+`BepInEx/config/OrbOfCreation-ModSuite/diagnostics/`. The timestamped file is retained until the user
+deletes it. macOS reveals the file with `open -R`, Windows selects it in Explorer, and other platforms
+open its containing folder. A reveal failure leaves the zip intact and shows its full path; a build
+failure says that no shareable file exists and does not affect gameplay.
 
-A full trace retains every semantic service-cycle event and accepted pump summary; the configuration
-and strategy publications a cycle pinned and the outcome of every action it dispatched, under that
-cycle's identity; the feature's own numeric projection where one is written; session and segment fences
-sufficient to validate order and cross-segment causal parents; and an explicit completeness
-classification. It does **not** retain the raw world capture.
+`manifest.txt` is first and states suite/game identity, enabled features, runtime health, included
+members, actual journal window, and every dropped or unavailable fact. The configuration, every
+identifiable top-level `.sav` candidate when no authoritative active-slot identity exists, and a bounded
+BepInEx log tail follow. The ring snapshot follows when it fits, then journal segments appear newest
+first. Textual inputs pass through one deterministic redactor before entry creation: known user roots
+become `<user-path>`, other absolute paths become `<absolute-path>`, and configured usernames become
+`<user>`. Save files and numeric binary formats remain byte-exact. Journal records contain value-typed
+identity, timing, route, and outcome fields only; strings cannot ride in that format.
+
+## Profiling companion full trace
+
+The detailed trace is composed only with the profiling build and starts automatically beside the
+performance profile. It retains every semantic service-cycle event and accepted pump summary; the
+configuration and strategy publications a cycle pinned and the outcome of every action it dispatched,
+under that cycle's identity; the feature's own numeric projection where one is written; session and
+segment fences sufficient to validate order and cross-segment causal parents; and an explicit
+completeness classification. It does **not** retain the raw world capture.
 
 Schema v7 names all four generations a cycle pinned. The pump summary carries how many cycles the frame
 started and how many services the world-freshness gate held: `0 started / 3 held` is a stalled
@@ -113,24 +135,26 @@ Rows are kinded rather than assumed to be services, because the same question is
 configuration and strategy publications. A service with no display name keeps its registered identity
 rather than being left out, so an unnamed feature reads as `orbautomata.auto-agromancy` — true, and
 visibly missing a name — instead of "Service 4", which would look finished while saying nothing. A
-roster that cannot be written or parsed costs the names and nothing else. Both artifacts sharing the
-session format carry it, including the in-game ring dump.
+roster that cannot be written or parsed costs the names and nothing else. The profiling trace and the
+in-memory ring snapshot both carry it.
 
-## Mode 1b: the recent-event ring
+## The recent-event ring
 
 The suite always holds its most recent semantic events — 8,192 of them, a few megabytes — in a fixed
-ring attached to the pump at composition. It never writes to disk on its own; the Runtime page's **Dump
-recent events** control turns the ring into an artifact under `trace/run-<timestamp>/recent/`. The
-status names the artifact, the event count, and how many older events the ring had dropped, because a
-bounded ring may lose history but may not lose it silently. What the ring buys is that the events
-leading up to a problem exist when a user notices it, rather than only after they reproduce it under an
-armed session. A dump is the same `OSCS`/`OSCM` pair an armed session produces, so the analysis tool
-reads one without knowing it is a dump; it lands in `recent/` rather than `full/`, because the
-dashboard correlates exactly one full session with the profile beside it and a dump is neither.
+ring attached to the pump at composition. It never writes to disk on its own. A bug-report request
+snapshots its accepted prefix as the same validated `OSCS`/`OSCM` family used by the detailed trace and
+places it under `recent-events/` in the zip. The bundle manifest names the event count and how many older
+events the ring had overwritten. What the ring buys is that the events leading up to a problem exist
+when a user notices it; the button captures the past instead of beginning a future recording.
 
-Recording has no elapsed-time or byte cutoff. It ends on the user's stop command, runtime shutdown,
-storage or backpressure failure, or semantic corruption; a session is never truncated and no completed
-session is pruned in part.
+Saved Game MCP screenshots in profiling builds are bounded before they reach the synchronous Unity
+capture path: the active run admits at most two owned `mcp-*.png` files. It rejects the third request
+before framebuffer capture and rejects an encoded image before file creation when the family would
+cross its fixed 6 MiB envelope. Inspection or write failures are command faults, not silent drops.
+
+The profiling trace has no elapsed-time or byte cutoff. It ends on runtime shutdown, storage or
+backpressure failure, or semantic corruption; a session is never truncated and no completed session is
+pruned in part.
 
 **Retention** bounds the number of `trace/run-<timestamp>/` folders. Full trace and performance profile
 write one per process launch; the always-on journal does not. Each launch prunes the oldest until at
@@ -140,37 +164,46 @@ byte budget would destroy. The name is a fixed-width UTC timestamp, so oldest me
 rather than by a filesystem timestamp a copy would not preserve. A folder that cannot be deleted is
 left for the next launch: retention never denies the suite its own recording.
 
+At startup the suite also owns the retired stable `trace/full`, stable `trace/profile`, and
+`replay/auto-harvest` layouts. It deletes only files whose exact retired path, extension, and four-byte
+format magic agree, then removes empty directories and emits one aggregate line. Unrecognized entries
+remain and make that line a warning.
+
 Starting mid-game is valid for diagnosis but does not root the session at a known initial state, so the
 manifest marks such a session `DiagnosticOnly`.
 
 ## Mode 2: compact service decision journal
 
-The journal records worker and terminal meaning rather than frames. One bounded numeric entry describes
-a cycle's pinned identity, decision/projection, wake, action count, fault state, and eventual batch
-terminal; feature projectors provide stable reason values, and native objects and rich strings never
-enter it. Consecutive equivalent decisions coalesce into one span with first/last time, cycle range,
-repeat count, and terminal totals, and empty pump time is elapsed time between entries rather than one
-record per frame. Lifecycle, configuration, strategy, fault, action, and health transitions always break
-a span. The coalescer compares a fixed maximum of sixteen projection values on the Unity owner thread
-without sorting, allocating, locking, or performing I/O.
+The journal records worker and terminal meaning rather than frames. An action-bearing cycle writes one
+fixed numeric record per attempted action: service and action ordinal, cycle and monotonic time,
+candidate UUID, exact native type ID, list UUID, view UUID, route status, and one packed
+disposition/result code. Actions without a native candidate use an explicit `NotApplicable` identity;
+an attribution failure does not gate gameplay: the action executes, the record uses the distinct
+`AttributionFailed` route, and one repeat-collapsible error line names the service and failure reason.
+Native objects and rich strings never enter the journal.
 
-**Retention.** Production retains 1,520 segments. A segment is an 80-byte header plus 128 fixed
-512-byte records plus a 40-byte footer, so 1,520 full segments occupy 99,797,120 bytes — the journal's
-share of the ~100 MB cap, with the run folders and BepInEx's logs the rest. The floor on coverage is
-the checkpoint: one partial segment per minute is over 25 hours of unattended play before the oldest
-evidence rolls off, and a journal whose segments fill on decisions covers proportionally longer. The
-cap is the budget, not a live-measurement candidate.
+Zero-action decisions retain one outcome kind/code and fault range. Consecutive equivalent decisions
+coalesce into one span with first/last time, cycle range, and repeat count; action records never
+coalesce. When a cycle has action records its ordinary aggregate terminal decision is omitted, because
+each action sentinel already carries the authoritative result and duplicate batch accounting has no
+consumer. A fault-bearing terminal remains as a fault-priority decision record beside its action.
+Lifecycle, configuration, strategy, emergency, and world-gate transitions remain explicit records.
 
-**Format.** Journal v2 uses one fixed 512-byte numeric record. Each `OSJD` segment has an 80-byte
+**Retention.** The fixed budget is 64 MiB. A maximum segment is 80 header bytes plus 128 fixed
+80-byte records plus a 40-byte footer, or 10,360 bytes. Production derives a retained limit of 6,476
+segments from that byte budget, leaving room for one maximum-sized temporary segment during atomic
+commit and oldest-first eviction. Retained full segments occupy 67,091,360 bytes; the maximum write
+transition occupies 67,101,720 bytes, below 67,108,864. Partial checkpoint segments only reduce that
+total.
+
+**Format.** Journal schema 3 uses one fixed 80-byte numeric record. Each `OSJD` segment has an 80-byte
 envelope, at most 128 records, and a 40-byte `OSJF` footer with exact run/ordinal/sequence fences and an
-IEEE CRC32 — a separate format and sink from `OSCS`. A decision span retains the service ordinal,
-lifecycle/configuration/strategy identity, capture and cycle ranges, first/last monotonic time, stable
-start and capture codes, exact returned wake, the bounded Common state projection, fault range,
-terminal result, action count, how many committed actions committed by *publishing*, and aggregate
-native mutation totals. That published count is what makes the span checkable: an action handing over a
-snapshot makes no native call, so a span that published everything must carry no native evidence at
-all, and without it the record cannot tell an action that could not call the game from one that owed a
-call and produced none.
+IEEE CRC32 — a separate format and sink from `OSCS`. Decision records retain service ordinal,
+lifecycle, cycle/time range, repeat count, one decision outcome, and failure occurrence range. Action
+records spend their fixed key space on exact target/routing attribution and one postcondition-backed
+outcome. Wake policy, projections, requested/committed/published counts, and native-call/mutation
+ledgers are not computed for this artifact; deeper timing and accounting remain in the explicitly
+armed semantic trace.
 
 Configuration, strategy, lifecycle, world-gate, and emergency transitions use explicit record kinds
 rather than pretending to be cycles. Lifecycle and world-gate transitions carry their service;
@@ -192,6 +225,21 @@ outlives the process and refusing it would leave the journal permanently dead on
 discarded count reaches the log once, loudly, and stays on the status card. A storage or observer fault
 detaches the journal and leaves scheduling, mutation, and any separately owned semantic trace running.
 There is deliberately no configuration toggle for the normal journal, and no restart or fallback path.
+
+## Other owned output paths
+
+The suite does not use `LogOutput.log` as an action ledger. Verified successes and ordinary preflight
+no-actions emit no per-action line; the action journal and Runtime outcome projection own those facts.
+A submitted mutation whose postcondition does not hold emits one warning. Lifecycle/startup/shutdown
+messages remain, and an actual adapter failure or native refusal emits one actionable line with stable
+identity and reason. Auto Buy's classified refusal responder owns the `NotAdmissible` line so narration
+cannot duplicate it.
+
+Auto Buy affordability drift remains a loud refusal but does not synchronously render or write a
+bundle. Structural contradictions that disable the feature retain a full text bundle under
+`trace/diagnostics`, capped before each write at eight owned files and 1 MiB total. A collision,
+oversized bundle, inspection failure, or retention failure leaves the refusal loud and names the
+bundle as unavailable rather than overwriting evidence or faulting gameplay.
 
 ## Mode 3: opt-in performance profile
 

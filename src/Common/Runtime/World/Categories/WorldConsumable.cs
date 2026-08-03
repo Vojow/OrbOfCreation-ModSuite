@@ -1,6 +1,68 @@
 using System;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
+
+/// <summary>One consumable's own scalars, before the global carry limit is joined in.</summary>
+internal readonly struct RawConsumableSample : IWorldEntity
+{
+    internal RawConsumableSample(
+        Guid consumableId,
+        bool visible,
+        bool randomized,
+        int quantity,
+        int queuedQuantity,
+        int gainedSince,
+        int maxCreatedLevel,
+        BigDouble currentPrepTime,
+        BigDouble currentCooldown,
+        BigDouble currentCooldownTime,
+        in RawConsumableModifiers modifiers,
+        double preparationTime,
+        bool canBeRandomized,
+        bool hasDuration,
+        double durationBase,
+        bool queueOnStart,
+        bool canFire)
+    {
+        ConsumableId = consumableId;
+        Visible = visible;
+        Randomized = randomized;
+        Quantity = quantity;
+        QueuedQuantity = queuedQuantity;
+        GainedSince = gainedSince;
+        MaxCreatedLevel = maxCreatedLevel;
+        CurrentPrepTime = currentPrepTime;
+        CurrentCooldown = currentCooldown;
+        CurrentCooldownTime = currentCooldownTime;
+        Modifiers = modifiers;
+        PreparationTime = preparationTime;
+        CanBeRandomized = canBeRandomized;
+        HasDuration = hasDuration;
+        DurationBase = durationBase;
+        QueueOnStart = queueOnStart;
+        CanFire = canFire;
+    }
+
+    public Guid EntityId => ConsumableId;
+    internal Guid ConsumableId { get; }
+    internal bool Visible { get; }
+    internal bool Randomized { get; }
+    internal int Quantity { get; }
+    internal int QueuedQuantity { get; }
+    internal int GainedSince { get; }
+    internal int MaxCreatedLevel { get; }
+    internal BigDouble CurrentPrepTime { get; }
+    internal BigDouble CurrentCooldown { get; }
+    internal BigDouble CurrentCooldownTime { get; }
+    internal RawConsumableModifiers Modifiers { get; }
+    internal double PreparationTime { get; }
+    internal bool CanBeRandomized { get; }
+    internal bool HasDuration { get; }
+    internal double DurationBase { get; }
+    internal bool QueueOnStart { get; }
+    internal bool CanFire { get; }
+}
 
 /// <summary>
 /// One consumable as published — the scalar half. How many are in stock lives in
@@ -140,14 +202,13 @@ internal readonly struct RawConsumableModifiers
     internal BigDouble BonusLevels { get; }
 }
 
-internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
+internal sealed class WorldConsumableBinder : WorldRowBinder<RawConsumableSample, WorldConsumable>
 {
     private Func<object, Guid>? _id;
     private Func<object, bool>? _visible;
     private Func<object, bool>? _randomized;
     private Func<object, int>? _quantity;
     private Func<object, int>? _queuedQuantity;
-    private Func<object, int>? _maximumCarryLoad;
     private Func<object, int>? _gainedSince;
     private Func<object, int>? _maxCreatedLevel;
     private Func<object, BigDouble>? _prepTime;
@@ -164,8 +225,6 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
     private Func<object, double>? _durationBase;
     private Func<object, bool>? _queueOnStart;
     private Func<object, bool>? _canFire;
-    private Func<object, bool>? _immediateCostsAffordable;
-    private Func<object, bool>? _usageCostsAffordable;
 
     internal override string Category => "consumables";
 
@@ -179,7 +238,6 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
         _randomized = bind.Field<bool>("randomized");
         _quantity = bind.Field<int>("quantity");
         _queuedQuantity = bind.Field<int>("queuedQuantity");
-        _maximumCarryLoad = bind.Call<int>("GetMaximumCarryLoad");
         _gainedSince = bind.Field<int>("gainedSince");
         _maxCreatedLevel = bind.Field<int>("maxCreatedLv");
         _prepTime = bind.Field<BigDouble>("currentPrepTime");
@@ -196,19 +254,16 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
         _durationBase = bind.Field<double>("durationBase");
         _queueOnStart = bind.Field<bool>("queueOnStart");
         _canFire = bind.Call<bool>("CanFire");
-        _immediateCostsAffordable = bind.Through("consumeCost").Call<bool>("HasEnough");
-        _usageCostsAffordable = bind.Through("usageCost").Call<bool>("HasEnough");
         return bind.Failure;
     }
 
-    internal override WorldConsumable Read(object entity) =>
+    internal override RawConsumableSample Read(object entity) =>
         new(
             _id!(entity),
             _visible!(entity),
             _randomized!(entity),
             _quantity!(entity),
             _queuedQuantity!(entity),
-            _maximumCarryLoad!(entity),
             _gainedSince!(entity),
             _maxCreatedLevel!(entity),
             _prepTime!(entity),
@@ -225,7 +280,61 @@ internal sealed class WorldConsumableBinder : WorldPlainBinder<WorldConsumable>
             _hasDuration!(entity),
             _durationBase!(entity),
             _queueOnStart!(entity),
-            _canFire!(entity),
-            _immediateCostsAffordable!(entity),
-            _usageCostsAffordable!(entity));
+            _canFire!(entity));
+}
+
+internal sealed class WorldConsumableDeriver : WorldRowDeriver<RawConsumableSample, WorldConsumable>
+{
+    private readonly int _maximumCarryLoad;
+    private readonly PublicationTable<WorldConsumableCost> _costs;
+    private readonly PublicationTable<WorldResource> _resources;
+
+    internal WorldConsumableDeriver(
+        int maximumCarryLoad,
+        PublicationTable<WorldConsumableCost> costs,
+        PublicationTable<WorldResource> resources)
+    {
+        _maximumCarryLoad = maximumCarryLoad;
+        _costs = costs;
+        _resources = resources;
+    }
+
+    internal override WorldConsumable Derive(in RawConsumableSample sample)
+    {
+        var modifiers = sample.Modifiers;
+        return new WorldConsumable(
+            sample.ConsumableId,
+            sample.Visible,
+            sample.Randomized,
+            sample.Quantity,
+            sample.QueuedQuantity,
+            _maximumCarryLoad,
+            sample.GainedSince,
+            sample.MaxCreatedLevel,
+            sample.CurrentPrepTime,
+            sample.CurrentCooldown,
+            sample.CurrentCooldownTime,
+            in modifiers,
+            sample.PreparationTime,
+            sample.CanBeRandomized,
+            sample.HasDuration,
+            sample.DurationBase,
+            sample.QueueOnStart,
+            sample.CanFire,
+            Affordable(sample.ConsumableId, WorldConsumableCostKind.Consume),
+            Affordable(sample.ConsumableId, WorldConsumableCostKind.Usage));
+    }
+
+    private bool Affordable(Guid consumableId, WorldConsumableCostKind kind)
+    {
+        if (!WorldConsumableCostLookup.TryFindRange(
+                _costs, consumableId, kind, out var start, out var count)) return true;
+        for (var index = start; index < start + count; index++)
+        {
+            var cost = _costs[index];
+            if (!WorldLookup.TryFind(_resources, cost.ResourceId, out var resource) ||
+                !OwnedMasteryCostMath.HasAmount(in resource, cost.Amount)) return false;
+        }
+        return true;
+    }
 }

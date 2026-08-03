@@ -18,7 +18,7 @@ internal static class AutoCastActionResultCodes
     /// <summary>A target request is already open, so no cast can be submitted into it.</summary>
     public static ServiceActionResultCode TargetingInProgress => new(3074);
 
-    /// <summary>The game says the caster is not free right now.</summary>
+    /// <summary>The game says the caster is not free right now; ordinary snapshot staleness.</summary>
     public static ServiceActionResultCode NativeCasterBusy => new(3075);
 
     /// <summary>
@@ -31,7 +31,7 @@ internal static class AutoCastActionResultCodes
     /// </remarks>
     public static ServiceActionResultCode SlotIdentityChanged => new(3076);
 
-    /// <summary>The game refused the cast on its own readiness terms when asked again.</summary>
+    /// <summary>The spell became unready after publication; ordinary snapshot staleness.</summary>
     public static ServiceActionResultCode SpellNotReady => new(3077);
 
     /// <summary>

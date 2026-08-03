@@ -686,6 +686,7 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable, I
 public sealed class ConsumableTypeSO : IdScriptableObject
 {
     public string DisplayName = string.Empty;
+    public IntVariable maximumCarryLoad = new IntVariable();
 
     public string GetName() => DisplayName;
 }
@@ -1283,6 +1284,11 @@ public sealed class ScalingWeightSO : IdScriptableObject
 public sealed class ScalingWeightRef
 {
     public ScalingWeightSO? scalingWeight;
+
+    public sealed class Value
+    {
+        public double baseValue;
+    }
 }
 
 /// <summary>An effect modifier that scales what it modifies by an authored weight.</summary>

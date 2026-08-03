@@ -1,8 +1,13 @@
 using System;
 using BepInEx.Logging;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Format;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace;
+using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Roster;
 using OrbModding.Common.Runtime.ServiceCycle.Orchestration;
+using OrbModding.Common.Runtime.Tracing.BufferedSegments;
+using System.Threading;
 #if SERVICE_CYCLE_PROFILE
 using OrbAutomata.Runtime.ServiceCycle.Profile;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
@@ -13,27 +18,27 @@ namespace OrbAutomata;
 
 internal sealed class AutomataServiceCycleObservability : IDisposable
 {
-    private readonly IMonotonicClock _clock;
     private readonly ManualLogSource _log;
 #if SERVICE_CYCLE_PROFILE
     private readonly AutomataServiceCycleProfileController? _profile;
     private readonly ServiceCycleProfileProbe _profileProbe;
 #endif
     private AutomataFullTraceController? _fullTrace;
-    private AutomataHostTraceController? _hostTrace;
+    private SuiteFramePump? _pump;
+    private int _serviceCapacity;
+    private ServiceCycleTraceRoster? _roster;
+    private static long _nextSnapshotIdentity = DateTime.UtcNow.Ticks;
     private AutomataDecisionJournalController? _decisionJournal;
     private bool _attached;
     private bool _disposed;
 
     private AutomataServiceCycleObservability(
-        IMonotonicClock clock,
         ManualLogSource log
 #if SERVICE_CYCLE_PROFILE
         , AutomataServiceCycleProfileController? profile
 #endif
         )
     {
-        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _log = log ?? throw new ArgumentNullException(nameof(log));
 #if SERVICE_CYCLE_PROFILE
         _profile = profile;
@@ -46,15 +51,16 @@ internal sealed class AutomataServiceCycleObservability : IDisposable
         bool traceActive,
         ManualLogSource log)
     {
+        if (clock is null) throw new ArgumentNullException(nameof(clock));
 #if SERVICE_CYCLE_PROFILE
         var profile = AutomataServiceCycleProfileController.TryCreate(
             clock,
             traceActive,
             log,
             PerformanceProfileControlRegistry.Shared);
-        return new AutomataServiceCycleObservability(clock, log, profile);
+        return new AutomataServiceCycleObservability(log, profile);
 #else
-        return new AutomataServiceCycleObservability(clock, log);
+        return new AutomataServiceCycleObservability(log);
 #endif
     }
 
@@ -82,22 +88,12 @@ internal sealed class AutomataServiceCycleObservability : IDisposable
             var fullTraceOptions = options.FullTrace;
             if (fullTraceOptions.Enabled)
             {
-                fullTrace = AutomataFullTraceController.TryCreate(
+                fullTrace = AutomataFullTraceController.Create(
                     pump,
                     serviceCapacity,
                     roster,
-                    _clock,
-                    in fullTraceOptions);
-            }
-
-            var hostTraceOptions = options.HostTrace;
-            if (hostTraceOptions.Enabled)
-            {
-                _hostTrace = AutomataHostTraceController.TryCreate(
-                    pump,
-                    serviceCapacity,
-                    roster,
-                    in hostTraceOptions);
+                    in fullTraceOptions,
+                    _log);
             }
 
             AutomataDecisionJournalController? decisionJournal = null;
@@ -120,13 +116,14 @@ internal sealed class AutomataServiceCycleObservability : IDisposable
 
             _fullTrace = fullTrace;
             _decisionJournal = decisionJournal;
+            _pump = pump;
+            _serviceCapacity = serviceCapacity;
+            _roster = roster;
             _attached = true;
         }
         catch
         {
             fullTrace?.Dispose();
-            _hostTrace?.Dispose();
-            _hostTrace = null;
             throw;
         }
     }
@@ -149,8 +146,56 @@ internal sealed class AutomataServiceCycleObservability : IDisposable
     internal void BeforePump()
     {
         _fullTrace?.BeforePump();
-        _hostTrace?.BeforePump();
         _decisionJournal?.Tick();
+    }
+
+    internal AutomataDiagnosticsRuntimeEvidence CaptureDiagnostics()
+    {
+        if (_disposed || !_attached || _pump is null || _roster is null)
+            return AutomataDiagnosticsRuntimeEvidence.Unavailable(
+                "The automation runtime is not active, so recent event and journal evidence is unavailable.");
+
+        HostTraceSnapshot? hostTrace = null;
+        var unavailable = string.Empty;
+        try
+        {
+            var source = _pump.SemanticTrace;
+            if (source is null)
+            {
+                unavailable = "The recent-event buffer is unavailable.";
+            }
+            else
+            {
+                hostTrace = HostTraceSnapshotWriter.Capture(
+                    source,
+                    new FullTraceSessionId(checked((ulong)Interlocked.Increment(ref _nextSnapshotIdentity))),
+                    _serviceCapacity,
+                    _roster);
+            }
+        }
+        catch (Exception exception) when (!BufferedSegmentFailurePolicy.IsProcessFatal(exception))
+        {
+            unavailable = "The recent-event buffer could not be captured: " +
+                exception.GetBaseException().Message;
+        }
+
+        DecisionJournalStatus journal;
+        try
+        {
+            journal = _decisionJournal?.Flush() ?? DecisionJournalStatus.Unavailable;
+        }
+        catch (Exception exception) when (!BufferedSegmentFailurePolicy.IsProcessFatal(exception))
+        {
+            journal = _decisionJournal?.Snapshot ?? DecisionJournalStatus.Unavailable;
+            unavailable = Join(unavailable, "The decision journal could not be flushed: " +
+                exception.GetBaseException().Message);
+        }
+
+        return new AutomataDiagnosticsRuntimeEvidence(
+            hostTrace,
+            journal,
+            AutomataDecisionJournalPathPolicy.DirectoryPath,
+            unavailable);
     }
 
     internal void AfterPump()
@@ -168,7 +213,9 @@ internal sealed class AutomataServiceCycleObservability : IDisposable
 #if SERVICE_CYCLE_PROFILE
         _profile?.Dispose();
 #endif
-        _hostTrace?.Dispose();
         _fullTrace?.Dispose();
     }
+
+    private static string Join(string left, string right) =>
+        left.Length == 0 ? right : left + " " + right;
 }

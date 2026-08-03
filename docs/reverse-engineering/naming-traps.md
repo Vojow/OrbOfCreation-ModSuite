@@ -77,4 +77,4 @@ type, a screenshot label plus the screen it came from resolves uniquely. The 18 
 collisions are 12 `ViewSO`, 5 `AttributeSO`, and 1 `PlotNodeActionSO` — none of those three types
 is purchasable, so none of the 18 is ever a strategy target.
 
-The labels themselves live in [`data/entity-display-names.tsv`](../../data/entity-display-names.tsv).
+The labels themselves live in [`data/entity-display-names.tsv`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/entity-display-names.tsv).

@@ -23,6 +23,10 @@ internal static class AutoHarvestService
                 in metadata,
                 createWorker: static () => new AutoHarvestWorkerDefinition(),
                 shouldStart: ShouldStart,
+                describeAction: static (in AutoHarvestCycleAction action) =>
+                    ServiceActionJournalAttribution.Native(
+                        AutoHarvestPairAuthoring.For(action.Pair).ActionId,
+                        ServiceActionNativeTypeId.PlotNodeActionSO),
                 execute: actions.TryExecute);
     }
 

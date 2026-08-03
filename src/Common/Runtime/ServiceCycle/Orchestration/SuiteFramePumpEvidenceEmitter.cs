@@ -1,3 +1,4 @@
+using System;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
@@ -12,13 +13,15 @@ internal sealed class SuiteFramePumpEvidenceEmitter
 {
     private readonly SuiteFramePumpTraceSession _traces;
     private readonly SuiteFramePumpJournalSession _journal;
+    private readonly ServiceActionAttributionFailureBuffer _attributionFailures;
 #if SERVICE_CYCLE_PROFILE
     private readonly SuiteFramePumpEvidenceProfiler _profiler;
 #endif
 
     internal SuiteFramePumpEvidenceEmitter(
         SuiteFramePumpTraceSession traces,
-        SuiteFramePumpJournalSession journal
+        SuiteFramePumpJournalSession journal,
+        ServiceActionAttributionFailureBuffer attributionFailures
 #if SERVICE_CYCLE_PROFILE
         , SuiteFramePumpEvidenceProfiler profiler
 #endif
@@ -26,6 +29,7 @@ internal sealed class SuiteFramePumpEvidenceEmitter
     {
         _traces = traces;
         _journal = journal;
+        _attributionFailures = attributionFailures;
 #if SERVICE_CYCLE_PROFILE
         _profiler = profiler;
 #endif
@@ -121,6 +125,8 @@ internal sealed class SuiteFramePumpEvidenceEmitter
 #endif
         }
         _journal.Observer?.ActionDispatched(ordinal, in dispatch, observedAt);
+        if (dispatch.AttributionFailureReason is { } reason)
+            _attributionFailures.Observe(ordinal, reason);
     }
 
     internal void StartAttemptObserved(

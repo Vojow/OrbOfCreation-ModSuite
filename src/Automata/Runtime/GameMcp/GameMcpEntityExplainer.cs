@@ -435,12 +435,20 @@ internal static class GameMcpEntityExplainer
                     world.EntityRequirements, ownerId, containerIndex, out var start, out var count))
             {
                 var rows = world.EntityRequirements.AsSpan();
-                for (var offset = 0; offset < count; offset++)
+                if (count > 0 && rows[start].OwnerKind != WorldRequirementOwnerKind.PrerequisiteLink)
                 {
-                    ref readonly var row = ref rows[start + offset];
-                    if (row.ParentOrdinal >= 0) continue;
-                    children.Add(ProjectRequirementNode(
-                        world, rows, start, count, in row, checkLevel, trail, depth + 1));
+                    ProjectFlatRequirementGroups(
+                        world, rows, start, count, checkLevel, trail, depth, children);
+                }
+                else
+                {
+                    for (var offset = 0; offset < count; offset++)
+                    {
+                        ref readonly var row = ref rows[start + offset];
+                        if (row.ParentOrdinal >= 0) continue;
+                        children.Add(ProjectRequirementNode(
+                            world, rows, start, count, in row, checkLevel, trail, depth + 1));
+                    }
                 }
             }
             var result = new JObject
@@ -456,6 +464,60 @@ internal static class GameMcpEntityExplainer
         finally
         {
             trail.Remove(key);
+        }
+    }
+
+    private static void ProjectFlatRequirementGroups(
+        GameWorldState world,
+        ReadOnlySpan<WorldEntityRequirement> rows,
+        int start,
+        int count,
+        long checkLevel,
+        HashSet<RequirementKey> trail,
+        int depth,
+        JArray destination)
+    {
+        var priorGroup = -1;
+        for (var offset = 0; offset < count; offset++)
+        {
+            ref readonly var first = ref rows[start + offset];
+            if (first.Program != WorldRequirementProgramKind.NextLevel ||
+                first.GroupOrdinal == priorGroup)
+            {
+                continue;
+            }
+            priorGroup = first.GroupOrdinal;
+
+            var groupChildren = new JArray();
+            JObject? singleton = null;
+            for (var candidateOffset = 0; candidateOffset < count; candidateOffset++)
+            {
+                ref readonly var candidate = ref rows[start + candidateOffset];
+                if (candidate.Program != first.Program ||
+                    candidate.GroupOrdinal != first.GroupOrdinal)
+                {
+                    continue;
+                }
+                var projected = ProjectRequirementNode(
+                    world, rows, start, count, in candidate, checkLevel, trail, depth + 1);
+                singleton = projected;
+                groupChildren.Add(projected);
+            }
+
+            if (groupChildren.Count == 1)
+            {
+                destination.Add(singleton!);
+                continue;
+            }
+            destination.Add(new JObject
+            {
+                ["nodeKind"] = "group",
+                ["ordinal"] = first.GroupOrdinal,
+                ["parentOrdinal"] = -1,
+                ["depth"] = 0,
+                ["operator"] = first.GroupKind == WorldRequirementGroupKind.Any ? "OR" : "AND",
+                ["children"] = groupChildren,
+            });
         }
     }
 

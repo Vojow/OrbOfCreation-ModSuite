@@ -249,7 +249,6 @@ public sealed class GameMcpConsumableTests
             ResourceId,
             new BigDouble(9, 6),
             new BigDouble(1, 9),
-            BigDouble.Zero,
             true,
             BigDouble.Zero,
             BigDouble.Zero,

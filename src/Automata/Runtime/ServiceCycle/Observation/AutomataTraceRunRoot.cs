@@ -9,7 +9,7 @@ namespace OrbAutomata;
 
 /// <summary>
 /// The suite's <c>trace/</c> directory: stable children for the always-on artifacts, and one
-/// <c>run-&lt;timestamp&gt;/</c> folder per process launch for the artifacts a user arms.
+    /// <c>run-&lt;timestamp&gt;/</c> folder per process launch for profiling-only artifacts.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,7 +19,7 @@ namespace OrbAutomata;
 /// an always-on recorder with a size cap is for.
 /// </para>
 /// <para>
-/// The manual full trace and the performance profile stay under the per-launch folder, because the
+/// The profiling full trace and the performance profile stay under the per-launch folder, because the
 /// analysis tool correlates exactly one full and one profile session per run folder. What accumulates
 /// there instead is whole run folders, so a launch prunes all but the newest few — whole folders, so a
 /// surviving one is still a complete correlated capture.

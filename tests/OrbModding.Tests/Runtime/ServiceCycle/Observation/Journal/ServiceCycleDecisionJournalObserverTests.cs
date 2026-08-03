@@ -14,7 +14,7 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Observation.Journal;
 public sealed class ServiceCycleDecisionJournalObserverTests
 {
     [Fact]
-    public void UnavailableCaptureKeepsReturnedWakeWithoutInventingStrategy()
+    public void UnavailableCaptureKeepsItsOutcomeWithoutInventingStrategyTransition()
     {
         var fixture = new Fixture();
         var attempt = CaptureUnavailable(1);
@@ -24,30 +24,8 @@ public sealed class ServiceCycleDecisionJournalObserverTests
 
         var record = Assert.Single(fixture.Sink.Records);
         Assert.Equal((ulong)1, record.FirstCycle);
-        Assert.Equal((ulong)0, record.Strategy);
-        Assert.Equal(CommonServiceDecisionCodes.CaptureUnavailable.Value, record.CaptureDecisionCode);
-        Assert.True(record.HasWake);
-        Assert.Equal(WakePolicyKind.AfterDecision, record.Wake.Kind);
-    }
-
-    /// <summary>
-    /// A captured cycle records the strategy generation the runtime stamped it with.
-    /// </summary>
-    /// <remarks>
-    /// The journal reads it off the capture context rather than the capture's return value, because
-    /// the runtime pins it and the service never sees it. See W49.
-    /// </remarks>
-    [Fact]
-    public void ACapturedCycleRecordsTheStrategyGenerationItRanAgainst()
-    {
-        var fixture = new Fixture();
-        var attempt = CapturedAttempt(1, strategyValue: 7);
-
-        fixture.Observer.StartAttemptObserved(0, in attempt, new MonotonicTimestamp(30));
-        fixture.Observer.Advance(new MonotonicTimestamp(100));
-
-        var record = Assert.Single(fixture.Sink.Records);
-        Assert.Equal((ulong)7, record.Strategy);
+        Assert.Equal(DecisionJournalDecisionOutcomeKind.Capture, record.DecisionOutcomeKind);
+        Assert.Equal(CommonServiceDecisionCodes.CaptureUnavailable.Value, record.DecisionOutcomeCode);
     }
 
     /// <summary>
@@ -89,12 +67,12 @@ public sealed class ServiceCycleDecisionJournalObserverTests
         var record = Assert.Single(fixture.Sink.Records);
         Assert.Equal(1, record.RepeatCount);
         Assert.Equal((ulong)1, record.FirstCycle);
-        Assert.Equal(CommonServiceDecisionCodes.Captured.Value, record.CaptureDecisionCode);
-        Assert.Equal(BatchTerminalDisposition.Completed, record.TerminalDisposition);
+        Assert.Equal(DecisionJournalDecisionOutcomeKind.Batch, record.DecisionOutcomeKind);
+        Assert.Equal(CommonActionResultCodes.Committed.Value, record.DecisionOutcomeCode);
     }
 
     [Fact]
-    public void ActionCycleJoinsProjectionWakeAndTerminalTotals()
+    public void ActionCycleWritesOneAttributedOutcome()
     {
         var fixture = new Fixture();
         var start = CapturedAttempt(1);
@@ -107,28 +85,22 @@ public sealed class ServiceCycleDecisionJournalObserverTests
         fixture.Observer.Advance(new MonotonicTimestamp(100));
 
         var record = Assert.Single(fixture.Sink.Records);
-        Assert.True(record.HasProjection);
-        Assert.True(record.HasWake);
-        Assert.Equal(WakePolicyKind.AfterBatch, record.Wake.Kind);
-        Assert.Equal(1, record.ActionCount);
-        Assert.Equal(1, record.CommittedActions);
-        Assert.Equal(1, record.NativeCallsAttempted);
-        Assert.Equal(1, record.MutationsCommitted);
+        Assert.Equal(DecisionJournalRecordKind.Action, record.Kind);
+        Assert.Equal(ServiceActionDisposition.Committed, record.ActionOutcome.Disposition);
+        Assert.Equal(CommonActionResultCodes.Committed.Value, record.ActionOutcome.Code);
+        Assert.Equal(ServiceActionNativeTypeId.StructureSO, record.Attribution.NativeType);
+        Assert.NotEqual(Guid.Empty, record.Attribution.CandidateId);
     }
 
     /// <summary>
-    /// A batch whose only action committed by publishing is journalled with the zero native totals it
-    /// truthfully reports.
+    /// A publishing action is still one action outcome, with a not-applicable native target.
     /// </summary>
     /// <remarks>
-    /// This is the record that killed the journal on the world collector's first completed cycle of
-    /// every session it ever ran. The record dropped the receipt's published count, so the terminal
-    /// validator could only read the batch's one action as one that owed a native mutation and
-    /// produced none, and refused it. Nothing else in the suite put a publishing receipt and the
-    /// journal in the same room.
+    /// Publication is an action effect, not an aggregate accounting count. The journal records the
+    /// action's sentinel and does not compute a separate published-action ledger.
     /// </remarks>
     [Fact]
-    public void APublishingBatchIsJournalledWithoutOwingNativeEvidence()
+    public void APublishingActionUsesNotApplicableAttribution()
     {
         var fixture = new Fixture();
         var start = CapturedAttempt(1);
@@ -142,44 +114,39 @@ public sealed class ServiceCycleDecisionJournalObserverTests
 
         Assert.False(fixture.Observer.IsFaulted);
         var record = Assert.Single(fixture.Sink.Records);
-        Assert.Equal(BatchTerminalDisposition.Completed, record.TerminalDisposition);
-        Assert.Equal(1, record.ActionCount);
-        Assert.Equal(1, record.CommittedActions);
-        Assert.Equal(1, record.PublishedActions);
-        Assert.Equal(0, record.NativeCallsAttempted);
-        Assert.Equal(0, record.MutationAttempts);
-        Assert.Equal(0, record.MutationsCommitted);
+        Assert.Equal(DecisionJournalRecordKind.Action, record.Kind);
+        Assert.Equal(ServiceActionDisposition.Committed, record.ActionOutcome.Disposition);
+        Assert.Equal(ServiceActionNativeTypeId.NotApplicable, record.Attribution.NativeType);
+        Assert.Equal(ServiceActionRouteStatus.NotApplicable, record.Attribution.RouteStatus);
+        Assert.Equal(Guid.Empty, record.Attribution.CandidateId);
     }
 
-    /// <summary>
-    /// A batch that published, mutated, and skipped keeps the two kinds of action apart.
-    /// </summary>
-    /// <remarks>
-    /// The mutating half still owes one attempted mutation each and committed evidence for the one it
-    /// committed; the published half owes none. Subtracting the published total is what lets the span
-    /// keep both claims at once.
-    /// </remarks>
     [Fact]
-    public void AMixedBatchSeparatesWhatPublishedFromWhatTouchedTheGame()
+    public void FaultedActionCycleKeepsFaultVisibleBesideActionOutcome()
     {
         var fixture = new Fixture();
         var start = CapturedAttempt(1);
-        var response = SuccessfulResponse(1, actionCount: 3);
-        var terminal = MixedAction(1);
+        var response = SuccessfulResponse(1, actionCount: 1);
+        var terminal = FaultedAction(1);
 
         fixture.Observer.StartAttemptObserved(0, in start, new MonotonicTimestamp(20));
         fixture.Observer.ResponseAcquired(0, in response, new MonotonicTimestamp(32));
         fixture.Observer.ActionDispatched(0, in terminal, new MonotonicTimestamp(46));
         fixture.Observer.Advance(new MonotonicTimestamp(100));
 
-        Assert.False(fixture.Observer.IsFaulted);
-        var record = Assert.Single(fixture.Sink.Records);
-        Assert.Equal(3, record.ActionCount);
-        Assert.Equal(2, record.CommittedActions);
-        Assert.Equal(1, record.PublishedActions);
-        Assert.Equal(2, record.NativeCallsAttempted);
-        Assert.Equal(2, record.MutationAttempts);
-        Assert.Equal(1, record.MutationsCommitted);
+        Assert.Collection(
+            fixture.Sink.Records,
+            action =>
+            {
+                Assert.Equal(DecisionJournalRecordKind.Action, action.Kind);
+                Assert.Equal(ServiceActionDisposition.Faulted, action.ActionOutcome.Disposition);
+            },
+            decision =>
+            {
+                Assert.Equal(DecisionJournalRecordKind.DecisionSpan, decision.Kind);
+                Assert.Equal(DecisionJournalDecisionOutcomeKind.Fault, decision.DecisionOutcomeKind);
+                Assert.Equal(ServiceFaultCategory.ActionExecution, decision.FaultCategory);
+            });
     }
 
     [Fact]
@@ -208,7 +175,7 @@ public sealed class ServiceCycleDecisionJournalObserverTests
             first =>
             {
                 Assert.Equal(ServiceFaultCategory.Evaluation, first.FaultCategory);
-                Assert.False(first.HasWake);
+                Assert.Equal(DecisionJournalDecisionOutcomeKind.Fault, first.DecisionOutcomeKind);
             },
             second => Assert.Equal((ServiceFaultCategory)0, second.FaultCategory));
     }
@@ -296,7 +263,7 @@ public sealed class ServiceCycleDecisionJournalObserverTests
             decision =>
             {
                 Assert.Equal(DecisionJournalRecordKind.DecisionSpan, decision.Kind);
-                Assert.Equal((BatchTerminalDisposition)0, decision.TerminalDisposition);
+                Assert.Equal(DecisionJournalDecisionOutcomeKind.Capture, decision.DecisionOutcomeKind);
             },
             transition =>
             {
@@ -473,8 +440,8 @@ public sealed class ServiceCycleDecisionJournalObserverTests
             },
             decision =>
             {
-                Assert.True(decision.HasProjection);
-                Assert.Equal(BatchTerminalDisposition.Orphaned, decision.TerminalDisposition);
+                Assert.Equal(DecisionJournalDecisionOutcomeKind.Batch, decision.DecisionOutcomeKind);
+                Assert.Equal(CommonActionResultCodes.LifecycleReplaced.Value, decision.DecisionOutcomeCode);
             },
             activated =>
             {

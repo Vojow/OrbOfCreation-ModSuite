@@ -1,7 +1,6 @@
 using System;
 using System.Globalization;
 using System.Threading;
-using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Format;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 using OrbModding.Common.Runtime.Tracing;
@@ -15,11 +14,10 @@ internal sealed class AutomataFullTracePathPolicy : IAutomataFullTraceSessionSou
 
     private AutomataFullTracePathPolicy(string rootDirectory) => _rootDirectory = rootDirectory;
 
-    internal static AutomataFullTraceOptions Create(ManualFullTraceControlRegistry control)
+    internal static AutomataFullTraceOptions CreateOptions()
     {
-        if (control is null) throw new ArgumentNullException(nameof(control));
         var root = AutomataTraceRunRoot.Child("full");
-        return new AutomataFullTraceOptions(control, new AutomataFullTracePathPolicy(root));
+        return new AutomataFullTraceOptions(new AutomataFullTracePathPolicy(root));
     }
 
     public AutomataFullTraceSessionSpec Create()
@@ -40,7 +38,7 @@ internal sealed class AutomataFullTracePathPolicy : IAutomataFullTraceSessionSou
 
     internal static string FormatRelativeArtifactPath(string artifactName)
     {
-        if (!ManualFullTraceStatus.IsSafeArtifactName(artifactName))
+        if (!AutomataFullTraceSessionSpec.IsSafeArtifactName(artifactName))
             throw new ArgumentException("A full-trace artifact basename is required.", nameof(artifactName));
         return AutomataTraceRunRoot.FormatRelativePath("full/" + artifactName);
     }

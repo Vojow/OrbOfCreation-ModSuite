@@ -284,7 +284,6 @@ public sealed class GameMcpGenericDiscoveryTests
             ResourceId,
             new BigDouble(8),
             new BigDouble(100),
-            BigDouble.Zero,
             visible: true,
             lifetimeQuantity: new BigDouble(8),
             discoveryTime: BigDouble.Zero,

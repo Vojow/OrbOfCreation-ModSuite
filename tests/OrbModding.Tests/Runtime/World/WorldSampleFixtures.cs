@@ -72,7 +72,6 @@ internal static class WorldSamples
             resourceId,
             new BigDouble(quantity),
             new BigDouble(capacity),
-            new BigDouble(rate),
             visible,
             new BigDouble(lifetimeQuantity),
             new BigDouble(discoveryTime),
@@ -86,7 +85,7 @@ internal static class WorldSamples
             inRallyMode,
             appliedLevels,
             levelVariableId,
-            in rateInputs,
+            Rate(rate, in rateInputs),
             in traits,
             in modifiers);
 
@@ -120,7 +119,6 @@ internal static class WorldSamples
             resourceId,
             quantity,
             capacity,
-            rate ?? BigDouble.Zero,
             visible,
             lifetimeQuantity ?? BigDouble.Zero,
             discoveryTime ?? BigDouble.Zero,
@@ -134,9 +132,30 @@ internal static class WorldSamples
             inRallyMode,
             appliedLevels,
             levelVariableId,
-            in rateInputs,
+            Rate((rate ?? BigDouble.Zero).ToDouble(), in rateInputs),
             in traits,
             in modifiers);
+
+    private static RawResourceRateInputs Rate(
+        double rate,
+        in RawResourceRateInputs supplied) =>
+        rate == 0d ? supplied : new RawResourceRateInputs(
+            new BigDouble(rate),
+            default,
+            default,
+            default,
+            default,
+            default,
+            rateModifiers: 1,
+            rateSplashModifiers: 0,
+            rateMaxPercentModifiers: 0,
+            rateInterestPercentModifiers: 0,
+            rateMissingPercentModifiers: 0,
+            rateLifetimePercentModifiers: 0,
+            default,
+            default,
+            default,
+            baseLoss: 0d);
 
     internal static RawStructureSample Structure(
         Guid structureId,

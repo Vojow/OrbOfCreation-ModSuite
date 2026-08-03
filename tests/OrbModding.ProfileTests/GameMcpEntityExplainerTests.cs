@@ -204,7 +204,7 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         var result = Explain(Collect(), owner.GetGuid(), 920);
 
         Assert.Equal("unavailable", (string?)result["status"]);
-        Assert.Equal("entity_name_unavailable", (string?)result["reasonCode"]);
+        Assert.Equal("suite_verdict_unevaluable", (string?)result["reasonCode"]);
         var requirements = Assert.IsType<JObject>(result["requirements"]);
         var root = Assert.IsType<JObject>(requirements["root"]);
         Assert.Equal("AND", (string?)root["operator"]);
@@ -212,7 +212,8 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         Assert.Equal(2, top.Length);
         Assert.Equal("OR", (string?)top[0]["operator"]);
         var orChildren = top[0]["children"]!.OfType<JObject>().ToArray();
-        Assert.Equal("AND", (string?)orChildren[1]["operator"]);
+        Assert.Equal("AndRequirement", (string?)orChildren[1]["conditionType"]);
+        Assert.Equal("Unevaluable", (string?)orChildren[1]["verdict"]);
 
         var firstLeaf = orChildren[0];
         Assert.Equal(research.GetGuid().ToString("D"),

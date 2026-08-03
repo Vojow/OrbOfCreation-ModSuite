@@ -78,7 +78,7 @@ cannot interleave writes.
 record is dirty — a write on a call that reads like a plain scalar. It is acceptable at this
 boundary, where a write is already being made; a read-only pass takes the multi-buy and
 `Player.GetBulkDevelopment()` values off the world snapshot instead, by the uuids pinned in
-[`data/known-entities.tsv`](../../data/known-entities.tsv), under the memo rule. Nothing offline can
+[`data/known-entities.tsv`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/known-entities.tsv), under the memo rule. Nothing offline can
 prove the asset carrying a uuid is the one the singleton returns, so
 `AutomataWorldCollectionCheck.CheckGlobalSingletons` calls both in the running game and compares;
 an unreadable value falls back to 1, which buys one level at a time.

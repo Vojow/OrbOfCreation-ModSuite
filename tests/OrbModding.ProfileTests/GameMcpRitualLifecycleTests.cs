@@ -148,7 +148,7 @@ public sealed class GameMcpRitualLifecycleTests
         var traits = default(RawResourceTraits);
         var resourceModifiers = default(RawResourceModifiers);
         var reading = new RawResourceSample(ResourceId, new BigDouble(80), new BigDouble(100),
-            BigDouble.Zero, true, BigDouble.Zero, BigDouble.Zero, new BigDouble(100),
+            true, BigDouble.Zero, BigDouble.Zero, new BigDouble(100),
             new BigDouble(100), BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, false, false,
             false, 0, Guid.Empty, in rateInputs, in traits, in resourceModifiers);
         var resource = new WorldResource(in reading, true, new BigDouble(20), 0.8, false,

@@ -42,12 +42,10 @@ public readonly partial struct ServiceCycleSemanticPayload : IEquatable<ServiceC
         long captureDurationTicks,
         long totalDurationTicks,
         int nativeOutcome,
-        int publishedCount = 0,
         ulong world = 0,
         int cyclesStarted = 0,
         int worldGateDeferrals = 0)
     {
-        PublishedCount = publishedCount;
         World = world;
         CyclesStarted = cyclesStarted;
         WorldGateDeferrals = worldGateDeferrals;
@@ -142,12 +140,6 @@ public readonly partial struct ServiceCycleSemanticPayload : IEquatable<ServiceC
     internal int NativeOutcomeCode { get; }
 
     /// <summary>
-    /// Committed actions in this batch that published a snapshot rather than mutating the game, and
-    /// therefore could not produce native evidence.
-    /// </summary>
-    public int PublishedCount { get; }
-
-    /// <summary>
     /// Reads the exact wake returned by a successful evaluator. The semantic schema stores the
     /// wake kind in <see cref="Disposition"/> and its single numeric operand in
     /// <see cref="DeadlineTicks"/>.
@@ -222,7 +214,7 @@ public readonly partial struct ServiceCycleSemanticPayload : IEquatable<ServiceC
         LifecycleTransitions == other.LifecycleTransitions && ResponseDurationTicks == other.ResponseDurationTicks &&
         ActionDurationTicks == other.ActionDurationTicks && CaptureDurationTicks == other.CaptureDurationTicks &&
         TotalDurationTicks == other.TotalDurationTicks && NativeOutcomeCode == other.NativeOutcomeCode &&
-        PublishedCount == other.PublishedCount && CyclesStarted == other.CyclesStarted &&
+        CyclesStarted == other.CyclesStarted &&
         WorldGateDeferrals == other.WorldGateDeferrals;
     public override bool Equals(object? obj) => obj is ServiceCycleSemanticPayload other && Equals(other);
     public override int GetHashCode() => HashCode.Combine(Fields, Service, Lifecycle, Configuration, Strategy, Capture, Cycle, Batch);

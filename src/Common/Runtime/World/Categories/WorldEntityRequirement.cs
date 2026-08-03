@@ -21,6 +21,23 @@ internal enum WorldRequirementOwnerKind
     Structure = 2,
     PrerequisiteLink = 3,
     Research = 4,
+    AlchemyRecipe = 5,
+}
+
+internal enum WorldRequirementProgramKind
+{
+    NextLevel = 0,
+    Usage = 1,
+}
+
+/// <summary>How the leaves at one top-level container position combine.</summary>
+internal enum WorldRequirementGroupKind
+{
+    /// <summary>A leaf or an explicit AndRequirement: every row must hold.</summary>
+    All = 0,
+
+    /// <summary>An explicit OrRequirement: one row must hold.</summary>
+    Any = 1,
 }
 
 /// <summary>
@@ -48,6 +65,9 @@ internal enum WorldRequirementConditionKind
     Number = 7,
     Generic = 8,
     PrerequisiteLink = 9,
+
+    /// <summary>An authored empty composite's exact Any/All identity value.</summary>
+    Literal = 10,
 }
 
 internal enum WorldRequirementNodeKind
@@ -125,7 +145,10 @@ internal readonly struct WorldEntityRequirement
         int reqType,
         double baseValue,
         in WorldRequirementScaling perLevel,
-        in WorldRequirementScaling modPerLevel)
+        in WorldRequirementScaling modPerLevel,
+        WorldRequirementProgramKind program = WorldRequirementProgramKind.NextLevel,
+        WorldRequirementGroupKind groupKind = WorldRequirementGroupKind.All,
+        int groupOrdinal = -1)
         : this(
             ownerId,
             ownerKind,
@@ -141,7 +164,10 @@ internal readonly struct WorldEntityRequirement
             reqType,
             baseValue,
             in perLevel,
-            in modPerLevel)
+            in modPerLevel,
+            program,
+            groupKind,
+            groupOrdinal)
     {
     }
 
@@ -160,7 +186,10 @@ internal readonly struct WorldEntityRequirement
         int reqType,
         double baseValue,
         in WorldRequirementScaling perLevel,
-        in WorldRequirementScaling modPerLevel)
+        in WorldRequirementScaling modPerLevel,
+        WorldRequirementProgramKind program = WorldRequirementProgramKind.NextLevel,
+        WorldRequirementGroupKind groupKind = WorldRequirementGroupKind.All,
+        int groupOrdinal = -1)
     {
         OwnerId = ownerId;
         OwnerKind = ownerKind;
@@ -177,12 +206,25 @@ internal readonly struct WorldEntityRequirement
         BaseValue = baseValue;
         PerLevel = perLevel;
         ModPerLevel = modPerLevel;
+        Program = program;
+        GroupKind = groupKind;
+        GroupOrdinal = groupOrdinal < 0 ? ordinal : groupOrdinal;
     }
 
     /// <summary>The entity whose next level this condition gates.</summary>
     internal Guid OwnerId { get; }
 
     internal WorldRequirementOwnerKind OwnerKind { get; }
+    internal WorldRequirementProgramKind Program { get; }
+
+    /// <summary>The native fold for the leaves at <see cref="GroupOrdinal"/>.</summary>
+    internal WorldRequirementGroupKind GroupKind { get; }
+
+    /// <summary>
+    /// The top-level container position this leaf belongs to. The container ANDs positions; rows
+    /// sharing one position are the children of an explicit Or/And composite.
+    /// </summary>
+    internal int GroupOrdinal { get; }
 
     /// <summary>
     /// Zero for an entity's per-level container; otherwise the exact tier index on a
@@ -675,6 +717,7 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
     private readonly Type? _structureType;
     private readonly Type? _researchType;
     private readonly Type? _prerequisiteLinkType;
+    private readonly Type? _alchemyType;
     private readonly string _unavailable;
 
     private readonly Func<object, Guid>? _upgradeId;
@@ -692,6 +735,8 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
     private readonly Func<object, object?>? _prerequisiteLinkTierContainer;
     private readonly Func<object, IList?>? _conditions;
     private readonly Func<object, long, bool>? _nativeCheck;
+    private readonly Func<object, object?>? _alchemyUsageContainer;
+    private readonly Func<object, IList?>? _alchemyConditions;
 
     /// <summary>
     /// One compiled accessor set per condition class seen so far. Not on the frame: these are
@@ -704,14 +749,16 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
         Type? upgradeType,
         Type? structureType,
         Type? researchType,
-        Type? prerequisiteLinkType)
+        Type? prerequisiteLinkType,
+        Type? alchemyType)
     {
         _upgradeType = upgradeType;
         _structureType = structureType;
         _researchType = researchType;
         _prerequisiteLinkType = prerequisiteLinkType;
+        _alchemyType = alchemyType;
         if (upgradeType is null || structureType is null || researchType is null ||
-            prerequisiteLinkType is null)
+            prerequisiteLinkType is null || alchemyType is null)
         {
             _unavailable = upgradeType is null
                 ? "the UpgradeSO type was not found on this build"
@@ -719,7 +766,9 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
                     ? "the StructureSO type was not found on this build"
                     : researchType is null
                         ? "the ResearchSO type was not found on this build"
-                        : "the PrerequisiteLinkSO type was not found on this build";
+                        : prerequisiteLinkType is null
+                            ? "the PrerequisiteLinkSO type was not found on this build"
+                            : "the AlchemyRecipeSO type was not found on this build";
             return;
         }
 
@@ -733,6 +782,7 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
         _structureId = structure.Call<Guid>("GetGuid");
         _structureContainer = NativeAccessorBinder.Reference(structureType, "prerequisitesPerLevel");
         _structureQuantity = NativeAccessorBinder.Field<int>(structureType, "quantity");
+        _alchemyUsageContainer = NativeAccessorBinder.Reference(alchemyType, "usagePrerequisites");
 
         var research = new WorldMemberBinding(researchType, "ResearchSO");
         _researchId = research.Call<Guid>("GetGuid");
@@ -756,15 +806,20 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
             "Check",
             "Requirements.ConditionInfo");
 
+        var alchemyContainerType = alchemyType.GetField("usagePrerequisites", Instance)?.FieldType;
+        _alchemyConditions = NativeAccessorBinder.CollectionField(alchemyContainerType, "prerequisites");
+
         if (_upgradeContainer is null || _structureContainer is null ||
             _upgradeLevel is null || _upgradeQueuedLevels is null ||
             _structureQuantity is null ||
             _researchId is null || _researchContainer is null ||
             _researchRequirementLevel is null ||
             _prerequisiteLinkId is null || _prerequisiteLinkTiers is null ||
-            _prerequisiteLinkTierContainer is null || _conditions is null)
+            _prerequisiteLinkTierContainer is null || _conditions is null ||
+            _alchemyUsageContainer is null || _alchemyConditions is null)
         {
-            _unavailable = "UpgradeSO, StructureSO, ResearchSO, and PrerequisiteLinkSO did not " +
+            _unavailable = "UpgradeSO, StructureSO, ResearchSO, PrerequisiteLinkSO, and " +
+                "AlchemyRecipeSO did not " +
                 "expose the complete prerequisite graph on this build";
             return;
         }
@@ -789,6 +844,7 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
     public bool IsAvailable =>
         _upgradeType is not null && _structureType is not null &&
         _researchType is not null && _prerequisiteLinkType is not null &&
+        _alchemyType is not null &&
         _unavailable.Length == 0;
 
     public WorldCategoryReport Collect(HashSet<Guid> claimed, GameWorldCycleFrame frame)
@@ -822,6 +878,16 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
             WorldRequirementOwnerKind.Research,
             _researchId!,
             _researchContainer!,
+            buffer,
+            ref sampled,
+            ref unmodelled,
+            ref firstFailure);
+        WalkKnownIds(
+            NativeAccessorBinder.StaticList(_alchemyType, "All"),
+            WorldRequirementOwnerKind.AlchemyRecipe,
+            WorldRequirementProgramKind.Usage,
+            frame.AlchemyRecipes,
+            _alchemyUsageContainer!,
             buffer,
             ref sampled,
             ref unmodelled,
@@ -999,7 +1065,8 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
         Func<object, object?> container,
         WorldEntityRequirementBuffer buffer,
         ref int unmodelled,
-        ref string firstFailure)
+        ref string firstFailure,
+        WorldRequirementProgramKind program = WorldRequirementProgramKind.NextLevel)
     {
         var ownerId = identity(owner);
         if (ownerId == Guid.Empty) return 0;
@@ -1008,15 +1075,9 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
         if (held is null) return 0;
         _nativeVerdictSources.Add(new NativeVerdictSource(ownerId, kind, owner, held));
 
-        return ReadContainer(
-            ownerId,
-            kind,
-            containerIndex: 0,
-            held,
-            publishContainerRoot: false,
-            buffer,
-            ref unmodelled,
-            ref firstFailure);
+        var conditions = _conditions!(held);
+        return AppendConditions(
+            ownerId, kind, program, conditions, buffer, ref unmodelled, ref firstFailure);
     }
 
     private readonly struct NativeVerdictSource
@@ -1079,20 +1140,10 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
         {
             var condition = conditions![index];
             if (condition is null) continue;
-
             appended += ReadCondition(
-                ownerId,
-                kind,
-                containerIndex,
-                condition,
-                parentOrdinal,
-                depth,
-                ref nextOrdinal,
-                buffer,
-                ref unmodelled,
-                ref firstFailure);
+                ownerId, kind, containerIndex, condition, parentOrdinal, depth,
+                ref nextOrdinal, buffer, ref unmodelled, ref firstFailure);
         }
-
         return appended;
     }
 
@@ -1112,76 +1163,229 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
         {
             var exceededOrdinal = nextOrdinal++;
             var unknown = new WorldEntityRequirement(
-                ownerId,
-                kind,
-                containerIndex,
-                exceededOrdinal,
-                parentOrdinal,
-                depth,
-                WorldRequirementNodeKind.Leaf,
-                WorldRequirementOperator.None,
-                WorldRequirementConditionKind.Unknown,
-                "RequirementGraphDepthExceeded",
-                Guid.Empty,
-                reqType: -1,
-                baseValue: 0d,
-                default(WorldRequirementScaling),
-                default(WorldRequirementScaling));
+                ownerId, kind, containerIndex, exceededOrdinal, parentOrdinal, depth,
+                WorldRequirementNodeKind.Leaf, WorldRequirementOperator.None,
+                WorldRequirementConditionKind.Unknown, "RequirementGraphDepthExceeded",
+                Guid.Empty, -1, 0d, default, default);
             unmodelled++;
             if (firstFailure.Length == 0)
-            {
                 firstFailure = $"a prerequisite graph exceeded {MaximumGraphDepth} nested nodes. " +
                     "Entities gated by one are never planned.";
-            }
             buffer.Append(in unknown);
             return 1;
         }
 
         var accessors = AccessorsFor(condition.GetType());
         var ordinal = nextOrdinal++;
-        var row = accessors.Read(
-            ownerId,
-            kind,
-            containerIndex,
-            ordinal,
-            parentOrdinal,
-            depth,
-            condition);
+        var row = accessors.ReadGraph(
+            ownerId, kind, containerIndex, ordinal, parentOrdinal, depth, condition);
         if (row.Kind == WorldRequirementConditionKind.Unknown &&
             row.NodeKind == WorldRequirementNodeKind.Leaf)
         {
             unmodelled++;
             if (firstFailure.Length == 0)
-            {
                 firstFailure = "this build authors a condition this suite does not model: " +
                     $"{row.ConditionTypeName}. Entities gated by one are never planned.";
-            }
         }
 
         buffer.Append(in row);
         var appended = 1;
         if (row.NodeKind != WorldRequirementNodeKind.Group) return appended;
 
-        var children = accessors.Children(condition);
+        var children = accessors.ReadChildren(condition);
         var childCount = children?.Count ?? 0;
         for (var index = 0; index < childCount; index++)
         {
             var child = children![index];
             if (child is null) continue;
             appended += ReadCondition(
-                ownerId,
-                kind,
-                containerIndex,
-                child,
-                ordinal,
-                depth + 1,
-                ref nextOrdinal,
-                buffer,
-                ref unmodelled,
-                ref firstFailure);
+                ownerId, kind, containerIndex, child, ordinal, depth + 1,
+                ref nextOrdinal, buffer, ref unmodelled, ref firstFailure);
+        }
+        return appended;
+    }
+
+    private void WalkKnownIds(
+        IList? owners,
+        WorldRequirementOwnerKind kind,
+        WorldRequirementProgramKind program,
+        WorldSampleBuffer<WorldAlchemyRecipe, WorldAlchemyRecipe> identities,
+        Func<object, object?> container,
+        WorldEntityRequirementBuffer buffer,
+        ref int sampled,
+        ref int unmodelled,
+        ref string firstFailure)
+    {
+        if (owners is null || owners.Count != identities.Count)
+        {
+            if (firstFailure.Length == 0)
+                firstFailure = "the AlchemyRecipeSO identity snapshot was incomplete";
+            return;
+        }
+
+        for (var index = 0; index < owners.Count; index++)
+        {
+            var owner = owners[index];
+            if (owner is null) continue;
+            try
+            {
+                sampled += ReadKnownId(
+                    owner, identities[index].EntityId, kind, program, container, buffer,
+                    ref unmodelled, ref firstFailure);
+            }
+            catch (Exception ex)
+            {
+                var row = UnreadableUsage(identities[index].EntityId, program);
+                buffer.Append(in row);
+                sampled++;
+                unmodelled++;
+                if (firstFailure.Length == 0)
+                    firstFailure = "reading a usage prerequisite threw: " +
+                        ex.GetBaseException().Message;
+            }
+        }
+    }
+
+    private int ReadKnownId(
+        object owner,
+        Guid ownerId,
+        WorldRequirementOwnerKind kind,
+        WorldRequirementProgramKind program,
+        Func<object, object?> container,
+        WorldEntityRequirementBuffer buffer,
+        ref int unmodelled,
+        ref string firstFailure)
+    {
+        var held = container(owner);
+        if (held is null) return AppendUnreadableUsage(
+            ownerId, kind, program, buffer, ref unmodelled, ref firstFailure);
+        var conditions = _alchemyConditions!(held);
+        if (conditions is null) return AppendUnreadableUsage(
+            ownerId, kind, program, buffer, ref unmodelled, ref firstFailure);
+        return AppendConditions(
+            ownerId, kind, program, conditions, buffer, ref unmodelled, ref firstFailure);
+    }
+
+    private static int AppendUnreadableUsage(
+        Guid ownerId,
+        WorldRequirementOwnerKind ownerKind,
+        WorldRequirementProgramKind program,
+        WorldEntityRequirementBuffer buffer,
+        ref int unmodelled,
+        ref string firstFailure)
+    {
+        var row = UnreadableUsage(ownerId, program, ownerKind);
+        buffer.Append(in row);
+        unmodelled++;
+        if (firstFailure.Length == 0)
+            firstFailure = "an AlchemyRecipeSO usage-prerequisite container was unreadable";
+        return 1;
+    }
+
+    private static WorldEntityRequirement UnreadableUsage(
+        Guid ownerId,
+        WorldRequirementProgramKind program,
+        WorldRequirementOwnerKind ownerKind = WorldRequirementOwnerKind.AlchemyRecipe) =>
+        new(
+            ownerId,
+            ownerKind,
+            0,
+            WorldRequirementConditionKind.Unknown,
+            "UnreadableUsageRequirements",
+            Guid.Empty,
+            -1,
+            0,
+            default,
+            default,
+            program);
+
+    private int AppendConditions(
+        Guid ownerId,
+        WorldRequirementOwnerKind ownerKind,
+        WorldRequirementProgramKind program,
+        IList? conditions,
+        WorldEntityRequirementBuffer buffer,
+        ref int unmodelled,
+        ref string firstFailure)
+    {
+        var appended = 0;
+        for (var groupOrdinal = 0; groupOrdinal < (conditions?.Count ?? 0); groupOrdinal++)
+        {
+            var condition = conditions![groupOrdinal];
+            if (condition is null) continue;
+
+            var accessors = AccessorsFor(condition.GetType());
+            if (!accessors.IsComposite)
+            {
+                var row = accessors.Read(
+                    ownerId, ownerKind, appended, condition, program,
+                    WorldRequirementGroupKind.All, groupOrdinal);
+                Append(in row, buffer, ref appended, ref unmodelled, ref firstFailure);
+                continue;
+            }
+
+            var children = accessors.ReadChildren(condition);
+            if (children is null)
+            {
+                var row = accessors.Unknown(
+                    ownerId, ownerKind, appended, program, accessors.GroupKind, groupOrdinal);
+                Append(in row, buffer, ref appended, ref unmodelled, ref firstFailure);
+                continue;
+            }
+
+            if (children.Count == 0)
+            {
+                // Enumerable.Any(empty) is false; Enumerable.All(empty) is true.
+                var row = accessors.EmptyComposite(
+                    ownerId, ownerKind, appended, program, groupOrdinal);
+                Append(in row, buffer, ref appended, ref unmodelled, ref firstFailure);
+                continue;
+            }
+
+            for (var childIndex = 0; childIndex < children.Count; childIndex++)
+            {
+                var child = children[childIndex];
+                if (child is null)
+                {
+                    var nullRow = accessors.Unknown(
+                        ownerId, ownerKind, appended, program, accessors.GroupKind, groupOrdinal);
+                    Append(in nullRow, buffer, ref appended, ref unmodelled, ref firstFailure);
+                    continue;
+                }
+                var childAccessors = AccessorsFor(child.GetType());
+                // This baseline authors no deeper composite in the programs collected here. Publish
+                // one named unknown child instead of flattening away its parentheses; the enclosing
+                // three-way fold then decides whether another OR arm proves the group met.
+                var row = childAccessors.IsComposite
+                    ? childAccessors.Unknown(
+                        ownerId, ownerKind, appended, program, accessors.GroupKind, groupOrdinal)
+                    : childAccessors.Read(
+                        ownerId, ownerKind, appended, child, program,
+                        accessors.GroupKind, groupOrdinal);
+                Append(in row, buffer, ref appended, ref unmodelled, ref firstFailure);
+            }
         }
 
         return appended;
+    }
+
+    private static void Append(
+        in WorldEntityRequirement row,
+        WorldEntityRequirementBuffer buffer,
+        ref int appended,
+        ref int unmodelled,
+        ref string firstFailure)
+    {
+        if (row.Kind == WorldRequirementConditionKind.Unknown)
+        {
+            unmodelled++;
+            if (firstFailure.Length == 0)
+                firstFailure = "this build authors a condition this suite does not model: " +
+                    $"{row.ConditionTypeName}. Entities gated by one are never planned.";
+        }
+
+        buffer.Append(in row);
+        appended++;
     }
 
     private ConditionAccessors AccessorsFor(Type conditionType)
@@ -1205,8 +1409,9 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
     /// <remarks>
     /// The three members are declared on the game's <c>BaseCondition&lt;T, TE&gt;</c>, whose <c>item</c>
     /// and <c>reqType</c> are its own type parameters — so there is no single closed type to bind
-    /// against and the accessors are compiled against each concrete subclass instead. Composites have
-    /// their own explicit child-list binding and are the only non-leaf nodes.
+    /// against and the accessors are compiled against each concrete subclass instead. The two
+    /// composites bind their explicit child lists and retain both their graph node and group-fold
+    /// semantics.
     /// </remarks>
     private sealed class ConditionAccessors
     {
@@ -1225,6 +1430,7 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
         private readonly Func<object, int>? _modPerLevelType;
         private readonly Func<object, BigDouble>? _modPerLevelAmount;
         private readonly Func<object, int>? _modPerLevelOrder;
+        private readonly WorldRequirementGroupKind? _groupKind;
 
         private ConditionAccessors(
             WorldRequirementConditionKind kind,
@@ -1241,7 +1447,8 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
             Func<object, int>? perLevelOrder,
             Func<object, int>? modPerLevelType,
             Func<object, BigDouble>? modPerLevelAmount,
-            Func<object, int>? modPerLevelOrder)
+            Func<object, int>? modPerLevelOrder,
+            WorldRequirementGroupKind? groupKind = null)
         {
             _kind = kind;
             _typeName = typeName;
@@ -1258,7 +1465,13 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
             _modPerLevelType = modPerLevelType;
             _modPerLevelAmount = modPerLevelAmount;
             _modPerLevelOrder = modPerLevelOrder;
+            _groupKind = groupKind;
         }
+
+        internal bool IsComposite => _groupKind.HasValue;
+        internal WorldRequirementGroupKind GroupKind => _groupKind ?? WorldRequirementGroupKind.All;
+
+        internal IList? ReadChildren(object condition) => _children?.Invoke(condition);
 
         internal static ConditionAccessors Bind(Type conditionType)
         {
@@ -1289,7 +1502,10 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
                     null,
                     null,
                     null,
-                    null);
+                    null,
+                    @operator == WorldRequirementOperator.Or
+                        ? WorldRequirementGroupKind.Any
+                        : WorldRequirementGroupKind.All);
             }
 
             var kind = Classify(typeName);
@@ -1341,81 +1557,124 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
         internal WorldEntityRequirement Read(
             Guid ownerId,
             WorldRequirementOwnerKind ownerKind,
-            int containerIndex,
             int ordinal,
-            int parentOrdinal,
-            int depth,
-            object condition)
+            object condition,
+            WorldRequirementProgramKind program,
+            WorldRequirementGroupKind groupKind,
+            int groupOrdinal)
         {
-            if (_nodeKind == WorldRequirementNodeKind.Group)
-            {
-                return new WorldEntityRequirement(
-                    ownerId,
-                    ownerKind,
-                    containerIndex,
-                    ordinal,
-                    parentOrdinal,
-                    depth,
-                    _nodeKind,
-                    _operator,
-                    WorldRequirementConditionKind.Unknown,
-                    _typeName,
-                    Guid.Empty,
-                    reqType: -1,
-                    baseValue: 0d,
-                    default(WorldRequirementScaling),
-                    default(WorldRequirementScaling));
-            }
-
             if (_kind == WorldRequirementConditionKind.Unknown)
-            {
-                return new WorldEntityRequirement(
-                    ownerId,
-                    ownerKind,
-                    containerIndex,
-                    ordinal,
-                    parentOrdinal,
-                    depth,
-                    _nodeKind,
-                    _operator,
-                    WorldRequirementConditionKind.Unknown,
-                    _typeName,
-                    Guid.Empty,
-                    reqType: -1,
-                    baseValue: 0d,
-                    default(WorldRequirementScaling),
-                    default(WorldRequirementScaling));
-            }
-
-            var threshold = _value!(condition);
-            var perLevel = threshold is null
-                ? default(WorldRequirementScaling)
-                : new WorldRequirementScaling(
-                    _perLevelType!(threshold), _perLevelAmount!(threshold), _perLevelOrder!(threshold));
-            var modPerLevel = threshold is null
-                ? default(WorldRequirementScaling)
-                : new WorldRequirementScaling(
-                    _modPerLevelType!(threshold),
-                    _modPerLevelAmount!(threshold),
-                    _modPerLevelOrder!(threshold));
+                return Unknown(ownerId, ownerKind, ordinal, program, groupKind, groupOrdinal);
+            ReadScaling(condition, out var threshold, out var perLevel, out var modPerLevel);
 
             return new WorldEntityRequirement(
                 ownerId,
                 ownerKind,
-                containerIndex,
                 ordinal,
-                parentOrdinal,
-                depth,
-                _nodeKind,
-                _operator,
                 _kind,
                 _typeName,
                 _item!(condition),
                 _reqType!(condition),
                 threshold is null ? 0d : _baseValue!(threshold),
                 in perLevel,
-                in modPerLevel);
+                in modPerLevel,
+                program,
+                groupKind,
+                groupOrdinal);
         }
+
+        internal WorldEntityRequirement ReadGraph(
+            Guid ownerId,
+            WorldRequirementOwnerKind ownerKind,
+            int containerIndex,
+            int ordinal,
+            int parentOrdinal,
+            int depth,
+            object condition)
+        {
+            if (_nodeKind == WorldRequirementNodeKind.Group ||
+                _kind == WorldRequirementConditionKind.Unknown)
+            {
+                return new WorldEntityRequirement(
+                    ownerId, ownerKind, containerIndex, ordinal, parentOrdinal, depth,
+                    _nodeKind, _operator, WorldRequirementConditionKind.Unknown, _typeName,
+                    Guid.Empty, -1, 0d, default, default,
+                    WorldRequirementProgramKind.NextLevel,
+                    GroupKind,
+                    groupOrdinal: containerIndex);
+            }
+
+            ReadScaling(condition, out var threshold, out var perLevel, out var modPerLevel);
+            return new WorldEntityRequirement(
+                ownerId, ownerKind, containerIndex, ordinal, parentOrdinal, depth,
+                _nodeKind, _operator, _kind, _typeName, _item!(condition),
+                _reqType!(condition), threshold is null ? 0d : _baseValue!(threshold),
+                in perLevel, in modPerLevel,
+                WorldRequirementProgramKind.NextLevel,
+                WorldRequirementGroupKind.All,
+                groupOrdinal: containerIndex);
+        }
+
+        private void ReadScaling(
+            object condition,
+            out object? threshold,
+            out WorldRequirementScaling perLevel,
+            out WorldRequirementScaling modPerLevel)
+        {
+            threshold = _value!(condition);
+            perLevel = threshold is null
+                ? default
+                : new WorldRequirementScaling(
+                    _perLevelType!(threshold), _perLevelAmount!(threshold), _perLevelOrder!(threshold));
+            modPerLevel = threshold is null
+                ? default
+                : new WorldRequirementScaling(
+                    _modPerLevelType!(threshold), _modPerLevelAmount!(threshold),
+                    _modPerLevelOrder!(threshold));
+        }
+
+        internal WorldEntityRequirement Unknown(
+            Guid ownerId,
+            WorldRequirementOwnerKind ownerKind,
+            int ordinal,
+            WorldRequirementProgramKind program,
+            WorldRequirementGroupKind groupKind,
+            int groupOrdinal) =>
+            new(
+                ownerId,
+                ownerKind,
+                ordinal,
+                WorldRequirementConditionKind.Unknown,
+                _typeName,
+                Guid.Empty,
+                reqType: -1,
+                baseValue: 0d,
+                default(WorldRequirementScaling),
+                default(WorldRequirementScaling),
+                program,
+                groupKind,
+                groupOrdinal);
+
+        internal WorldEntityRequirement EmptyComposite(
+            Guid ownerId,
+            WorldRequirementOwnerKind ownerKind,
+            int ordinal,
+            WorldRequirementProgramKind program,
+            int groupOrdinal) =>
+            new(
+                ownerId,
+                ownerKind,
+                ordinal,
+                WorldRequirementConditionKind.Literal,
+                _typeName,
+                Guid.Empty,
+                reqType: GroupKind == WorldRequirementGroupKind.All ? 1 : 0,
+                baseValue: 0d,
+                default(WorldRequirementScaling),
+                default(WorldRequirementScaling),
+                program,
+                GroupKind,
+                groupOrdinal);
 
         /// <summary>
         /// The condition classes this suite has been audited against, by the name the game gives them.
@@ -1423,8 +1682,9 @@ internal sealed class WorldEntityRequirementReader : IWorldCategoryReader
         /// <remarks>
         /// A name rather than a resolved type, because the list the container holds is
         /// <c>[SerializeReference]</c> and its entries are only ever known by what they turn out to be.
-        /// Composite classes are classified before this switch. Everything else absent from it is
-        /// unknown by construction, which is the fail-closed reading.
+        /// Composite classes are bound separately to their child lists. Everything absent from this
+        /// switch and that composite branch is unknown by construction, which is the fail-closed
+        /// reading.
         /// </remarks>
         private static WorldRequirementConditionKind Classify(string typeName) => typeName switch
         {

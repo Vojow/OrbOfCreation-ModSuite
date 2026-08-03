@@ -90,6 +90,13 @@ internal sealed class AutomataDecisionJournalController
         Publish(_runtime.Tick());
     }
 
+    internal DecisionJournalStatus Flush()
+    {
+        if (_disposed || _runtime is null) return _lastPublished;
+        Publish(_runtime.Flush());
+        return _lastPublished;
+    }
+
     internal bool DisposeWithPump()
     {
         if (_disposed) return _runtime is not null;

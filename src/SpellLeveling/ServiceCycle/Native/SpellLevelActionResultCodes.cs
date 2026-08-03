@@ -26,8 +26,8 @@ internal static class SpellLevelActionResultCodes
 
     /// <summary>The level's cost is no longer affordable, or the spell is no longer ready.</summary>
     /// <remarks>
-    /// Penalty-free: affordability is deliberately a boundary fact (W59), so a plan the holdings no
-    /// longer cover is the design working rather than a planner bug.
+    /// Penalty-free: the planner uses published affordability, but holdings may move before action
+    /// dispatch, so a live disagreement is ordinary staleness rather than a broken action contract.
     /// </remarks>
     public static ServiceActionResultCode LevelNotAffordable => new(2050);
 }

@@ -22,6 +22,8 @@ public sealed class AutomataServiceDefinitionTests
                 in SuiteRuntimeConfiguration _,
                 in ServiceCycleStartContext _) =>
                 ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready),
+            describeAction: (in Action _) =>
+                ServiceActionJournalAttribution.Publication,
             execute: (
                 in Action _,
                 in SuiteRuntimeConfiguration _,

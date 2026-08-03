@@ -10,9 +10,11 @@ namespace OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
 internal interface IDecisionJournalObservationSink
 {
     bool IsFaulted { get; }
+    void ObserveAction(in DecisionJournalActionObservation observation);
     void Observe(in DecisionJournalObservation observation);
     void ObserveTransition(in DecisionJournalRecord transition);
     void BreakServiceSpan(ServiceCycleTraceServiceId service, MonotonicTimestamp observedAt);
     void Advance(MonotonicTimestamp now);
+    void Flush(MonotonicTimestamp now);
     void Stop(MonotonicTimestamp now);
 }

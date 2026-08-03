@@ -339,11 +339,124 @@ public sealed class WorldRequirementEvaluatorTests : IDisposable
     public void AnUnmodelledConditionClassIsUnevaluableRatherThanUnmet()
     {
         var gated = Upgrade();
-        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.UnsupportedRequirement());
+        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.OpaqueRequirement());
 
         Assert.Equal(
             WorldRequirementVerdict.Unevaluable,
             WorldRequirementEvaluator.Evaluate(Collect(), gated.GetGuid(), 1));
+    }
+
+    [Fact]
+    public void AUsageProgramOrGroupIsMetWhenEitherAuthoredResearchArmIsMet()
+    {
+        var recipe = new global::AlchemyRecipeSO();
+        global::AlchemyRecipeSO.All.Add(recipe);
+        var unmet = Research();
+        var met = Research();
+        met.level = 1;
+        var group = new Requirements.OrRequirement();
+        group.orConditions.Add(ResearchCondition(unmet, 1));
+        group.orConditions.Add(ResearchCondition(met, 1));
+        recipe.usagePrerequisites.prerequisites.Add(group);
+
+        Assert.Equal(
+            WorldRequirementVerdict.Met,
+            WorldRequirementEvaluator.Evaluate(
+                Collect(), recipe.GetGuid(), 0, WorldRequirementProgramKind.Usage));
+    }
+
+    [Fact]
+    public void AnUnknownOrArmDoesNotPoisonAMetArm()
+    {
+        var gated = Upgrade();
+        var met = Research();
+        met.level = 1;
+        var group = new Requirements.OrRequirement();
+        group.orConditions.Add(new Requirements.OpaqueRequirement());
+        group.orConditions.Add(ResearchCondition(met, 1));
+        gated.prerequisitesPerLevel.prerequisites.Add(group);
+
+        Assert.Equal(
+            WorldRequirementVerdict.Met,
+            WorldRequirementEvaluator.Evaluate(Collect(), gated.GetGuid(), 1));
+    }
+
+    [Fact]
+    public void AnOrGroupWithNoMetArmAndAnUnknownArmIsUnevaluable()
+    {
+        var gated = Upgrade();
+        var unmet = Research();
+        var group = new Requirements.OrRequirement();
+        group.orConditions.Add(ResearchCondition(unmet, 1));
+        group.orConditions.Add(new Requirements.OpaqueRequirement());
+        gated.prerequisitesPerLevel.prerequisites.Add(group);
+
+        Assert.Equal(
+            WorldRequirementVerdict.Unevaluable,
+            WorldRequirementEvaluator.Evaluate(Collect(), gated.GetGuid(), 1));
+    }
+
+    [Fact]
+    public void AnOrGroupWithOnlyUnmetArmsIsUnmet()
+    {
+        var gated = Upgrade();
+        var group = new Requirements.OrRequirement();
+        group.orConditions.Add(ResearchCondition(Research(), 1));
+        group.orConditions.Add(ResearchCondition(Research(), 1));
+        gated.prerequisitesPerLevel.prerequisites.Add(group);
+
+        Assert.Equal(
+            WorldRequirementVerdict.Unmet,
+            WorldRequirementEvaluator.Evaluate(Collect(), gated.GetGuid(), 1));
+    }
+
+    [Fact]
+    public void EmptyCompositeIdentityMatchesNativeAnyAndAll()
+    {
+        var any = Upgrade();
+        any.prerequisitesPerLevel.prerequisites.Add(new Requirements.OrRequirement());
+        var all = Upgrade();
+        all.prerequisitesPerLevel.prerequisites.Add(new Requirements.AndRequirement());
+        var world = Collect();
+
+        Assert.Equal(
+            WorldRequirementVerdict.Unmet,
+            WorldRequirementEvaluator.Evaluate(world, any.GetGuid(), 1));
+        Assert.Equal(
+            WorldRequirementVerdict.Met,
+            WorldRequirementEvaluator.Evaluate(world, all.GetGuid(), 1));
+    }
+
+    [Fact]
+    public void AnUnknownAndArmPoisonsTheGroup()
+    {
+        var gated = Upgrade();
+        var met = Research();
+        met.level = 1;
+        var group = new Requirements.AndRequirement();
+        group.andConditions.Add(ResearchCondition(met, 1));
+        group.andConditions.Add(new Requirements.OpaqueRequirement());
+        gated.prerequisitesPerLevel.prerequisites.Add(group);
+
+        Assert.Equal(
+            WorldRequirementVerdict.Unevaluable,
+            WorldRequirementEvaluator.Evaluate(Collect(), gated.GetGuid(), 1));
+    }
+
+    [Fact]
+    public void ADeeperCompositeShapeIsNamedAndUnevaluable()
+    {
+        var gated = Upgrade();
+        var outer = new Requirements.OrRequirement();
+        outer.orConditions.Add(new Requirements.AndRequirement());
+        gated.prerequisitesPerLevel.prerequisites.Add(outer);
+
+        var world = Collect();
+
+        Assert.Equal("AndRequirement", world.EntityRequirements[0].ConditionTypeName);
+        Assert.Equal(
+            WorldRequirementVerdict.Unevaluable,
+            WorldRequirementEvaluator.Evaluate(world, gated.GetGuid(), 1));
     }
 
     /// <summary>
@@ -399,7 +512,7 @@ public sealed class WorldRequirementEvaluatorTests : IDisposable
         var scribing = Research();
         scribing.level = 1;
         RequireResearch(gated, scribing, 6d);
-        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.UnsupportedRequirement());
+        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.OpaqueRequirement());
 
         Assert.Equal(
             WorldRequirementVerdict.Unevaluable,
@@ -407,7 +520,7 @@ public sealed class WorldRequirementEvaluatorTests : IDisposable
     }
 
     [Fact]
-    public void NestedAndOrGroupsUseTheirNativeBooleanSemantics()
+    public void NestedAndOrGroupsUseThreeWayFailClosedSemantics()
     {
         var gatedByOr = Upgrade();
         var gatedByAnd = Upgrade();
@@ -445,9 +558,9 @@ public sealed class WorldRequirementEvaluatorTests : IDisposable
 
         var world = Collect();
 
-        Assert.Equal(WorldRequirementVerdict.Met,
+        Assert.Equal(WorldRequirementVerdict.Unevaluable,
             WorldRequirementEvaluator.Evaluate(world, gatedByOr.GetGuid(), 1));
-        Assert.Equal(WorldRequirementVerdict.Unmet,
+        Assert.Equal(WorldRequirementVerdict.Unevaluable,
             WorldRequirementEvaluator.Evaluate(world, gatedByAnd.GetGuid(), 1));
     }
 
@@ -612,12 +725,17 @@ public sealed class WorldRequirementEvaluatorTests : IDisposable
 
     private static void RequireResearch(
         global::UpgradeSO owner, global::ResearchSO target, double threshold) =>
-        owner.prerequisitesPerLevel.prerequisites.Add(new Requirements.ResearchRequirement
+        owner.prerequisitesPerLevel.prerequisites.Add(ResearchCondition(target, threshold));
+
+    private static Requirements.ResearchRequirement ResearchCondition(
+        global::ResearchSO target,
+        double threshold) =>
+        new Requirements.ResearchRequirement
         {
             item = target,
             reqType = Requirements.UpgradeRequirementType.AtLeast,
             value = new Requirements.LeveledValue { baseValue = threshold },
-        });
+        };
 
     private static Requirements.ResearchRequirement Require(
         global::ResearchSO target, double threshold) => new()

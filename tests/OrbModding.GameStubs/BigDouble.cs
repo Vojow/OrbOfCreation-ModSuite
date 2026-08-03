@@ -31,6 +31,8 @@ using UnityEngine;
 #endif
     public struct BigDouble : IFormattable, IComparable, IComparable<BigDouble>, IEquatable<BigDouble>
     {
+        public BigDouble AsPercent() => Normalize(Mantissa, Exponent - 2);
+
         public const double Tolerance = 1e-18;
 
         //for example: if two exponents are more than 17 apart, consider adding them together pointless, just return the larger one

@@ -27,8 +27,6 @@ internal sealed class ServiceCycleMainState
     internal ServiceNativeCallTotals NativeOutcome;
     internal int CommittedCount;
 
-    /// <summary>Committed actions in this batch that published rather than mutated the game.</summary>
-    internal int PublishedCount;
     internal int PreNativeSkippedCount;
     internal ConfigGeneration LatestConfigGeneration;
     internal int ActionCount;

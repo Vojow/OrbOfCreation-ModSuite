@@ -20,6 +20,7 @@ internal interface IAutomataServiceCycleRuntime : IDisposable
         ConfigGeneration configurationGeneration);
     void CancelPreparedWork();
     void InvalidateLifecycle();
+    AutomataDiagnosticsRuntimeEvidence CaptureDiagnostics();
 #if SERVICE_CYCLE_PROFILE
     AutomataRuntimeFrameFacts CaptureFrameFacts(bool includeServices);
     GameMcpCommandResult ExecuteGameMcp(GameMcpCommand command);
@@ -110,6 +111,18 @@ internal sealed class AutomataServiceCycleActivation : IDisposable
     {
         if (_disposed) return;
         _runtime?.InvalidateLifecycle();
+    }
+
+    internal bool TryCaptureDiagnostics(out AutomataDiagnosticsRuntimeEvidence evidence)
+    {
+        if (_disposed || _runtime is null)
+        {
+            evidence = AutomataDiagnosticsRuntimeEvidence.Unavailable(
+                "The automation runtime is not active, so recent event and journal evidence is unavailable.");
+            return false;
+        }
+        evidence = _runtime.CaptureDiagnostics();
+        return true;
     }
 
 #if SERVICE_CYCLE_PROFILE

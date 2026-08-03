@@ -67,14 +67,14 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
-    public void ABusyCasterRefusesWithoutFiring()
+    public void ABusyCasterIsAnExactPenaltyFreeSkipWithoutFiring()
     {
         var spell = Equip(Ember);
         global::SpellManager.NativeCanCast = false;
 
         var result = Execute(Fire(0, Ember));
 
-        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(ServiceActionDisposition.Skipped, result.Disposition);
         Assert.Equal(AutoCastActionResultCodes.NativeCasterBusy, result.Code);
         Assert.Equal(0, spell.FireCalls);
     }
@@ -83,13 +83,13 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
     public void ASpellTheGameNoLongerCallsReadyRefusesWithoutFiring()
     {
         // The snapshot said ready and the game now says otherwise. That is the staleness the boundary
-        // exists to absorb, and absorbing it costs one penalty-free rejection.
+        // exists to absorb, and absorbing it costs one penalty-free skip.
         var spell = Equip(Ember);
         spell.NativeCanCast = false;
 
         var result = Execute(Fire(0, Ember));
 
-        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(ServiceActionDisposition.Skipped, result.Disposition);
         Assert.Equal(AutoCastActionResultCodes.SpellNotReady, result.Code);
         Assert.Equal(0, spell.FireCalls);
     }

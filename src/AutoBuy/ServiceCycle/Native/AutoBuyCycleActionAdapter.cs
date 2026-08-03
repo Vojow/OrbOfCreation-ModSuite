@@ -44,6 +44,8 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
     private readonly IAutoBuyRefusalResponsePort _refusals;
     private readonly IServiceWorldGenerationSource? _worldGenerations;
     private readonly List<AutoBuyEarlierPurchase> _batchPurchases = new(16);
+    private readonly Dictionary<Guid, BigDouble> _batchSpendVariance = new();
+    private readonly HashSet<Guid> _batchUnpricedResources = new();
     private ulong _journalBatch;
 #if SERVICE_CYCLE_PROFILE
     private long _diagnosedTopologyEpoch;
@@ -153,6 +155,14 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         if (!NativeEpochMatches(action.CollectedAtEpoch))
             return ServiceActionResult.Rejected(CommonActionResultCodes.LifecycleReplaced);
 
+        // Planning already charged every queued action to one snapshot ledger. Reconcile the
+        // verified receipts from earlier actions before asking the native purchase boundary again:
+        // a positive variance consumes this action's planned margin, while a negative one releases
+        // conservative headroom. An exact multi-level/partial receipt cannot be reconstructed from
+        // the native first-level tuple, so it forces a quiet replan instead of guessed accounting.
+        if (!IsPayableAfterReconciliation(in action))
+            return ServiceActionResult.Skipped(AutoBuyActionResultCodes.BatchSpendDrift);
+
         // Re-check the LIVE queue room against the operator's reserve before every submission. The
         // worker does not bound the plan by the queue at all (W39), and both services consume the
         // slots they compete for, so this is the authority that keeps LeaveQueueSlots free — a
@@ -179,14 +189,12 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         if (!queueRoomReadable)
         {
             Plugin.Log?.LogAutomataWarning(
-                AutoBuyPurchaseNarration.QueueRoomUnavailable(action.Kind, action.Uuid).Message);
+                AutoBuyPurchaseNarration.QueueRoomUnavailable(action.Kind, action.Uuid));
             return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
         }
 
         if (remainingRoom <= reservedSlots)
         {
-            Plugin.Log?.LogAutomataInfo(
-                AutoBuyPurchaseNarration.QueueReserveReached(action.Kind, action.Uuid, remainingRoom, reservedSlots).Message);
             return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
         }
 
@@ -219,7 +227,8 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
             return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
         }
 
-        Narrate(action.Kind, action.Uuid, submission, action.Belief);
+        if (!submission.Verified)
+            Narrate(action.Kind, action.Uuid, submission);
         if (submission.Preflight == AutoBuyPurchasePreflight.NotAdmissible)
             ReportRefusal(in action, levels, in submission, in context);
         var result = Map(submission);
@@ -232,6 +241,7 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
                 context.ActionIndex,
                 submission.CommittedLevels,
                 in liveCosts));
+            ReconcileSpend(in action, in submission);
         }
         return result;
     }
@@ -281,6 +291,89 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         if (_journalBatch == batch) return;
         _journalBatch = batch;
         _batchPurchases.Clear();
+        _batchSpendVariance.Clear();
+        _batchUnpricedResources.Clear();
+    }
+
+    private bool IsPayableAfterReconciliation(in AutoBuyCycleAction action)
+    {
+        var planned = action.PlannedSpend.AsSpan();
+        if (planned.Length == 0) return true;
+
+        for (var index = 0; index < planned.Length; index++)
+        {
+            ref readonly var row = ref planned[index];
+            if (_batchUnpricedResources.Contains(row.ResourceId)) return false;
+            _batchSpendVariance.TryGetValue(row.ResourceId, out var variance);
+            var reconciledRemaining = row.RemainingBeforeSpend - variance;
+            if (reconciledRemaining.CompareTo(row.Cost + row.ReserveFloor) < 0) return false;
+        }
+
+        return true;
+    }
+
+    private void ReconcileSpend(
+        in AutoBuyCycleAction action,
+        in AutoBuyPurchaseSubmission submission)
+    {
+        var planned = action.PlannedSpend.AsSpan();
+        if (planned.Length == 0) return;
+        if (action.Count != 1 || submission.CommittedLevels != 1 ||
+            !submission.LiveCosts.IsComplete)
+        {
+            MarkUnpriced(planned, submission.LiveCosts.Rows);
+            return;
+        }
+
+        var live = submission.LiveCosts.Rows;
+        for (var plannedIndex = 0; plannedIndex < planned.Length; plannedIndex++)
+        {
+            ref readonly var plannedRow = ref planned[plannedIndex];
+            var found = false;
+            var actual = default(BigDouble);
+            for (var liveIndex = 0; liveIndex < live.Length; liveIndex++)
+            {
+                ref readonly var liveRow = ref live[liveIndex];
+                if (liveRow.ResourceId != plannedRow.ResourceId) continue;
+                actual += liveRow.Cost;
+                found = true;
+            }
+
+            if (!found)
+            {
+                _batchUnpricedResources.Add(plannedRow.ResourceId);
+                continue;
+            }
+
+            _batchSpendVariance.TryGetValue(plannedRow.ResourceId, out var variance);
+            _batchSpendVariance[plannedRow.ResourceId] =
+                variance + actual - plannedRow.Cost;
+        }
+
+        for (var liveIndex = 0; liveIndex < live.Length; liveIndex++)
+        {
+            var known = false;
+            for (var plannedIndex = 0; plannedIndex < planned.Length; plannedIndex++)
+            {
+                if (planned[plannedIndex].ResourceId == live[liveIndex].ResourceId)
+                {
+                    known = true;
+                    break;
+                }
+            }
+            if (!known && live[liveIndex].Cost != default)
+                _batchUnpricedResources.Add(live[liveIndex].ResourceId);
+        }
+    }
+
+    private void MarkUnpriced(
+        ReadOnlySpan<AutoBuyPlannedSpend> planned,
+        ReadOnlySpan<AutoBuyLiveCostRow> live)
+    {
+        for (var index = 0; index < planned.Length; index++)
+            _batchUnpricedResources.Add(planned[index].ResourceId);
+        for (var index = 0; index < live.Length; index++)
+            _batchUnpricedResources.Add(live[index].ResourceId);
     }
 
     private AutoBuyEarlierPurchase[] RelatedPurchases(in AutoBuyLiveCostSnapshot refusedCosts)
@@ -316,26 +409,15 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         return false;
     }
 
-    // Always-on human-readable decision line ("purchased X of Y" / "failed to purchase") so buying
-    // behaviour — including the accepted Pillar-A cascade where a later candidate becomes
-    // unaffordable — can be analysed from the log. The structured trace carries only the generic
-    // native call-outcome today; surfacing the level counts there is a tracked follow-up.
+    // One actionable warning for an actual refusal or failure. Successful actions are carried by the
+    // compact journal sentinel and must not turn the general BepInEx log into an action ledger.
     private static void Narrate(
         AutoBuyCandidateKind kind,
         Guid uuid,
-        in AutoBuyPurchaseSubmission submission,
-        in AutoBuyPlanBelief belief)
+        in AutoBuyPurchaseSubmission submission)
     {
-        var narration = AutoBuyPurchaseNarration.Describe(kind, uuid, in submission, in belief);
-        switch (narration.Level)
-        {
-            case AutoBuyPurchaseNarrationLevel.Warning:
-                Plugin.Log?.LogAutomataWarning(narration.Message);
-                break;
-            default:
-                Plugin.Log?.LogAutomataInfo(narration.Message);
-                break;
-        }
+        var warning = AutoBuyPurchaseNarration.DescribeWarning(kind, uuid, in submission);
+        if (warning is not null) Plugin.Log?.LogAutomataWarning(warning);
     }
 
     private bool Owns(AutoBuyCandidateKind kind)
@@ -381,6 +463,8 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         {
             case AutoBuyPurchasePreflight.CandidateUnavailable:
                 return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
+            case AutoBuyPurchasePreflight.AffordabilityUnavailable:
+                return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
             case AutoBuyPurchasePreflight.NotAdmissible:
                 return submission.Diagnosis.Classification ==
                     AutoBuyRefusalClassification.AffordabilityChanged
@@ -411,11 +495,6 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         var evidence = ServiceNativeMutationEvidence.Observed(submission.Outcome, submission.CallOutcome);
         if (submission.Verified)
             return ServiceActionResult.Committed(CommonActionResultCodes.Committed, evidence);
-        if (submission.Outcome == NativeMutationOutcome.PostconditionFailed &&
-            submission.CommittedLevels == 0)
-        {
-            return ServiceActionResult.Skipped(CommonActionResultCodes.Skipped, evidence);
-        }
         return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault, evidence);
     }
 }

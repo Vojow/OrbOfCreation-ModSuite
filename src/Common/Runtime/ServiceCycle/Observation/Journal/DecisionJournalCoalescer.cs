@@ -8,6 +8,7 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
     private readonly IDecisionJournalRecordSink _sink;
     private readonly DecisionJournalRecord[] _open;
     private readonly bool[] _hasOpen;
+    private readonly ulong[] _actionCycles;
     private readonly MonotonicDuration _checkpointInterval;
     private MonotonicTimestamp _nextCheckpoint;
     private MonotonicTimestamp _lastObservedAt;
@@ -24,6 +25,7 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
         _open = new DecisionJournalRecord[serviceCapacity];
         _hasOpen = new bool[serviceCapacity];
+        _actionCycles = new ulong[serviceCapacity];
         _checkpointInterval = checkpointInterval;
         _nextCheckpoint = AddSaturated(startedAt, checkpointInterval);
         _lastObservedAt = startedAt;
@@ -32,11 +34,33 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
     public bool IsFaulted { get; private set; }
     internal bool IsStopped => _stopped;
 
+    public void ObserveAction(in DecisionJournalActionObservation observation)
+    {
+        if (IsFaulted) return;
+        EnsureRunning(observation.Fact.CompletedAt);
+        var index = ServiceIndex(observation.Service);
+        if (!AppendOpen(index)) return;
+        var record = DecisionJournalRecord.Action(in observation);
+        if (!_sink.TryAppend(in record))
+        {
+            IsFaulted = true;
+            return;
+        }
+        _actionCycles[index] = observation.Fact.Context.Cycle.Cycle.Value;
+    }
+
     public void Observe(in DecisionJournalObservation observation)
     {
         if (IsFaulted) return;
         EnsureRunning(observation.LastObservedAt);
         var index = ServiceIndex(observation.Service);
+        if (observation.Terminal.IsPresent && _actionCycles[index] == observation.Cycle)
+        {
+            _actionCycles[index] = 0;
+            // The action record already carries the ordinary terminal outcome. A fault is not
+            // ordinary terminal accounting: it remains independently visible in the decision span.
+            if (!observation.Fault.IsValid) return;
+        }
         var next = DecisionJournalRecord.Decision(in observation);
         if (!_hasOpen[index])
         {
@@ -63,11 +87,17 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
         EnsureRunning(new MonotonicTimestamp(transition.LastTimestampTicks));
         if (transition.Service.IsValid)
         {
-            if (!AppendOpen(ServiceIndex(transition.Service))) return;
+            var index = ServiceIndex(transition.Service);
+            if (!AppendOpen(index)) return;
+            _actionCycles[index] = 0;
         }
         else if (!AppendAllOpen())
         {
             return;
+        }
+        else
+        {
+            Array.Clear(_actionCycles, 0, _actionCycles.Length);
         }
         if (!_sink.TryAppend(in transition)) IsFaulted = true;
     }
@@ -78,7 +108,8 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
     {
         if (IsFaulted) return;
         EnsureRunning(observedAt);
-        AppendOpen(ServiceIndex(service));
+        var index = ServiceIndex(service);
+        if (AppendOpen(index)) _actionCycles[index] = 0;
     }
 
     public void Advance(MonotonicTimestamp now)
@@ -86,6 +117,14 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
         if (IsFaulted) return;
         EnsureRunning(now);
         if (now < _nextCheckpoint) return;
+        if (AppendAllOpen() && !_sink.TryFlush()) IsFaulted = true;
+        _nextCheckpoint = AddSaturated(now, _checkpointInterval);
+    }
+
+    public void Flush(MonotonicTimestamp now)
+    {
+        if (IsFaulted) return;
+        EnsureRunning(now);
         if (AppendAllOpen() && !_sink.TryFlush()) IsFaulted = true;
         _nextCheckpoint = AddSaturated(now, _checkpointInterval);
     }

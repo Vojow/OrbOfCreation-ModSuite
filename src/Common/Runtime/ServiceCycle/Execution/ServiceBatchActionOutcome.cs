@@ -18,6 +18,8 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
 
     internal ServiceActionDispatch Advance(
         in ServiceActionFact actionFact,
+        in ServiceActionJournalAttribution attribution,
+        string? attributionFailureReason,
         in ServiceFaultRecoveryFact pendingRecovery,
         MonotonicTimestamp observedAt,
         bool committed,
@@ -35,7 +37,6 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
                 _runtime.State.CommittedCount,
                 _runtime.State.NativeOutcome,
                 observedAt,
-                _runtime.State.PublishedCount,
                 _runtime.State.PreNativeSkippedCount);
             _completion.CompleteBatch(
                 in completed,
@@ -44,9 +45,11 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
                 nonBlockingHandoff);
             return new ServiceActionDispatch(
                 actionFact,
+                attribution,
                 true,
                 completed,
-                recoveredFault: CommitRecovery(in pendingRecovery));
+                recoveredFault: CommitRecovery(in pendingRecovery),
+                attributionFailureReason: attributionFailureReason);
         }
         if (_runtime.Lifetime.IsSuperseded)
         {
@@ -58,24 +61,29 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
                 _runtime.Actions.Cursor,
                 _runtime.State.NativeOutcome,
                 observedAt,
-                _runtime.State.PublishedCount,
                 _runtime.State.PreNativeSkippedCount);
             _completion.CompleteLifecycleOrphan(in orphaned);
             return new ServiceActionDispatch(
                 actionFact,
+                attribution,
                 true,
                 orphaned,
-                recoveredFault: CommitRecovery(in pendingRecovery));
+                recoveredFault: CommitRecovery(in pendingRecovery),
+                attributionFailureReason: attributionFailureReason);
         }
         return new ServiceActionDispatch(
             actionFact,
+            attribution,
             false,
             default,
-            recoveredFault: CommitRecovery(in pendingRecovery));
+            recoveredFault: CommitRecovery(in pendingRecovery),
+            attributionFailureReason: attributionFailureReason);
     }
 
     internal ServiceActionDispatch Terminate(
         in ServiceActionFact actionFact,
+        in ServiceActionJournalAttribution attribution,
+        string? attributionFailureReason,
         in ServiceActionResult result,
         in ServiceFaultRecoveryFact pendingRecovery,
         int index,
@@ -91,7 +99,6 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
             result,
             _runtime.State.NativeOutcome,
             observedAt,
-            publishedCount: _runtime.State.PublishedCount,
             preNativeSkippedCount: _runtime.State.PreNativeSkippedCount);
         _completion.CompleteBatch(
             in terminal,
@@ -117,11 +124,13 @@ internal sealed class ServiceBatchActionOutcome<TState, TAction>
         }
         return new ServiceActionDispatch(
             actionFact,
+            attribution,
             true,
             terminal,
             fault,
             retryDue,
-            CommitRecovery(in pendingRecovery));
+            CommitRecovery(in pendingRecovery),
+            attributionFailureReason);
     }
 
     private ServiceFaultRecoveryFact CommitRecovery(

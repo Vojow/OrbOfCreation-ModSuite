@@ -13,14 +13,6 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Contracts;
 /// </summary>
 public sealed class ServicePublicationActionTests
 {
-    private static readonly ServiceCycleIdentity Cycle = new(
-        new ServiceId("orbmodding.test"),
-        new LifecycleGeneration(1),
-        new ConfigGeneration(1),
-        new StrategyGeneration(1),
-        new WorldGeneration(1),
-        new CycleId(1));
-
     private static ServiceNativeMutationEvidence Verified =>
         ServiceNativeMutationEvidence.Observed(
             NativeMutationOutcome.Verified,
@@ -73,68 +65,4 @@ public sealed class ServicePublicationActionTests
             ServicePublicationEvidence.Strategy(new StrategyGeneration(0)));
     }
 
-    [Fact]
-    public void ABatchOfPublicationsOwesNoNativeEvidence()
-    {
-        var receipt = BatchReceipt.Completed(
-            Cycle,
-            new BatchId(1),
-            actionCount: 1,
-            committedCount: 1,
-            default,
-            new MonotonicTimestamp(10),
-            publishedCount: 1);
-
-        Assert.Equal(1, receipt.PublishedCount);
-        Assert.Equal(0, receipt.NativeActionCount);
-    }
-
-    /// <summary>
-    /// The count defaults to zero, so a batch that publishes but forgets to say so is rejected rather
-    /// than admitted. A wrong default has to fail closed or it is not a check.
-    /// </summary>
-    [Fact]
-    public void APublishingBatchThatDoesNotDeclareItselfIsRefused() =>
-        Assert.Throws<ArgumentException>(() => BatchReceipt.Completed(
-            Cycle,
-            new BatchId(1),
-            actionCount: 1,
-            committedCount: 1,
-            default,
-            new MonotonicTimestamp(10)));
-
-    [Fact]
-    public void AMixedBatchStillOwesEvidenceForItsMutatingHalf()
-    {
-        var receipt = BatchReceipt.Completed(
-            Cycle,
-            new BatchId(1),
-            actionCount: 2,
-            committedCount: 2,
-            new ServiceNativeCallTotals(1, 1, 1),
-            new MonotonicTimestamp(10),
-            publishedCount: 1);
-
-        Assert.Equal(1, receipt.NativeActionCount);
-
-        Assert.Throws<ArgumentException>(() => BatchReceipt.Completed(
-            Cycle,
-            new BatchId(1),
-            actionCount: 2,
-            committedCount: 2,
-            default,
-            new MonotonicTimestamp(10),
-            publishedCount: 1));
-    }
-
-    [Fact]
-    public void MorePublicationsThanCommitsIsIncoherent() =>
-        Assert.Throws<ArgumentOutOfRangeException>(() => BatchReceipt.Completed(
-            Cycle,
-            new BatchId(1),
-            actionCount: 1,
-            committedCount: 1,
-            default,
-            new MonotonicTimestamp(10),
-            publishedCount: 2));
 }

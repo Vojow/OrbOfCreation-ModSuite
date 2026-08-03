@@ -132,7 +132,7 @@ internal static class SuiteConfigurationSchema
                     "The retired rejection logger was the only consumer of this limit.");
                 context.DiscardObsolete(
                     EnableOperationalLogging,
-                    "Runtime full trace, recent events, and the decision journal replace legacy operational narration.");
+                    "Runtime bug reports and the decision journal replace legacy operational narration.");
                 context.DiscardObsolete(
                     DecisionLogLevel,
                     "Runtime observation controls replace the legacy decision-log level.");

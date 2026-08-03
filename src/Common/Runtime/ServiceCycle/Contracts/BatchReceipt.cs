@@ -20,7 +20,6 @@ public readonly struct BatchReceipt
         BatchTerminalDisposition disposition,
         int actionCount,
         int committedCount,
-        int publishedCount,
         int preNativeSkippedCount,
         int terminalIndex,
         int untouchedSuffixCount,
@@ -36,7 +35,6 @@ public readonly struct BatchReceipt
         Disposition = disposition;
         ActionCount = actionCount;
         CommittedCount = committedCount;
-        PublishedCount = publishedCount;
         PreNativeSkippedCount = preNativeSkippedCount;
         TerminalIndex = terminalIndex;
         UntouchedSuffixCount = untouchedSuffixCount;
@@ -54,23 +52,10 @@ public readonly struct BatchReceipt
     public int ActionCount { get; }
     public int CommittedCount { get; }
 
-    /// <summary>
-    /// How many committed actions in this batch published a snapshot rather than mutating the game.
-    /// </summary>
-    /// <remarks>
-    /// Native evidence is required per action that could produce it, so the batch has to know how
-    /// many of its actions could not. The parameter defaults to zero — meaning "every action was a
-    /// native mutation", which is what every caller predating publishing actions meant — and a
-    /// caller that forgets it on a publishing batch fails the evidence check rather than slipping
-    /// through it.
-    /// </remarks>
-    public int PublishedCount { get; }
-
     /// <summary>Skipped actions whose live preflight proved the pinned snapshot stale.</summary>
     public int PreNativeSkippedCount { get; }
 
     /// <summary>Actions in this batch that reached or could reach a native mutation boundary.</summary>
-    public int NativeActionCount => ActionCount - PublishedCount - PreNativeSkippedCount;
     public int SkippedCount => Disposition switch
     {
         BatchTerminalDisposition.Completed => ActionCount - CommittedCount,
@@ -97,11 +82,10 @@ public readonly struct BatchReceipt
         int actionCount,
         ServiceNativeCallTotals nativeCallOutcome,
         MonotonicTimestamp completedAt,
-        int publishedCount = 0,
         int preNativeSkippedCount = 0) =>
         Completed(
             cycle, batch, actionCount, actionCount, nativeCallOutcome, completedAt,
-            publishedCount, preNativeSkippedCount);
+            preNativeSkippedCount);
 
     public static BatchReceipt Completed(
         ServiceCycleIdentity cycle,
@@ -110,29 +94,29 @@ public readonly struct BatchReceipt
         int committedCount,
         ServiceNativeCallTotals nativeCallOutcome,
         MonotonicTimestamp completedAt,
-        int publishedCount = 0,
         int preNativeSkippedCount = 0)
     {
         ValidateBase(cycle, batch, actionCount);
         if (committedCount < 0 || committedCount > actionCount)
             throw new ArgumentOutOfRangeException(nameof(committedCount));
-        if (publishedCount < 0 || publishedCount > committedCount)
-            throw new ArgumentOutOfRangeException(nameof(publishedCount));
         if (preNativeSkippedCount < 0 ||
             preNativeSkippedCount > actionCount - committedCount)
             throw new ArgumentOutOfRangeException(nameof(preNativeSkippedCount));
-        var nativeActions = actionCount - publishedCount - preNativeSkippedCount;
-        var nativeCommitted = committedCount - publishedCount;
-        if (nativeActions == 0)
+        var processedNativeCandidates = actionCount - preNativeSkippedCount;
+        if (processedNativeCandidates == 0)
         {
             if (!IsZero(in nativeCallOutcome))
                 throw new ArgumentException(
                     "A batch with no native action cannot carry native evidence.",
                     nameof(nativeCallOutcome));
         }
-        else if (nativeCallOutcome.MutationAttempts < nativeActions ||
-                 nativeCallOutcome.MutationsCommitted < nativeCommitted ||
-                 nativeCommitted == 0 && nativeCallOutcome.MutationsCommitted != 0)
+        // The surviving zero-evidence completion shape is publication-only: every candidate that
+        // reached the action boundary committed without a native mutation.
+        else if (IsZero(in nativeCallOutcome)
+                     ? committedCount != processedNativeCandidates
+                     : nativeCallOutcome.MutationAttempts < processedNativeCandidates ||
+                       nativeCallOutcome.MutationsCommitted < committedCount ||
+                       committedCount == 0 && nativeCallOutcome.MutationsCommitted != 0)
         {
             throw new ArgumentException(
                 "A completed batch requires one attempted mutation per processed native action and committed evidence for every committed native action.",
@@ -140,7 +124,7 @@ public readonly struct BatchReceipt
         }
         return new BatchReceipt(
             cycle, batch, BatchTerminalDisposition.Completed, actionCount, committedCount,
-            publishedCount, preNativeSkippedCount, -1, 0,
+            preNativeSkippedCount, -1, 0,
             CommonActionResultCodes.Committed, default, false, nativeCallOutcome, completedAt, default);
     }
 
@@ -154,7 +138,6 @@ public readonly struct BatchReceipt
         ServiceNativeCallTotals nativeCallOutcome,
         MonotonicTimestamp completedAt,
         EmergencyStopContext emergencyStop = default,
-        int publishedCount = 0,
         int preNativeSkippedCount = 0)
     {
         ValidateBase(cycle, batch, actionCount);
@@ -163,8 +146,6 @@ public readonly struct BatchReceipt
             throw new ArgumentOutOfRangeException(nameof(committedCount));
         if (terminalIndex < 0 || terminalIndex >= actionCount)
             throw new ArgumentOutOfRangeException(nameof(terminalIndex));
-        if (publishedCount < 0 || publishedCount > committedCount)
-            throw new ArgumentOutOfRangeException(nameof(publishedCount));
         if (preNativeSkippedCount < 0 ||
             preNativeSkippedCount > terminalIndex - committedCount)
             throw new ArgumentOutOfRangeException(nameof(preNativeSkippedCount));
@@ -173,18 +154,18 @@ public readonly struct BatchReceipt
                 ServiceActionDisposition.Rejected or ServiceActionDisposition.Faulted))
             throw new ArgumentException("A terminal action must be rejected or faulted.", nameof(terminalAction));
         var terminalNative = terminalAction.NativeCallOutcome;
-        var nativePrefix = terminalIndex - publishedCount - preNativeSkippedCount;
+        var nativePrefix = terminalIndex - preNativeSkippedCount;
         var minimumCalls = checked((long)nativePrefix + terminalNative.NativeCallsAttempted);
         var minimumAttempts = checked((long)nativePrefix + terminalNative.MutationAttempts);
-        var prefixMutations = checked(nativeCallOutcome.MutationsCommitted - terminalNative.MutationsCommitted);
-        var nativeCommitted = committedCount - publishedCount;
+        var prefixMutations = checked(
+            nativeCallOutcome.MutationsCommitted - terminalNative.MutationsCommitted);
         if (nativeCallOutcome.NativeCallsAttempted < minimumCalls ||
             nativeCallOutcome.MutationAttempts < minimumAttempts ||
-            prefixMutations < nativeCommitted ||
-            nativeCommitted == 0 && prefixMutations != 0)
+            prefixMutations < committedCount ||
+            committedCount == 0 && prefixMutations != 0)
         {
             throw new ArgumentException(
-                "Batch native evidence must account for the processed native prefix plus terminal action.",
+                "Batch native evidence requires one native call and mutation attempt per processed prefix action, committed evidence for each prefix commit, and the terminal action's evidence.",
                 nameof(nativeCallOutcome));
         }
         var disposition = terminalAction.Disposition == ServiceActionDisposition.Rejected
@@ -196,7 +177,7 @@ public readonly struct BatchReceipt
                 "Emergency-stop termination requires exactly one valid emergency context.",
                 nameof(emergencyStop));
         return new BatchReceipt(
-            cycle, batch, disposition, actionCount, committedCount, publishedCount,
+            cycle, batch, disposition, actionCount, committedCount,
             preNativeSkippedCount, terminalIndex, actionCount - terminalIndex - 1,
             terminalAction.Code, terminalAction, true, nativeCallOutcome, completedAt, emergencyStop);
     }
@@ -208,11 +189,10 @@ public readonly struct BatchReceipt
         int committedCount,
         ServiceNativeCallTotals nativeCallOutcome,
         MonotonicTimestamp completedAt,
-        int publishedCount = 0,
         int preNativeSkippedCount = 0) =>
         Orphaned(
             cycle, batch, actionCount, committedCount, committedCount, nativeCallOutcome, completedAt,
-            publishedCount, preNativeSkippedCount);
+            preNativeSkippedCount);
 
     public static BatchReceipt Orphaned(
         ServiceCycleIdentity cycle,
@@ -222,7 +202,6 @@ public readonly struct BatchReceipt
         int processedCount,
         ServiceNativeCallTotals nativeCallOutcome,
         MonotonicTimestamp completedAt,
-        int publishedCount = 0,
         int preNativeSkippedCount = 0)
     {
         ValidateBase(cycle, batch, actionCount);
@@ -230,31 +209,28 @@ public readonly struct BatchReceipt
             throw new ArgumentOutOfRangeException(nameof(processedCount));
         if (committedCount < 0 || committedCount > processedCount)
             throw new ArgumentOutOfRangeException(nameof(committedCount));
-        if (publishedCount < 0 || publishedCount > committedCount)
-            throw new ArgumentOutOfRangeException(nameof(publishedCount));
         if (preNativeSkippedCount < 0 ||
             preNativeSkippedCount > processedCount - committedCount)
             throw new ArgumentOutOfRangeException(nameof(preNativeSkippedCount));
-        var nativeProcessed = processedCount - publishedCount - preNativeSkippedCount;
-        var nativeCommitted = committedCount - publishedCount;
-        if (nativeProcessed == 0)
+        var processedNativeCandidates = processedCount - preNativeSkippedCount;
+        if (processedNativeCandidates == 0)
         {
             if (!IsZero(in nativeCallOutcome))
                 throw new ArgumentException(
                     "An orphan with no processed native prefix cannot carry native evidence.",
                     nameof(nativeCallOutcome));
         }
-        else if (nativeCallOutcome.MutationAttempts < nativeProcessed ||
-                 nativeCallOutcome.MutationsCommitted < nativeCommitted ||
-                 nativeCommitted == 0 && nativeCallOutcome.MutationsCommitted != 0)
+        else if (nativeCallOutcome.MutationAttempts < processedNativeCandidates ||
+                 nativeCallOutcome.MutationsCommitted < committedCount ||
+                 committedCount == 0 && nativeCallOutcome.MutationsCommitted != 0)
         {
             throw new ArgumentException(
-                "Orphaned evidence must account for every processed native prefix action.",
+                "An orphaned batch requires one attempted mutation per processed native action and committed evidence for every committed native action.",
                 nameof(nativeCallOutcome));
         }
         return new BatchReceipt(
             cycle, batch, BatchTerminalDisposition.Orphaned, actionCount, committedCount,
-            publishedCount, preNativeSkippedCount, -1,
+            preNativeSkippedCount, -1,
             actionCount - processedCount, CommonActionResultCodes.LifecycleReplaced,
             default, false, nativeCallOutcome, completedAt, default);
     }

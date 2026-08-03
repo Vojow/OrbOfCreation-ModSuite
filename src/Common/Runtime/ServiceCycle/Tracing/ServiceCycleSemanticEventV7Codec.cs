@@ -18,9 +18,9 @@ internal static class ServiceCycleSemanticEventV7Codec
         WriteU64(bytes, 24, item.Parent.Sequence);
         WriteI32(bytes, 32, (int)item.Kind);
         var payload = item.Payload;
-        // Reserved and asserted zero in v5. v6 spends it on the published-action count, so the batch
-        // evidence checks stay exact without the record growing.
-        WriteU32(bytes, 36, (uint)payload.PublishedCount);
+        // Retired publication accounting. Per-action effect/evidence is authoritative; new records
+        // burn the old batch-ledger slot to zero.
+        WriteU32(bytes, 36, 0);
         WriteU64(bytes, 40, (ulong)payload.Fields);
         WriteU64(bytes, 48, payload.Service);
         WriteU64(bytes, 56, payload.Lifecycle);
@@ -66,13 +66,13 @@ internal static class ServiceCycleSemanticEventV7Codec
     internal static ServiceCycleSemanticEvent Read(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length != RecordBytes) throw Invalid();
-        var publishedCount = ReadU32(bytes, 36);
-        if (publishedCount > int.MaxValue) throw Invalid();
         var id = ReadIdentity(bytes, 0, 8, required: true);
         var parent = ReadIdentity(bytes, 16, 24, required: false);
         var kindValue = ReadI32(bytes, 32);
         if (kindValue is < (int)ServiceCycleSemanticEventKind.ConfigurationPublished or
             > (int)ServiceCycleSemanticEventKind.ActionSkipped) throw Invalid();
+        var kind = (ServiceCycleSemanticEventKind)kindValue;
+        if (ReadU32(bytes, 36) != 0) throw Invalid();
         var payload = new ServiceCycleSemanticPayload(
             (ServiceCycleSemanticFields)ReadU64(bytes, 40),
             ReadU64(bytes, 48), ReadU64(bytes, 56), ReadU64(bytes, 64), ReadU64(bytes, 72),
@@ -82,13 +82,12 @@ internal static class ServiceCycleSemanticEventV7Codec
             ReadI32(bytes, 180), ReadI32(bytes, 184), ReadI64(bytes, 192), ReadI64(bytes, 200), ReadI64(bytes, 208),
             ReadI32(bytes, 216), ReadI32(bytes, 220), ReadI32(bytes, 224), ReadI32(bytes, 228), ReadI64(bytes, 232),
             ReadI64(bytes, 240), ReadI64(bytes, 248), ReadI64(bytes, 256), ReadI64(bytes, 264), ReadI32(bytes, 188),
-            (int)publishedCount,
             ReadU64(bytes, 272),
             ReadI32(bytes, 280),
             ReadI32(bytes, 284));
         try
         {
-            return new ServiceCycleSemanticEvent(id, parent, (ServiceCycleSemanticEventKind)kindValue, in payload);
+            return new ServiceCycleSemanticEvent(id, parent, kind, in payload);
         }
         catch (ArgumentException)
         {

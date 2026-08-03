@@ -17,6 +17,7 @@ internal sealed class AutomataServiceCycleHost : IDisposable
 {
     private readonly Func<long> _readFrameIdentity;
     private readonly IServiceCyclePumpTimingSink? _pumpTiming;
+    private readonly Action<string>? _attributionFailureLog;
     private readonly SuiteFramePump _pump;
     private readonly int _serviceCapacity;
     private readonly ServiceCycleTraceRoster _roster;
@@ -30,8 +31,11 @@ internal sealed class AutomataServiceCycleHost : IDisposable
         Func<long> readFrameIdentity,
         IServiceCyclePumpTimingSink? pumpTiming,
         ServiceCycleSemanticRecorder? semanticTrace,
-        ServiceCycleProfileProbe profileProbe)
-        : this(registry, readFrameIdentity, pumpTiming, semanticTrace, null, profileProbe) { }
+        ServiceCycleProfileProbe profileProbe,
+        Action<string>? attributionFailureLog = null)
+        : this(
+            registry, readFrameIdentity, pumpTiming, semanticTrace, null, profileProbe,
+            attributionFailureLog) { }
 
     internal AutomataServiceCycleHost(
         ServiceCycleRegistry registry,
@@ -39,20 +43,23 @@ internal sealed class AutomataServiceCycleHost : IDisposable
         IServiceCyclePumpTimingSink? pumpTiming,
         ServiceCycleSemanticRecorder? semanticTrace,
         ServiceActionOutcomeWindowRegistry? actionOutcomes,
-        ServiceCycleProfileProbe profileProbe)
+        ServiceCycleProfileProbe profileProbe,
+        Action<string>? attributionFailureLog = null)
 #else
     internal AutomataServiceCycleHost(
         ServiceCycleRegistry registry,
         Func<long> readFrameIdentity,
         IServiceCyclePumpTimingSink? pumpTiming,
         ServiceCycleSemanticRecorder? semanticTrace,
-        ServiceActionOutcomeWindowRegistry? actionOutcomes = null)
+        ServiceActionOutcomeWindowRegistry? actionOutcomes = null,
+        Action<string>? attributionFailureLog = null)
 #endif
     {
         if (registry is null) throw new ArgumentNullException(nameof(registry));
         _readFrameIdentity = readFrameIdentity ??
             throw new ArgumentNullException(nameof(readFrameIdentity));
         _pumpTiming = pumpTiming;
+        _attributionFailureLog = attributionFailureLog;
         _serviceCapacity = registry.OrdinalCount;
         // Read before the seal, while every registration is present and nothing can add another: this
         // is the one moment the suite knows its whole roster.
@@ -80,9 +87,27 @@ internal sealed class AutomataServiceCycleHost : IDisposable
         _pump.ApplyConfiguredEmergencyStop();
         _observability?.BeforePump();
         var report = _pump.PumpFrame(_readFrameIdentity());
+        LogAttributionFailures();
         _pumpTiming?.Observe(in report);
         _observability?.AfterPump();
         return report;
+    }
+
+    private void LogAttributionFailures()
+    {
+        try
+        {
+            if (_attributionFailureLog is null) return;
+            for (var index = 0; index < _pump.AttributionFailureCount; index++)
+            {
+                var failure = _pump.AttributionFailureAt(index);
+                var service = _roster[failure.ServiceOrdinal].MachineId;
+                _attributionFailureLog(
+                    $"ServiceCycle action attribution failed for service {service}; " +
+                    $"the action executed and the journal marked attribution failed: {failure.Reason}");
+            }
+        }
+        finally { _pump.ClearAttributionFailures(); }
     }
 
     internal void AttachObservability(
@@ -107,6 +132,11 @@ internal sealed class AutomataServiceCycleHost : IDisposable
         ThrowIfDisposed();
         _pump.SetEmergencyStop(engaged, reason);
     }
+
+    internal AutomataDiagnosticsRuntimeEvidence CaptureDiagnostics() =>
+        _observability?.CaptureDiagnostics() ??
+        AutomataDiagnosticsRuntimeEvidence.Unavailable(
+            "The automation runtime has no diagnostics source.");
 
     internal bool TryReplaceLifecycle(long nativeGeneration)
     {

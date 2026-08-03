@@ -46,7 +46,7 @@ UUID lookup works for every registered `IdScriptableObject` descendant. Native u
 modification needs an `UpgradeableObject` accessor or an effect script aimed at another record.
 Tooltip extension reaches `TooltipableObject` descendants even where they are not upgradeable.
 
-The exhaustive per-type census lives in [`data/entity-types.tsv`](../../data/entity-types.tsv).
+The exhaustive per-type census lives in [`data/entity-types.tsv`](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/data/entity-types.tsv).
 
 ## Where the shape bends
 

@@ -1,7 +1,7 @@
 using System;
-using System.Buffers.Binary;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Format;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing;
@@ -13,24 +13,57 @@ namespace OrbModding.Tests.Runtime.ServiceCycle.Observation.Journal;
 public sealed class DecisionJournalRecordCodecTests
 {
     [Fact]
-    public void DecisionRoundTripsEveryNumericField()
+    public void DecisionRoundTripsEveryCompactField()
     {
         var expected = DecisionJournalRecord.Decision(CreateObservation(1, 10, faultOccurrence: 2));
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-
-        DecisionJournalRecordCodec.Write(bytes, in expected);
-        var actual = DecisionJournalRecordCodec.Read(bytes);
+        var actual = RoundTrip(in expected);
 
         Assert.Equal(expected.Kind, actual.Kind);
         Assert.Equal(expected.Service, actual.Service);
+        Assert.Equal(expected.Lifecycle, actual.Lifecycle);
         Assert.Equal(expected.FirstCycle, actual.FirstCycle);
+        Assert.Equal(expected.LastCycle, actual.LastCycle);
+        Assert.Equal(expected.FirstTimestampTicks, actual.FirstTimestampTicks);
         Assert.Equal(expected.LastTimestampTicks, actual.LastTimestampTicks);
-        Assert.Equal(expected.Wake, actual.Wake);
+        Assert.Equal(expected.RepeatCount, actual.RepeatCount);
+        Assert.Equal(expected.DecisionOutcomeKind, actual.DecisionOutcomeKind);
+        Assert.Equal(expected.DecisionOutcomeCode, actual.DecisionOutcomeCode);
         Assert.Equal(expected.FaultCategory, actual.FaultCategory);
-        Assert.Equal(expected.TerminalDisposition, actual.TerminalDisposition);
-        Assert.Equal(expected.NativeCallsAttempted, actual.NativeCallsAttempted);
-        Assert.True(DecisionJournalProjection.Equals(expected.Projection, actual.Projection));
+        Assert.Equal(expected.FaultCode, actual.FaultCode);
+        Assert.Equal(expected.FirstFaultOccurrence, actual.FirstFaultOccurrence);
+        Assert.Equal(expected.LastFaultOccurrence, actual.LastFaultOccurrence);
     }
+
+    [Fact]
+    public void ActionRoundTripsExactAttributionAndOneOutcome()
+    {
+        var candidate = new Guid("11111111-1111-1111-1111-111111111111");
+        var list = new Guid("22222222-2222-2222-2222-222222222222");
+        var view = new Guid("33333333-3333-3333-3333-333333333333");
+        var attribution = ServiceActionJournalAttribution.Routed(
+            candidate,
+            ServiceActionNativeTypeId.StructureSO,
+            list,
+            view);
+        var expected = ActionRecord(in attribution);
+
+        var actual = RoundTrip(in expected);
+
+        Assert.Equal(DecisionJournalRecordKind.Action, actual.Kind);
+        Assert.Equal((ulong)1, actual.FirstCycle);
+        Assert.Equal((ushort)1, actual.ActionOrdinal);
+        Assert.Equal(candidate, actual.Attribution.CandidateId);
+        Assert.Equal(ServiceActionNativeTypeId.StructureSO, actual.Attribution.NativeType);
+        Assert.Equal(list, actual.Attribution.ListId);
+        Assert.Equal(view, actual.Attribution.ViewId);
+        Assert.Equal(ServiceActionRouteStatus.Resolved, actual.Attribution.RouteStatus);
+        Assert.Equal(ServiceActionDisposition.Rejected, actual.ActionOutcome.Disposition);
+        Assert.Equal(CommonActionResultCodes.PolicyRejected.Value, actual.ActionOutcome.Code);
+    }
+
+    [Fact]
+    public void WireRecordIsEightyBytes() =>
+        Assert.Equal(80, DecisionJournalRecordCodec.RecordBytes);
 
     [Fact]
     public void GlobalTransitionRoundTripsWithoutServiceIdentity()
@@ -41,10 +74,8 @@ public sealed class DecisionJournalRecordCodecTests
             0,
             new MonotonicTimestamp(42),
             code: 3);
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
 
-        DecisionJournalRecordCodec.Write(bytes, in expected);
-        var actual = DecisionJournalRecordCodec.Read(bytes);
+        var actual = RoundTrip(in expected);
 
         Assert.Equal(expected.Kind, actual.Kind);
         Assert.False(actual.Service.IsValid);
@@ -60,10 +91,8 @@ public sealed class DecisionJournalRecordCodecTests
             5,
             new MonotonicTimestamp(42),
             code: 2);
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
 
-        DecisionJournalRecordCodec.Write(bytes, in expected);
-        var actual = DecisionJournalRecordCodec.Read(bytes);
+        var actual = RoundTrip(in expected);
 
         Assert.Equal(DecisionJournalRecordKind.WorldGateHeld, actual.Kind);
         Assert.Equal(expected.Service, actual.Service);
@@ -72,234 +101,69 @@ public sealed class DecisionJournalRecordCodecTests
     }
 
     [Fact]
-    public void EveryTerminalDispositionRoundTripsCanonicalAggregate()
-    {
-        var cycle = Identity(1);
-        var completed = BatchReceipt.Completed(
-            cycle,
-            new BatchId(1),
-            1,
-            new ServiceNativeCallTotals(1, 1, 1),
-            new MonotonicTimestamp(11));
-        var skipped = BatchReceipt.Completed(
-            cycle,
-            new BatchId(5),
-            1,
-            0,
-            new ServiceNativeCallTotals(1, 1, 0),
-            new MonotonicTimestamp(11));
-        var rejectedAction = ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
-        var rejected = BatchReceipt.Terminated(
-            cycle,
-            new BatchId(2),
-            2,
-            1,
-            1,
-            rejectedAction,
-            new ServiceNativeCallTotals(1, 1, 1),
-            new MonotonicTimestamp(11));
-        var faultedAction = ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
-        var faulted = BatchReceipt.Terminated(
-            cycle,
-            new BatchId(3),
-            1,
-            0,
-            0,
-            faultedAction,
-            default,
-            new MonotonicTimestamp(11));
-        var orphaned = BatchReceipt.Orphaned(
-            cycle,
-            new BatchId(4),
-            2,
-            1,
-            new ServiceNativeCallTotals(1, 1, 1),
-            new MonotonicTimestamp(11));
-        var published = BatchReceipt.Completed(
-            cycle,
-            new BatchId(6),
-            actionCount: 2,
-            committedCount: 2,
-            new ServiceNativeCallTotals(1, 1, 1),
-            new MonotonicTimestamp(11),
-            publishedCount: 1);
-        var receipts = new[] { completed, skipped, rejected, faulted, orphaned, published };
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-
-        foreach (var receipt in receipts)
-        {
-            var observation = CreateObservation(in receipt, 10);
-            var expected = DecisionJournalRecord.Decision(in observation);
-            DecisionJournalRecordCodec.Write(bytes, in expected);
-
-            var actual = DecisionJournalRecordCodec.Read(bytes);
-
-            Assert.Equal(receipt.Disposition, actual.TerminalDisposition);
-            Assert.Equal(receipt.ResultCode.Value, actual.TerminalResultCode);
-            Assert.Equal(receipt.CommittedCount, actual.CommittedActions);
-            Assert.Equal(receipt.PublishedCount, actual.PublishedActions);
-        }
-    }
-
-    [Fact]
-    public void ReservedBytesAreRejected()
+    public void DecisionReservedBytesAreRejected()
     {
         var record = DecisionJournalRecord.Decision(CreateObservation(1, 10));
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
+        var bytes = Write(in record);
         bytes[^1] = 1;
 
         Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
     }
 
     [Fact]
-    public void NonCanonicalBooleanProjectionIsRejected()
+    public void ActionReservedBytesAreRejected()
     {
-        var record = DecisionJournalRecord.Decision(CreateObservation(1, 10));
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
-        bytes[188] = 1;
-        bytes[192] = 2;
-
-        Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
-    }
-
-    [Theory]
-    [InlineData((int)DecisionJournalRecordKind.ConfigurationChanged, 16)]
-    [InlineData((int)DecisionJournalRecordKind.LifecycleChanged, 24)]
-    [InlineData((int)DecisionJournalRecordKind.ConfigurationChanged, 32)]
-    public void TransitionRejectsNonOwnedGeneration(int kindValue, int offset)
-    {
-        var kind = (DecisionJournalRecordKind)kindValue;
-        var record = DecisionJournalRecord.Transition(
-            kind,
-            kind == DecisionJournalRecordKind.LifecycleChanged
-                ? new ServiceCycleTraceServiceId(1)
-                : default,
-            2,
-            new MonotonicTimestamp(3));
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(offset, 8), 9);
+        var attribution = ServiceActionJournalAttribution.Native(
+            new Guid("11111111-1111-1111-1111-111111111111"),
+            ServiceActionNativeTypeId.StructureSO);
+        var record = ActionRecord(in attribution);
+        var bytes = Write(in record);
+        bytes[12] = 1;
 
         Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
     }
 
     [Fact]
-    public void CompletedTerminalRejectsFaultResultCode()
+    public void MissingActionOutcomeIsRejected()
     {
-        var record = DecisionJournalRecord.Decision(CreateObservation(1, 10));
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
-        BinaryPrimitives.WriteInt32LittleEndian(
-            bytes.AsSpan(136, 4),
-            CommonActionResultCodes.AdapterFault.Value);
+        var attribution = ServiceActionJournalAttribution.Native(
+            new Guid("11111111-1111-1111-1111-111111111111"),
+            ServiceActionNativeTypeId.StructureSO);
+        var record = ActionRecord(in attribution);
+        var bytes = Write(in record);
+        bytes.AsSpan(4, 4).Clear();
 
         Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
     }
 
-    [Fact]
-    public void FaultRejectsNonFaultResultCode()
+    private static DecisionJournalRecord ActionRecord(in ServiceActionJournalAttribution attribution)
     {
-        var record = DecisionJournalRecord.Decision(CreateObservation(1, 10, faultOccurrence: 1));
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
-        BinaryPrimitives.WriteInt32LittleEndian(
-            bytes.AsSpan(120, 4),
-            CommonActionResultCodes.Committed.Value);
-
-        Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
-    }
-
-    [Fact]
-    public void CompletedTerminalRejectsMissingCommittedActions()
-    {
-        var record = DecisionJournalRecord.Decision(CreateObservation(1, 10));
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
-        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(144, 8), 0);
-
-        Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
-    }
-
-    [Fact]
-    public void TerminatedReceiptRejectsCommittedTerminalPosition()
-    {
-        var record = DecisionJournalRecord.Decision(CreateObservation(1, 10));
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
-        BinaryPrimitives.WriteInt32LittleEndian(
-            bytes.AsSpan(132, 4),
-            (int)BatchTerminalDisposition.Rejected);
-        BinaryPrimitives.WriteInt32LittleEndian(
-            bytes.AsSpan(136, 4),
-            CommonActionResultCodes.PolicyRejected.Value);
-
-        Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
-    }
-
-    [Fact]
-    public void TerminalRejectsMissingCycleIdentity()
-    {
-        var record = DecisionJournalRecord.Decision(CreateObservation(1, 10));
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
-        bytes.AsSpan(40, 32).Clear();
-
-        Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
-    }
-
-    [Fact]
-    public void CapturedSpanRejectsRangeCardinalityMismatch()
-    {
-        var record = DecisionJournalRecord.Decision(CreateObservation(1, 10));
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(64, 8), 2);
-
-        Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
-    }
-
-    [Fact]
-    public void MorePublishedActionsThanCommittedAreRejected()
-    {
-        var record = PublicationRecord();
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
-        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(PublishedActionsOffset, 8), 2);
-
-        Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
-    }
-
-    /// <summary>
-    /// A span whose every action published made no native call, so any native evidence in it is a lie
-    /// about which action produced it.
-    /// </summary>
-    [Fact]
-    public void AFullyPublishedSpanCannotCarryNativeEvidence()
-    {
-        var record = PublicationRecord();
-        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
-        DecisionJournalRecordCodec.Write(bytes, in record);
-        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(152, 8), 1);
-        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(160, 8), 1);
-
-        Assert.Throws<FormatException>(() => DecisionJournalRecordCodec.Read(bytes));
-    }
-
-    private const int PublishedActionsOffset = 440;
-
-    private static DecisionJournalRecord PublicationRecord()
-    {
-        var receipt = BatchReceipt.Completed(
+        var context = new ServiceActionContext(
             Identity(1),
             new BatchId(1),
-            actionCount: 1,
-            committedCount: 1,
-            default,
-            new MonotonicTimestamp(11),
-            publishedCount: 1);
-        var observation = CreateObservation(in receipt, 10);
-        return DecisionJournalRecord.Decision(in observation);
+            new ActionId(1),
+            0,
+            new MonotonicTimestamp(10));
+        var result = ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected);
+        var fact = new ServiceActionFact(
+            context,
+            result,
+            new MonotonicTimestamp(10),
+            new MonotonicTimestamp(11));
+        var observation = new DecisionJournalActionObservation(
+            new ServiceCycleTraceServiceId(1),
+            in fact,
+            in attribution);
+        return DecisionJournalRecord.Action(in observation);
+    }
+
+    private static DecisionJournalRecord RoundTrip(in DecisionJournalRecord record) =>
+        DecisionJournalRecordCodec.Read(Write(in record));
+
+    private static byte[] Write(in DecisionJournalRecord record)
+    {
+        var bytes = new byte[DecisionJournalRecordCodec.RecordBytes];
+        DecisionJournalRecordCodec.Write(bytes, in record);
+        return bytes;
     }
 }

@@ -146,7 +146,8 @@ public sealed class WorldEntityRequirementTests : IDisposable
             typeof(MissingCheckUpgrade),
             typeof(MissingCheckStructure),
             typeof(global::ResearchSO),
-            typeof(MissingCheckLink));
+            typeof(MissingCheckLink),
+            typeof(global::AlchemyRecipeSO));
 
         Assert.False(reader.IsAvailable);
         var report = reader.Collect(
@@ -200,13 +201,81 @@ public sealed class WorldEntityRequirementTests : IDisposable
     public void AConditionClassTheSuiteDoesNotModelPublishesAnUnknownRow()
     {
         var gated = Author(new global::UpgradeSO { maxLevel = 1 });
-        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.UnsupportedRequirement());
+        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.OpaqueRequirement());
 
         var row = Single(Collect());
 
         Assert.Equal(WorldRequirementConditionKind.Unknown, row.Kind);
-        Assert.Equal("UnsupportedRequirement", row.ConditionTypeName);
+        Assert.Equal("OpaqueRequirement", row.ConditionTypeName);
         Assert.Equal(Guid.Empty, row.TargetId);
+    }
+
+    [Fact]
+    public void AnOrGroupPublishesItsLeavesAtOneAnyPosition()
+    {
+        var gated = Author(new global::UpgradeSO { maxLevel = 1 });
+        var first = new global::ResearchSO();
+        var second = new global::ResearchSO();
+        global::ResearchSO.All.Add(first);
+        global::ResearchSO.All.Add(second);
+        var group = new Requirements.OrRequirement();
+        group.orConditions.Add(new Requirements.ResearchRequirement
+        {
+            item = first,
+            reqType = Requirements.UpgradeRequirementType.OneLevel,
+        });
+        group.orConditions.Add(new Requirements.ResearchRequirement
+        {
+            item = second,
+            reqType = Requirements.UpgradeRequirementType.OneLevel,
+        });
+        gated.prerequisitesPerLevel.prerequisites.Add(group);
+
+        var world = Collect();
+
+        Assert.Equal(2, world.EntityRequirements.Count);
+        Assert.All(world.EntityRequirements.AsSpan().ToArray(), row =>
+        {
+            Assert.Equal(WorldRequirementConditionKind.Research, row.Kind);
+            Assert.Equal(WorldRequirementGroupKind.Any, row.GroupKind);
+            Assert.Equal(0, row.GroupOrdinal);
+        });
+        Assert.Equal(0, world.EntityRequirements[0].Ordinal);
+        Assert.Equal(1, world.EntityRequirements[1].Ordinal);
+    }
+
+    [Fact]
+    public void AnAuthoredUsageOrGroupIsFullyCollected()
+    {
+        var recipe = new global::AlchemyRecipeSO();
+        global::AlchemyRecipeSO.All.Add(recipe);
+        var research = new global::ResearchSO();
+        global::ResearchSO.All.Add(research);
+        var group = new Requirements.OrRequirement();
+        group.orConditions.Add(new Requirements.ResearchRequirement { item = research });
+        recipe.usagePrerequisites.prerequisites.Add(group);
+        var collector = new GameWorldCollector();
+
+        var report = collector.Collect(new GameWorldCycleFrame { CollectedAtEpoch = 1 });
+        var category = report.For("entity requirements");
+
+        Assert.Equal(1, category.Sampled);
+        Assert.Equal(0, category.Skipped);
+        Assert.DoesNotContain("OrRequirement", category.FirstFailure, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUnreadableUsageContainerPublishesANamedUnknownRow()
+    {
+        var recipe = new global::AlchemyRecipeSO { usagePrerequisites = null! };
+        global::AlchemyRecipeSO.All.Add(recipe);
+
+        var world = Collect();
+
+        var row = Single(world);
+        Assert.Equal(WorldRequirementConditionKind.Unknown, row.Kind);
+        Assert.Equal("UnreadableUsageRequirements", row.ConditionTypeName);
+        Assert.Equal(WorldRequirementProgramKind.Usage, row.Program);
     }
 
     /// <summary>
@@ -218,7 +287,7 @@ public sealed class WorldEntityRequirementTests : IDisposable
     public void AnUnmodelledConditionClassIsNamedInThePassReport()
     {
         var gated = Author(new global::UpgradeSO { maxLevel = 1 });
-        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.UnsupportedRequirement());
+        gated.prerequisitesPerLevel.prerequisites.Add(new Requirements.OpaqueRequirement());
 
         var collector = new GameWorldCollector();
         var report = collector.Collect(new GameWorldCycleFrame { CollectedAtEpoch = 1 });
@@ -226,12 +295,12 @@ public sealed class WorldEntityRequirementTests : IDisposable
 
         Assert.Equal(1, category.Sampled);
         Assert.Equal(1, category.Skipped);
-        Assert.Contains("UnsupportedRequirement", category.FirstFailure, StringComparison.Ordinal);
+        Assert.Contains("OpaqueRequirement", category.FirstFailure, StringComparison.Ordinal);
         Assert.False(report.IsComplete);
     }
 
     [Fact]
-    public void NestedAndOrGroupsPreserveTheirAuthoredTree()
+    public void DeeperCompositeGroupsRemainNamedAndUnevaluable()
     {
         var gated = Author(new global::UpgradeSO { maxLevel = 1 });
         var scribing = new global::ResearchSO();
@@ -258,20 +327,12 @@ public sealed class WorldEntityRequirementTests : IDisposable
 
         var rows = Collect().EntityRequirements.AsSpan();
 
-        Assert.Equal(4, rows.Length);
-        Assert.Equal(WorldRequirementNodeKind.Group, rows[0].NodeKind);
-        Assert.Equal(WorldRequirementOperator.Or, rows[0].Operator);
-        Assert.Equal(-1, rows[0].ParentOrdinal);
-        Assert.Equal(0, rows[0].Depth);
-        Assert.Equal(WorldRequirementConditionKind.Research, rows[1].Kind);
-        Assert.Equal(0, rows[1].ParentOrdinal);
-        Assert.Equal(1, rows[1].Depth);
-        Assert.Equal(WorldRequirementNodeKind.Group, rows[2].NodeKind);
-        Assert.Equal(WorldRequirementOperator.And, rows[2].Operator);
-        Assert.Equal(0, rows[2].ParentOrdinal);
-        Assert.Equal(WorldRequirementConditionKind.Structure, rows[3].Kind);
-        Assert.Equal(2, rows[3].ParentOrdinal);
-        Assert.Equal(2, rows[3].Depth);
+        Assert.Equal(2, rows.Length);
+        Assert.Equal(WorldRequirementConditionKind.Research, rows[0].Kind);
+        Assert.Equal(WorldRequirementGroupKind.Any, rows[0].GroupKind);
+        Assert.Equal(WorldRequirementConditionKind.Unknown, rows[1].Kind);
+        Assert.Equal("AndRequirement", rows[1].ConditionTypeName);
+        Assert.Equal(WorldRequirementGroupKind.Any, rows[1].GroupKind);
     }
 
     [Fact]
@@ -377,6 +438,7 @@ public sealed class WorldEntityRequirementTests : IDisposable
         global::UpgradeSO.All.Clear();
         global::StructureSO.All.Clear();
         global::ResearchSO.All.Clear();
+        global::AlchemyRecipeSO.All.Clear();
         global::IntVariable.All.Clear();
         global::PrerequisiteLinkSO.All.Clear();
         global::GameManager.currentFrame = 0;

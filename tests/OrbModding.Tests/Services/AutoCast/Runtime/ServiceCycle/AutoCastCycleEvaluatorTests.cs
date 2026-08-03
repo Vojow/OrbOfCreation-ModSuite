@@ -14,13 +14,11 @@ namespace OrbModding.Tests.Services.AutoCast.Runtime.ServiceCycle;
 
 /// <summary>
 /// Policy tests for the Auto Cast worker. Worlds are built directly so each term of the admission
-/// ladder — occupancy, the game's own readiness answer, the reserve floor and the start threshold —
+/// ladder — occupancy, caster and spell readiness, the reserve floor and the start threshold —
 /// can be exercised on its own, along with the rotation and the full-charge hold.
 /// </summary>
 /// <remarks>
-/// Nothing here asserts about targets, about whether the caster is free, or about a target request
-/// already being open. The worker cannot see any of those, by design (W60), and they are the subject
-/// of the action-adapter tests.
+/// Target requests remain live-only graph state and are the subject of the action-adapter tests.
 /// </remarks>
 public sealed class AutoCastCycleEvaluatorTests
 {
@@ -68,6 +66,16 @@ public sealed class AutoCastCycleEvaluatorTests
     public void ASlotAlreadyCastingIsNotItsTurn()
     {
         var world = World(Slot(0, Ember, castReady: true, casting: true));
+
+        var state = AutoCastCycleState.Create(new LifecycleGeneration(1));
+        Assert.Empty(Plan(world, Config(), ref state, out _, out var metrics));
+        Assert.Equal(1, metrics.Exclusions.Busy);
+    }
+
+    [Fact]
+    public void AManagerWideBusyReadingIsQuietPlanningBackpressure()
+    {
+        var world = World(Slot(0, Ember, castReady: true, casterAvailable: false));
 
         var state = AutoCastCycleState.Create(new LifecycleGeneration(1));
         Assert.Empty(Plan(world, Config(), ref state, out _, out var metrics));
@@ -391,7 +399,8 @@ public sealed class AutoCastCycleEvaluatorTests
         bool resourcesCovered = true,
         int currentCharges = 1,
         int maximumCharges = 1,
-        double cooldownRemaining = 0d) =>
+        double cooldownRemaining = 0d,
+        bool casterAvailable = true) =>
         new(
             slotIndex,
             spellRecipeId,
@@ -407,7 +416,8 @@ public sealed class AutoCastCycleEvaluatorTests
             resourcesCovered,
             currentCharges,
             maximumCharges,
-            new BigDouble(cooldownRemaining));
+            new BigDouble(cooldownRemaining),
+            casterAvailable);
 
     private static WorldSpellCost Cost(
         int slotIndex,

@@ -90,6 +90,8 @@ internal sealed class AutoConceptCycleActionAdapter : IAutoConceptCycleActionPor
                 return ServiceActionResult.Rejected(AutoConceptActionResultCodes.ProjectionRefused);
             case AutoConceptPreflight.MasteryLimitChanged:
                 return ServiceActionResult.Rejected(AutoConceptActionResultCodes.MasteryLimitChanged);
+            case AutoConceptPreflight.ResourceBackpressure:
+                return ServiceActionResult.Skipped(AutoConceptActionResultCodes.ProjectionRefused);
         }
 
         var evidence = ServiceNativeMutationEvidence.Observed(
@@ -103,18 +105,11 @@ internal sealed class AutoConceptCycleActionAdapter : IAutoConceptCycleActionPor
         in AutoConceptCycleAction action,
         in AutoConceptSubmission submission)
     {
+        if (submission.Verified ||
+            submission.Preflight == AutoConceptPreflight.ResourceBackpressure) return;
         var replacement = action.ReplacementId == Guid.Empty
             ? string.Empty
             : $" with replacement {EntityIdentityFormatter.Format(action.ReplacementId)}";
-        if (submission.Verified)
-        {
-            var sign = submission.AppliedDelta >= 0 ? "+" : string.Empty;
-            Plugin.Log?.LogAutomataInfo(
-                $"Auto Concept completed {action.Kind} for {EntityIdentityFormatter.Format(action.RecipeId)}{replacement}; " +
-                $"quantity delta {sign}{submission.AppliedDelta}.");
-            return;
-        }
-
         var message =
             $"Auto Concept did not complete {action.Kind} for {EntityIdentityFormatter.Format(action.RecipeId)}{replacement}: " +
             submission.Reason;

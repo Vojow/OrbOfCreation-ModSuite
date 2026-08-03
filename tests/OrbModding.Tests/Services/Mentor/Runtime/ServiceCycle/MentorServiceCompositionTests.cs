@@ -73,7 +73,7 @@ public sealed class MentorServiceCompositionTests
         };
 
     private static WorldSpellRecipe Spell(Guid id, int mastery) =>
-        new(id, true, 0, default, mastery, false, false, false, 0, 0, 0, false,
+        new(id, true, 0, default, mastery, false, false, false, false, 0, 0, 0, false,
             default, default, default, default, default, default, false);
 
     private static PublicationTable<T> Table<T>(params T[] rows) where T : struct =>

@@ -55,17 +55,23 @@ internal static partial class ServiceCycleSemanticPayloadValidation
                         ? payload.NativeOutcome != NativeMutationOutcome.Verified && NativeEvidenceIsCoherent(in payload)
                         : NativeTotalsAreZero(in payload)), nameof(payload));
                 break;
+            // The batch payload no longer carries a publication ledger. Its one surviving
+            // publication-only shape is therefore all actions committed with zero native totals;
+            // it is indistinguishable here from omitted native evidence for those commits.
             case ServiceCycleSemanticEventKind.BatchCompleted:
                 Require(payload.Disposition == (int)BatchTerminalDisposition.Completed &&
                     payload.Code == CommonActionResultCodes.Committed.Value &&
                     payload.ActionCount >= 0 && payload.CommittedCount <= payload.ActionCount &&
                     payload.ActionIndex == -1 && payload.UntouchedSuffixCount == 0 &&
-                    (payload.CommittedCount - payload.PublishedCount == 0 &&
-                        payload.MutationAttempts == 0 ? NativeTotalsAreZero(in payload) :
-                        payload.MutationAttempts >= payload.CommittedCount - payload.PublishedCount &&
-                        payload.MutationsCommitted >= payload.CommittedCount - payload.PublishedCount &&
-                        (payload.CommittedCount - payload.PublishedCount != 0 ||
-                            payload.MutationsCommitted == 0)),
+                    NativeTotalsAreCoherent(in payload) &&
+                    (NativeTotalsAreZero(in payload) &&
+                        payload.CommittedCount == payload.ActionCount ||
+                        (payload.CommittedCount == 0 && payload.MutationAttempts == 0
+                            ? NativeTotalsAreZero(in payload)
+                            : payload.MutationAttempts >= payload.CommittedCount &&
+                                payload.MutationsCommitted >= payload.CommittedCount &&
+                                (payload.CommittedCount != 0 ||
+                                    payload.MutationsCommitted == 0))),
                     nameof(payload));
                 break;
             case ServiceCycleSemanticEventKind.BatchAborted:
@@ -77,8 +83,8 @@ internal static partial class ServiceCycleSemanticPayloadValidation
                     payload.CommittedCount <= payload.ActionIndex &&
                     payload.UntouchedSuffixCount == payload.ActionCount - payload.ActionIndex - 1 &&
                     NativeTotalsAreCoherent(in payload) &&
-                    payload.MutationsCommitted >= payload.CommittedCount - payload.PublishedCount &&
-                    (payload.CommittedCount - payload.PublishedCount != 0 || payload.MutationsCommitted == 0),
+                    payload.MutationsCommitted >= payload.CommittedCount &&
+                    (payload.CommittedCount != 0 || payload.MutationsCommitted == 0),
                     nameof(payload));
                 break;
             case ServiceCycleSemanticEventKind.BatchOrphaned:
@@ -88,12 +94,12 @@ internal static partial class ServiceCycleSemanticPayloadValidation
                     payload.CommittedCount <= payload.ActionCount && payload.ActionIndex == -1 &&
                     payload.UntouchedSuffixCount <= payload.ActionCount - payload.CommittedCount &&
                     NativeTotalsAreCoherent(in payload) &&
-                    (payload.CommittedCount - payload.PublishedCount == 0 &&
-                        payload.MutationAttempts == 0 ? NativeTotalsAreZero(in payload) :
-                        payload.MutationAttempts >= payload.CommittedCount - payload.PublishedCount &&
-                        payload.MutationsCommitted >= payload.CommittedCount - payload.PublishedCount &&
-                        (payload.CommittedCount - payload.PublishedCount != 0 ||
-                            payload.MutationsCommitted == 0)), nameof(payload));
+                    (payload.CommittedCount == 0 && payload.MutationAttempts == 0
+                        ? NativeTotalsAreZero(in payload)
+                        : payload.MutationAttempts >= payload.CommittedCount &&
+                            payload.MutationsCommitted >= payload.CommittedCount &&
+                            (payload.CommittedCount != 0 ||
+                                payload.MutationsCommitted == 0)), nameof(payload));
                 break;
         }
     }

@@ -124,6 +124,7 @@ internal sealed record TraceDashboardEvent(
     long MutationsCommitted);
 
 internal sealed record TraceDashboardDecision(
+    string Kind,
     double StartMilliseconds,
     double EndMilliseconds,
     ulong Service,
@@ -132,24 +133,18 @@ internal sealed record TraceDashboardDecision(
     long RepeatCount,
     string StartDecision,
     string CaptureDecision,
-    string Wake,
     string Terminal,
-    int ActionCount,
-    long CommittedActions,
-    long NativeCallsAttempted,
-    long MutationAttempts,
-    long MutationsCommitted,
     int WorkerSamples,
     double WorkerAverageMilliseconds,
     double? WorkerMicrosecondsPerCapturedCandidate,
     double? WorkerMicrosecondsPerPlannedAction,
-    TraceDashboardProjectionEntry[] Projection);
-
-internal sealed record TraceDashboardProjectionEntry(
-    int Key,
-    string Name,
-    string Kind,
-    string Value);
+    int ActionOrdinal,
+    string CandidateId,
+    string NativeType,
+    string ListId,
+    string ViewId,
+    string RouteStatus,
+    string Outcome);
 
 internal sealed record TraceDashboardStageAggregate(
     int StageCode,

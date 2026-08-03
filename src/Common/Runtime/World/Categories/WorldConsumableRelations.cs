@@ -335,36 +335,65 @@ internal static class WorldConsumableRelationDeriver
     {
         if (buffer.Count == 0) return PublicationTable<WorldConsumableType>.Empty;
         var rows = new WorldConsumableType[buffer.Count];
-        for (var index = 0; index < buffer.Count; index++) rows[index] = buffer[index];
-        Array.Sort(rows, ConsumableTypeComparer.Instance);
-        return PublicationTable<WorldConsumableType>.Create(rows, rows.Length);
+        var count = 0;
+        for (var index = 0; index < buffer.Count; index++)
+        {
+            var row = buffer[index];
+            if (row.ConsumableId == Guid.Empty || row.TypeId == Guid.Empty) continue;
+            rows[count++] = row;
+        }
+        Array.Sort(rows, 0, count, ConsumableTypeComparer.Instance);
+        return PublicationTable<WorldConsumableType>.Create(rows, count);
     }
 
     internal static PublicationTable<WorldConsumableCost> Build(WorldConsumableCostBuffer buffer)
     {
         if (buffer.Count == 0) return PublicationTable<WorldConsumableCost>.Empty;
         var rows = new WorldConsumableCost[buffer.Count];
-        for (var index = 0; index < buffer.Count; index++) rows[index] = buffer[index];
-        Array.Sort(rows, ConsumableCostComparer.Instance);
-        return PublicationTable<WorldConsumableCost>.Create(rows, rows.Length);
+        var count = 0;
+        for (var index = 0; index < buffer.Count; index++)
+        {
+            var row = buffer[index];
+            if (row.ConsumableId == Guid.Empty || row.ResourceId == Guid.Empty) continue;
+            rows[count++] = row;
+        }
+        Array.Sort(rows, 0, count, ConsumableCostComparer.Instance);
+        return PublicationTable<WorldConsumableCost>.Create(rows, count);
     }
 
     internal static PublicationTable<WorldConsumableUsage> Build(WorldConsumableUsageBuffer buffer)
     {
         if (buffer.Count == 0) return PublicationTable<WorldConsumableUsage>.Empty;
         var rows = new WorldConsumableUsage[buffer.Count];
-        for (var index = 0; index < buffer.Count; index++) rows[index] = buffer[index];
-        Array.Sort(rows, ConsumableUsageComparer.Instance);
-        return PublicationTable<WorldConsumableUsage>.Create(rows, rows.Length);
+        var identities = new HashSet<ConsumableUsageKey>();
+        var count = 0;
+        for (var index = 0; index < buffer.Count; index++)
+        {
+            var row = buffer[index];
+            if (row.UsageId == Guid.Empty || row.Level <= 0 ||
+                !identities.Add(new ConsumableUsageKey(row.ConsumableId, row.UsageId)))
+                continue;
+            rows[count++] = row;
+        }
+        Array.Sort(rows, 0, count, ConsumableUsageComparer.Instance);
+        return PublicationTable<WorldConsumableUsage>.Create(rows, count);
     }
 
     internal static PublicationTable<WorldConsumableCount> Build(WorldConsumableCountBuffer buffer)
     {
         if (buffer.Count == 0) return PublicationTable<WorldConsumableCount>.Empty;
         var rows = new WorldConsumableCount[buffer.Count];
-        for (var index = 0; index < buffer.Count; index++) rows[index] = buffer[index];
-        Array.Sort(rows, ConsumableCountComparer.Instance);
-        return PublicationTable<WorldConsumableCount>.Create(rows, rows.Length);
+        var count = 0;
+        for (var index = 0; index < buffer.Count; index++)
+        {
+            var row = buffer[index];
+            if (row.ConsumableId == Guid.Empty || row.Level <= 0 ||
+                row.Quantity < 0 || row.FreeQuantity < 0)
+                continue;
+            rows[count++] = row;
+        }
+        Array.Sort(rows, 0, count, ConsumableCountComparer.Instance);
+        return PublicationTable<WorldConsumableCount>.Create(rows, count);
     }
 
     private sealed class ConsumableTypeComparer : IComparer<WorldConsumableType>
@@ -402,6 +431,24 @@ internal static class WorldConsumableRelationDeriver
         }
     }
 
+    private readonly struct ConsumableUsageKey : IEquatable<ConsumableUsageKey>
+    {
+        internal ConsumableUsageKey(Guid consumableId, Guid usageId)
+        {
+            ConsumableId = consumableId;
+            UsageId = usageId;
+        }
+
+        private Guid ConsumableId { get; }
+        private Guid UsageId { get; }
+        public bool Equals(ConsumableUsageKey other) =>
+            ConsumableId == other.ConsumableId && UsageId == other.UsageId;
+        public override bool Equals(object? value) =>
+            value is ConsumableUsageKey other && Equals(other);
+        public override int GetHashCode() =>
+            unchecked((ConsumableId.GetHashCode() * 397) ^ UsageId.GetHashCode());
+    }
+
     private sealed class ConsumableCountComparer : IComparer<WorldConsumableCount>
     {
         internal static readonly IComparer<WorldConsumableCount> Instance =
@@ -424,6 +471,8 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
     private readonly Type? _nativeType;
+    private readonly Type? _registryType;
+    private readonly Type? _consumableTypeType;
     private readonly WorldConsumableBinder _binder = new();
     private readonly string _unavailable;
     private readonly Func<object, IList?>? _types;
@@ -444,10 +493,15 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
     private readonly Func<object, int>? _countLevel;
     private readonly Func<object, int>? _countQuantity;
     private readonly Func<object, int>? _countFreeQuantity;
+    private readonly Func<object, Guid>? _maximumCarryLoadVariableId;
 
-    internal WorldConsumableReader(Type? nativeType)
+    private static readonly Guid GlobalConsumableTypeId =
+        new("315471ca-0d15-455d-92da-f9d5f95a3c33");
+
+    internal WorldConsumableReader(Type? nativeType, Type? registryType)
     {
         _nativeType = nativeType;
+        _registryType = registryType;
         if (nativeType is null)
         {
             _unavailable = "the ConsumableSO type was not found on this build";
@@ -458,7 +512,11 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
         var bind = new WorldMemberBinding(nativeType, "ConsumableSO");
         _types = bind.CollectionField("consumableTypes");
         var typeEntry = bind.CollectionElementType("consumableTypes");
+        _consumableTypeType = typeEntry;
         _typeId = bind.Elements(typeEntry, "ConsumableSO.consumableTypes[]").Call<Guid>("GetGuid");
+        _maximumCarryLoadVariableId = bind
+            .Elements(typeEntry, "GlobalConsumableType")
+            .ReferenceGuid("maximumCarryLoad");
 
         _consumeCosts = bind.Through("consumeCost").CollectionField("costs");
         _usageCosts = bind.Through("usageCost").CollectionField("costs");
@@ -496,7 +554,8 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
     }
 
     public string Category => "consumables";
-    public bool IsAvailable => _nativeType is not null && _unavailable.Length == 0;
+    public bool IsAvailable =>
+        _nativeType is not null && _registryType is not null && _unavailable.Length == 0;
 
     public WorldCategoryReport Collect(HashSet<Guid> claimed, GameWorldCycleFrame frame)
     {
@@ -505,11 +564,25 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
         frame.ConsumableCosts.Reset();
         frame.ConsumableUsages.Reset();
         frame.ConsumableCounts.Reset();
+        frame.ConsumableMaximumCarryLoadVariableId = Guid.Empty;
         if (!IsAvailable) return WorldCategoryReport.Missing(Category, _unavailable);
 
         var entities = NativeAccessorBinder.StaticList(_nativeType, "All");
         if (entities is null)
             return WorldCategoryReport.Missing(Category, "the ConsumableSO registry was unreadable");
+        if (entities.Count == 0)
+            return new WorldCategoryReport(
+                Category, WorldCategoryOutcome.Collected, 0, 0, string.Empty);
+
+        var registry = NativeAccessorBinder.StaticDictionary(_registryType, "RuntimeLookup");
+        var globalType = registry?[GlobalConsumableTypeId];
+        if (globalType is null || globalType.GetType() != _consumableTypeType)
+            return WorldCategoryReport.Missing(
+                Category, "the global Consumable type edge was unreadable");
+        frame.ConsumableMaximumCarryLoadVariableId = _maximumCarryLoadVariableId!(globalType);
+        if (frame.ConsumableMaximumCarryLoadVariableId == Guid.Empty)
+            return WorldCategoryReport.Missing(
+                Category, "the global maximum carry-load variable carried no identity");
 
         var sampled = 0;
         var skipped = 0;
@@ -602,7 +675,7 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
         for (var index = 0; index < entries.Count; index++)
         {
             var entry = entries[index];
-            if (entry is null || _typeId!(entry) == Guid.Empty)
+            if (entry is null)
             {
                 failure = $"a consumable type at position {index} was null or unidentified";
                 return false;
@@ -622,7 +695,7 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
         for (var index = 0; index < entries.Count; index++)
         {
             var entry = entries[index];
-            if (entry is null || _costResourceId!(entry) == Guid.Empty)
+            if (entry is null)
             {
                 failure = $"a consumable cost at position {index} was null or unidentified";
                 return false;
@@ -674,10 +747,7 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
         for (var index = 0; index < entries.Count; index++)
         {
             var entry = entries[index];
-            if (entry is null || entry.GetType() != _countType ||
-                _countLevel!(entry) <= 0 ||
-                _countQuantity!(entry) < 0 ||
-                _countFreeQuantity!(entry) < 0)
+            if (entry is null || entry.GetType() != _countType)
             {
                 failure = $"a consumable count at position {index} carried invalid values";
                 return false;

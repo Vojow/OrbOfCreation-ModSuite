@@ -229,6 +229,30 @@ public sealed class ServiceCycleContractTests
         Assert.True(emergencyReceipt.HasEmergencyStopContext);
     }
 
+    [Fact]
+    public void CompletedReceiptRejectsPartialCommitsWithoutNativeEvidence()
+    {
+        var cycle = NewCycleIdentity();
+
+        Assert.Throws<ArgumentException>(() => BatchReceipt.Completed(
+            cycle,
+            new BatchId(13),
+            actionCount: 5,
+            committedCount: 3,
+            nativeCallOutcome: default,
+            completedAt: new MonotonicTimestamp(130)));
+
+        var publication = BatchReceipt.Completed(
+            cycle,
+            new BatchId(14),
+            actionCount: 5,
+            committedCount: 5,
+            nativeCallOutcome: default,
+            completedAt: new MonotonicTimestamp(140));
+        Assert.Equal(5, publication.CommittedCount);
+        Assert.Equal(0, publication.PreNativeSkippedCount);
+    }
+
     private static ServiceCycleIdentity NewCycleIdentity() => new(
         new ServiceId("test.contract"),
         new RuntimeLifecycleGeneration(1),

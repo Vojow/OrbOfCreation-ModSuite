@@ -97,6 +97,9 @@ internal sealed class CrossRoleServiceDefinition :
             CommonServiceDecisionCodes.NotReady,
             WakePolicy.AfterDecision(new MonotonicDuration(1_000)));
 
+    public ServiceActionJournalAttribution DescribeAction(in CrossRoleAction action) =>
+        ServiceActionJournalAttribution.Publication;
+
     public ServiceActionResult TryExecute(
         in CrossRoleAction action,
         in SuiteRuntimeConfiguration config,

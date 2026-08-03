@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
+using OrbAutomata;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
@@ -96,7 +99,7 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
     }
 
     [Fact]
-    public void CompletedActionCycleWritesProjectionWakeAndTerminalFacts()
+    public void CompletedActionCycleWritesOneAttributedOutcome()
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
@@ -121,18 +124,66 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         runtime.RequestStop();
         AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
 
-        var decision = Assert.Single(
+        var action = Assert.Single(
             storage.ReadRecords(),
-            item => item.Kind == DecisionJournalRecordKind.DecisionSpan);
-        Assert.True(decision.HasProjection);
-        Assert.True(decision.HasWake);
-        Assert.Equal(WakePolicy.AfterBatch(new MonotonicDuration(17)), decision.Wake);
-        Assert.Equal(BatchTerminalDisposition.Completed, decision.TerminalDisposition);
-        Assert.Equal(1, decision.ActionCount);
-        Assert.Equal(1, decision.CommittedActions);
-        Assert.Equal(1, decision.NativeCallsAttempted);
-        Assert.Equal(1, decision.MutationAttempts);
-        Assert.Equal(1, decision.MutationsCommitted);
+            item => item.Kind == DecisionJournalRecordKind.Action);
+        Assert.Equal(ServiceActionDisposition.Committed, action.ActionOutcome.Disposition);
+        Assert.Equal(CommonActionResultCodes.Committed.Value, action.ActionOutcome.Code);
+        Assert.Equal(ServiceActionNativeTypeId.StructureSO, action.Attribution.NativeType);
+        Assert.NotEqual(Guid.Empty, action.Attribution.CandidateId);
+    }
+
+    [Fact]
+    public void AttributionFailureExecutesAndJournalsDistinctStatusWithLoggedReason()
+    {
+        var clock = new ThreadSafeTestClock(100);
+        using var registry = new ServiceCycleRegistry(1, clock);
+        var definition = new ExecutionServiceDefinition("journal.runtime.attribution-failure")
+        {
+            ActionCount = 2,
+            ThrowOnDescribeAction = true,
+        };
+        using var registration = registry.Register(
+            definition,
+            new LifecycleGeneration(1),
+            ServiceActionDispatchPolicy.Bounded(2));
+        var messages = new List<string>();
+        var frameIdentity = 3L;
+        using var host = new AutomataServiceCycleHost(
+            registry,
+            () => frameIdentity,
+            pumpTiming: null,
+            semanticTrace: null,
+            actionOutcomes: null,
+            attributionFailureLog: messages.Add);
+        var pump = host.Pump;
+        TestWorldCollector.CollectedAtActivation(registry);
+        using var storage = new DecisionJournalRuntimeTestStorage();
+        var runtime = Runtime(pump, storage);
+        using var teardown = new JournalTeardown(runtime);
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
+
+        Assert.Equal(frameIdentity, ServiceRunnerTestWait.PrepareBatch(pump, registration));
+        Assert.Equal(2, host.Tick().ActionsAttempted);
+        Assert.Equal(2, definition.ActionExecutionCount);
+        runtime.RequestStop();
+        AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
+
+        var actions = storage.ReadRecords()
+            .Where(item => item.Kind == DecisionJournalRecordKind.Action)
+            .ToArray();
+        Assert.Equal(2, actions.Length);
+        Assert.All(actions, action =>
+        {
+            Assert.Equal(ServiceActionDisposition.Committed, action.ActionOutcome.Disposition);
+            Assert.Equal(ServiceActionRouteStatus.AttributionFailed, action.Attribution.RouteStatus);
+        });
+        Assert.Equal(2, messages.Count);
+        Assert.Equal(messages[0], messages[1]);
+        Assert.Equal(
+            $"ServiceCycle action attribution failed for service {definition.ServiceId.Value}; " +
+            "the action executed and the journal marked attribution failed: attribution exploded",
+            messages[0]);
     }
 
     [Fact]
@@ -165,10 +216,8 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
             records,
             item => item.Kind == DecisionJournalRecordKind.DecisionSpan);
         Assert.Equal((int)EmergencyStopReason.SafetyInterlock, transition.TransitionCode);
-        Assert.Equal(BatchTerminalDisposition.Rejected, decision.TerminalDisposition);
-        Assert.Equal(CommonActionResultCodes.EmergencyStop.Value, decision.TerminalResultCode);
-        Assert.Equal(2, decision.ActionCount);
-        Assert.Equal(0, decision.CommittedActions);
+        Assert.Equal(DecisionJournalDecisionOutcomeKind.Batch, decision.DecisionOutcomeKind);
+        Assert.Equal(CommonActionResultCodes.EmergencyStop.Value, decision.DecisionOutcomeCode);
         Assert.Equal(0, definition.ActionExecutionCount);
     }
 
