@@ -40,3 +40,5 @@ historical `tools/*.py` paths remain wrappers so existing documentation and scri
 
 The full model is authored state, not live state. Runtime quantities, visibility, registry
 membership, modifiers, and save progress belong to the running-game tooling.
+
+`OrbModding.IlInspect` queries installed managed assemblies as read-only, build-pinned IL evidence.
