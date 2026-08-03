@@ -18,6 +18,9 @@ import-entity-display-names = "orbtools.gamedata.import_display_names:main"
 dev = [
     "pytest>=8.4.2",
 ]
+docs = [
+    "mkdocs-material>=9.6,<10",
+]
 
 [build-system]
 requires = ["hatchling"]
