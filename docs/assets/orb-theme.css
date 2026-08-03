@@ -132,7 +132,7 @@ body::before {
   height: auto;
   margin: 0;
   color: #fff;
-  font-size: clamp(1.2rem, 2.8vw, 1.8rem);
+  font-size: clamp(1.5rem, 3.4vw, 2.15rem);
   line-height: 1.08;
   text-shadow: 3px 3px #080808;
 }
@@ -246,6 +246,27 @@ body::before {
 
 .md-nav__list {
   padding: 0 7px 10px;
+}
+
+.md-nav .md-nav {
+  margin-left: 7px;
+  padding-left: 7px;
+  border-left: 2px solid #4b3a52;
+}
+
+.md-nav .md-nav .md-nav__list {
+  padding-right: 3px;
+  padding-bottom: 5px;
+  padding-left: 3px;
+}
+
+.md-nav__item--nested > .md-nav__link {
+  font-family: var(--orb-mono);
+  font-weight: 700;
+}
+
+.md-nav__item--nested > .md-nav__link .md-nav__icon::after {
+  color: var(--gold);
 }
 
 .md-nav__link {
@@ -420,8 +441,13 @@ body::before {
   }
 
   .md-header__title {
+    display: block;
+    flex: 1 1 auto;
+    width: auto;
+    height: 32px;
     margin-left: 0;
-    font-size: 1rem;
+    overflow: visible;
+    font-size: 1.4rem;
   }
 
   .md-header__title::before {
@@ -429,6 +455,8 @@ body::before {
   }
 
   .md-header__button.md-logo {
+    display: block;
+    flex: 0 0 52px;
     order: 5;
     width: 52px;
     height: 48px;
@@ -437,7 +465,11 @@ body::before {
 
   .md-sidebar {
     top: 0;
-    height: auto;
+    height: 100%;
+  }
+
+  .md-search {
+    width: auto;
   }
 
   .md-sidebar__scrollwrap {
@@ -450,6 +482,22 @@ body::before {
     color: #fff;
     background: linear-gradient(#555, #292929);
   }
+
+  .md-nav__source {
+    border-top: 2px solid #555;
+    border-bottom: 2px solid #111;
+    background: #202020;
+    box-shadow: inset 2px 2px #383838, inset -2px -2px #090909;
+  }
+
+  .md-source {
+    color: var(--muted);
+  }
+
+  .md-source:hover,
+  .md-source:focus {
+    color: var(--collect);
+  }
 }
 
 @media screen and (max-width: 44.984375em) {
@@ -460,6 +508,15 @@ body::before {
   .md-main__inner {
     padding-right: 0;
     padding-left: 0;
+  }
+
+  .md-header__title {
+    height: 24px;
+    font-size: 1rem;
+  }
+
+  .md-header__button.md-logo {
+    display: none;
   }
 
   .md-content__inner {

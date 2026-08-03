@@ -15,7 +15,6 @@ theme:
     scheme: slate
   features:
     - navigation.indexes
-    - navigation.sections
     - search.highlight
     - search.suggest
 
