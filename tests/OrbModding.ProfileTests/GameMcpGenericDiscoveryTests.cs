@@ -40,7 +40,7 @@ public sealed class GameMcpGenericDiscoveryTests
         Assert.NotNull(schema["properties"]!["components"]);
         Assert.NotNull(schema["properties"]!["uuid"]);
         Assert.NotNull(schema["properties"]!["offerUuid"]);
-        Assert.NotNull(schema["properties"]!["expectedNativeType"]);
+        Assert.Null(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
         Assert.Null(schema["properties"]!["amount"]);
     }
@@ -121,7 +121,7 @@ public sealed class GameMcpGenericDiscoveryTests
     public void Predecision_and_poststate_are_named_and_carry_the_exact_next_cost()
     {
         var row = Json(GameMcpWorldQuery.GetRow(
-            Context(), "glyphs", GlyphId.ToString("D"), "GlyphSO"));
+            Context(), "glyphs", GlyphId.ToString("D")));
         var postState = Json(GameMcpWorldQuery.ProjectPostState(
             Context(), "glyphs", GlyphId));
 
@@ -156,8 +156,7 @@ public sealed class GameMcpGenericDiscoveryTests
             {
                 new GameMcpUuidCount(ComponentId, 1),
                 new GameMcpUuidCount(ResourceId, 1),
-            },
-            string.Empty));
+            }));
 
         Assert.Equal("available", (string?)preview["status"]);
         Assert.Equal("glyphcraft", (string?)preview["surface"]);
@@ -179,32 +178,12 @@ public sealed class GameMcpGenericDiscoveryTests
             {
                 new GameMcpUuidCount(ComponentId, 1),
                 new GameMcpUuidCount(ResourceId, 1),
-            },
-            string.Empty));
+            }));
 
         Assert.Equal("unavailable", (string?)preview["status"]);
         Assert.Equal("discovery_recipe_ambiguous", (string?)preview["reasonCode"]);
         Assert.Contains("2 published glyphs", (string?)preview["reason"]);
         Assert.Null(preview["output"]);
-    }
-
-    [Fact]
-    public void PreviewEnforcesTheResolvedOutputNativeType()
-    {
-        var preview = Json(GameMcpWorldQuery.ProjectDiscoveryPreview(
-            Context(),
-            "glyphcraft",
-            new[]
-            {
-                new GameMcpUuidCount(ComponentId, 1),
-                new GameMcpUuidCount(ResourceId, 1),
-            },
-            "SpellRecipeSO"));
-
-        Assert.Equal("unavailable", (string?)preview["status"]);
-        Assert.Equal("native_type_mismatch", (string?)preview["reasonCode"]);
-        Assert.Contains("GlyphSO", (string?)preview["reason"]);
-        Assert.Contains("SpellRecipeSO", (string?)preview["reason"]);
     }
 
     [Fact]

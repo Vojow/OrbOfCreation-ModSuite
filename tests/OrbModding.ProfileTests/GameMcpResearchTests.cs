@@ -70,7 +70,7 @@ public sealed class GameMcpResearchTests
     {
         var world = World();
         var response = Json(GameMcpWorldQuery.GetRow(GameMcpTestHarness.Context(world, 2801),
-            "research", ResearchId.ToString("D"), "ResearchSO").Freeze(), world);
+            "research", ResearchId.ToString("D")).Freeze(), world);
         var row = response["row"]!;
 
         Assert.Equal("Improved Casting", (string?)row["name"]);
@@ -97,7 +97,7 @@ public sealed class GameMcpResearchTests
             spendableAmount: 1,
             investmentRemaining: 100);
         var response = Json(GameMcpWorldQuery.GetRow(GameMcpTestHarness.Context(world, 2803),
-            "research", ResearchId.ToString("D"), "ResearchSO").Freeze(), world);
+            "research", ResearchId.ToString("D")).Freeze(), world);
         var develop = response["row"]!["develop"]!;
         var cost = Assert.Single(develop["costs"]!).Value<JObject>()!;
 

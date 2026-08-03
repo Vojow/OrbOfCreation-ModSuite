@@ -80,7 +80,7 @@ public sealed class GameMcpEquipmentLoadoutTests
     {
         var context = GameMcpTestHarness.Context(World(), generation: 2401);
         var response = Json(GameMcpWorldQuery.GetRow(
-            context, "equipment", EquipmentId.ToString("D"), "EquipmentSO"));
+            context, "equipment", EquipmentId.ToString("D")));
 
         var row = response["row"]!;
         Assert.Equal("Prismatic Lens", (string?)row["name"]);

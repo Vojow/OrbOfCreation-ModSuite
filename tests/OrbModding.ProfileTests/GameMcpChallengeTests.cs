@@ -77,7 +77,7 @@ public sealed class GameMcpChallengeTests
         Assert.Null(first["select"]);
         var exact = Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 2501),
-            "challenges", First.ToString("D"), "ChallengeSO").Freeze(), world)["row"]!;
+            "challenges", First.ToString("D")).Freeze(), world)["row"]!;
         Assert.True((bool)exact["select"]!["available"]!);
         Assert.True((bool)exact["activate"]!["available"]!);
         Assert.Equal("12", (string?)exact["nextDifficulty"]);
@@ -94,11 +94,11 @@ public sealed class GameMcpChallengeTests
         var before = World(selected: false);
         var selectCommand = new GameMcpCommand(
             1, GameMcpCommandKind.Challenge, 9, 3, "select", First, Guid.Empty,
-            "ChallengeSO", string.Empty, 1, string.Empty, string.Empty, false, false,
+            "ChallengeSO", 1, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before));
         var fetchCommand = new GameMcpCommand(
             2, GameMcpCommandKind.Challenge, 9, 3, "fetch_time", Guid.Empty, Guid.Empty,
-            "ChallengeSO", string.Empty, 1, string.Empty, string.Empty, false, false,
+            "ChallengeSO", 1, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before));
         var target = Json(GameMcpWorldQuery.ProjectChallengePostState(context, selectCommand), world);
         var fetch = Json(GameMcpWorldQuery.ProjectChallengePostState(context, fetchCommand), world);

@@ -29,12 +29,8 @@ internal static class GameMcpSpellWorkbenchProjection
     }
 
     internal static GameMcpValue ProjectPricePreview(
-        in SpellWorkbenchPricePreview preview,
-        string expectedNativeType = "")
+        in SpellWorkbenchPricePreview preview)
     {
-        if (!GameMcpWorldQuery.TryAssertPreviewNativeType(
-                "spell-recipes", expectedNativeType, out var typeMismatch))
-            return typeMismatch;
         if (!preview.Available)
         {
             return new JObject

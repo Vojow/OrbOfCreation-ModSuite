@@ -80,8 +80,7 @@ public sealed class GameMcpSpellCompositionTests
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             context,
             "spell-recipes",
-            RecipeId.ToString("D"),
-            "SpellRecipeSO"));
+            RecipeId.ToString("D")));
         var row = (JObject)response["row"]!;
         var equipped = Assert.Single(row["equipped"]!.Values<JObject>())!;
         var overview = GameMcpTestHarness.Json(GameMcpWorldQuery.Overview(context));
@@ -217,7 +216,6 @@ public sealed class GameMcpSpellCompositionTests
         Guid.Empty,
         Guid.Empty,
         "IntVariable",
-        string.Empty,
         5,
         mode == "set_output_level" ? "output" : "reserve",
         string.Empty,

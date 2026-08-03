@@ -66,7 +66,7 @@ internal static class GameMcpDocumentJsonEncoder
         {
             result = complete;
             result["mcpCategory"] = source.Category;
-            result["expectedNativeType"] = source.ExpectedNativeType;
+            result["nativeType"] = source.NativeType;
             return result;
         }
 

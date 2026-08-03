@@ -190,7 +190,6 @@ public sealed class GameMcpStreamableHttpProtocolTests
             targetId: tree,
             secondaryId: Guid.Empty,
             derivedNativeType: "DiscoveryTreeSO",
-            expectedNativeType: string.Empty,
             amount: 1,
             payloadKey: string.Empty,
             payloadValue: string.Empty,
@@ -282,7 +281,6 @@ public sealed class GameMcpStreamableHttpProtocolTests
             targetId: kind == GameMcpCommandKind.Purchase ? System.Guid.NewGuid() : System.Guid.Empty,
             secondaryId: System.Guid.Empty,
             derivedNativeType: kind == GameMcpCommandKind.Purchase ? "StructureSO" : string.Empty,
-            expectedNativeType: string.Empty,
             amount: 1,
             payloadKey: kind == GameMcpCommandKind.ConfigurationSet ? "Mode" : string.Empty,
             payloadValue: kind == GameMcpCommandKind.ConfigurationSet ? "Disabled" : string.Empty,
@@ -324,7 +322,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
 
         Assert.Equal(new[] { "category" }, schema["required"]!.Values<string>());
         Assert.Equal(
-            new[] { "category", "uuids", "uuid", "expectedNativeType" },
+            new[] { "category", "uuids", "uuid" },
             properties.Properties().Select(property => property.Name));
         Assert.Equal("string", (string?)properties["uuid"]?["type"]);
         Assert.Equal("array", (string?)properties["uuids"]?["type"]);
@@ -561,7 +559,6 @@ public sealed class GameMcpStreamableHttpProtocolTests
                 ["arguments"] = new JObject
                 {
                     ["uuid"] = "not-a-uuid",
-                    ["expectedNativeType"] = "StructureSO",
                 },
             }));
 
@@ -960,13 +957,6 @@ public sealed class GameMcpWorldEnvelopeTests
         Assert.Equal("category_not_collected", (string?)unavailable["reasonCode"]);
         Assert.Contains("quantity was not bound", (string?)unavailable["reason"]);
 
-        var wrongType = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
-            state,
-            "resources",
-            Guid.NewGuid().ToString("D"),
-            "UpgradeSO"));
-        Assert.Equal("unavailable", (string?)wrongType["status"]);
-        Assert.Equal("native_type_mismatch", (string?)wrongType["reasonCode"]);
     }
 
     [Fact]
@@ -1110,16 +1100,14 @@ public sealed class GameMcpWorldEnvelopeTests
         var unaffectedGet = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,
             "upgrades",
-            unaffectedId.ToString("D"),
-            "UpgradeSO"));
+            unaffectedId.ToString("D")));
         Assert.Equal("available", (string?)unaffectedGet["status"]);
         Assert.NotNull(unaffectedGet["row"]);
 
         var affectedGet = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,
             "upgrades",
-            affectedId.ToString("D"),
-            "UpgradeSO"));
+            affectedId.ToString("D")));
         Assert.Equal("unavailable", (string?)affectedGet["status"]);
         Assert.Equal("entity_data_incomplete", (string?)affectedGet["reasonCode"]);
         Assert.NotNull(affectedGet["partialRow"]);
@@ -1128,8 +1116,7 @@ public sealed class GameMcpWorldEnvelopeTests
         var batch = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRows(
             state,
             "upgrades",
-            new[] { unaffectedId.ToString("D"), affectedId.ToString("D") },
-            "UpgradeSO"));
+            new[] { unaffectedId.ToString("D"), affectedId.ToString("D") }));
         Assert.Equal("available", (string?)batch["status"]);
         Assert.Null(batch["found"]);
         Assert.Null(batch["incomplete"]);
@@ -1297,8 +1284,7 @@ public sealed class GameMcpWorldEnvelopeTests
         var result = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,
             "purchase-costs",
-            Guid.NewGuid().ToString("D"),
-            "StructureSO|UpgradeSO"));
+            Guid.NewGuid().ToString("D")));
 
         Assert.Equal("unavailable", (string?)result["status"]);
         Assert.Equal("composite_identity_required", (string?)result["reasonCode"]);
@@ -1523,8 +1509,7 @@ public sealed class GameMcpWorldEnvelopeTests
             GameMcpWorldQuery.GetRow(
                 Snapshot(publisher.ReadLatest()),
                 "research",
-                researchId.ToString("D"),
-                string.Empty).Freeze(),
+                researchId.ToString("D")).Freeze(),
             world.EntityIdentities));
 
         var responseBytes = System.Text.Encoding.UTF8.GetByteCount(
@@ -1620,8 +1605,7 @@ public sealed class GameMcpWorldEnvelopeTests
         var result = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,
             "crafting-recipes",
-            recipeId.ToString("D"),
-            "CraftingRecipeSO"));
+            recipeId.ToString("D")));
 
         Assert.Equal("available", (string?)result["status"]);
         Assert.Null(result["worldGeneration"]);
@@ -1664,8 +1648,7 @@ public sealed class GameMcpWorldEnvelopeTests
         var unavailable = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             Snapshot(publisher.ReadLatest()),
             "crafting-recipes",
-            recipeId.ToString("D"),
-            string.Empty));
+            recipeId.ToString("D")));
         Assert.Equal("unavailable", (string?)unavailable["status"]);
         Assert.Equal("category_not_collected", (string?)unavailable["reasonCode"]);
         Assert.Contains(

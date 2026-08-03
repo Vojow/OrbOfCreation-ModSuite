@@ -101,7 +101,6 @@ public sealed class GameMcpCastTests
         RecipeId,
         Guid.Empty,
         "SpellRecipeSO",
-        string.Empty,
         1,
         string.Empty,
         string.Empty,

@@ -28,7 +28,7 @@ public sealed class GameMcpRitualLifecycleTests
         Assert.Equal(
             new[] { "select", "deselect", "set_level", "activate", "cancel_duration" },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
-        Assert.NotNull(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
+        Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
         var operation = GameMcpProtocolRouter.BuildOperation("game_ritual", new JObject
         {
             ["mode"] = "activate",
@@ -77,7 +77,7 @@ public sealed class GameMcpRitualLifecycleTests
         var world = World(selected: true, level: 4, activeInstances: 1);
         var response = Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 801),
-            "rituals", RitualId.ToString("D"), "RitualSO").Freeze(), world);
+            "rituals", RitualId.ToString("D")).Freeze(), world);
 
         var row = response["row"]!;
         Assert.Equal("Moon Rite", (string?)row["name"]);
@@ -98,7 +98,7 @@ public sealed class GameMcpRitualLifecycleTests
         var world = World(selected: false, level: 0, activeInstances: 0);
         var response = Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 802),
-            "rituals", RitualId.ToString("D"), "RitualSO").Freeze(), world);
+            "rituals", RitualId.ToString("D")).Freeze(), world);
 
         var activate = response["row"]!["activate"]!;
         Assert.False((bool)activate["available"]!);
@@ -114,7 +114,7 @@ public sealed class GameMcpRitualLifecycleTests
         var before = World(selected: false, level: 0, activeInstances: 0);
         var after = World(selected: true, level: 3, activeInstances: 0);
         var command = new GameMcpCommand(1, GameMcpCommandKind.RitualLifecycle,
-            9, 3, "select", RitualId, Guid.Empty, "RitualSO", string.Empty,
+            9, 3, "select", RitualId, Guid.Empty, "RitualSO",
             1, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before, generation: 91));
 

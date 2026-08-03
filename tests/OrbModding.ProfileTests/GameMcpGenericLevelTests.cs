@@ -28,7 +28,7 @@ public sealed class GameMcpGenericLevelTests
             tool["inputSchema"]!["required"]!.Values<string>());
         Assert.Equal(new[] { "purchase", "bonus" },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
-        Assert.NotNull(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
+        Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
         var operation = GameMcpProtocolRouter.BuildOperation("game_level", new JObject
         {
             ["mode"] = "purchase",
@@ -42,10 +42,10 @@ public sealed class GameMcpGenericLevelTests
     {
         var world = World(total: 5, bonus: 2, purchaseAffordable: false);
 
-        var equipment = Row(world, "equipment-types", EquipmentTypeId, "EquipmentTypeSO");
-        var glyph = Row(world, "glyphs", GlyphId, "GlyphSO");
-        var resourceType = Row(world, "resource-types", ResourceTypeId, "ResourceTypeSO");
-        var timeRune = Row(world, "time-runes", TimeRuneId, "TimeRuneSO");
+        var equipment = Row(world, "equipment-types", EquipmentTypeId);
+        var glyph = Row(world, "glyphs", GlyphId);
+        var resourceType = Row(world, "resource-types", ResourceTypeId);
+        var timeRune = Row(world, "time-runes", TimeRuneId);
 
         AssertDecision(equipment, supportsBonus: true);
         AssertDecision(glyph, supportsBonus: true);
@@ -83,11 +83,10 @@ public sealed class GameMcpGenericLevelTests
     private static JObject Row(
         GameWorldState world,
         string category,
-        Guid id,
-        string nativeType) =>
+        Guid id) =>
         Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 901),
-            category, id.ToString("D"), nativeType).Freeze(), world)["row"] as JObject ??
+            category, id.ToString("D")).Freeze(), world)["row"] as JObject ??
         throw new InvalidOperationException("row was unavailable");
 
     private static void AssertDecision(JObject row, bool supportsBonus)
@@ -111,7 +110,7 @@ public sealed class GameMcpGenericLevelTests
 
     private static GameMcpCommand Command(string mode, GameWorldState before) =>
         new(1, GameMcpCommandKind.GenericLevel,
-            9, 3, mode, GlyphId, Guid.Empty, "GlyphSO", string.Empty,
+            9, 3, mode, GlyphId, Guid.Empty, "GlyphSO",
             1, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before, generation: 901));
 

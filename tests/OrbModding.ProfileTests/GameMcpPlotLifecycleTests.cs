@@ -27,7 +27,7 @@ public sealed class GameMcpPlotLifecycleTests
             tool["inputSchema"]!["required"]!.Values<string>());
         Assert.Equal(new[] { "add", "remove" },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
-        Assert.NotNull(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
+        Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
         var operation = GameMcpProtocolRouter.BuildOperation("game_harvest", new JObject
         {
             ["mode"] = "add",

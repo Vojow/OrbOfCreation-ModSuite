@@ -31,8 +31,7 @@ public sealed class GameMcpPublicationConsistencyTests
         var result = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             pinned,
             "spell-recipes",
-            GameMcpAcceptanceFixture.SpellId.ToString("D"),
-            string.Empty));
+            GameMcpAcceptanceFixture.SpellId.ToString("D")));
 
         Assert.Null(result["worldGeneration"]);
         Assert.Null(result["lifecycleGeneration"]);
@@ -93,8 +92,7 @@ public sealed class GameMcpWorldQueryTests
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRows(
             GameMcpTestHarness.Context(world, generation: 1003),
             "resources",
-            new[] { resourceId.ToString("D") },
-            string.Empty));
+            new[] { resourceId.ToString("D") }));
         var row = Assert.Single(response["results"]!.Values<JObject>())!["row"]!;
 
         Assert.Equal(
@@ -170,8 +168,7 @@ public sealed class GameMcpWorldQueryTests
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRows(
             GameMcpTestHarness.Context(world, generation: 1004),
             "resources",
-            new[] { resourceId.ToString("D") },
-            string.Empty));
+            new[] { resourceId.ToString("D") }));
         var row = Assert.Single(response["results"]!.Values<JObject>())!["row"]!;
 
         Assert.Equal("5e24", (string?)row["amount"]);
@@ -289,24 +286,10 @@ public sealed class GameMcpWorldQueryTests
         var exact = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,
             "spell-recipes",
-            GameMcpAcceptanceFixture.SpellId.ToString("D"),
-            string.Empty));
+            GameMcpAcceptanceFixture.SpellId.ToString("D")));
         Assert.Equal("available", (string?)exact["status"]);
         Assert.Null(exact["expectedNativeType"]);
         Assert.Equal(4, (int)exact["row"]!["masteryLevel"]!);
-    }
-
-    [Fact]
-    public void OptionalNativeTypeAssertionFailsClosedOnlyOnMismatch()
-    {
-        var state = GameMcpAcceptanceFixture.SpellSnapshot(4);
-        var mismatch = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
-            state,
-            "spell-recipes",
-            GameMcpAcceptanceFixture.SpellId.ToString("D"),
-            "AlchemyRecipeSO"));
-        Assert.Equal("unavailable", (string?)mismatch["status"]);
-        Assert.Equal("native_type_mismatch", (string?)mismatch["reasonCode"]);
     }
 
     [Fact]
@@ -353,8 +336,7 @@ public sealed class GameMcpWorldQueryTests
         var exact = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,
             "spell-recipes",
-            GameMcpAcceptanceFixture.SpellId.ToString("D"),
-            string.Empty));
+            GameMcpAcceptanceFixture.SpellId.ToString("D")));
         Assert.Null(exact["row"]!["spellPowerMod"]);
         Assert.Equal("spell-recipes", (string?)exact["row"]!["category"]);
         Assert.NotNull(exact["row"]!["loadoutAdd"]);
@@ -470,7 +452,7 @@ public sealed class GameMcpProtocolSurfaceTests
         Assert.Equal(new[] { "uuid" }, required);
         var properties = (JObject)purchase["inputSchema"]!["properties"]!;
         Assert.Null(properties["worldGeneration"]);
-        Assert.NotNull(properties["expectedNativeType"]);
+        Assert.Null(properties["expectedNativeType"]);
         Assert.Null(properties["kind"]);
 
         var screenshot = Assert.Single(
@@ -910,7 +892,6 @@ internal static class GameMcpAcceptanceFixture
             Guid.NewGuid(),
             Guid.Empty,
             derivedNativeType: "StructureSO",
-            expectedNativeType: string.Empty,
             amount: 1,
             payloadKey: string.Empty,
             payloadValue: string.Empty,

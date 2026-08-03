@@ -29,7 +29,7 @@ public sealed class GameMcpHarvestLifecycleTests
             tool["inputSchema"]!["required"]!.Values<string>());
         Assert.Equal(new[] { "add_element", "remove_element", "add_action", "remove_action" },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
-        Assert.NotNull(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
+        Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
         var operation = GameMcpProtocolRouter.BuildOperation("game_harvest_setup", new JObject
         {
             ["mode"] = "add_action",
@@ -79,7 +79,7 @@ public sealed class GameMcpHarvestLifecycleTests
         var world = World(elementActive: 2, actionActive: 1);
         var response = Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 901),
-            "harvest-elements", ElementId.ToString("D"), "HarvestElementSO").Freeze(), world);
+            "harvest-elements", ElementId.ToString("D")).Freeze(), world);
 
         var row = response["row"]!;
         Assert.Equal("Fire", (string?)row["name"]);
@@ -98,7 +98,7 @@ public sealed class GameMcpHarvestLifecycleTests
             elementAddAvailable: false);
         var blocked = Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(blockedWorld, generation: 902),
-            "harvest-elements", ElementId.ToString("D"), "HarvestElementSO").Freeze(),
+            "harvest-elements", ElementId.ToString("D")).Freeze(),
             blockedWorld)["row"]!;
         Assert.False((bool)blocked["addElement"]!["available"]!);
         Assert.Null(blocked["addElement"]!["costs"]);
@@ -114,7 +114,7 @@ public sealed class GameMcpHarvestLifecycleTests
         var before = World(elementActive: 2, actionActive: 1);
         var after = World(elementActive: 2, actionActive: 2);
         var command = new GameMcpCommand(1, GameMcpCommandKind.HarvestLifecycle,
-            9, 3, "add_action", ElementId, ActionId, "HarvestElementSO", string.Empty,
+            9, 3, "add_action", ElementId, ActionId, "HarvestElementSO",
             1, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before, generation: 91));
 

@@ -183,26 +183,6 @@ public sealed class GameMcpSpellLoadoutTests
     }
 
     [Fact]
-    public void PreviewEnforcesTheSameExpectedRecipeTypeAsAdd()
-    {
-        var preview = SpellWorkbenchPricePreview.Priced(
-            FirstRecipeId,
-            Array.Empty<SpellWorkbenchPricePreviewCost>(),
-            affordable: true,
-            Guid.Empty);
-
-        var response = GameMcpTestHarness.Json(
-            GameMcpSpellWorkbenchProjection.ProjectPricePreview(
-                in preview,
-                "GlyphSO"));
-
-        Assert.Equal("unavailable", (string?)response["status"]);
-        Assert.Equal("native_type_mismatch", (string?)response["reasonCode"]);
-        Assert.Contains("SpellRecipeSO", (string?)response["reason"]);
-        Assert.Contains("GlyphSO", (string?)response["reason"]);
-    }
-
-    [Fact]
     public void SpellSlotListIsLeanAndRetainsTheActionableRuntimeHandle()
     {
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.ListRows(
@@ -325,7 +305,6 @@ public sealed class GameMcpSpellLoadoutTests
         FirstInstanceId,
         Guid.Empty,
         "Spell",
-        string.Empty,
         destinationSlot + 1,
         string.Empty,
         string.Empty,

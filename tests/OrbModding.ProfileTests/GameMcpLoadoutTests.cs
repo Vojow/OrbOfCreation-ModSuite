@@ -34,7 +34,7 @@ public sealed class GameMcpLoadoutTests
             "select", "set_section", "rename", "next_icon", "next_color",
             "snapshot_save", "snapshot_load", "snapshot_clear",
         }, tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
-        Assert.NotNull(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
+        Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
     }
 
     [Fact]
@@ -78,10 +78,9 @@ public sealed class GameMcpLoadoutTests
     {
         var world = World(selected: true, populatedSnapshot: true);
         var playerResponse = Json(GameMcpWorldQuery.GetRow(Context(world, 901),
-            "player-loadouts", PlayerId.ToString("D"), "PlayerLoadout").Freeze(), world);
+            "player-loadouts", PlayerId.ToString("D")).Freeze(), world);
         var snapshotResponse = Json(GameMcpWorldQuery.GetRow(Context(world, 901),
-            "snapshot-loadouts", SnapshotId.ToString("D"),
-            "AlchemySnapshotListVariable|EquipmentSnapshotListVariable").Freeze(), world);
+            "snapshot-loadouts", SnapshotId.ToString("D")).Freeze(), world);
         var player = Assert.IsType<JObject>(playerResponse["row"]);
         var snapshot = Assert.IsType<JObject>(snapshotResponse["row"]);
 
@@ -103,12 +102,12 @@ public sealed class GameMcpLoadoutTests
         var before = World(selected: false, populatedSnapshot: true);
         var after = World(selected: true, populatedSnapshot: false);
         var select = new GameMcpCommand(1, GameMcpCommandKind.Loadout,
-            9, 3, "select", PlayerId, Guid.Empty, "PlayerLoadout", string.Empty,
+            9, 3, "select", PlayerId, Guid.Empty, "PlayerLoadout",
             1, string.Empty, string.Empty, false, false,
             frameContext: Context(before, 91));
         var clear = new GameMcpCommand(2, GameMcpCommandKind.Loadout,
             9, 3, "snapshot_clear", SnapshotId, Guid.Empty,
-            "EquipmentSnapshotListVariable", string.Empty,
+            "EquipmentSnapshotListVariable",
             1, string.Empty, string.Empty, false, false,
             frameContext: Context(before, 91));
 

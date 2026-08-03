@@ -134,7 +134,7 @@ public sealed class GameMcpTargetingTests
     private static GameMcpCommand Command(string mode, Guid id) => new(
         1, GameMcpCommandKind.Targeting, 9, 3, mode, id, Guid.Empty,
         mode == "submit" ? "StructureSO" : "TargetingManager+TargetLink",
-        string.Empty, 1, string.Empty, string.Empty, false, false);
+        1, string.Empty, string.Empty, false, false);
 
     private static GameWorldState World()
     {

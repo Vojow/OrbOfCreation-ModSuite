@@ -202,18 +202,18 @@ internal sealed class GameMcpProjectedDomainValue : GameMcpValue
         object value,
         string[] paths,
         string category,
-        string expectedNativeType)
+        string nativeType)
     {
         Value = value ?? throw new ArgumentNullException(nameof(value));
         Paths = paths is null ? Array.Empty<string>() : (string[])paths.Clone();
         Category = category ?? string.Empty;
-        ExpectedNativeType = expectedNativeType ?? string.Empty;
+        NativeType = nativeType ?? string.Empty;
     }
 
     internal object Value { get; }
     internal string[] Paths { get; }
     internal string Category { get; }
-    internal string ExpectedNativeType { get; }
+    internal string NativeType { get; }
 }
 
 internal sealed class GameMcpNull : GameMcpValue

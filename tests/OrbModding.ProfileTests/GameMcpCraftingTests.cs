@@ -38,7 +38,7 @@ public sealed class GameMcpCraftingTests
         Assert.Equal(
             new[] { "craft", "automate", "cancel_manual", "cancel_automation" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>());
-        Assert.NotNull(schema["properties"]!["expectedNativeType"]);
+        Assert.Null(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
         Assert.Null(schema["properties"]!["amount"]);
         var operation = GameMcpProtocolRouter.BuildOperation(
@@ -98,8 +98,7 @@ public sealed class GameMcpCraftingTests
         var result = Json(GameMcpWorldQuery.GetRow(
             Context(),
             "crafting-recipes",
-            RecipeId.ToString("D"),
-            "CraftingRecipeSO"));
+            RecipeId.ToString("D")));
 
         Assert.Equal("available", (string?)result["status"]);
         Assert.Null(result["worldGeneration"]);
@@ -154,7 +153,7 @@ public sealed class GameMcpCraftingTests
     {
         var command = new GameMcpCommand(
             1, GameMcpCommandKind.Crafting, 15, 8, "craft", RecipeId, Guid.Empty,
-            "CraftingRecipeSO", string.Empty, 1, string.Empty, string.Empty,
+            "CraftingRecipeSO", 1, string.Empty, string.Empty,
             false, false, frameContext: Context(queuedAmount: 4));
         var committed = GameMcpCommandResult.Committed("committed", 15, 8);
         var postState = Json(GameMcpWorldQuery.ProjectGameplayPostState(
@@ -180,7 +179,7 @@ public sealed class GameMcpCraftingTests
     {
         var command = new GameMcpCommand(
             1, GameMcpCommandKind.Crafting, 15, 8, mode, RecipeId, Guid.Empty,
-            "CraftingRecipeSO", string.Empty, 1, string.Empty, string.Empty,
+            "CraftingRecipeSO", 1, string.Empty, string.Empty,
             false, false, frameContext: Context(automationQuantity: before));
         var committed = GameMcpCommandResult.Committed("committed", 15, 8);
 

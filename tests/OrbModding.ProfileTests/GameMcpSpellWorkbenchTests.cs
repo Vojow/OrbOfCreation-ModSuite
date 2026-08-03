@@ -41,7 +41,7 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Equal(
             new[] { "preview", "confirm", "offer_initiate", "offer_select", "offer_confirm", "offer_reroll" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
-        Assert.NotNull(schema["properties"]!["expectedNativeType"]);
+        Assert.Null(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
         Assert.Null(schema["properties"]!["detail"]);
         Assert.Null(schema["properties"]!["verbosity"]);
@@ -80,7 +80,7 @@ public sealed class GameMcpSpellWorkbenchTests
             GameMcpWorldQuery.ListRows(context, "spell-recipes", 0, 10));
         var listed = Assert.Single(list["rows"]!.Values<JObject>())!;
         var get = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
-            context, "spell-recipes", RecipeId.ToString("D"), "SpellRecipeSO"));
+            context, "spell-recipes", RecipeId.ToString("D")));
         var exact = (JObject)get["row"]!;
 
         Assert.Equal("Gather Knowledge", (string?)listed["name"]);
@@ -119,7 +119,7 @@ public sealed class GameMcpSpellWorkbenchTests
             equipped: true));
 
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
-            context, "spell-recipes", RecipeId.ToString("D"), "SpellRecipeSO"));
+            context, "spell-recipes", RecipeId.ToString("D")));
         var row = response["row"]!;
 
         Assert.Null(row["selected"]);
@@ -153,7 +153,7 @@ public sealed class GameMcpSpellWorkbenchTests
             coreLevel: coreLevel));
 
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
-            context, "spell-recipes", RecipeId.ToString("D"), "SpellRecipeSO"));
+            context, "spell-recipes", RecipeId.ToString("D")));
         var decision = response["row"]!["loadoutAdd"]!;
 
         Assert.False((bool)decision["available"]!);
@@ -212,7 +212,7 @@ public sealed class GameMcpSpellWorkbenchTests
             discoveryVisible: false));
 
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
-            context, "spell-recipes", RecipeId.ToString("D"), "SpellRecipeSO"));
+            context, "spell-recipes", RecipeId.ToString("D")));
         var row = response["row"]!;
 
         Assert.False((bool)row["discover"]!["available"]!);
@@ -383,7 +383,6 @@ public sealed class GameMcpSpellWorkbenchTests
         RecipeId,
         Guid.Empty,
         "SpellRecipeSO",
-        string.Empty,
         1,
         payloadKey,
         string.Empty,

@@ -167,7 +167,6 @@ internal sealed class GameMcpCommand
         Guid targetId,
         Guid secondaryId,
         string derivedNativeType,
-        string expectedNativeType,
         int amount,
         string payloadKey,
         string payloadValue,
@@ -195,7 +194,6 @@ internal sealed class GameMcpCommand
         TargetId = targetId;
         SecondaryId = secondaryId;
         DerivedNativeType = derivedNativeType ?? string.Empty;
-        ExpectedNativeType = expectedNativeType ?? string.Empty;
         Amount = amount;
         PayloadKey = payloadKey ?? string.Empty;
         PayloadValue = payloadValue ?? string.Empty;
@@ -216,7 +214,6 @@ internal sealed class GameMcpCommand
     internal Guid TargetId { get; }
     internal Guid SecondaryId { get; }
     internal string DerivedNativeType { get; }
-    internal string ExpectedNativeType { get; }
     internal int Amount { get; }
     internal string PayloadKey { get; }
     internal string PayloadValue { get; }
@@ -892,13 +889,6 @@ internal static class GameMcpNativeActionAdmission
             throw new ArgumentException(
                 "the server-derived native type must be exactly " + derived +
                 " for " + command.Kind + ", not " + command.DerivedNativeType);
-        if (command.ExpectedNativeType.Length > 0 &&
-            !string.Equals(command.ExpectedNativeType, derived, StringComparison.Ordinal))
-        {
-            throw new ArgumentException(
-                "expectedNativeType assertion must be exactly " + derived +
-                " for " + command.Kind + ", not " + command.ExpectedNativeType);
-        }
     }
 }
 #endif

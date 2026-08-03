@@ -32,7 +32,7 @@ public sealed class GameMcpCraftingStationTests
             tool["inputSchema"]!["required"]!.Values<string>());
         Assert.Equal(new[] { "set_ingredient", "set_output", "set_level", "start", "stop" },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
-        Assert.NotNull(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
+        Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
         Assert.NotNull(tool["inputSchema"]!["properties"]!["selectionUuid"]);
         Assert.NotNull(tool["inputSchema"]!["properties"]!["slot"]);
         Assert.NotNull(tool["inputSchema"]!["properties"]!["level"]);
@@ -89,7 +89,7 @@ public sealed class GameMcpCraftingStationTests
         var world = World(FirstId, active: false, level: 3);
         var response = Json(GameMcpWorldQuery.GetRow(
             Context(world, generation: 901),
-            "crafting-stations", StationId.ToString("D"), "CraftingStructure").Freeze(), world);
+            "crafting-stations", StationId.ToString("D")).Freeze(), world);
 
         var row = response["row"]!;
         Assert.True(row["name"]?.Type == JTokenType.String, row.ToString());
@@ -114,7 +114,7 @@ public sealed class GameMcpCraftingStationTests
         var before = World(Guid.Empty, active: false, level: 3);
         var after = World(FirstId, active: false, level: 3);
         var command = new GameMcpCommand(1, GameMcpCommandKind.CraftingStation,
-            9, 3, "set_ingredient", StationId, FirstId, "CraftingStructure", string.Empty,
+            9, 3, "set_ingredient", StationId, FirstId, "CraftingStructure",
             1, string.Empty, string.Empty, false, false,
             frameContext: Context(before, generation: 91));
 

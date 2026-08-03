@@ -26,7 +26,7 @@ public sealed class GameMcpAlchemyLoadoutTests
             tool["inputSchema"]!["required"]!.Values<string>());
         Assert.Equal(new[] { "add", "remove", "move" },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
-        Assert.NotNull(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
+        Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
         Assert.Null(tool["inputSchema"]!["properties"]!["amount"]);
         Assert.Null(tool["inputSchema"]!["properties"]!["level"]);
         var operation = GameMcpProtocolRouter.BuildOperation(
@@ -86,7 +86,7 @@ public sealed class GameMcpAlchemyLoadoutTests
     {
         var response = Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(World(targetAmount: 2, position: 1), generation: 701),
-            "alchemy-recipes", RecipeId.ToString("D"), "AlchemyRecipeSO").Freeze());
+            "alchemy-recipes", RecipeId.ToString("D")).Freeze());
 
         var row = response["row"]!;
         Assert.Equal("Catalyze", (string?)row["name"]);
@@ -114,7 +114,7 @@ public sealed class GameMcpAlchemyLoadoutTests
         var before = World(targetAmount: 1, position: 0);
         var after = World(targetAmount: 3, position: 0);
         var command = new GameMcpCommand(1, GameMcpCommandKind.AlchemyLoadout,
-            9, 3, "add", RecipeId, Guid.Empty, "AlchemyRecipeSO", string.Empty,
+            9, 3, "add", RecipeId, Guid.Empty, "AlchemyRecipeSO",
             1, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before, generation: 81));
 

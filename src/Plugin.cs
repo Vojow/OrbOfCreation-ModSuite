@@ -1553,8 +1553,7 @@ public sealed class Plugin : BaseUnityPlugin
                     GameMcpWorldQuery.GetRows(
                         context,
                         request.Category,
-                        request.Uuids,
-                        request.ExpectedNativeType).Freeze());
+                        request.Uuids).Freeze());
                 return true;
             case "entity_catalog":
                 execution = GameMcpToolExecution.Read(
@@ -1588,8 +1587,7 @@ public sealed class Plugin : BaseUnityPlugin
                     GameMcpWorldQuery.ProjectDiscoveryPreview(
                         context,
                         request.Key,
-                        request.UuidCounts,
-                        request.ExpectedNativeType));
+                        request.UuidCounts));
                 return true;
             case "game_spell_loadout" when request.Mode == "preview":
                 var glyphs = new SpellWorkbenchGlyphStack[request.UuidCounts.Length];
@@ -1613,8 +1611,7 @@ public sealed class Plugin : BaseUnityPlugin
                 }
                 execution = GameMcpToolExecution.Read(
                     GameMcpSpellWorkbenchProjection.ProjectPricePreview(
-                        in preview,
-                        request.ExpectedNativeType));
+                        in preview));
                 return true;
             case "game_spell_loadout" when request.Mode == "staged":
                 SpellWorkbenchStagedLayout staged;
@@ -2183,7 +2180,6 @@ public sealed class Plugin : BaseUnityPlugin
             targetId,
             request.SecondaryUuid,
             nativeType,
-            request.ExpectedNativeType,
             amount <= 0 ? 1 : amount,
             payloadKey,
             payloadValue,
@@ -2269,18 +2265,6 @@ public sealed class Plugin : BaseUnityPlugin
                 reason.Length == 0
                     ? "the UUID is not supported by " + request.ToolName
                     : reason);
-            return false;
-        }
-        if (request.ExpectedNativeType.Length > 0 &&
-            !string.Equals(
-                request.ExpectedNativeType,
-                nativeType,
-                StringComparison.Ordinal))
-        {
-            failure = GameMcpCommandResult.Rejected(
-                "native_type_mismatch",
-                "the frame derived " + nativeType +
-                " but expectedNativeType asserted " + request.ExpectedNativeType);
             return false;
         }
         failure = null!;
@@ -2830,15 +2814,15 @@ public sealed class Plugin : BaseUnityPlugin
                 "plot selection is available only in the Main scene, not " + scene);
         }
 
-        const string expectedNativeType = "PlotNodeSO";
-        var plotType = AccessTools.TypeByName(expectedNativeType);
+        const string plotNativeType = "PlotNodeSO";
+        var plotType = AccessTools.TypeByName(plotNativeType);
         var listType = AccessTools.TypeByName("UIPlotNodeList");
         if (plotType is null || listType is null)
         {
             return GadgetRejected(
                 "native_plot_navigation_unavailable",
                 "required native types are unavailable: expected " +
-                expectedNativeType + " and UIPlotNodeList");
+                plotNativeType + " and UIPlotNodeList");
         }
 
         var plot = TypedRegistryResolver.Shared.Resolve(stableUuid, plotType);
@@ -2847,7 +2831,7 @@ public sealed class Plugin : BaseUnityPlugin
             return GadgetRejected(
                 "native_plot_not_resolved",
                 "stable plot " + EntityIdentityFormatter.Format(stableUuid) + " as " +
-                expectedNativeType + " was not resolved: " + plot.Reason);
+                plotNativeType + " was not resolved: " + plot.Reason);
         }
 
         var activeLists = Resources.FindObjectsOfTypeAll(listType)
@@ -2872,7 +2856,7 @@ public sealed class Plugin : BaseUnityPlugin
         {
             return GadgetRejected(
                 "native_plot_navigation_unavailable",
-                "UIPlotNodeList.OnNodeClick(" + expectedNativeType +
+                "UIPlotNodeList.OnNodeClick(" + plotNativeType +
                 ") -> System.Void could not be resolved");
         }
 
@@ -2882,7 +2866,7 @@ public sealed class Plugin : BaseUnityPlugin
             new GameMcpObjectBuilder
             {
                 ["plotUuid"] = stableUuid.ToString("D"),
-                ["expectedNativeType"] = expectedNativeType,
+                ["nativeType"] = plotNativeType,
                 ["nativeMethod"] = "UIPlotNodeList.OnNodeClick",
                 ["sceneBefore"] = scene,
             });

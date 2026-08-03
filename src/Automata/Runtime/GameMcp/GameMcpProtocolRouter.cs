@@ -232,7 +232,6 @@ internal sealed class GameMcpProtocolRouter
                 break;
             case "world_get":
                 builder.Category = RequireString(arguments, "category");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (arguments.ContainsKey("uuids"))
                     builder.Uuids = RequireStringArray(
                         arguments, "uuids", GameMcpWorldQuery.MaximumBatchSize);
@@ -252,19 +251,16 @@ internal sealed class GameMcpProtocolRouter
                 break;
             case "game_purchase":
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Amount = OptionalIntInRange(arguments, "count", 1, 1, 1000);
                 break;
             case "game_cast":
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(
                     arguments, "mode", "fire", "release", "toggle_off");
                 builder.SlotIndex = RequiredInt(arguments, "slotIndex", 0, 255);
                 break;
             case "game_concept":
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "add", "remove_owned");
                 builder.Amount = OptionalIntInRange(
                     arguments, "amount", 1, 1, 1_000_000);
@@ -273,7 +269,6 @@ internal sealed class GameMcpProtocolRouter
                 builder.Mode = RequireOneOf(arguments, "mode", "add", "remove");
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.SecondaryUuid = RequireUuid(arguments, "actionUuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Amount = OptionalIntInRange(
                     arguments, "amount", 1, 1, 10_000);
                 break;
@@ -281,7 +276,6 @@ internal sealed class GameMcpProtocolRouter
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "add_element", "remove_element", "add_action", "remove_action");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.SecondaryUuid = builder.Mode is "add_action" or "remove_action"
                     ? RequireUuid(arguments, "actionUuid")
                     : Guid.Empty;
@@ -291,10 +285,8 @@ internal sealed class GameMcpProtocolRouter
             case "game_structure":
                 builder.Mode = RequireOneOf(arguments, "mode", "enable", "disable");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
             case "game_spell_level":
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "single", "all");
                 builder.Uuid = builder.Mode == "single"
                     ? RequireUuid(arguments, "uuid")
@@ -308,7 +300,6 @@ internal sealed class GameMcpProtocolRouter
             case "game_spell_loadout":
                 builder.Mode = RequireOneOf(
                     arguments, "mode", "staged", "preview", "add", "remove", "move");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode is "preview" or "add")
                 {
                     builder.Uuid = RequireUuid(arguments, "uuid");
@@ -321,7 +312,6 @@ internal sealed class GameMcpProtocolRouter
                 break;
             case "game_targeting":
                 builder.Mode = RequireOneOf(arguments, "mode", "submit", "randomize");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode == "submit") builder.Uuid = RequireUuid(arguments, "uuid");
                 break;
             case "game_consumable":
@@ -334,7 +324,6 @@ internal sealed class GameMcpProtocolRouter
                     "set_randomization",
                     "move");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode == "discard")
                     builder.Amount = RequiredInt(arguments, "amount", 1, int.MaxValue);
                 if (builder.Mode == "set_randomization")
@@ -353,10 +342,8 @@ internal sealed class GameMcpProtocolRouter
                         "cancel_manual", "cancel_automation")
                     : "craft";
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
             case "game_discover":
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "preview", "confirm",
                     "offer_initiate", "offer_select", "offer_confirm", "offer_reroll");
                 if (builder.Mode is "preview" or "confirm")
@@ -376,12 +363,10 @@ internal sealed class GameMcpProtocolRouter
             case "game_equipment":
                 builder.Mode = RequireOneOf(arguments, "mode", "equip", "unequip");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
             case "game_alchemy":
                 builder.Mode = RequireOneOf(arguments, "mode", "add", "remove", "move");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode == "move")
                     builder.SlotIndex = RequiredInt(arguments, "destination", 0, int.MaxValue);
                 break;
@@ -389,20 +374,17 @@ internal sealed class GameMcpProtocolRouter
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "select", "deselect", "set_level", "activate", "cancel_duration");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode == "set_level")
                     builder.Amount = checked(RequiredInt(arguments, "level", 0, int.MaxValue - 1) + 1);
                 break;
             case "game_level":
                 builder.Mode = RequireOneOf(arguments, "mode", "purchase", "bonus");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
             case "game_brewing_station":
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "set_ingredient", "set_output", "set_level", "start", "stop");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode is "set_ingredient" or "set_output")
                     builder.SecondaryUuid = RequireUuid(arguments, "selectionUuid");
                 if (builder.Mode == "set_ingredient")
@@ -415,7 +397,6 @@ internal sealed class GameMcpProtocolRouter
                     "rename", "next_icon", "next_color", "snapshot_save",
                     "snapshot_load", "snapshot_clear");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode == "set_section")
                 {
                     builder.Key = RequireOneOf(arguments, "section", "equipment", "alchemy");
@@ -432,7 +413,6 @@ internal sealed class GameMcpProtocolRouter
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "select", "activate", "abandon", "fetch_time", "fetch_prestige");
                 builder.Uuid = OptionalUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode is "select" or "activate" or "abandon" && builder.Uuid == Guid.Empty)
                     throw new GameMcpInvalidParamsException("uuid is required for " + builder.Mode);
                 if (builder.Mode is "fetch_time" or "fetch_prestige" && builder.Uuid != Guid.Empty)
@@ -449,7 +429,6 @@ internal sealed class GameMcpProtocolRouter
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "develop", "pause", "resume", "cancel", "bonus");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
             case "suite_config_set":
                 builder.Section = RequireString(arguments, "section");
@@ -599,7 +578,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "world_get",
                 "Get exact world rows",
-                "Read one or more stable UUIDs as one ordered result list from one immutable published world. expectedNativeType is an optional fail-closed assertion.",
+                "Read one or more stable UUIDs as one ordered result list from one immutable published world.",
                 WorldGetSchema()),
             Tool(
                 "entity_catalog",
@@ -778,7 +757,7 @@ internal sealed class GameMcpProtocolRouter
                     "mode"),
                     ModeRule("staged", forbidden: new[]
                     {
-                        "uuid", "glyphs", "destination", "expectedNativeType",
+                        "uuid", "glyphs", "destination",
                     }),
                     ModeRule("preview", new[] { "uuid", "glyphs" }, new[] { "destination" }),
                     ModeRule("add", new[] { "uuid", "glyphs" }, new[] { "destination" }),
@@ -1142,8 +1121,6 @@ internal sealed class GameMcpProtocolRouter
                     GameMcpWorldQuery.MaximumBatchSize),
                 ["uuid"] = StringSchema(
                     "Singular alias for one canonical UUID; do not combine with uuids."),
-                ["expectedNativeType"] =
-                    StringSchema("Optional exact assertion returned by world_categories."),
             },
             "category");
     }
@@ -1368,16 +1345,12 @@ internal sealed class GameMcpProtocolRouter
             var subject = arguments.ContainsKey("uuid");
             var glyphs = arguments.ContainsKey("glyphs");
             var destination = arguments.ContainsKey("destination");
-            var expectedType = arguments.ContainsKey("expectedNativeType");
             if (mode == "staged")
             {
                 if (subject) errors.Add(ValidationError("unexpected_for_mode", "uuid",
                     "field 'uuid' is not accepted for mode 'staged'"));
                 if (glyphs) errors.Add(ValidationError("unexpected_for_mode", "glyphs",
                     "field 'glyphs' is not accepted for mode 'staged'"));
-                if (expectedType) errors.Add(ValidationError(
-                    "unexpected_for_mode", "expectedNativeType",
-                    "field 'expectedNativeType' is not accepted for mode 'staged'"));
             }
             else if (mode is "preview" or "add")
             {
@@ -1476,8 +1449,6 @@ internal sealed class GameMcpProtocolRouter
 
     private static JObject ActionSchema(JObject properties, params string[] required)
     {
-        properties["expectedNativeType"] =
-            StringSchema("Optional exact assertion; the server derives the native type from UUID.");
         return ObjectSchema(properties, required);
     }
 

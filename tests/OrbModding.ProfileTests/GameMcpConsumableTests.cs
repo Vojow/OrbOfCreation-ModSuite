@@ -78,8 +78,7 @@ public sealed class GameMcpConsumableTests
         var response = Json(GameMcpWorldQuery.GetRow(
             context,
             "consumables",
-            ConsumableId.ToString("D"),
-            "ConsumableSO"));
+            ConsumableId.ToString("D")));
         Assert.True(response["row"] is not null, response.ToString());
         var row = response["row"]!;
 
@@ -104,7 +103,7 @@ public sealed class GameMcpConsumableTests
     {
         var command = new GameMcpCommand(
             1, GameMcpCommandKind.Consumable, 9, 3, "discard", ConsumableId,
-            Guid.Empty, "ConsumableSO", string.Empty, 1, string.Empty, string.Empty,
+            Guid.Empty, "ConsumableSO", 1, string.Empty, string.Empty,
             false, false, frameContext: GameMcpTestHarness.Context(World(quantity: 3)));
         var committed = GameMcpCommandResult.Committed("committed", 9, 3);
         var terminal = committed
@@ -123,7 +122,7 @@ public sealed class GameMcpConsumableTests
 
         var randomizationCommand = new GameMcpCommand(
             2, GameMcpCommandKind.Consumable, 9, 3, "set_randomization", ConsumableId,
-            Guid.Empty, "ConsumableSO", string.Empty, 1, string.Empty, string.Empty,
+            Guid.Empty, "ConsumableSO", 1, string.Empty, string.Empty,
             false, false, frameContext: GameMcpTestHarness.Context(World()));
         var randomization = committed
             .WithDetails(GameMcpWorldQuery.ProjectGameplayPostState(

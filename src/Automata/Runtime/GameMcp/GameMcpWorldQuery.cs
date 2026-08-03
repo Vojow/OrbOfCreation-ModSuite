@@ -334,8 +334,7 @@ internal static class GameMcpWorldQuery
     internal static JObject GetRow(
         GameMcpFrameContext state,
         string categoryName,
-        string uuidText,
-        string expectedNativeType)
+        string uuidText)
     {
         if (!TryWorld(state, out var publication, out var unavailable))
             return unavailable;
@@ -343,18 +342,6 @@ internal static class GameMcpWorldQuery
             return NotAvailable(publication, "unknown_category", reason);
         if (!Guid.TryParseExact(uuidText ?? string.Empty, "D", out var uuid))
             return NotAvailable(publication, "invalid_uuid", "uuid must be a canonical D-format GUID");
-        if (expectedNativeType.Length > 0 &&
-            !string.Equals(
-                expectedNativeType,
-                category.ExpectedNativeType,
-                StringComparison.Ordinal))
-        {
-            return NotAvailable(
-                publication,
-                "native_type_mismatch",
-                "category " + category.Name + " requires expected native type " +
-                category.ExpectedNativeType + ", not " + expectedNativeType);
-        }
         if (!string.Equals(
                 category.IdentityMode,
                 "stable_entity_uuid",
@@ -430,8 +417,7 @@ internal static class GameMcpWorldQuery
     internal static JObject GetRows(
         GameMcpFrameContext state,
         string categoryName,
-        IReadOnlyList<string> uuidTexts,
-        string expectedNativeType)
+        IReadOnlyList<string> uuidTexts)
     {
         if (!TryWorld(state, out var publication, out var unavailable))
             return unavailable;
@@ -444,18 +430,6 @@ internal static class GameMcpWorldQuery
                 "invalid_batch_size",
                 "uuids must contain between 1 and " +
                 MaximumBatchSize.ToString(CultureInfo.InvariantCulture) + " entries");
-        }
-        if (expectedNativeType.Length > 0 &&
-            !string.Equals(
-                expectedNativeType,
-                category.ExpectedNativeType,
-                StringComparison.Ordinal))
-        {
-            return NotAvailable(
-                publication,
-                "native_type_mismatch",
-                "category " + category.Name + " requires expected native type " +
-                category.ExpectedNativeType + ", not " + expectedNativeType);
         }
         if (!string.Equals(
                 category.IdentityMode,
@@ -2149,7 +2123,7 @@ internal static class GameMcpWorldQuery
         var result = new JObject
         {
             ["category"] = category.Name,
-            ["expectedNativeType"] = category.ExpectedNativeType,
+            ["nativeType"] = category.ExpectedNativeType,
             ["count"] = category.Count(world),
             ["available"] = availability.Available,
         };
@@ -2650,7 +2624,7 @@ internal static class GameMcpWorldQuery
                             world, id, out var category, out var nativeType, out _))
                     {
                         offer["category"] = category;
-                        offer["expectedNativeType"] = nativeType;
+                        offer["nativeType"] = nativeType;
                     }
                     offers.Add(offer);
                 }
@@ -3207,15 +3181,13 @@ internal static class GameMcpWorldQuery
     internal static GameMcpValue ProjectDiscoveryPreview(
         GameMcpFrameContext state,
         string surface,
-        GameMcpUuidCount[] components,
-        string expectedNativeType)
+        GameMcpUuidCount[] components)
     {
         if (state.World is null)
             return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
         var world = state.World.Snapshot;
         if (surface.Length == 0)
-            return ProjectSurfaceLessDiscoveryPreview(
-                state, components, expectedNativeType);
+            return ProjectSurfaceLessDiscoveryPreview(state, components);
 
         Guid outputId;
         string category;
@@ -3249,9 +3221,6 @@ internal static class GameMcpWorldQuery
                 ["reasonCode"] = reasonCode,
                 ["reason"] = reason,
             }.Freeze();
-        if (!TryAssertPreviewNativeType(
-                category, expectedNativeType, out var typeMismatch))
-            return typeMismatch;
         return new JObject
         {
             ["status"] = "available",
@@ -3262,8 +3231,7 @@ internal static class GameMcpWorldQuery
 
     private static GameMcpValue ProjectSurfaceLessDiscoveryPreview(
         GameMcpFrameContext state,
-        GameMcpUuidCount[] components,
-        string expectedNativeType)
+        GameMcpUuidCount[] components)
     {
         if (state.World is null)
             return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
@@ -3311,9 +3279,6 @@ internal static class GameMcpWorldQuery
         }
         if (matchCount == 1)
         {
-            if (!TryAssertPreviewNativeType(
-                    matchedCategory, expectedNativeType, out var typeMismatch))
-                return typeMismatch;
             return new JObject
             {
                 ["status"] = "available",
@@ -3332,38 +3297,6 @@ internal static class GameMcpWorldQuery
                 : "The composition resolves on more than one discovery screen; specify surface.",
             ["matchingSurfaces"] = matchingSurfaces,
         }.Freeze();
-    }
-
-    internal static bool TryAssertPreviewNativeType(
-        string categoryName,
-        string expectedNativeType,
-        out GameMcpValue failure)
-    {
-        failure = null!;
-        if (expectedNativeType.Length == 0) return true;
-        if (!TryCategory(categoryName, out var category, out var categoryReason))
-        {
-            failure = new JObject
-            {
-                ["status"] = "unavailable",
-                ["reasonCode"] = "contract_unavailable",
-                ["reason"] = categoryReason,
-            }.Freeze();
-            return false;
-        }
-        if (string.Equals(
-                expectedNativeType,
-                category.ExpectedNativeType,
-                StringComparison.Ordinal))
-            return true;
-        failure = new JObject
-        {
-            ["status"] = "unavailable",
-            ["reasonCode"] = "native_type_mismatch",
-            ["reason"] = "The frame derived " + category.ExpectedNativeType +
-                " but expectedNativeType asserted " + expectedNativeType + ".",
-        }.Freeze();
-        return false;
     }
 
     internal static bool TryResolveGenericDiscovery(

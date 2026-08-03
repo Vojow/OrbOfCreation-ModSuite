@@ -102,8 +102,7 @@ internal static class GameMcpTestHarness
                 GameMcpWorldQuery.GetRows(
                     context,
                     request.Category,
-                    request.Uuids,
-                    request.ExpectedNativeType).Freeze()),
+                    request.Uuids).Freeze()),
             "entity_catalog" => GameMcpToolExecution.Read(
                 GameMcpEntityCatalog.Search(
                     context.World?.Snapshot.EntityIdentities ?? EntityCatalog,

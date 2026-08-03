@@ -102,12 +102,6 @@ internal static class GameMcpEntityWireNormalizer
             item["category"] = category;
             item.Remove("mcpCategory");
         }
-        if (item["expectedNativeType"] is JToken nativeType)
-        {
-            item["nativeType"] = nativeType;
-            item.Remove("expectedNativeType");
-        }
-
         var properties = new List<JProperty>(item.Properties());
         for (var index = 0; index < properties.Count; index++)
         {

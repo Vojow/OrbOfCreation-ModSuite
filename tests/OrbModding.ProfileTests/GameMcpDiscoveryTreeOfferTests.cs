@@ -39,7 +39,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
             schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
         Assert.NotNull(schema["properties"]!["offerUuid"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
-        Assert.NotNull(schema["properties"]!["expectedNativeType"]);
+        Assert.Null(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["verbosity"]);
         Assert.Null(schema["properties"]!["detail"]);
     }
@@ -79,9 +79,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
             mode: "reroll",
             Guid.NewGuid(),
             Guid.Empty,
-            "DiscoveryTreeSO",
-            string.Empty,
-            1,
+            "DiscoveryTreeSO", 1,
             string.Empty,
             string.Empty,
             false,
@@ -180,8 +178,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var read = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             context,
             "discovery-trees",
-            treeId.ToString("D"),
-            "DiscoveryTreeSO"));
+            treeId.ToString("D")));
 
         Assert.Equal("available", (string?)read["status"]);
         Assert.Null(read["expectedNativeType"]);
@@ -227,8 +224,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 82),
             "discovery-trees",
-            treeId.ToString("D"),
-            "DiscoveryTreeSO"));
+            treeId.ToString("D")));
         var row = (JObject)response["row"]!;
 
         Assert.Equal("Glyph Discoveries", (string?)row["name"]);
@@ -262,8 +258,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var unaffordable = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(DiscoveryWorld(unaffordableTree), generation: 83),
             "discovery-trees",
-            treeId.ToString("D"),
-            "DiscoveryTreeSO"));
+            treeId.ToString("D")));
         Assert.False((bool)unaffordable["row"]!["initiate"]!["available"]!);
         Assert.Equal("unaffordable",
             (string?)unaffordable["row"]!["initiate"]!["reasonCode"]);
@@ -301,7 +296,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var context = GameMcpTestHarness.Context(world, generation: 83);
 
         var treeRead = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
-            context, "discovery-trees", treeId.ToString("D"), "DiscoveryTreeSO"));
+            context, "discovery-trees", treeId.ToString("D")));
         var offers = treeRead["row"]!["offers"]!.Values<JObject>().ToArray();
         Assert.Equal(new[] { runeId.ToString("D"), glyphId.ToString("D") },
             offers.Select(offer => (string?)offer!["uuid"]));
@@ -311,7 +306,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         Assert.True((bool)treeRead["row"]!["rerollAvailable"]!);
 
         var runeRead = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
-            context, "time-runes", runeId.ToString("D"), "TimeRuneSO"));
+            context, "time-runes", runeId.ToString("D")));
         Assert.Equal("available", (string?)runeRead["status"]);
         var explanation = GameMcpTestHarness.Json(
             GameMcpEntityExplainer.Explain(context, runeId.ToString("D")));
@@ -333,8 +328,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 84),
             "discovery-trees",
-            treeId.ToString("D"),
-            "DiscoveryTreeSO"));
+            treeId.ToString("D")));
 
         Assert.Equal("unavailable", (string?)response["status"]);
         Assert.Equal("discovery_offer_read_incomplete", (string?)response["reasonCode"]);
@@ -380,8 +374,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 85),
             "discovery-trees",
-            treeId.ToString("D"),
-            "DiscoveryTreeSO"));
+            treeId.ToString("D")));
 
         if (mode == 2)
             Assert.False((bool)response["row"]!["rerollAvailable"]!);
@@ -429,7 +422,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                 Guid.Empty, Guid.Empty, 0, 0, false, 0, 2, true, true, false));
             var idleRead = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
                 GameMcpTestHarness.Context(idle, generation: 90),
-                "discovery-trees", tree.GetGuid().ToString("D"), "DiscoveryTreeSO"));
+                "discovery-trees", tree.GetGuid().ToString("D")));
             calls++;
             Assert.True((bool)idleRead["row"]!["initiate"]!["available"]!);
             Assert.NotNull(idleRead["row"]!["name"]);
@@ -640,7 +633,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var mapped = DiscoveryTreeOfferActionResultMapper.Map(in submission);
         var command = new GameMcpCommand(
             1, GameMcpCommandKind.DiscoveryTreeOffer, 9, 3, "confirm",
-            tree, offer, "DiscoveryTreeSO", string.Empty, 1,
+            tree, offer, "DiscoveryTreeSO", 1,
             string.Empty, string.Empty, false, false);
         var terminal = GameMcpCommandResult.FromAction(
             in mapped,
@@ -704,7 +697,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var mapped = DiscoveryTreeOfferActionResultMapper.Map(in submission);
         var command = new GameMcpCommand(
             1, GameMcpCommandKind.DiscoveryTreeOffer, 9, 3, "initiate",
-            tree, Guid.Empty, "DiscoveryTreeSO", string.Empty, 1,
+            tree, Guid.Empty, "DiscoveryTreeSO", 1,
             string.Empty, string.Empty, false, false);
         var terminal = GameMcpCommandResult.FromAction(
             in mapped,
@@ -826,9 +819,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                 "initiate",
                 tree.GetGuid(),
                 Guid.Empty,
-                "DiscoveryTreeSO",
-                string.Empty,
-                1,
+                "DiscoveryTreeSO", 1,
                 string.Empty,
                 string.Empty,
                 false,
@@ -936,9 +927,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                         mode: "initiate",
                         tree.GetGuid(),
                         Guid.Empty,
-                        "DiscoveryTreeSO",
-                        string.Empty,
-                        1,
+                        "DiscoveryTreeSO", 1,
                         string.Empty,
                         string.Empty,
                         false,

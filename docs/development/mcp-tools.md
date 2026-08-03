@@ -169,8 +169,7 @@ identity mode, row count, and exact availability. Internal world-property and ro
 not protocol data. `world_get` always requires `category` plus either a `uuids` list or the singular
 `uuid` alias; supplying both is a `mutually_exclusive` validation failure, and either form returns
 the same list shape.
-`expectedNativeType`, when supplied, is a strict assertion and rejects a mismatch. Composite tables
-cannot be addressed by an arbitrary related UUID; use `world_list`.
+Composite tables cannot be addressed by an arbitrary related UUID; use `world_list`.
 
 Supply `uuids` with 1–200 canonical UUIDs. Results preserve input order without repeating an index or UUID on
 successful rows. A typed not-found or invalid result repeats the implicated UUID because that is
@@ -305,8 +304,8 @@ compose pages let the player select components and then resolve exactly one outp
 reproduces that direction and never accepts the desired output UUID as the decision.
 `mode:"preview"` and `mode:"confirm"` take one `surface` from
 `spellcraft|glyphcraft|devote|runecraft|alchemy|artifacts|concepts` plus ordered `components` of
-`{uuid,count}`. The server derives the target and its native type from the live resolver; the
-`expectedNativeType` assertion is still accepted, but there is no target argument to select with.
+`{uuid,count}`. The server derives the target and its native type from the live resolver; there is
+no target argument to select with.
 Zero or multiple resolutions refuse (`discovery_recipe_unresolved`, `discovery_recipe_ambiguous`)
 instead of guessing, and a component that is neither an available glyph nor a published resource,
 or that asks for more uses than the glyph permits, refuses as `component_unavailable`. This is why a
@@ -391,8 +390,7 @@ ledger is computed for an action the screen cannot run.
 Call `game_harvest_setup(mode="add_element"|"remove_element", uuid=...)` for one exact
 `HarvestElementSO`. Action modes additionally require `actionUuid` naming an action actually
 offered by that element. `amount` defaults to one and reproduces the visible multi-instance list
-change without depending on the screen's hidden selector state. Optional `expectedNativeType`,
-when supplied, must be `HarvestElementSO`.
+change without depending on the screen's hidden selector state.
 
 The action boundary revalidates the concrete element/action pair, visibility, active-list room,
 standing usage capacity, and mastery-derived action maximum on Unity's main thread. Success returns
@@ -446,8 +444,7 @@ matched-recipe UUID is not a player choice and is not part of the wire surface.
 Call `game_brewing_station(mode="set_ingredient", uuid=...)` with `slot` 0 or 1 and a
 `selectionUuid` from that slot's options. `set_output` takes a visible output `selectionUuid`;
 `set_level` takes a level inside the published range; `start` and `stop` take no mode-specific
-fields. Every other field combination is rejected at schema validation. Optional
-`expectedNativeType`, when supplied, must be `CraftingStructure`.
+fields. Every other field combination is rejected at schema validation.
 
 The action resolves the exact runtime station and repeats selector availability, output visibility,
 level range, recipe-loaded, and active-state admission on Unity's main thread. Success returns the
@@ -469,8 +466,7 @@ The selected player row also owns the three controls visible in the editor:
 `set_section` requires `section:"equipment"|"alchemy"` plus `enabled`; `rename` requires a name
 of at most 24 characters; `next_icon` and `next_color` advance one step through the same native
 lists as the UI. Arbitrary icon/color indexes and a free-standing save verb are absent because the
-screen exposes neither. Optional `expectedNativeType`, when supplied for these modes, must be
-`PlayerLoadout`.
+screen exposes neither.
 
 `snapshot-loadouts` identifies both the Alchemy and Equipment snapshot-list owners; each detail
 row exposes its kind, visible zero-based slots, populated state, and named saved entries.
@@ -606,9 +602,6 @@ The MCP-only loadout sequence is:
 instance for `remove`/`move`.
 `glyphs` belongs to `preview`/`add` only; `destination` belongs to `move` only. Anything else is a
 named `unexpected_for_mode` validation failure rather than a silently ignored field.
-When supplied, `expectedNativeType` is asserted against the resolved recipe/output on both preview
-and mutation paths; preview never accepts a type assertion that the identical add or confirm would
-refuse.
 
 Add reproduces the library button's own admission order: it creates the native candidate, applies
 the recipe's selected level and the requested glyphs, then requires recipe usage requirements,
@@ -888,8 +881,7 @@ ConsumableUse/MultiBuy permit last. Success is the requested queue, exact usage 
 clamped holding removal, randomization flag, or exact destination. Payment and downstream effect
 accounting do not gate success; a committed result returns only the changed amount, flag, or slot.
 
-`game_craft` requires one recipe `uuid`; `expectedNativeType`, when supplied, must be
-`CraftingRecipeSO`. Its optional mode defaults to `craft` for compatibility and may be
+`game_craft` requires one recipe `uuid`. Its optional mode defaults to `craft` for compatibility and may be
 `craft`, `automate`, `cancel_manual`, or `cancel_automation`. `craft` re-resolves the exact
 recipe, authored page/queue route, native purchase amount, affordability, and room on Unity's main
 thread, then captures the shared crafting permit last. Direct recipes invoke native
@@ -903,8 +895,8 @@ automated instance route shown by the UI. The recipe row publishes manual queued
 automated quantity/capacity needed for the next decision. Success is one settled quantity change;
 refund accounting is neither computed nor used as a gate.
 
-`game_discover`'s composition modes require `surface` plus `components` and accept no target UUID;
-optional `expectedNativeType` remains an exact assertion, not a selector. `preview` resolves the
+`game_discover`'s composition modes require `surface` plus `components` and accept no target UUID.
+`preview` resolves the
 component multiset against the published roster for that one surface and returns the single named
 output, its costs, holdings, affordability, and blockers; it is a read and mutates nothing.
 `confirm` derives the target the same way from the admitted immutable world, then rereads both
@@ -917,8 +909,7 @@ restores any temporary UI selection staged for native resolution. A fault names 
 discovery outcome. A composition that resolves differently than the caller expected is
 preview or refusal evidence, never a wrong-target mutation.
 
-`game_equipment` requires `mode` and one published equipment `uuid`; optional
-`expectedNativeType`, when supplied, must be `EquipmentSO`. On Unity's main thread it re-resolves
+`game_equipment` requires `mode` and one published equipment `uuid`. On Unity's main thread it re-resolves
 the exact artifact and repeats creation, current stacks, global and primary-type slot room, live
 multi-buy, maximum stacks, and native usage-affordability checks before taking the family permit.
 Success is only the exact requested target-stack transition. It returns the target's stack count

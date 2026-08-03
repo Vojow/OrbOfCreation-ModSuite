@@ -58,7 +58,6 @@ internal sealed class GameMcpOperationRequest
         UuidCounts = source.UuidCounts is null
             ? Array.Empty<GameMcpUuidCount>()
             : (GameMcpUuidCount[])source.UuidCounts.Clone();
-        ExpectedNativeType = source.ExpectedNativeType ?? string.Empty;
         Mode = source.Mode ?? string.Empty;
         Offset = source.Offset;
         Limit = source.Limit;
@@ -85,7 +84,6 @@ internal sealed class GameMcpOperationRequest
     internal Guid SecondaryUuid { get; }
     internal string[] Uuids { get; }
     internal GameMcpUuidCount[] UuidCounts { get; }
-    internal string ExpectedNativeType { get; }
     internal string Mode { get; }
     internal int Offset { get; }
     internal int Limit { get; }
@@ -114,7 +112,6 @@ internal sealed class GameMcpOperationRequestBuilder
     internal Guid SecondaryUuid { get; set; }
     internal string[] Uuids { get; set; } = Array.Empty<string>();
     internal GameMcpUuidCount[] UuidCounts { get; set; } = Array.Empty<GameMcpUuidCount>();
-    internal string ExpectedNativeType { get; set; } = string.Empty;
     internal string Mode { get; set; } = string.Empty;
     internal int Offset { get; set; }
     internal int Limit { get; set; } = 1;

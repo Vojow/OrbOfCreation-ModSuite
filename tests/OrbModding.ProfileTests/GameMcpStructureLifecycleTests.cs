@@ -25,7 +25,7 @@ public sealed class GameMcpStructureLifecycleTests
             tool["inputSchema"]!["required"]!.Values<string>());
         Assert.Equal(new[] { "enable", "disable" },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
-        Assert.NotNull(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
+        Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
         var operation = GameMcpProtocolRouter.BuildOperation("game_structure", new JObject
         {
             ["mode"] = "disable",
@@ -58,7 +58,7 @@ public sealed class GameMcpStructureLifecycleTests
         var before = World(disabled: false, available: true);
         var after = World(disabled: true, available: true);
         var command = new GameMcpCommand(1, GameMcpCommandKind.StructureLifecycle,
-            9, 3, "disable", StructureId, Guid.Empty, "StructureSO", string.Empty,
+            9, 3, "disable", StructureId, Guid.Empty, "StructureSO",
             1, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before, generation: 91));
         var afterContext = GameMcpTestHarness.Context(after, generation: 92);
@@ -79,7 +79,7 @@ public sealed class GameMcpStructureLifecycleTests
     private static JObject Row(GameWorldState world) =>
         Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 901),
-            "structures", StructureId.ToString("D"), "StructureSO").Freeze(), world)["row"]
+            "structures", StructureId.ToString("D")).Freeze(), world)["row"]
             as JObject ?? throw new InvalidOperationException("row was unavailable");
 
     private static GameWorldState World(bool disabled, bool available)
