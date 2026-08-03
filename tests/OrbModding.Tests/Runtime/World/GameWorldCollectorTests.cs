@@ -2854,6 +2854,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EachSlotCarriesTheGamesOwnAnswerForEveryStateItDistinguishes()
     {
+        FakeSpellManager.NativeCanCast = false;
         var loadout = new FakeSpellLoadout();
         loadout.value.Add(new FakeSpell
         {
@@ -2891,6 +2892,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         // An occupant with no recipe behind it still publishes a row: the slot is filled, and a
         // consumer that cannot name what is in it should see that rather than see nothing.
         Assert.True(busy.Occupied);
+        Assert.False(busy.CasterAvailable);
         Assert.Equal(Guid.Empty, busy.SpellRecipeId);
 
         // The neighbouring slot is the negative of all of it, from the same pass.
@@ -2900,6 +2902,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.False(idle.Attuning);
         Assert.False(idle.Channeled);
         Assert.False(idle.Toggled);
+        Assert.False(idle.CasterAvailable);
         Assert.True(idle.CastReady);
     }
 

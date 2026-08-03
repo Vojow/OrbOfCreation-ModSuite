@@ -259,13 +259,13 @@ Every outcome waits for a new world publication; Auto Scribe has no cadence or r
 
 ## Auto Cast
 
-Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. Empty slots are skipped, active auras are treated as already satisfied, channels pause the rotation, and persistent spells are never turned off automatically.
+Auto Cast follows equipped spell slot order and fires at most one new spell per evaluation. Empty slots are skipped, active auras are treated as already satisfied, channels pause the rotation, and persistent spells are never turned off automatically. The published world carries both the manager-wide `SpellManager.CanCastASpell()` answer and each slot's `Spell.CanCast()` answer, so busy and unready periods are quiet planning backpressure rather than repeated boundary submissions.
 
 The rotation cursor advances when a slot is chosen, not when its cast commits. Whether a spell has anything to aim at is an unbounded reflective walk of the live effect graph with no snapshot form, so the worker cannot see it and the boundary is where a targetless spell is refused; a cursor that waited for a commit would re-pick that same spell every cycle and starve every other slot. A refused cast costs itself its turn and comes round again one rotation later.
 
 `FullCharge=true` holds charge-capable spells through the game's native charge-input contract until the full-charge point. While Auto Cast owns that hold, the rest of the rotation pauses. The hold is released when charging completes, Auto Cast is disabled or emergency-blocked, the setting is turned off, manual spell input occurs, or the plugin shuts down. Set `FullCharge=false` to fire charge-capable spells immediately without charging.
 
-A planned cast is advisory. Before firing, Auto Cast rediscovers the slot and requires the stable recipe UUID, exact native Spell reference, runtime type, and slot index to match. Scene changes, save implementation, and player-manager restarts discard prepared casts immediately.
+A planned cast is advisory. Before firing, Auto Cast rediscovers the slot and requires the stable recipe UUID, exact native Spell reference, runtime type, and slot index to match, then repeats manager and spell readiness. A manager or spell that became unready after publication is recorded with its exact reason as an expected skip; structural identity failures and genuine mutation failures remain rejected or faulted. Scene changes, save implementation, and player-manager restarts discard prepared casts immediately.
 
 Every finite-cap resource used by immediate or drain costs must meet `StartResourcePercent`. Immediate costs also pass the shared reserve policy. Manual casting pauses automation for `ManualPauseSeconds`, and an existing manual target prompt is never replaced.
 

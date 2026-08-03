@@ -80,6 +80,7 @@ internal static class WorldCategoryFakes
         // Nor is the equipped loadout: Spell belongs to no per-type registry either, so the list
         // holding it is reached by uuid the same way and the slots are read out of that list.
         ["SpellListVariable"] = typeof(FakeSpellLoadout),
+        ["SpellManager"] = typeof(FakeSpellManager),
 
         // Not categories either: an effect block's one modifier and one script are read past their
         // counts, and the lists holding them are typed as interfaces, so the two kinds the suite
@@ -95,6 +96,7 @@ internal static class WorldCategoryFakes
         FakeAlchemyType.All.Clear();
         FakeSpellRecipe.All.Clear();
         FakeSpellType.All.Clear();
+        FakeSpellManager.NativeCanCast = true;
         FakeEquipment.All.Clear();
         FakeEquipmentType.All.Clear();
         FakeResourceType.All.Clear();
@@ -690,6 +692,13 @@ internal sealed class FakeSpellLoadout
     public List<FakeSpell?> value = new();
 
     public Guid GetGuid() => Identity;
+}
+
+internal static class FakeSpellManager
+{
+    internal static bool NativeCanCast = true;
+
+    public static bool CanCastASpell() => NativeCanCast;
 }
 
 /// <summary>One equipped spell, answering exactly what the loadout reader asks it.</summary>
