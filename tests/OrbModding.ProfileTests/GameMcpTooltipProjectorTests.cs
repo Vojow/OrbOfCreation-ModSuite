@@ -110,6 +110,22 @@ public sealed class GameMcpTooltipProjectorTests
         Assert.Equal(754, System.Text.Encoding.UTF8.GetByteCount(encoded));
     }
 
+    [Fact]
+    public void DeepTooltipNamesTheTwoHundredLineTruncation()
+    {
+        var tooltip = new FakeTooltip("Deep");
+        for (var index = 0; index < 205; index++)
+            tooltip.Nodes.Add(new TooltipNode("Fact " + index));
+
+        var result = GameMcpTestHarness.Json(
+            GameMcpTooltipProjector.Project(tooltip, null, null));
+        var lines = ((string)result["text"]!).Split('\n');
+
+        Assert.Equal(201, lines.Length);
+        Assert.Equal("Tooltip truncated after 200 lines.", lines[^1]);
+        Assert.DoesNotContain("Fact 204", lines);
+    }
+
     private sealed class FakeTooltip : ITooltipable
     {
         internal FakeTooltip(string name, params TooltipNode[] nodes)

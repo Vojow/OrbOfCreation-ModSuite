@@ -533,8 +533,8 @@ internal static class GameMcpWorldQuery
         GameMcpCommandResult committed) => command.Kind switch
         {
             GameMcpCommandKind.SpellWorkbench when string.Equals(
-                command.SourceOperation?.Request.ToolName,
-                "game_spell_loadout",
+                command.Mode,
+                "create",
                 StringComparison.Ordinal) => ProjectSpellLoadoutDelta(state, command),
             GameMcpCommandKind.SpellWorkbench => ProjectDiscoveryDelta(state, command),
             GameMcpCommandKind.SpellComposition =>
@@ -771,13 +771,70 @@ internal static class GameMcpWorldQuery
 
     private static GameMcpValue ProjectDiscoveryDelta(
         GameMcpFrameContext state,
-        GameMcpCommand command) =>
-        new JObject
+        GameMcpCommand command)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        if (!TryReadDiscoveryState(
+                state.World.Snapshot,
+                command.TargetId,
+                command.DerivedNativeType,
+                out var after))
+            return PostStateUnavailable(
+                "post_state_not_published",
+                "the settled world has no discovery state for the requested target");
+        bool? before = null;
+        var oldWorld = Before(command);
+        if (oldWorld is not null && TryReadDiscoveryState(
+                oldWorld,
+                command.TargetId,
+                command.DerivedNativeType,
+                out var previous))
+            before = previous;
+        var result = new JObject
         {
             ["uuid"] = command.TargetId.ToString("D"),
-            ["discovered"] = new JObject { ["before"] = false, ["after"] = true },
-            ["surface"] = command.PayloadKey,
-        }.Freeze();
+            ["discovered"] = new JObject { ["before"] = before, ["after"] = after },
+        };
+        if (command.PayloadKey.Length > 0) result["surface"] = command.PayloadKey;
+        return result.Freeze();
+    }
+
+    private static bool TryReadDiscoveryState(
+        GameWorldState world,
+        Guid targetId,
+        string nativeType,
+        out bool discovered)
+    {
+        switch (nativeType)
+        {
+            case "SpellRecipeSO" when WorldLookup.TryFind(
+                world.SpellRecipes, targetId, out var spell):
+                discovered = spell.Discovered;
+                return true;
+            case "GlyphSO" when WorldLookup.TryFind(world.Glyphs, targetId, out var glyph):
+                discovered = glyph.Discovered;
+                return true;
+            case "RitualSO" when WorldLookup.TryFind(world.Rituals, targetId, out var ritual):
+                discovered = ritual.Discovered;
+                return true;
+            case "TimeRuneSO" when WorldLookup.TryFind(
+                world.TimeRunes, targetId, out var timeRune):
+                discovered = timeRune.Discovered;
+                return true;
+            case "AlchemyRecipeSO" when WorldLookup.TryFind(
+                world.AlchemyRecipes, targetId, out var alchemy):
+                discovered = alchemy.Discovered;
+                return true;
+            case "EquipmentSO" when WorldLookup.TryFind(
+                world.Equipment, targetId, out var equipment):
+                discovered = equipment.IsCreated;
+                return true;
+            default:
+                discovered = false;
+                return false;
+        }
+    }
 
     private static GameMcpValue ProjectConsumableDelta(
         GameMcpFrameContext state,
@@ -892,7 +949,7 @@ internal static class GameMcpWorldQuery
             return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
         var after = state.World.Snapshot;
         var before = Before(command);
-        if (command.Mode == "add")
+        if (command.Mode is "add" or "create")
         {
             for (var index = 0; index < after.SpellSlots.Count; index++)
             {
@@ -904,6 +961,15 @@ internal static class GameMcpWorldQuery
                 {
                     ["uuid"] = command.TargetId.ToString("D"),
                     ["slot"] = new JObject { ["before"] = null, ["after"] = slot.SlotIndex },
+                    ["loadBudget"] = new JObject
+                    {
+                        ["used"] = new JObject
+                        {
+                            ["before"] = before?.SpellWorkbench.EquippedCount,
+                            ["after"] = after.SpellWorkbench.EquippedCount,
+                        },
+                        ["maximum"] = after.SpellWorkbench.MaximumEquipped,
+                    },
                 }.Freeze();
             }
         }
@@ -1158,14 +1224,13 @@ internal static class GameMcpWorldQuery
             {
                 var row = category.Row(publication.Snapshot, rowIndex);
                 if (!Matches(publication.Snapshot, category, row, normalized)) continue;
-                if (category.TryIdentity(row, out var identity))
-                    matchedIdentities.Add(identity);
+                if (!category.TryIdentity(row, out var identity)) continue;
+                matchedIdentities.Add(identity);
                 totalMatches++;
                 if (matches.Count >= limit) continue;
-                if (category.TryIdentity(row, out var matchedIdentity))
-                    matches.Add(new JObject
+                matches.Add(new JObject
                 {
-                    ["uuid"] = matchedIdentity.ToString("D"),
+                    ["uuid"] = identity.ToString("D"),
                     ["category"] = category.Name,
                     ["nativeType"] = category.ExpectedNativeType,
                 });
@@ -1207,7 +1272,6 @@ internal static class GameMcpWorldQuery
                 result["implicatedOffers"] = implicatedOffers;
         }
         result[incomplete ? "partialMatches" : "matches"] = matches;
-        if (totalMatches > matches.Count) result["nextOffset"] = matches.Count;
         return result;
     }
 
@@ -2136,16 +2200,25 @@ internal static class GameMcpWorldQuery
         if (recipe.Discovered)
         {
             var coreUsable = SpellCoreUsable(world, in recipe);
-            next["available"] = world.SpellWorkbench.HasEmptySlot && coreUsable;
+            var canPrice = world.SpellWorkbench.HasEmptySlot && coreUsable;
+            if (canPrice)
+            {
+                var costs = ProjectSpellCosts(world, world.SpellWorkbench.CreationCosts);
+                if (costs.Count > 0) next["costs"] = costs;
+                next["affordable"] = world.SpellWorkbench.CreationAffordable;
+            }
+            next["available"] = canPrice && world.SpellWorkbench.CreationAffordable;
             next["requiresGlyphLayout"] = true;
-            if (world.SpellWorkbench.HasEmptySlot && coreUsable)
+            if (canPrice && world.SpellWorkbench.CreationAffordable)
             {
                 var options = ProjectOwnedAugmentOptions(world);
                 if (options.Count > 0) next["augmentOptions"] = options;
             }
-            else next["reasonCode"] = world.SpellWorkbench.HasEmptySlot
-                ? "core_glyphs_unavailable"
-                : "loadout_full";
+            else if (!world.SpellWorkbench.HasEmptySlot)
+                next["reasonCode"] = "loadout_full";
+            else if (!coreUsable)
+                next["reasonCode"] = "core_glyphs_unavailable";
+            else next["reasonCode"] = "unaffordable";
         }
         else
         {
@@ -2765,6 +2838,7 @@ internal static class GameMcpWorldQuery
                     recipe.CoreGlyphs[index].GlyphId,
                     out var glyph) ||
                 !glyph.Available ||
+                glyph.Level <= 0 ||
                 glyph.AugmentsSpells)
                 return false;
         }

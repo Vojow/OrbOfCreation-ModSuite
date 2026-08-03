@@ -1833,6 +1833,7 @@ public sealed class Plugin : BaseUnityPlugin
             if (request.ToolName == "game_discover")
             {
                 mode = "discover";
+                payloadKey = request.Key;
                 if (context.World is null)
                     preparationFailure = GameMcpCommandResult.Rejected(
                         "world_not_published",
@@ -2009,8 +2010,7 @@ public sealed class Plugin : BaseUnityPlugin
                 {
                     code = "action_target_unavailable";
                     if (reason.Length == 0)
-                        reason = identity + " does not satisfy the live " +
-                            request.ToolName + " admission constraint";
+                        reason = identity + " is not available for this action right now";
                 }
                 else
                 {

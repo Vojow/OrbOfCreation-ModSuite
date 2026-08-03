@@ -1157,6 +1157,44 @@ public sealed class GameMcpWorldEnvelopeTests
     }
 
     [Fact]
+    public void WorldSearchCountsOnlyRowsItCanReturn()
+    {
+        var reports = GameMcpWorldQuery.RegisteredCategoryNames()
+            .Concat(new[]
+            {
+                "structure-costs",
+                "upgrade-costs",
+                "crafting-recipe-state",
+                "crafting-decisions",
+                "concept-instances",
+                "consumable-inventory",
+            })
+            .Distinct(StringComparer.Ordinal)
+            .Select(Clean)
+            .ToArray();
+        var world = new GameWorldState
+        {
+            Upgrades = PublicationTable<WorldUpgrade>.Create(new[] { Upgrade(Guid.Empty) }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(reports),
+            CollectedAtEpoch = 45,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+        using var publisher =
+            new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
+        publisher.Publish(world, new WorldGeneration(949));
+
+        var search = GameMcpTestHarness.Json(GameMcpWorldQuery.Search(
+            Snapshot(publisher.ReadLatest()),
+            "00000000",
+            10));
+
+        Assert.Equal("available", (string?)search["status"]);
+        Assert.Equal(0, (int)search["total"]!);
+        Assert.Empty(search["matches"]!.Values<JObject>());
+        Assert.Null(search["nextOffset"]);
+    }
+
+    [Fact]
     public void SearchExcludesCompositeOnlyOwnersAndWorldListRetainsTheirLocalizedEvidence()
     {
         var ownerId = Guid.Parse("b4505524-0000-4000-8000-000000000001");

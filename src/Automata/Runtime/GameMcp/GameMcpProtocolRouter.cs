@@ -1166,12 +1166,6 @@ internal sealed class GameMcpProtocolRouter
         };
     }
 
-    private static bool IsActionTool(string name) => name is
-        "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-        "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
-        "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
-        "game_challenge" or "game_prestige" or "game_research";
-
     private static JObject ListResources() => new()
     {
         ["resources"] = new JArray

@@ -169,7 +169,7 @@ successful rows. A typed not-found or invalid result repeats the implicated UUID
 failure evidence. Every row comes from the same pinned publication; the server does not issue a
 generation or retain a snapshot token across calls.
 
-Every paged read uses one pagination vocabulary: `total` and — only when more rows remain —
+Paged list and catalog reads use one pagination vocabulary: `total` and — only when more rows remain —
 `nextOffset`. There is no redundant `returned` or `hasMore`; the collection length and
 `nextOffset` say both. The collection itself is always present, including when it is empty.
 
@@ -248,7 +248,9 @@ are clean.
 composite diagnostic row. If an owner UUID exists only in `entity-requirements`, search returns an
 authoritative empty entity result; `world_list(entity-requirements)` retains the exact localized
 owner, ordinal, and runtime type evidence. If a searchable entity row itself is returned and that
-entity owns an unmodeled leaf, the search result is explicitly incomplete for that entity.
+entity owns an unmodeled leaf, the search result is explicitly incomplete for that entity. Its
+`total` counts only stable-identity matches that the response can actually return. The tool accepts
+no offset, so a bounded result never advertises an unusable continuation cursor.
 
 ### Discovery decision loop
 

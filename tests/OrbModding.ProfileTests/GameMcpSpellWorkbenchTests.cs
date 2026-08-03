@@ -126,15 +126,38 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Null(row["select"]);
         Assert.True((bool)row["loadoutAdd"]!["available"]!);
         Assert.True((bool)row["loadoutAdd"]!["requiresGlyphLayout"]!);
-        Assert.Null(row["loadoutAdd"]!["affordable"]);
+        Assert.True((bool)row["loadoutAdd"]!["affordable"]!);
         Assert.Null(row["loadoutAdd"]!["reasonCode"]);
-        Assert.Null(row["loadoutAdd"]!["costs"]);
+        var cost = Assert.Single(row["loadoutAdd"]!["costs"]!.Values<JObject>())!;
+        Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
+        Assert.Equal("750", (string?)cost["cost"]);
+        Assert.Equal("9e6", (string?)cost["amount"]);
         Assert.Equal(1, (int)row["loadBudget"]!["used"]!);
         Assert.Equal(3, (int)row["loadBudget"]!["maximum"]!);
         Assert.True((bool)row["loadBudget"]!["fitsAnotherSpell"]!);
         var equipped = Assert.Single(row["equipped"]!.Values<JObject>())!;
         Assert.Equal(0, (int)equipped["slot"]!);
         Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
+    }
+
+    [Fact]
+    public void LoadoutAddReadRefusesAnUnaffordableScreenPrice()
+    {
+        var context = GameMcpTestHarness.Context(World(
+            discovered: true,
+            discoveryAffordable: true,
+            creationAffordable: false,
+            hasEmptySlot: true));
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context, "spell-recipes", RecipeId.ToString("D"), "SpellRecipeSO"));
+        var decision = response["row"]!["loadoutAdd"]!;
+
+        Assert.False((bool)decision["available"]!);
+        Assert.False((bool)decision["affordable"]!);
+        Assert.Equal("unaffordable", (string?)decision["reasonCode"]);
+        Assert.Single(decision["costs"]!.Values<JObject>());
+        Assert.Null(decision["augmentOptions"]);
     }
 
     [Fact]
@@ -224,6 +247,49 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Equal("requested spell workbench transition",
             (string?)failure["missingOutcome"]);
         Assert.Single(failure.Properties());
+    }
+
+    [Fact]
+    public void SettledProjectorReportsObservedDiscoveryAndLoadoutChanges()
+    {
+        var undiscovered = World(
+            discovered: false,
+            discoveryAffordable: true,
+            creationAffordable: true,
+            hasEmptySlot: true);
+        var discoveryCommand = Command("discover", before: undiscovered);
+        var terminal = GameMcpCommandResult.Committed(
+            "committed",
+            9,
+            3);
+
+        var unchanged = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(undiscovered), discoveryCommand, terminal));
+
+        Assert.False((bool)unchanged["discovered"]!["before"]!);
+        Assert.False((bool)unchanged["discovered"]!["after"]!);
+        Assert.Null(unchanged["surface"]);
+
+        var beforeAdd = World(
+            discovered: true,
+            discoveryAffordable: true,
+            creationAffordable: true,
+            hasEmptySlot: true);
+        var afterAdd = World(
+            discovered: true,
+            discoveryAffordable: true,
+            creationAffordable: true,
+            hasEmptySlot: true,
+            equipped: true);
+        var addCommand = Command("create", before: beforeAdd);
+        var added = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(afterAdd), addCommand, terminal));
+
+        Assert.Equal(0, (int)added["slot"]!["after"]!);
+        Assert.Equal(0, (int)added["loadBudget"]!["used"]!["before"]!);
+        Assert.Equal(1, (int)added["loadBudget"]!["used"]!["after"]!);
+        Assert.Equal(3, (int)added["loadBudget"]!["maximum"]!);
+        Assert.Null(added["discovered"]);
     }
 
     [Fact]
