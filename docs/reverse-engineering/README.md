@@ -32,6 +32,7 @@ assets, or a live registry read belongs here.
 - [Modding hooks](modding-hooks.md) — where to attach, what not to touch, and how to prove a mutation landed.
 - [Requirements](requirements.md) — the requirement graph: what gates actually read, node visibility states, and walking a chain to the real blocker.
 - [Native action surfaces](native-action-surfaces.md) — the purchase, consumable and crafting paths, already decompiled.
+- [Unified level controls](unified-level-native-pipeline.md) — the complete levelable type matrix, visible list callbacks, and usage-cost admission.
 
 The product-version-pinned authored model, progression graph, and census live under
 [`data/`](../../data/README.md).

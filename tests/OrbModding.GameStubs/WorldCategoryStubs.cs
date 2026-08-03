@@ -51,7 +51,15 @@ public sealed class SpellTypeSO : IdScriptableObject
 }
 
 
-public sealed class EquipmentTypeSO : IdScriptableObject
+public interface ILevelable
+{
+}
+
+public interface ILevelableHasFree
+{
+}
+
+public sealed class EquipmentTypeSO : IdScriptableObject, ILevelable, ILevelableHasFree
 {
     public static List<EquipmentTypeSO> All = new List<EquipmentTypeSO>();
     public int level;
@@ -61,11 +69,23 @@ public sealed class EquipmentTypeSO : IdScriptableObject
     public ValueModifierRecord maxTypeSlots = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ModifierRecord powerMod = new ModifierRecord();
     public ModifierRecord experienceRateMod = new ModifierRecord();
+    public ResourceCostList LevelCost = new ResourceCostList();
+    public ResourceCostList BonusLevelCost = new ResourceCostList();
+    public bool NativeCanLevel = true;
+    public bool SuppressLevelPurchase;
+    public bool SuppressBonusPurchase;
     public int GetMaxTypeSlots() => maxTypeSlots.GetValue().ToInt();
+    public int GetLevel() => level + freeLevels;
+    public int GetFreeLevels() => freeLevels;
+    public bool CanLevel() => NativeCanLevel;
+    public ResourceCostList GetLevelCost() => LevelCost;
+    public ResourceCostList GetFreeLevelCost() => BonusLevelCost;
+    public void PurchaseLevel() { if (!SuppressLevelPurchase) level++; }
+    public void PurchaseFreeLevel() { if (!SuppressBonusPurchase) freeLevels++; }
 }
 
 
-public sealed class ResourceTypeSO : IdScriptableObject
+public sealed class ResourceTypeSO : IdScriptableObject, ILevelable, ILevelableHasFree
 {
     public static List<ResourceTypeSO> All = new List<ResourceTypeSO>();
     public int level;
@@ -96,6 +116,18 @@ public sealed class ResourceTypeSO : IdScriptableObject
     public ModifierRecord replenishTimeMod = new ModifierRecord();
     public ModifierRecord decayRatio = new ModifierRecord();
     public ModifierRecord decayTimeMod = new ModifierRecord();
+    public ResourceCostList LevelCost = new ResourceCostList();
+    public ResourceCostList BonusLevelCost = new ResourceCostList();
+    public bool NativeCanLevel = true;
+    public bool SuppressLevelPurchase;
+    public bool SuppressBonusPurchase;
+    public int GetLevel() => level + freeLevels;
+    public int GetFreeLevels() => freeLevels;
+    public bool CanLevel() => NativeCanLevel;
+    public ResourceCostList GetLevelCost() => LevelCost;
+    public ResourceCostList GetFreeLevelCost() => BonusLevelCost;
+    public void PurchaseLevel() { if (!SuppressLevelPurchase) level++; }
+    public void PurchaseFreeLevel() { if (!SuppressBonusPurchase) freeLevels++; }
 }
 
 
@@ -352,7 +384,7 @@ public sealed class HarvestElementSO : IdScriptableObject
 }
 
 
-public sealed class TimeRuneSO : IdScriptableObject, IDiscoverable
+public sealed class TimeRuneSO : IdScriptableObject, IDiscoverable, ILevelable
 {
     public static List<TimeRuneSO> All = new List<TimeRuneSO>();
     public bool discovered;
@@ -375,6 +407,9 @@ public sealed class TimeRuneSO : IdScriptableObject, IDiscoverable
     public ValueModifierRecord power = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord powerScalingMod = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord masteryXpMod = new ValueModifierRecord(new BigDouble(0.0, 0));
+    public ResourceCostList LevelCost = new ResourceCostList();
+    public bool NativeCanLevel = true;
+    public bool SuppressLevelPurchase;
 
     public ResourceCostList GetDiscoverCost() => discoveryCost;
     public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(glyphRecipe);
@@ -383,6 +418,10 @@ public sealed class TimeRuneSO : IdScriptableObject, IDiscoverable
     public bool CanDiscover() => NativeCanDiscover;
     public bool IsDiscovered() => discovered;
     public bool IsDiscoverRequired() => isDiscoverRequired;
+    public int GetLevel() => level;
+    public bool CanLevel() => NativeCanLevel;
+    public ResourceCostList GetLevelCost() => LevelCost;
+    public void PurchaseLevel() { if (!SuppressLevelPurchase) level++; }
     public void Discover()
     {
         DiscoverCalls++;
@@ -395,7 +434,7 @@ public sealed class TimeRuneSO : IdScriptableObject, IDiscoverable
 }
 
 
-public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable
+public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable, ILevelable, ILevelableHasFree
 {
     public static List<GlyphSO> All = new List<GlyphSO>();
     public string DisplayName = string.Empty;
@@ -424,6 +463,11 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable
     public ValueModifierRecord freeLoadoutUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord maxUsages = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifier creationCostMod;
+    public ResourceCostList LevelCost = new ResourceCostList();
+    public ResourceCostList BonusLevelCost = new ResourceCostList();
+    public bool NativeCanLevel = true;
+    public bool SuppressLevelPurchase;
+    public bool SuppressBonusPurchase;
 
     public string GetName() => DisplayName;
     public bool IsAvailable() => NativeAvailable;
@@ -433,6 +477,13 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable
     public bool IsDiscoverVisible() => NativeDiscoverVisible;
     public bool CanDiscover() => NativeCanDiscover;
     public bool IsDiscovered() => discovered;
+    public int GetLevel() => level + freeLevels;
+    public int GetFreeLevels() => freeLevels;
+    public bool CanLevel() => NativeCanLevel;
+    public ResourceCostList GetLevelCost() => LevelCost;
+    public ResourceCostList GetFreeLevelCost() => BonusLevelCost;
+    public void PurchaseLevel() { if (!SuppressLevelPurchase) level++; }
+    public void PurchaseFreeLevel() { if (!SuppressBonusPurchase) freeLevels++; }
     public bool IsDiscoverRequired() => discoveryRequired;
     public void Discover()
     {

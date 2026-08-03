@@ -12,7 +12,7 @@ public sealed class GameMcpFrameRoutingContractTests
     public void EveryAdvertisedToolBuildsOneImmutableOperationForTheSoleInbox()
     {
         var tools = GameMcpAcceptanceFixture.Tools();
-        Assert.Equal(36, tools.Count);
+        Assert.Equal(37, tools.Count);
         var inbox = new GameMcpFrameInbox();
         var operations = tools
             .Select(tool => GameMcpProtocolRouter.BuildOperation(
@@ -204,6 +204,11 @@ public sealed class GameMcpFrameRoutingContractTests
         {
             ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "select",
+        },
+        "game_level" => new JObject
+        {
+            ["uuid"] = Guid.NewGuid().ToString("D"),
+            ["mode"] = "purchase",
         },
         "game_challenge" => new JObject
         {

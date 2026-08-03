@@ -17,7 +17,8 @@ internal readonly struct WorldGlyph : IWorldEntity
         BigDouble maxUsages,
         bool available = false,
         int maximumUsages = 0,
-        WorldDiscoverableDecision discovery = default)
+        WorldDiscoverableDecision discovery = default,
+        WorldLevelableDecision levelDecision = default)
     {
         GlyphId = glyphId;
         Level = level;
@@ -36,6 +37,7 @@ internal readonly struct WorldGlyph : IWorldEntity
         Available = available;
         MaximumUsages = maximumUsages;
         Discovery = discovery;
+        LevelDecision = levelDecision;
     }
 
     internal Guid GlyphId { get; }
@@ -77,10 +79,13 @@ internal readonly struct WorldGlyph : IWorldEntity
     internal int MaximumUsages { get; }
 
     internal WorldDiscoverableDecision Discovery { get; }
+
+    internal WorldLevelableDecision LevelDecision { get; }
 }
 
 internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
 {
+    private readonly Func<string, Type?> _resolveType;
     private Func<object, Guid>? _id;
     private Func<object, int>? _level;
     private Func<object, int>? _freeLevels;
@@ -98,6 +103,10 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
     private Func<object, bool>? _available;
     private Func<object, int>? _maximumUsages;
     private WorldDiscoverableBinding? _discovery;
+    private WorldLevelableDecisionBinding? _levelDecision;
+
+    internal WorldGlyphBinder(Func<string, Type?> resolveType) =>
+        _resolveType = resolveType ?? throw new ArgumentNullException(nameof(resolveType));
 
     internal override string Category => "glyphs";
 
@@ -123,7 +132,8 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
         _available = bind.Call<bool>("IsAvailable");
         _maximumUsages = bind.Call<int>("GetMaxUsages");
         _discovery = new WorldDiscoverableBinding(type, TypeName);
-        return Join(bind.Failure, _discovery.Failure);
+        _levelDecision = new WorldLevelableDecisionBinding(type, true, _resolveType);
+        return Join(bind.Failure, _discovery.Failure, _levelDecision.Failure);
     }
 
     internal override WorldGlyph Read(object entity) =>
@@ -144,8 +154,14 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
             _maxUsages!(entity),
             _available!(entity),
             _maximumUsages!(entity),
-            _discovery!.Read(entity));
+            _discovery!.Read(entity),
+            _levelDecision!.Read(entity));
 
-    private static string Join(string left, string right) =>
-        left.Length == 0 ? right : right.Length == 0 ? left : left + "; " + right;
+    private static string Join(params string[] values)
+    {
+        var result = string.Empty;
+        foreach (var value in values)
+            if (value.Length > 0) result = result.Length == 0 ? value : result + "; " + value;
+        return result;
+    }
 }

@@ -585,6 +585,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .RitualLifecycleOwnershipFailure)
+                    , createGenericLevel: () => new GenericLevelGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureGenericLevelMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .GenericLevelOwnershipFailure)
                     , createChallenges: () => new ChallengeGameAction(
                         readAutoHarvestLifecycleEpoch,
                         tryCaptureMutationPermit: () =>
@@ -1938,6 +1946,17 @@ public sealed class Plugin : BaseUnityPlugin
         }
         else if (kind == GameMcpCommandKind.RitualLifecycle)
             nativeType = "RitualSO";
+        else if (kind == GameMcpCommandKind.GenericLevel)
+        {
+            if (context.World is null)
+                preparationFailure = GameMcpCommandResult.Rejected(
+                    "world_not_published", context.RuntimeNotAvailableReason);
+            else if (!GameMcpEntityCapabilityMap.TryResolveGenericLevelType(
+                         context.World.Snapshot, request.Uuid,
+                         out nativeType, out var levelReason))
+                preparationFailure = GameMcpCommandResult.Rejected(
+                    "level_target_unavailable", levelReason);
+        }
         else if (kind == GameMcpCommandKind.Challenge)
             nativeType = "ChallengeSO";
         else if (kind == GameMcpCommandKind.Prestige)

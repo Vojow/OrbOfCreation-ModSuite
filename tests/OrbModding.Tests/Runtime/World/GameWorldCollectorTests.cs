@@ -237,6 +237,66 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    public void UnifiedLevelRowsPublishEachConcreteTypesLiveNextDecision()
+    {
+        var resource = new FakeResource
+        {
+            Identity = Guid.NewGuid(),
+            Quantity = new BigDouble(20),
+            Visible = true,
+        };
+        FakeResource.All.Add(resource);
+        FakeCraftingResourceCostList Cost(int amount) =>
+            new FakeCraftingResourceCostList { affordabilityUsesResourceAmounts = true }
+                .With(resource, new BigDouble(amount));
+
+        var equipment = new FakeEquipmentType
+        {
+            level = 3,
+            freeLevels = 2,
+            LevelCost = Cost(5),
+            BonusLevelCost = Cost(7),
+        };
+        var glyph = new FakeGlyph
+        {
+            level = 4,
+            freeLevels = 1,
+            LevelCost = Cost(6),
+            BonusLevelCost = Cost(8),
+        };
+        var resourceType = new FakeResourceType
+        {
+            level = 5,
+            freeLevels = 3,
+            LevelCost = Cost(9),
+            BonusLevelCost = Cost(10),
+        };
+        var timeRune = new FakeTimeRune
+        {
+            level = 6,
+            LevelCost = Cost(11),
+        };
+        FakeEquipmentType.All.Add(equipment);
+        FakeGlyph.All.Add(glyph);
+        FakeResourceType.All.Add(resourceType);
+        FakeTimeRune.All.Add(timeRune);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.EquipmentTypes, equipment.Identity, out var equipmentRow));
+        AssertLevelDecision(equipmentRow.LevelDecision, 5, 2, 5, 7);
+        Assert.True(WorldLookup.TryFind(world.Glyphs, glyph.Identity, out var glyphRow));
+        AssertLevelDecision(glyphRow.LevelDecision, 5, 1, 6, 8);
+        Assert.True(WorldLookup.TryFind(world.ResourceTypes, resourceType.Identity, out var resourceTypeRow));
+        AssertLevelDecision(resourceTypeRow.LevelDecision, 8, 3, 9, 10);
+        Assert.True(WorldLookup.TryFind(world.TimeRunes, timeRune.Identity, out var timeRuneRow));
+        AssertLevelDecision(timeRuneRow.LevelDecision, 6, 0, 11, null);
+    }
+
+    [Fact]
     public void CraftingRecipesPublishNativeVerdictsAndConcreteRecipeEdgesTogether()
     {
         var recipeId = Guid.Parse("b1b7d331-587a-4b4c-87cf-4a8f57c8256b");
@@ -4066,6 +4126,27 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(WorldCategoryOutcome.Unavailable, queues.Outcome);
         Assert.Contains("ActionableListVariable", queues.FirstFailure, StringComparison.Ordinal);
         Assert.Equal(WorldCategoryOutcome.Collected, report.For("resources").Outcome);
+    }
+
+    private static void AssertLevelDecision(
+        WorldLevelableDecision decision,
+        int total,
+        int bonus,
+        int paidCost,
+        int? bonusCost)
+    {
+        Assert.Equal(total, decision.TotalLevel);
+        Assert.Equal(bonus, decision.BonusLevels);
+        Assert.True(decision.CanPurchase);
+        Assert.True(decision.PurchaseAffordable);
+        Assert.Equal((double)paidCost,
+            Assert.Single(decision.PaidCosts.AsSpan().ToArray()).Amount.ToDouble());
+        Assert.Equal(bonusCost.HasValue, decision.SupportsBonus);
+        if (!bonusCost.HasValue) return;
+        Assert.True(decision.BonusResourcesVisible);
+        Assert.True(decision.BonusAffordable);
+        Assert.Equal((double)bonusCost.Value,
+            Assert.Single(decision.BonusCosts.AsSpan().ToArray()).Amount.ToDouble());
     }
 
     private static FakeCostList CostOf(params (Guid Resource, double Amount)[] entries)

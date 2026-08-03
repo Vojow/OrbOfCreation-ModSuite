@@ -109,7 +109,7 @@ does not refresh it by hidden navigation.
 
 ## Tool surface
 
-The registry is exactly 36 tools. It is built once per lifecycle and never changes mid-session, so
+The registry is exactly 37 tools. It is built once per lifecycle and never changes mid-session, so
 there is no `tools/list_changed` notification. The rows below are in `tools/list` order.
 
 | Tool | Purpose |
@@ -138,6 +138,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_equipment` | Equip/increase or unequip/decrease one created artifact using live native multi-buy |
 | `game_alchemy` | Add, remove, or reorder one ordinary Alchemy recipe through its visible list |
 | `game_ritual` | Select a Ritual, set its starting level, activate it, or cancel its duration reward |
+| `game_level` | Buy one paid or bonus level from an ordinary level-list control |
 | `game_challenge` | Select, activate, abandon, or fetch the Time/prestige challenge offers |
 | `game_prestige` | Confirm and perform the irreversible persistent reset |
 | `game_research` | Develop/queue, pause, resume, cancel, or apply a free research bonus level |
@@ -349,6 +350,22 @@ v1.0.5 and are deliberately absent. Activation revalidates the selected Ritual a
 native price before payment; success is the settled battle transition. `cancel_duration` ends an
 already-running duration reward and does not claim to cancel a battle. Selection, level, battle,
 and duration activity each use one game-written outcome sentinel and never a resource ledger.
+
+### Unified level controls
+
+The `equipment-types`, `glyphs`, `resource-types`, and `time-runes` detail rows are the complete
+pre-decision surface for their ordinary level-list buttons. Each row distinguishes paid, bonus,
+and total levels and carries a `purchase` decision. Equipment types, glyphs, and resource types
+also carry `bonus`; time runes do not implement that native control. Available decisions include
+the exact named native usage cost and current spendable amount. Inapplicable or unavailable
+controls do not publish priced ledgers.
+
+Call `game_level(mode="purchase"|"bonus", uuid=...)`. The tool derives the exact native type from
+the published category, repeats the visible button's live admission on Unity's main thread, and
+returns only the settled paid- or bonus-level change plus the resulting total. The paid route
+checks the game's persistent usage cost but does not perform a one-time payment; the concrete
+native level callback applies its own usage/effects. Research development and spell mastery stay
+on `game_research` and `game_spell_level`, respectively.
 
 ### Challenge decision loop
 

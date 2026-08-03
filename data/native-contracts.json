@@ -21827,6 +21827,260 @@
       "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "GetSelectedCompletionCost",
       "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
       "owners": ["Common Ritual decision world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "generic-level.levelable.type-action", "assembly": "assembly-csharp",
+      "type": "ILevelable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.free-levelable.type-action", "assembly": "assembly-csharp",
+      "type": "ILevelableHasFree", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.equipment-type.type-action", "assembly": "assembly-csharp",
+      "type": "EquipmentTypeSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph.type-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type.type-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.time-rune.type-action", "assembly": "assembly-csharp",
+      "type": "TimeRuneSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.research.type-delegated", "assembly": "assembly-csharp",
+      "type": "ResearchSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level matrix"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.spell-recipe.type-delegated", "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level matrix"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.cost.type-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.tuple.type-action", "assembly": "assembly-csharp",
+      "type": "ResourceTuple", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource.type-action", "assembly": "assembly-csharp",
+      "type": "ResourceSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.equipment-get-level-action", "assembly": "assembly-csharp",
+      "type": "EquipmentTypeSO", "typeVisibility": "public", "kind": "method", "member": "GetLevel",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.equipment-can-level-action", "assembly": "assembly-csharp",
+      "type": "EquipmentTypeSO", "typeVisibility": "public", "kind": "method", "member": "CanLevel",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.equipment-get-cost-action", "assembly": "assembly-csharp",
+      "type": "EquipmentTypeSO", "typeVisibility": "public", "kind": "method", "member": "GetLevelCost",
+      "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.equipment-purchase-action", "assembly": "assembly-csharp",
+      "type": "EquipmentTypeSO", "typeVisibility": "public", "kind": "method", "member": "PurchaseLevel",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph-get-level-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "GetLevel",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph-can-level-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "CanLevel",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph-get-cost-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "GetLevelCost",
+      "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph-purchase-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "PurchaseLevel",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type-get-level-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "method", "member": "GetLevel",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type-can-level-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "method", "member": "CanLevel",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type-get-cost-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "method", "member": "GetLevelCost",
+      "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type-purchase-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "method", "member": "PurchaseLevel",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.time-rune-get-level-action", "assembly": "assembly-csharp",
+      "type": "TimeRuneSO", "typeVisibility": "public", "kind": "method", "member": "GetLevel",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.time-rune-can-level-action", "assembly": "assembly-csharp",
+      "type": "TimeRuneSO", "typeVisibility": "public", "kind": "method", "member": "CanLevel",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.time-rune-get-cost-action", "assembly": "assembly-csharp",
+      "type": "TimeRuneSO", "typeVisibility": "public", "kind": "method", "member": "GetLevelCost",
+      "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.time-rune-purchase-action", "assembly": "assembly-csharp",
+      "type": "TimeRuneSO", "typeVisibility": "public", "kind": "method", "member": "PurchaseLevel",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.equipment-get-bonus-level-action", "assembly": "assembly-csharp",
+      "type": "EquipmentTypeSO", "typeVisibility": "public", "kind": "method", "member": "GetFreeLevels",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.equipment-get-bonus-cost-action", "assembly": "assembly-csharp",
+      "type": "EquipmentTypeSO", "typeVisibility": "public", "kind": "method", "member": "GetFreeLevelCost",
+      "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.equipment-purchase-bonus-action", "assembly": "assembly-csharp",
+      "type": "EquipmentTypeSO", "typeVisibility": "public", "kind": "method", "member": "PurchaseFreeLevel",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph-get-bonus-level-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "GetFreeLevels",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph-get-bonus-cost-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "GetFreeLevelCost",
+      "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph-purchase-bonus-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "PurchaseFreeLevel",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type-get-bonus-level-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "method", "member": "GetFreeLevels",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type-get-bonus-cost-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "method", "member": "GetFreeLevelCost",
+      "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type-purchase-bonus-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "method", "member": "PurchaseFreeLevel",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.cost-has-enough-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "HasEnough",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.cost-resources-visible-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "AllResourcesVisible",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.cost-entries-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "GetEntries",
+      "visibility": "public", "static": false, "returnType": "System.Collections.Generic.List`1<ResourceTuple>", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.tuple-resource-action", "assembly": "assembly-csharp",
+      "type": "ResourceTuple", "typeVisibility": "public", "kind": "field", "member": "resource",
+      "visibility": "public", "static": false, "valueType": "ResourceSO",
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.tuple-value-action", "assembly": "assembly-csharp",
+      "type": "ResourceTuple", "typeVisibility": "public", "kind": "method", "member": "GetValue",
+      "visibility": "public", "static": false, "returnType": "BigDouble", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-guid-action", "assembly": "assembly-csharp",
+      "type": "IdScriptableObject", "typeVisibility": "public", "kind": "method", "member": "GetGuid",
+      "visibility": "public", "static": false, "returnType": "System.Guid", "parameters": [],
+      "owners": ["Automata unified level GameAction", "Common level decision world collection"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-has-amount-action", "assembly": "assembly-csharp",
+      "type": "ResourceSO", "typeVisibility": "public", "kind": "method", "member": "HasAmount",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": ["BigDouble"],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
     }
   ],
   "sourceAudit": {
@@ -21843,8 +22097,9 @@
       "src/Automata",
       "src/Common",
       "src/DiscoveryTree",
-      "src/GenericDiscovery",
-      "src/EquipmentLoadout",
+    "src/GenericDiscovery",
+    "src/GenericLevel",
+    "src/EquipmentLoadout",
       "src/Challenge",
       "src/Prestige",
       "src/Research",

@@ -48,7 +48,8 @@ internal readonly struct WorldResourceType : IWorldEntity
         int replenishRatioModifiers,
         int replenishTimeModModifiers,
         int decayRatioModifiers,
-        int decayTimeModModifiers)
+        int decayTimeModModifiers,
+        WorldLevelableDecision levelDecision = default)
     {
         ResourceTypeId = resourceTypeId;
         Level = level;
@@ -79,6 +80,7 @@ internal readonly struct WorldResourceType : IWorldEntity
         ReplenishTimeModModifiers = replenishTimeModModifiers;
         DecayRatioModifiers = decayRatioModifiers;
         DecayTimeModModifiers = decayTimeModModifiers;
+        LevelDecision = levelDecision;
     }
 
     internal Guid ResourceTypeId { get; }
@@ -147,10 +149,13 @@ internal readonly struct WorldResourceType : IWorldEntity
     internal int DecayRatioModifiers { get; }
 
     internal int DecayTimeModModifiers { get; }
+
+    internal WorldLevelableDecision LevelDecision { get; }
 }
 
 internal sealed class WorldResourceTypeBinder : WorldPlainBinder<WorldResourceType>
 {
+    private readonly Func<string, Type?> _resolveType;
     private Func<object, Guid>? _id;
     private Func<object, int>? _level;
     private Func<object, int>? _freeLevels;
@@ -180,6 +185,10 @@ internal sealed class WorldResourceTypeBinder : WorldPlainBinder<WorldResourceTy
     private Func<object, int>? _replenishTimeModModifiers;
     private Func<object, int>? _decayRatioModifiers;
     private Func<object, int>? _decayTimeModModifiers;
+    private WorldLevelableDecisionBinding? _levelDecision;
+
+    internal WorldResourceTypeBinder(Func<string, Type?> resolveType) =>
+        _resolveType = resolveType ?? throw new ArgumentNullException(nameof(resolveType));
 
     internal override string Category => "resource types";
 
@@ -217,7 +226,8 @@ internal sealed class WorldResourceTypeBinder : WorldPlainBinder<WorldResourceTy
         _replenishTimeModModifiers = bind.NestedCollectionCount("replenishTimeMod", "activeModifiers");
         _decayRatioModifiers = bind.NestedCollectionCount("decayRatio", "activeModifiers");
         _decayTimeModModifiers = bind.NestedCollectionCount("decayTimeMod", "activeModifiers");
-        return bind.Failure;
+        _levelDecision = new WorldLevelableDecisionBinding(type, true, _resolveType);
+        return Join(bind.Failure, _levelDecision.Failure);
     }
 
     internal override WorldResourceType Read(object entity) =>
@@ -250,5 +260,9 @@ internal sealed class WorldResourceTypeBinder : WorldPlainBinder<WorldResourceTy
             _replenishRatioModifiers!(entity),
             _replenishTimeModModifiers!(entity),
             _decayRatioModifiers!(entity),
-            _decayTimeModModifiers!(entity));
+            _decayTimeModModifiers!(entity),
+            _levelDecision!.Read(entity));
+
+    private static string Join(string left, string right) =>
+        left.Length == 0 ? right : right.Length == 0 ? left : left + "; " + right;
 }

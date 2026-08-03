@@ -252,6 +252,7 @@ internal sealed class FakeCraftingResourceCostList
         (!affordabilityUsesResourceAmounts || costs.All(cost =>
             cost.resource is not null &&
             cost.valueBig.CompareTo(cost.resource.GetTrueQuantity()) <= 0));
+    public bool AllResourcesVisible() => costs.All(cost => cost.resource?.Visible == true);
     public BigDouble MaximumCostTimes() => maximumCostTimes;
     public bool IsEmpty() => costs.Count == 0;
     public List<FakeCraftingResourceTuple> GetEntries() => costs;
@@ -1179,9 +1180,19 @@ internal sealed class FakeEquipmentType
     public FakeModifierRecord maxTypeSlots = new(0d);
     public FakeModifierRecord powerMod = new(0d);
     public FakeModifierRecord experienceRateMod = new(0d);
+    public bool NativeCanLevel = true;
+    public FakeCraftingResourceCostList LevelCost = new();
+    public FakeCraftingResourceCostList BonusLevelCost = new();
 
     public Guid GetGuid() => Identity;
     public int GetMaxTypeSlots() => (int)maxTypeSlots.GetValue().ToDouble();
+    public int GetLevel() => level + freeLevels;
+    public int GetFreeLevels() => freeLevels;
+    public bool CanLevel() => NativeCanLevel;
+    public FakeCraftingResourceCostList GetLevelCost() => LevelCost;
+    public FakeCraftingResourceCostList GetFreeLevelCost() => BonusLevelCost;
+    public void PurchaseLevel() => level++;
+    public void PurchaseFreeLevel() => freeLevels++;
 }
 
 internal sealed class FakeEquipmentList
@@ -1252,6 +1263,17 @@ internal sealed class FakeResourceType
     public FakeModifierRecord replenishTimeMod = new(0d);
     public FakeModifierRecord decayRatio = new(0d);
     public FakeModifierRecord decayTimeMod = new(0d);
+    public bool NativeCanLevel = true;
+    public FakeCraftingResourceCostList LevelCost = new();
+    public FakeCraftingResourceCostList BonusLevelCost = new();
+
+    public int GetLevel() => level + freeLevels;
+    public int GetFreeLevels() => freeLevels;
+    public bool CanLevel() => NativeCanLevel;
+    public FakeCraftingResourceCostList GetLevelCost() => LevelCost;
+    public FakeCraftingResourceCostList GetFreeLevelCost() => BonusLevelCost;
+    public void PurchaseLevel() => level++;
+    public void PurchaseFreeLevel() => freeLevels++;
 }
 
 internal sealed class FakeCraftingRecipeType
@@ -1418,8 +1440,14 @@ internal sealed class FakeTimeRune : global::IDiscoverable
     public List<global::ResourceSO> genericDiscoveryResources = new();
     public bool NativeDiscoverVisible = true;
     public bool NativeCanDiscover = true;
+    public bool NativeCanLevel = true;
+    public FakeCraftingResourceCostList LevelCost = new();
 
     public Guid GetGuid() => Identity;
+    public int GetLevel() => level;
+    public bool CanLevel() => NativeCanLevel;
+    public FakeCraftingResourceCostList GetLevelCost() => LevelCost;
+    public void PurchaseLevel() => level++;
     global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
     List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
     List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
@@ -1456,10 +1484,20 @@ internal sealed class FakeGlyph : global::IDiscoverable
     public List<global::ResourceSO> genericDiscoveryResources = new();
     public bool NativeDiscoverVisible = true;
     public bool NativeCanDiscover = true;
+    public bool NativeCanLevel = true;
+    public FakeCraftingResourceCostList LevelCost = new();
+    public FakeCraftingResourceCostList BonusLevelCost = new();
 
     public bool NativeAvailable = true;
     public bool IsAvailable() => NativeAvailable;
     public int GetMaxUsages() => (int)maxUsages.GetValue().ToDouble();
+    public int GetLevel() => level + freeLevels;
+    public int GetFreeLevels() => freeLevels;
+    public bool CanLevel() => NativeCanLevel;
+    public FakeCraftingResourceCostList GetLevelCost() => LevelCost;
+    public FakeCraftingResourceCostList GetFreeLevelCost() => BonusLevelCost;
+    public void PurchaseLevel() => level++;
+    public void PurchaseFreeLevel() => freeLevels++;
     global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
     List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
     List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);

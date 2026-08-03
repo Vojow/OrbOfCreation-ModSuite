@@ -126,8 +126,57 @@ internal static class GameMcpEntityCapabilityMap
             GameMcpCommandKind.RitualLifecycle =>
                 Entity(world.EntityIdentities, world.Rituals, target,
                     "rituals", capability, out reason),
+            GameMcpCommandKind.GenericLevel =>
+                TryResolveGenericLevelType(world, target, out _, out reason),
             _ => Unsupported(capability, out reason),
         };
+    }
+
+    internal static bool TryResolveGenericLevelType(
+        GameWorldState world,
+        Guid target,
+        out string nativeType,
+        out string reason)
+    {
+        if (world is null) throw new ArgumentNullException(nameof(world));
+        nativeType = string.Empty;
+        var matches = 0;
+        if (Supports("equipment-types", GameMcpCommandKind.GenericLevel) &&
+            WorldLookup.TryFind(world.EquipmentTypes, target, out _))
+        {
+            matches++;
+            nativeType = "EquipmentTypeSO";
+        }
+        if (Supports("glyphs", GameMcpCommandKind.GenericLevel) &&
+            WorldLookup.TryFind(world.Glyphs, target, out _))
+        {
+            matches++;
+            nativeType = "GlyphSO";
+        }
+        if (Supports("resource-types", GameMcpCommandKind.GenericLevel) &&
+            WorldLookup.TryFind(world.ResourceTypes, target, out _))
+        {
+            matches++;
+            nativeType = "ResourceTypeSO";
+        }
+        if (Supports("time-runes", GameMcpCommandKind.GenericLevel) &&
+            WorldLookup.TryFind(world.TimeRunes, target, out _))
+        {
+            matches++;
+            nativeType = "TimeRuneSO";
+        }
+        if (matches == 1)
+        {
+            reason = string.Empty;
+            return true;
+        }
+        reason = matches == 0
+            ? "Identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
+              " is absent from published level-list categories"
+            : "Identity " + EntityIdentityFormatter.Format(target, world.EntityIdentities) +
+              " is ambiguous across " + matches + " level-list categories";
+        nativeType = string.Empty;
+        return false;
     }
 
     internal static bool TryResolveGenericDiscoveryType(
@@ -402,14 +451,16 @@ internal static class GameMcpEntityCapabilityMap
         D("spell-types", "SpellTypeSO"),
         D("equipment", "EquipmentSO", GameMcpCommandKind.GenericDiscovery,
             GameMcpCommandKind.EquipmentLoadout),
-        D("equipment-types", "EquipmentTypeSO"),
-        D("resource-types", "ResourceTypeSO"),
+        D("equipment-types", "EquipmentTypeSO", GameMcpCommandKind.GenericLevel),
+        D("resource-types", "ResourceTypeSO", GameMcpCommandKind.GenericLevel),
         D("crafting-recipe-types", "CraftingRecipeTypeSO"),
         D("crafting-recipes", "CraftingRecipeSO", GameMcpCommandKind.Crafting),
         D("harvest-elements", "HarvestElementSO"),
         D("harvest-resources", "HarvestElementSO"),
-        D("time-runes", "TimeRuneSO", GameMcpCommandKind.GenericDiscovery),
-        D("glyphs", "GlyphSO", GameMcpCommandKind.GenericDiscovery),
+        D("time-runes", "TimeRuneSO", GameMcpCommandKind.GenericDiscovery,
+            GameMcpCommandKind.GenericLevel),
+        D("glyphs", "GlyphSO", GameMcpCommandKind.GenericDiscovery,
+            GameMcpCommandKind.GenericLevel),
         D("consumables", "ConsumableSO", GameMcpCommandKind.Consumable),
         D("rituals", "RitualSO", GameMcpCommandKind.GenericDiscovery,
             GameMcpCommandKind.RitualLifecycle),

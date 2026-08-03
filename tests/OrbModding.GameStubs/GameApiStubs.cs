@@ -147,7 +147,7 @@ public static class AutoBuyManager
     public static int GetRemainingRoom() => RemainingRoom;
 }
 
-public class SpellRecipeSO : IdScriptableObject, IDiscoverable
+public class SpellRecipeSO : IdScriptableObject, IDiscoverable, ILevelable
 {
     public static List<SpellRecipeSO> All = new List<SpellRecipeSO>();
     private string stableUuid;
@@ -1276,9 +1276,11 @@ public class ResourceCostList
         }
     }
     public bool affordable = true;
+    public bool ResourcesVisible = true;
 
     public bool IsWithinCapacity() => WithinCapacity;
     public bool IsEmpty() => costs.Count == 0;
+    public bool AllResourcesVisible() => ResourcesVisible;
 
     // How many more purchases the holdings cover. Spending is what makes a price unaffordable in the
     // game, so a fixture that wants a purchase to stop being possible partway says how far the
@@ -1540,7 +1542,7 @@ public class ResourceSO : UpgradeableObject
 /// Stands in for the game's research entries. Modelled only as far as world collection reads it:
 /// identity, level, whether it is developing, and whether it is available.
 /// </summary>
-public class ResearchSO
+public class ResearchSO : ILevelable
 {
     public static List<ResearchSO> All = new List<ResearchSO>();
     public string uuid = Guid.NewGuid().ToString();

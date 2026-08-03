@@ -561,6 +561,7 @@ internal static class GameMcpWorldQuery
             GameMcpCommandKind.EquipmentLoadout => ProjectEquipmentDelta(state, command),
             GameMcpCommandKind.AlchemyLoadout => ProjectAlchemyLoadoutDelta(state, command),
             GameMcpCommandKind.RitualLifecycle => ProjectRitualLifecycleDelta(state, command),
+            GameMcpCommandKind.GenericLevel => ProjectGenericLevelDelta(state, command),
             GameMcpCommandKind.Research => ProjectResearchDelta(state, command),
             GameMcpCommandKind.GenericDiscovery => ProjectDiscoveryDelta(state, command),
             _ => ProjectPostState(state, PostStateCategory(command), command.TargetId),
@@ -753,6 +754,88 @@ internal static class GameMcpWorldQuery
         AddRitualDecision(world, next, in current);
         result["next"] = next;
         return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectGenericLevelDelta(
+        GameMcpFrameContext state,
+        GameMcpCommand command)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        if (!TryFindLevelDecision(
+                state.World.Snapshot, command.TargetId, command.DerivedNativeType,
+                out var current))
+            return PostStateUnavailable("post_state_not_published",
+                "the settled world has no level row for that entity");
+        var oldWorld = Before(command);
+        WorldLevelableDecision previous = default;
+        var hadBefore = oldWorld is not null && TryFindLevelDecision(
+            oldWorld, command.TargetId, command.DerivedNativeType, out previous);
+        var currentPaid = current.TotalLevel - current.BonusLevels;
+        var previousPaid = hadBefore ? previous.TotalLevel - previous.BonusLevels : (int?)null;
+        var result = new JObject { ["uuid"] = command.TargetId.ToString("D") };
+        if (command.Mode == "bonus")
+        {
+            if (hadBefore && current.BonusLevels <= previous.BonusLevels)
+                return PostStateUnavailable("requested_state_not_reached",
+                    "the settled world does not show a higher bonus level");
+            result["bonusLevel"] = new JObject
+            {
+                ["before"] = hadBefore ? previous.BonusLevels : (int?)null,
+                ["after"] = current.BonusLevels,
+            };
+        }
+        else
+        {
+            if (hadBefore && currentPaid <= previousPaid)
+                return PostStateUnavailable("requested_state_not_reached",
+                    "the settled world does not show a higher paid level");
+            result["paidLevel"] = new JObject
+            {
+                ["before"] = previousPaid,
+                ["after"] = currentPaid,
+            };
+        }
+        result["totalLevel"] = new JObject
+        {
+            ["before"] = hadBefore ? previous.TotalLevel : (int?)null,
+            ["after"] = current.TotalLevel,
+        };
+        return result.Freeze();
+    }
+
+    private static bool TryFindLevelDecision(
+        GameWorldState world,
+        Guid target,
+        string nativeType,
+        out WorldLevelableDecision decision)
+    {
+        if (nativeType == "EquipmentTypeSO" &&
+            WorldLookup.TryFind(world.EquipmentTypes, target, out var equipment))
+        {
+            decision = equipment.LevelDecision;
+            return true;
+        }
+        if (nativeType == "GlyphSO" &&
+            WorldLookup.TryFind(world.Glyphs, target, out var glyph))
+        {
+            decision = glyph.LevelDecision;
+            return true;
+        }
+        if (nativeType == "ResourceTypeSO" &&
+            WorldLookup.TryFind(world.ResourceTypes, target, out var resourceType))
+        {
+            decision = resourceType.LevelDecision;
+            return true;
+        }
+        if (nativeType == "TimeRuneSO" &&
+            WorldLookup.TryFind(world.TimeRunes, target, out var timeRune))
+        {
+            decision = timeRune.LevelDecision;
+            return true;
+        }
+        decision = default;
+        return false;
     }
 
     private static GameMcpValue ProjectHarvestDelta(
@@ -1156,6 +1239,14 @@ internal static class GameMcpWorldQuery
         GameMcpCommandKind.EquipmentLoadout => "equipment",
         GameMcpCommandKind.AlchemyLoadout => "alchemy-recipes",
         GameMcpCommandKind.RitualLifecycle => "rituals",
+        GameMcpCommandKind.GenericLevel => command.DerivedNativeType switch
+        {
+            "EquipmentTypeSO" => "equipment-types",
+            "GlyphSO" => "glyphs",
+            "ResourceTypeSO" => "resource-types",
+            "TimeRuneSO" => "time-runes",
+            _ => string.Empty,
+        },
         GameMcpCommandKind.Research => "research",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
@@ -1700,6 +1791,10 @@ internal static class GameMcpWorldQuery
             ? ProjectAlchemyRecipe(world, in alchemyRecipe)
             : row is WorldEquipment equipment
             ? ProjectEquipment(world, in equipment)
+            : row is WorldEquipmentType equipmentType
+            ? ProjectEquipmentType(world, in equipmentType)
+            : row is WorldResourceType resourceType
+            ? ProjectResourceType(world, in resourceType)
             : row is WorldChallenge challenge
             ? ProjectChallenge(world, in challenge)
             : row is WorldGlyph glyph
@@ -3491,12 +3586,43 @@ internal static class GameMcpWorldQuery
             ["category"] = "glyphs",
             ["nativeType"] = "GlyphSO",
             ["discovered"] = glyph.Discovered,
-            ["level"] = glyph.Level,
             ["available"] = glyph.Available,
             ["usableCount"] = glyph.MaximumUsages,
         };
-        if (glyph.FreeLevels != 0) result["bonusLevel"] = glyph.FreeLevels;
+        AddLevelDecision(world, result, glyph.LevelDecision);
         AddDiscoveryDecision(world, result, glyph.Discovery);
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectEquipmentType(
+        GameWorldState world,
+        in WorldEquipmentType equipmentType)
+    {
+        var result = new JObject
+        {
+            ["entityId"] = equipmentType.EntityId.ToString("D"),
+            ["category"] = "equipment-types",
+            ["nativeType"] = "EquipmentTypeSO",
+            ["baseUsage"] = equipmentType.BaseUsage,
+            ["masteryLevel"] = new GameMcpDomainValue(equipmentType.MasteryLevel),
+            ["maximumSlots"] = new GameMcpDomainValue(equipmentType.MaxTypeSlots),
+        };
+        AddLevelDecision(world, result, equipmentType.LevelDecision);
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectResourceType(
+        GameWorldState world,
+        in WorldResourceType resourceType)
+    {
+        var result = new JObject
+        {
+            ["entityId"] = resourceType.EntityId.ToString("D"),
+            ["category"] = "resource-types",
+            ["nativeType"] = "ResourceTypeSO",
+            ["hidden"] = resourceType.SpecialHidden,
+        };
+        AddLevelDecision(world, result, resourceType.LevelDecision);
         return result.Freeze();
     }
 
@@ -3608,12 +3734,72 @@ internal static class GameMcpWorldQuery
             ["category"] = "time-runes",
             ["nativeType"] = "TimeRuneSO",
             ["discovered"] = rune.Discovered,
-            ["level"] = rune.Level,
             ["masteryLevel"] = rune.MasteryLevel,
             ["seen"] = rune.Seen,
         };
+        AddLevelDecision(world, result, rune.LevelDecision);
         AddDiscoveryDecision(world, result, rune.Discovery);
         return result.Freeze();
+    }
+
+    private static void AddLevelDecision(
+        GameWorldState world,
+        JObject result,
+        WorldLevelableDecision decision)
+    {
+        result["paidLevel"] = decision.TotalLevel - decision.BonusLevels;
+        if (decision.SupportsBonus) result["bonusLevel"] = decision.BonusLevels;
+        result["totalLevel"] = decision.TotalLevel;
+
+        var purchase = new JObject
+        {
+            ["available"] = decision.CanPurchase && decision.PurchaseAffordable,
+        };
+        if (!decision.CanPurchase) purchase["reasonCode"] = "native_level_refused";
+        else
+        {
+            purchase["affordable"] = decision.PurchaseAffordable;
+            if (!decision.PurchaseAffordable) purchase["reasonCode"] = "unaffordable";
+            var costs = ProjectLevelCosts(world, decision.PaidCosts);
+            if (costs.Count > 0) purchase["costs"] = costs;
+        }
+        result["purchase"] = purchase;
+
+        if (!decision.SupportsBonus) return;
+        var bonus = new JObject
+        {
+            ["available"] = decision.BonusResourcesVisible && decision.BonusAffordable,
+        };
+        if (!decision.BonusResourcesVisible) bonus["reasonCode"] = "resources_hidden";
+        else
+        {
+            bonus["affordable"] = decision.BonusAffordable;
+            if (!decision.BonusAffordable) bonus["reasonCode"] = "unaffordable";
+            var costs = ProjectLevelCosts(world, decision.BonusCosts);
+            if (costs.Count > 0) bonus["costs"] = costs;
+        }
+        result["bonus"] = bonus;
+    }
+
+    private static JArray ProjectLevelCosts(
+        GameWorldState world,
+        PublicationTable<WorldLevelableCost> costs)
+    {
+        var result = new JArray();
+        for (var index = 0; index < costs.Count; index++)
+        {
+            var cost = costs[index];
+            var row = new JObject
+            {
+                ["resourceId"] = cost.ResourceId.ToString("D"),
+                ["cost"] = new GameMcpDomainValue(cost.Amount),
+            };
+            if (WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource))
+                row["spendableAmount"] = new GameMcpDomainValue(
+                    SpendableAmount(world, cost.ResourceId, resource.Reading.Quantity));
+            result.Add(row);
+        }
+        return result;
     }
 
     private static void AddDiscoveryDecision(

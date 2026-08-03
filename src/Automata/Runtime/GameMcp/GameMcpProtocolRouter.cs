@@ -367,6 +367,11 @@ internal sealed class GameMcpProtocolRouter
                 if (builder.Mode == "set_level")
                     builder.Amount = checked(RequiredInt(arguments, "level", 0, int.MaxValue - 1) + 1);
                 break;
+            case "game_level":
+                builder.Mode = RequireOneOf(arguments, "mode", "purchase", "bonus");
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                break;
             case "game_challenge":
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "select", "activate", "abandon", "fetch_time", "fetch_prestige");
@@ -464,7 +469,7 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
-            "game_ritual" when
+            "game_ritual" or "game_level" when
                 !(name == "game_discover" && request.Mode == "preview") &&
                 !(name == "game_spell_loadout" && request.Mode == "preview") =>
                 GameMcpOperationClass.Gameplay,
@@ -494,7 +499,7 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
-            "game_ritual" =>
+            "game_ritual" or "game_level" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_navigate" or "game_continue" =>
@@ -800,6 +805,19 @@ internal sealed class GameMcpProtocolRouter
                     ModeRule("set_level", new[] { "level" }),
                     ModeRule("activate", forbidden: new[] { "level" }),
                     ModeRule("cancel_duration", forbidden: new[] { "level" })),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_level",
+                "Buy one paid or bonus level",
+                "Use the native level-list controls for artifact types, glyphs, resource types, and Time Runes. Research and spells keep their dedicated tools.",
+                ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("purchase", "bonus"),
+                        ["uuid"] = StringSchema("Published levelable entity UUID."),
+                    },
+                    "mode", "uuid"),
                 readOnly: false,
                 idempotent: false),
             Tool(

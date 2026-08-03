@@ -27,7 +27,8 @@ internal readonly struct WorldEquipmentType : IWorldEntity
         BigDouble masteryLevel,
         BigDouble maxTypeSlots,
         int powerModModifiers,
-        int experienceRateModModifiers)
+        int experienceRateModModifiers,
+        WorldLevelableDecision levelDecision = default)
     {
         EquipmentTypeId = equipmentTypeId;
         Level = level;
@@ -37,6 +38,7 @@ internal readonly struct WorldEquipmentType : IWorldEntity
         MaxTypeSlots = maxTypeSlots;
         PowerModModifiers = powerModModifiers;
         ExperienceRateModModifiers = experienceRateModModifiers;
+        LevelDecision = levelDecision;
     }
 
     internal Guid EquipmentTypeId { get; }
@@ -59,10 +61,13 @@ internal readonly struct WorldEquipmentType : IWorldEntity
     internal int PowerModModifiers { get; }
 
     internal int ExperienceRateModModifiers { get; }
+
+    internal WorldLevelableDecision LevelDecision { get; }
 }
 
 internal sealed class WorldEquipmentTypeBinder : WorldPlainBinder<WorldEquipmentType>
 {
+    private readonly Func<string, Type?> _resolveType;
     private Func<object, Guid>? _id;
     private Func<object, int>? _level;
     private Func<object, int>? _freeLevels;
@@ -71,6 +76,10 @@ internal sealed class WorldEquipmentTypeBinder : WorldPlainBinder<WorldEquipment
     private Func<object, BigDouble>? _maxTypeSlots;
     private Func<object, int>? _powerModModifiers;
     private Func<object, int>? _experienceRateModModifiers;
+    private WorldLevelableDecisionBinding? _levelDecision;
+
+    internal WorldEquipmentTypeBinder(Func<string, Type?> resolveType) =>
+        _resolveType = resolveType ?? throw new ArgumentNullException(nameof(resolveType));
 
     internal override string Category => "equipment types";
 
@@ -87,7 +96,8 @@ internal sealed class WorldEquipmentTypeBinder : WorldPlainBinder<WorldEquipment
         _maxTypeSlots = bind.ModifierRecord("maxTypeSlots");
         _powerModModifiers = bind.NestedCollectionCount("powerMod", "activeModifiers");
         _experienceRateModModifiers = bind.NestedCollectionCount("experienceRateMod", "activeModifiers");
-        return bind.Failure;
+        _levelDecision = new WorldLevelableDecisionBinding(type, true, _resolveType);
+        return Join(bind.Failure, _levelDecision.Failure);
     }
 
     internal override WorldEquipmentType Read(object entity) =>
@@ -99,5 +109,9 @@ internal sealed class WorldEquipmentTypeBinder : WorldPlainBinder<WorldEquipment
             _masteryLevel!(entity),
             _maxTypeSlots!(entity),
             _powerModModifiers!(entity),
-            _experienceRateModModifiers!(entity));
+            _experienceRateModModifiers!(entity),
+            _levelDecision!.Read(entity));
+
+    private static string Join(string left, string right) =>
+        left.Length == 0 ? right : right.Length == 0 ? left : left + "; " + right;
 }
