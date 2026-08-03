@@ -32,7 +32,7 @@ public sealed class IlInspectTests
         Assert.Contains(NameOf<FixtureBase>(), text);
         Assert.Contains($"{NameOf<IFixtureContract>()} [declared]", text);
         Assert.Contains("FixtureVirtual(System.Int32)", text);
-        Assert.Contains("public static field", text);
+        Assert.Contains("public static readonly field", text);
         Assert.Contains("public virtual final method", text);
     }
 
@@ -58,6 +58,39 @@ public sealed class IlInspectTests
         Assert.Contains(" call ", methodText);
         Assert.Contains($"{NameOf<DeclaredImplementation>()}.CallTarget()", fieldText);
         Assert.Contains("ldsfld", fieldText);
+    }
+
+    [Fact]
+    public void CallersReportVirtualOverrideRelationships()
+    {
+        var overrideText = Inspect("callers", $"{typeof(VirtualDerived).FullName}::Dispatch");
+        var baseText = Inspect("callers", $"{typeof(VirtualBase).FullName}::Dispatch");
+
+        Assert.Contains(
+            $"note: {NameOf<VirtualDerived>()}.Dispatch() overrides {NameOf<VirtualBase>()}.Dispatch();",
+            overrideText);
+        Assert.DoesNotContain("  (none)", overrideText);
+        Assert.Contains($"{NameOf(typeof(VirtualCaller))}.Call({NameOf<VirtualBase>()})", baseText);
+        Assert.Contains($"note: override declaration: {NameOf<VirtualDerived>()}.Dispatch()", baseText);
+    }
+
+    [Fact]
+    public void CallersResolveGenericInstanceTokensToOpenDefinitions()
+    {
+        var text = Inspect("callers", $"{typeof(GenericFixture<>).FullName}::Echo");
+
+        Assert.Contains($"{NameOf(typeof(GenericCaller))}.Call()", text);
+        Assert.Contains("GenericFixture`1<System.Int32>.Echo(T)", text);
+    }
+
+    [Fact]
+    public void TypeDistinguishesConstAndReadonlyFields()
+    {
+        var text = Inspect("type", typeof(FieldModifierFixture).FullName!);
+
+        Assert.Contains($"public const field {NameOf<FieldModifierFixture>()}.Constant", text);
+        Assert.Contains($"public static readonly field {NameOf<FieldModifierFixture>()}.SharedReadonly", text);
+        Assert.Contains($"public readonly field {NameOf<FieldModifierFixture>()}.InstanceReadonly", text);
     }
 
     [Fact]
@@ -120,6 +153,8 @@ public sealed class IlInspectTests
 
     private static string NameOf<T>() => typeof(T).FullName!.Replace('+', '.');
 
+    private static string NameOf(Type type) => type.FullName!.Replace('+', '.');
+
     private interface IFixtureContract
     {
     }
@@ -148,5 +183,37 @@ public sealed class IlInspectTests
 
     private sealed class InheritedImplementation : DeclaredImplementation
     {
+    }
+
+    private abstract class VirtualBase
+    {
+        public abstract int Dispatch();
+    }
+
+    private sealed class VirtualDerived : VirtualBase
+    {
+        public override int Dispatch() => 7;
+    }
+
+    private static class VirtualCaller
+    {
+        public static int Call(VirtualBase value) => value.Dispatch();
+    }
+
+    private sealed class GenericFixture<T>
+    {
+        public T Echo(T value) => value;
+    }
+
+    private static class GenericCaller
+    {
+        public static int Call() => new GenericFixture<int>().Echo(11);
+    }
+
+    private sealed class FieldModifierFixture
+    {
+        public const int Constant = 1;
+        public static readonly int SharedReadonly = 2;
+        public readonly int InstanceReadonly = 3;
     }
 }

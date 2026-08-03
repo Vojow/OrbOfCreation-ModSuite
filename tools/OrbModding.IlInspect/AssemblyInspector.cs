@@ -168,7 +168,14 @@ internal sealed class AssemblyInspector : IDisposable
     {
         var (targetType, memberName) = FindMemberOwner(query);
         var targetTypeName = targetType.FullName;
+        var targetMethods = targetType.Methods
+            .Where(method => method.Name == memberName)
+            .ToHashSet();
+        var targetFields = targetType.Fields
+            .Where(field => field.Name == memberName)
+            .ToHashSet();
         var hits = new List<(MethodDefinition Method, Instruction Instruction, string Target)>();
+        var resolvedMethodSiteCounts = new Dictionary<MethodDefinition, int>();
 
         foreach (var method in AllTypes().SelectMany(type => type.Methods).Where(method => method.HasBody))
         {
@@ -176,22 +183,47 @@ internal sealed class AssemblyInspector : IDisposable
             {
                 switch (instruction.Operand)
                 {
-                    case MethodReference reference when
-                        reference.DeclaringType.FullName == targetTypeName && reference.Name == memberName &&
-                        IsCall(instruction.OpCode.Code):
-                        hits.Add((method, instruction, Names.Method(reference)));
+                    case MethodReference reference when IsCall(instruction.OpCode.Code):
+                        if (TryResolve(reference, out var resolvedMethod))
+                        {
+                            resolvedMethodSiteCounts.TryGetValue(resolvedMethod, out var count);
+                            resolvedMethodSiteCounts[resolvedMethod] = count + 1;
+                            if (targetMethods.Contains(resolvedMethod))
+                            {
+                                hits.Add((method, instruction, Names.Method(reference)));
+                            }
+                        }
+                        else if (reference.DeclaringType.FullName == targetTypeName &&
+                                 reference.Name == memberName)
+                        {
+                            hits.Add((method, instruction, Names.Method(reference)));
+                        }
                         break;
-                    case FieldReference reference when
-                        reference.DeclaringType.FullName == targetTypeName && reference.Name == memberName &&
-                        IsFieldAccess(instruction.OpCode.Code):
-                        hits.Add((method, instruction, Names.Field(reference)));
+                    case FieldReference reference when IsFieldAccess(instruction.OpCode.Code):
+                        if (TryResolve(reference, out var resolvedField))
+                        {
+                            if (targetFields.Contains(resolvedField))
+                            {
+                                hits.Add((method, instruction, Names.Field(reference)));
+                            }
+                        }
+                        else if (reference.DeclaringType.FullName == targetTypeName &&
+                                 reference.Name == memberName)
+                        {
+                            hits.Add((method, instruction, Names.Field(reference)));
+                        }
                         break;
                 }
             }
         }
 
         output.WriteLine($"callers {Names.Type(targetType)}.{memberName}");
-        if (hits.Count == 0)
+        var notes = CallerNotes(targetMethods, resolvedMethodSiteCounts).ToArray();
+        foreach (var note in notes)
+        {
+            output.WriteLine($"  note: {note}");
+        }
+        if (hits.Count == 0 && notes.Length == 0)
         {
             output.WriteLine("  (none)");
             return;
@@ -204,6 +236,87 @@ internal sealed class AssemblyInspector : IDisposable
                 $"{hit.Instruction.OpCode.Name} {hit.Target}");
         }
     }
+
+    private IEnumerable<string> CallerNotes(
+        IEnumerable<MethodDefinition> targetMethods,
+        IReadOnlyDictionary<MethodDefinition, int> resolvedMethodSiteCounts)
+    {
+        foreach (var target in targetMethods.OrderBy(Names.Method, StringComparer.Ordinal))
+        {
+            var baseDeclaration = FindBaseDeclaration(target);
+            if (baseDeclaration is not null)
+            {
+                resolvedMethodSiteCounts.TryGetValue(baseDeclaration, out var count);
+                yield return
+                    $"{Names.Method(target)} overrides {Names.Method(baseDeclaration)}; " +
+                    $"{count} call {(count == 1 ? "site" : "sites")} in this assembly " +
+                    "reference the base declaration.";
+            }
+
+            foreach (var @override in FindOverrides(target))
+            {
+                yield return $"override declaration: {Names.Method(@override)}";
+            }
+        }
+    }
+
+    private IEnumerable<MethodDefinition> FindOverrides(MethodDefinition declaration) =>
+        AllTypes()
+            .SelectMany(type => type.Methods)
+            .Where(method => !ReferenceEquals(method, declaration) && Overrides(method, declaration))
+            .OrderBy(Names.Method, StringComparer.Ordinal);
+
+    private bool Overrides(MethodDefinition method, MethodDefinition declaration)
+    {
+        var visited = new HashSet<MethodDefinition>();
+        var current = FindBaseDeclaration(method);
+        while (current is not null && visited.Add(current))
+        {
+            if (ReferenceEquals(current, declaration))
+            {
+                return true;
+            }
+            current = FindBaseDeclaration(current);
+        }
+        return false;
+    }
+
+    private static MethodDefinition? FindBaseDeclaration(MethodDefinition method)
+    {
+        foreach (var explicitOverride in method.Overrides)
+        {
+            if (TryResolve(explicitOverride, out var resolved) && !resolved.DeclaringType.IsInterface)
+            {
+                return resolved;
+            }
+        }
+
+        if (!method.IsVirtual || method.IsNewSlot)
+        {
+            return null;
+        }
+
+        var baseReference = method.DeclaringType.BaseType;
+        while (baseReference is not null && TryResolve(baseReference, out var baseType))
+        {
+            var declaration = baseType.Methods.FirstOrDefault(candidate =>
+                candidate.IsVirtual && MethodSlotsMatch(method, candidate));
+            if (declaration is not null)
+            {
+                return declaration;
+            }
+            baseReference = baseType.BaseType;
+        }
+        return null;
+    }
+
+    private static bool MethodSlotsMatch(MethodDefinition method, MethodDefinition candidate) =>
+        method.Name == candidate.Name &&
+        method.GenericParameters.Count == candidate.GenericParameters.Count &&
+        method.Parameters.Count == candidate.Parameters.Count &&
+        method.Parameters.Zip(candidate.Parameters, (left, right) =>
+                left.ParameterType.FullName == right.ParameterType.FullName)
+            .All(matches => matches);
 
     private void WriteImplementers(string query, TextWriter output)
     {
@@ -377,6 +490,36 @@ internal sealed class AssemblyInspector : IDisposable
         }
     }
 
+    private static bool TryResolve(MethodReference reference, out MethodDefinition definition)
+    {
+        try
+        {
+            definition = reference.Resolve();
+            return definition is not null;
+        }
+        catch (Exception exception) when (
+            exception is AssemblyResolutionException or ResolutionException)
+        {
+            definition = null!;
+            return false;
+        }
+    }
+
+    private static bool TryResolve(FieldReference reference, out FieldDefinition definition)
+    {
+        try
+        {
+            definition = reference.Resolve();
+            return definition is not null;
+        }
+        catch (Exception exception) when (
+            exception is AssemblyResolutionException or ResolutionException)
+        {
+            definition = null!;
+            return false;
+        }
+    }
+
     private static bool IsCall(Code code) =>
         code is Code.Call or Code.Callvirt or Code.Newobj or Code.Jmp or Code.Ldftn or Code.Ldvirtftn;
 
@@ -384,8 +527,21 @@ internal sealed class AssemblyInspector : IDisposable
         code is Code.Ldfld or Code.Ldflda or Code.Stfld or Code.Ldsfld or Code.Ldsflda or Code.Stsfld;
 
     private static string Describe(FieldDefinition field) =>
-        $"{Visibility(field)}{Modifiers(field.IsStatic, false, false, false)}field " +
+        $"{Visibility(field)}{FieldModifiers(field)}field " +
         $"{Names.Field(field)} : {Names.Type(field.FieldType)}";
+
+    private static string FieldModifiers(FieldDefinition field)
+    {
+        if (field.IsLiteral)
+        {
+            return " const ";
+        }
+
+        var modifiers = new List<string>();
+        if (field.IsStatic) modifiers.Add("static");
+        if (field.IsInitOnly) modifiers.Add("readonly");
+        return modifiers.Count == 0 ? " " : " " + string.Join(" ", modifiers) + " ";
+    }
 
     private static string Describe(PropertyDefinition property)
     {
