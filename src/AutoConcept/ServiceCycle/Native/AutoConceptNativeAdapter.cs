@@ -247,9 +247,22 @@ internal sealed class AutoConceptNativeAdapter :
         float minimumResourcePercent,
         out int safeTarget,
         out string reason)
+        => TryFindSafeTarget(
+            candidate, desiredTarget, rateReservePercent, minimumResourcePercent,
+            out safeTarget, out reason, out _);
+
+    private bool TryFindSafeTarget(
+        NativeConceptCandidate candidate,
+        int desiredTarget,
+        float rateReservePercent,
+        float minimumResourcePercent,
+        out int safeTarget,
+        out string reason,
+        out AutoConceptProjectionRefusal refusal)
     {
         safeTarget = candidate.Quantity;
         reason = "no resource-safe quantity was found";
+        refusal = AutoConceptProjectionRefusal.Backpressure;
         desiredTarget = Math.Min(desiredTarget, candidate.MaximumQuantity);
         if (desiredTarget <= candidate.Quantity)
         {
@@ -260,11 +273,14 @@ internal sealed class AutoConceptNativeAdapter :
         while (delta > 0)
         {
             var target = candidate.Quantity + delta;
-            if (TryValidateProjectedDrain(candidate, target, rateReservePercent, minimumResourcePercent, out reason))
+            if (TryValidateProjectedDrain(
+                    candidate, target, rateReservePercent, minimumResourcePercent,
+                    out reason, out refusal))
             {
                 safeTarget = target;
                 return true;
             }
+            if (refusal == AutoConceptProjectionRefusal.Contract) return false;
             delta /= 2;
         }
         return false;
@@ -333,8 +349,13 @@ internal sealed class AutoConceptNativeAdapter :
                 config.RateReservePercent,
                 config.MinimumResourcePercent,
                 out var safeTarget,
-                out var reason))
-            return AutoConceptSubmission.Rejected(AutoConceptPreflight.ProjectionRefused, reason);
+                out var reason,
+                out var refusal))
+            return AutoConceptSubmission.Rejected(
+                refusal == AutoConceptProjectionRefusal.Backpressure
+                    ? AutoConceptPreflight.ResourceBackpressure
+                    : AutoConceptPreflight.ProjectionRefused,
+                reason);
         var delta = safeTarget - candidate.Quantity;
         var succeeded = TryAdd(candidate, delta, out reason);
         return _lastNativeMutationOutcome.MutationAttempts == 0
@@ -559,8 +580,10 @@ internal sealed class AutoConceptNativeAdapter :
         int targetQuantity,
         float rateReservePercent,
         float minimumResourcePercent,
-        out string reason)
+        out string reason,
+        out AutoConceptProjectionRefusal refusal)
     {
+        refusal = AutoConceptProjectionRefusal.Contract;
         try
         {
             var temporary = Activator.CreateInstance(
@@ -593,6 +616,7 @@ internal sealed class AutoConceptNativeAdapter :
             if (entries.Count == 0)
             {
                 reason = "no positive incremental drain";
+                refusal = AutoConceptProjectionRefusal.None;
                 return true;
             }
             foreach (var entry in entries)
@@ -600,7 +624,12 @@ internal sealed class AutoConceptNativeAdapter :
                 if (entry.Amount.IsZero || entry.Amount.IsNegative) continue;
                 var zeroState = ReflectionUtil.InvokeNoArgs(entry.Resource, "IsAtZero");
                 if (!AutoConceptResourcePolicy.TryAcceptPositiveDrain(zeroState, out var zeroReason))
+                {
+                    refusal = zeroState is true
+                        ? AutoConceptProjectionRefusal.Backpressure
+                        : AutoConceptProjectionRefusal.Contract;
                     return FailProjection($"{ResourceName(entry.Resource)} {zeroReason}", out reason);
+                }
                 var trueIncrement = InvokeCompatible(entry.Resource, "GetTrueSpend", entry.NativeAmount);
                 if (!BigAmount.TryRead(trueIncrement, out var adjustedIncrement) || adjustedIncrement.IsNegative)
                     return FailProjection("resource quality conversion failed", out reason);
@@ -613,21 +642,35 @@ internal sealed class AutoConceptNativeAdapter :
                     ? default
                     : grossRate.Multiply(Math.Clamp(rateReservePercent, 0.0f, 100.0f) / 100.0);
                 if (currentRate.Subtract(adjustedIncrement).CompareTo(reserve) < 0)
+                {
+                    refusal = AutoConceptProjectionRefusal.Backpressure;
                     return FailProjection($"{ResourceName(entry.Resource)} would fall below the configured rate reserve", out reason);
+                }
 
                 if (ReflectionUtil.InvokeNoArgs(entry.Resource, "HasMaxQuantity") is true &&
                     BigAmount.TryRead(ReflectionUtil.InvokeNoArgs(entry.Resource, "GetQuantity"), out var quantity) &&
                     BigAmount.TryRead(ReflectionUtil.InvokeNoArgs(entry.Resource, "GetTrueSoftCap"), out var capacity) &&
                     !capacity.IsZero && quantity.DivideApprox(capacity) * 100.0 < minimumResourcePercent)
+                {
+                    refusal = AutoConceptProjectionRefusal.Backpressure;
                     return FailProjection($"{ResourceName(entry.Resource)} is below the configured quantity floor", out reason);
+                }
             }
             reason = "projected native drain is safe";
+            refusal = AutoConceptProjectionRefusal.None;
             return true;
         }
         catch (Exception ex) when (ex is TargetInvocationException || ex is ArgumentException || ex is InvalidOperationException || ex is MissingMethodException || ex is MemberAccessException || ex is OverflowException)
         {
             return FailProjection(ex.GetBaseException().Message, out reason);
         }
+    }
+
+    private enum AutoConceptProjectionRefusal
+    {
+        None = 0,
+        Backpressure = 1,
+        Contract = 2,
     }
 
     private Dictionary<object, object> ReadActiveByRecipe()

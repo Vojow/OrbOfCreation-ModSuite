@@ -383,6 +383,61 @@ public sealed class AutoConceptCycleEvaluatorTests
     }
 
     [Fact]
+    public void APublishedRateReserveRefusalIsQuietPlanningBackpressure()
+    {
+        var world = World(
+            new[] { Recipe(Alpha, maximum: 1) },
+            Array.Empty<WorldAlchemyInstance>(),
+            resources: new[] { DrainingResource(Resource, 50, 100, trueRate: 100, currentDrain: 0) },
+            costs: new[]
+            {
+                new WorldAlchemyCost(
+                    Alpha, WorldAlchemyCostKind.RecipeDrain, Resource, new BigDouble(60)),
+                new WorldAlchemyCost(
+                    Alpha, WorldAlchemyCostKind.ProspectiveDrain, Resource,
+                    new BigDouble(60), targetQuantity: 1),
+            });
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+
+        Assert.Empty(Plan(
+            world,
+            Config(rateReservePercent: 50),
+            ref state,
+            out _));
+    }
+
+    [Fact]
+    public void DepthPlansTheLargestPublishedTargetThatClearsTheReserve()
+    {
+        var world = World(
+            new[] { Recipe(Alpha, maximum: 4) },
+            new[] { Instance(Alpha, quantity: 1, queued: 1) },
+            resources: new[] { DrainingResource(Resource, 50, 100, trueRate: 100, currentDrain: 10) },
+            costs: new[]
+            {
+                new WorldAlchemyCost(
+                    Alpha, WorldAlchemyCostKind.RecipeDrain, Resource, new BigDouble(10)),
+                new WorldAlchemyCost(
+                    Alpha, WorldAlchemyCostKind.CurrentDrain, Resource, new BigDouble(10)),
+                new WorldAlchemyCost(
+                    Alpha, WorldAlchemyCostKind.ProspectiveDrain, Resource,
+                    new BigDouble(40), targetQuantity: 2),
+                new WorldAlchemyCost(
+                    Alpha, WorldAlchemyCostKind.ProspectiveDrain, Resource,
+                    new BigDouble(70), targetQuantity: 4),
+            });
+        var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
+
+        var action = Assert.Single(Plan(
+            world,
+            Config(rateReservePercent: 50),
+            ref state,
+            out _));
+
+        Assert.Equal(2, action.TargetOrDelta);
+    }
+
+    [Fact]
     [Trait("Category", "AutoConceptReliability")]
     public void RejectedCandidateReentersPlanningOnTheNextWorldPublication()
     {
@@ -544,7 +599,8 @@ public sealed class AutoConceptCycleEvaluatorTests
         Guid id,
         double quantity,
         double capacity,
-        double trueRate)
+        double trueRate,
+        double? currentDrain = null)
     {
         var rateInputs = default(RawResourceRateInputs);
         var traits = default(RawResourceTraits);
@@ -559,7 +615,7 @@ public sealed class AutoConceptCycleEvaluatorTests
             discoveryTime: default,
             quality: new BigDouble(100),
             gainRate: new BigDouble(100),
-            drain: new BigDouble(-trueRate),
+            drain: new BigDouble(currentDrain ?? -trueRate),
             reservation: default,
             usage: default,
             inLossMode: false,
@@ -585,7 +641,9 @@ public sealed class AutoConceptCycleEvaluatorTests
         bool emergencyDisabled = false,
         AutoConceptOperationMode mode = AutoConceptOperationMode.Active,
         AutoConceptSlotManagementMode slotMode = AutoConceptSlotManagementMode.RotateAll,
-        int trainingSeconds = 60) =>
+        int trainingSeconds = 60,
+        float rateReservePercent = 0,
+        float minimumResourcePercent = 0) =>
         new()
         {
             General = new SuiteGeneralConfiguration { Enabled = enabled },
@@ -595,6 +653,8 @@ public sealed class AutoConceptCycleEvaluatorTests
                 Mode = mode,
                 SlotManagement = slotMode,
                 TrainingPeriodSeconds = trainingSeconds,
+                RateReservePercent = rateReservePercent,
+                MinimumResourcePercent = minimumResourcePercent,
                 MinimumDrainRatio = 0.25f,
             },
         };

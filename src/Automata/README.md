@@ -283,6 +283,15 @@ Candidate quantity limits come from the native `AlchemyRecipeSO.GetMaxUsageSlots
 collector does not interpret the raw `maxUsageSlots` modifier because its `-1` value is a sentinel
 that the game resolves to a mastery-derived or unlimited maximum.
 
+The same publication captures native prospective drain vectors for the exact quantity targets the
+boundary's halving ladder can choose. Planning compares each positive incremental drain through the
+published resource quality, true rate, current drain, capacity, and configured rate/quantity floors.
+A target the publication already says would violate a reserve is quiet backpressure and is not
+scheduled; a lower safe target may still be selected. The GameAction independently reconstructs the
+prospective vector and repeats every check against live native state before mutation. Boundary-time
+resource backpressure keeps its exact result code but counts as an expected skip, while an unavailable
+projection contract remains a loud rejection.
+
 `SlotManagementMode=TimedCycle` is the default once Auto Concept is enabled. It permits complete settled replacement across concept types, but every assigned concept receives its full configured settled-active period before rotation; catching the current highest mastery never ends that session early, and least-recently-assigned ordering prevents any unlocked concept from being starved. Before removal, the native boundary proves that releasing the exact active assignment will open either a matching typed slot or a typeless slot for the replacement. `RotateAll` instead removes one settled active concept only if a same-type inactive concept has strictly lower mastery, waits for native settlement, and then adds the exact planned replacement. Equal mastery never rotates on UUID ordering alone. `PreserveManual` never removes the quantity present when Auto Concept starts; it can rotate only assignments that Auto Concept added itself.
 
 Every newly assigned lower-mastery concept in `RotateAll` or `PreserveManual` receives a catch-up training session. The session captures the highest eligible mastery level and fractional progress at assignment time, becomes timed only after the native quantity is settled and active, and protects the assignment until it reaches that target or `TrainingPeriodSeconds` elapses. `TimedCycle` uses the same timer but never applies the catch-up shortcut. The default is 30 seconds and the accepted range is 10 through 3600 seconds. Native setup time does not consume the period, and the controller schedules the exact next session deadline in addition to ordinary world/configuration wakes. A verified assignment starts its session from the accepted queued target; a later depth settlement is recorded as suite-owned and cannot restart that deadline.

@@ -90,6 +90,8 @@ internal sealed class AutoConceptCycleActionAdapter : IAutoConceptCycleActionPor
                 return ServiceActionResult.Rejected(AutoConceptActionResultCodes.ProjectionRefused);
             case AutoConceptPreflight.MasteryLimitChanged:
                 return ServiceActionResult.Rejected(AutoConceptActionResultCodes.MasteryLimitChanged);
+            case AutoConceptPreflight.ResourceBackpressure:
+                return ServiceActionResult.Skipped(AutoConceptActionResultCodes.ProjectionRefused);
         }
 
         var evidence = ServiceNativeMutationEvidence.Observed(
@@ -103,7 +105,8 @@ internal sealed class AutoConceptCycleActionAdapter : IAutoConceptCycleActionPor
         in AutoConceptCycleAction action,
         in AutoConceptSubmission submission)
     {
-        if (submission.Verified) return;
+        if (submission.Verified ||
+            submission.Preflight == AutoConceptPreflight.ResourceBackpressure) return;
         var replacement = action.ReplacementId == Guid.Empty
             ? string.Empty
             : $" with replacement {action.ReplacementId:D}";

@@ -303,6 +303,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             timeScalingMod = new FakeModifierRecord(80d),
             cachedCompletionTime = new BigDouble(4d),
             cachedRequiredXp = default,
+            maxUsageSlots = new FakeModifierRecord(4d),
             experienceContainer = new FakeExperienceContainer
             {
                 cachedRequiredXp = new BigDouble(12d),
@@ -371,6 +372,16 @@ public sealed class GameWorldCollectorTests : IDisposable
             out var currentCount));
         Assert.Equal(1, currentCount);
         Assert.Equal(11d, world.AlchemyCosts[currentStart].Amount.ToDouble());
+
+        Assert.True(WorldAlchemyCostLookup.TryFindProspectiveRange(
+            world.AlchemyCosts,
+            recipe.Identity,
+            targetQuantity: 4,
+            out var prospectiveStart,
+            out var prospectiveCount));
+        Assert.Equal(1, prospectiveCount);
+        Assert.Equal(resource, world.AlchemyCosts[prospectiveStart].ResourceId);
+        Assert.Equal(28d, world.AlchemyCosts[prospectiveStart].Amount.ToDouble());
     }
 
     [Fact]

@@ -487,7 +487,8 @@
       "returnType": "BigDouble",
       "parameters": [],
       "owners": [
-        "Automata Auto Concept action boundary"
+        "Automata Auto Concept action boundary",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
@@ -2708,7 +2709,8 @@
       "parameters": [],
       "owners": [
         "Automata Auto Concept drain",
-        "Automata cost-math verification"
+        "Automata cost-math verification",
+        "Automata world collection"
       ],
       "usages": [
         "reflection"
@@ -7893,6 +7895,27 @@
         "reflection"
       ],
       "place": "action"
+    },
+    {
+      "id": "resource-cost-list.multiply",
+      "assembly": "assembly-csharp",
+      "type": "ResourceCostList",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Multiply",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceCostList",
+      "parameters": [
+        "BigDouble"
+      ],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
     },
     {
       "id": "resource-drain.current",

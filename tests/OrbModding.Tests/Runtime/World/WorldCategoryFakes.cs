@@ -616,6 +616,19 @@ internal class FakeAlchemyInstance : FakeAbstractRefInstance<FakeAlchemyRecipe>
     public int quantity;
     public int queuedQuantity;
     public FakeAlchemyDrain resourceDrain = new();
+
+    public FakeConceptDrainMultiplier GetDrainCostMod() =>
+        new(new BigDouble(quantity));
+}
+
+internal readonly struct FakeConceptDrainMultiplier
+{
+    private readonly BigDouble _percent;
+
+    internal FakeConceptDrainMultiplier(BigDouble multiplier) =>
+        _percent = multiplier * new BigDouble(100d);
+
+    public BigDouble AsPercent() => _percent / new BigDouble(100d);
 }
 
 internal sealed class FakeUnexpectedAlchemyInstance : FakeAlchemyInstance
@@ -749,6 +762,16 @@ internal sealed class FakeSpellCostList
     {
         costs.Add(new FakeSpellCostEntry(resource, amount));
         return this;
+    }
+
+    public FakeSpellCostList Multiply(BigDouble multiplier)
+    {
+        var result = new FakeSpellCostList();
+        foreach (var entry in costs)
+            result.costs.Add(new FakeSpellCostEntry(
+                entry.resource.GetGuid(),
+                (entry.valueBig * multiplier).ToDouble()));
+        return result;
     }
 }
 
