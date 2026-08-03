@@ -23,10 +23,9 @@ public sealed class AutoBuyPurchaseNarrationTests
     }
 
     [Fact]
-    public void DescribeWarning_SuccessAndOrdinaryNoOpsAreSilent()
+    public void DescribeWarning_SuccessAndOrdinaryRefusalsAreSilent()
     {
         var verified = Attempted(before: 4, delta: 3, requested: 3);
-        var nativeNoOp = Attempted(before: 4, delta: 0, requested: 3);
         var unavailable = AutoBuyPurchaseSubmission.Rejected(
             AutoBuyPurchasePreflight.SingleBuyUnavailable);
         var refusalOwnedByResponder = AutoBuyPurchaseSubmission.Rejected(
@@ -35,11 +34,22 @@ public sealed class AutoBuyPurchaseNarrationTests
         Assert.Null(AutoBuyPurchaseNarration.DescribeWarning(
             AutoBuyCandidateKind.Upgrade, CandidateId, in verified));
         Assert.Null(AutoBuyPurchaseNarration.DescribeWarning(
-            AutoBuyCandidateKind.Upgrade, CandidateId, in nativeNoOp));
-        Assert.Null(AutoBuyPurchaseNarration.DescribeWarning(
             AutoBuyCandidateKind.Upgrade, CandidateId, in unavailable));
         Assert.Null(AutoBuyPurchaseNarration.DescribeWarning(
             AutoBuyCandidateKind.Upgrade, CandidateId, in refusalOwnedByResponder));
+    }
+
+    [Fact]
+    public void DescribeWarning_UnverifiedPostcondition_IsActionable()
+    {
+        var unverified = Attempted(before: 4, delta: 0, requested: 3);
+
+        var warning = AutoBuyPurchaseNarration.DescribeWarning(
+            AutoBuyCandidateKind.Upgrade, CandidateId, in unverified);
+
+        Assert.Equal(
+            $"Auto Buy failed to purchase 3 levels for Upgrade {CandidateId:D}: native mutation did not apply.",
+            warning);
     }
 
     [Fact]

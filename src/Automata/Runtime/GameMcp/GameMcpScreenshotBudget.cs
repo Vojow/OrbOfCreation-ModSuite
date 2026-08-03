@@ -29,7 +29,8 @@ internal readonly struct GameMcpScreenshotBudgetAdmission
 /// <summary>
 /// A fixed, non-configurable envelope for explicitly saved Game MCP screenshots in the active run.
 /// The slot check happens before Unity captures or encodes a frame; the byte check happens once,
-/// after encoding and before any file is created.
+/// after encoding and before any file is created. The 6 MiB limit is per run folder; with at most
+/// eight retained runs, screenshots have an effective retained envelope of approximately 48 MiB.
 /// </summary>
 internal static class GameMcpScreenshotBudget
 {

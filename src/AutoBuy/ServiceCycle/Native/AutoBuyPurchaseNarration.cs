@@ -24,10 +24,7 @@ internal static class AutoBuyPurchaseNarration
     {
         if (submission.Verified ||
             submission.Preflight == AutoBuyPurchasePreflight.NotAdmissible ||
-            submission.Preflight == AutoBuyPurchasePreflight.SingleBuyUnavailable ||
-            submission.Preflight == AutoBuyPurchasePreflight.Proceeded &&
-            submission.Outcome == NativeMutationOutcome.PostconditionFailed &&
-            submission.CommittedLevels == 0)
+            submission.Preflight == AutoBuyPurchasePreflight.SingleBuyUnavailable)
         {
             return null;
         }

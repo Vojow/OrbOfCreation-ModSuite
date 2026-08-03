@@ -171,15 +171,6 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         Log = Logger;
 
-        var legacyObservability = AutomataLegacyObservabilityCleanup.Run(Paths.ConfigPath);
-        if (legacyObservability.ShouldLog)
-        {
-            if (legacyObservability.HasWarnings)
-                Logger.LogWarning(legacyObservability.Describe());
-            else
-                Logger.LogInfo(legacyObservability.Describe());
-        }
-
         RunAutomaticSaveBackup();
 
         // The read-only save backup above is the first startup gate. The assembly audit is next,
@@ -192,6 +183,15 @@ public sealed class Plugin : BaseUnityPlugin
             _controlPlaneFailure = loadDecision.Message;
             Logger.LogError(loadDecision.Message);
             return;
+        }
+
+        var legacyObservability = AutomataLegacyObservabilityCleanup.Run(Paths.ConfigPath);
+        if (legacyObservability.ShouldLog)
+        {
+            if (legacyObservability.HasWarnings)
+                Logger.LogWarning(legacyObservability.Describe());
+            else
+                Logger.LogInfo(legacyObservability.Describe());
         }
 
         var configuration = SuiteConfiguration.TryBind(Config);

@@ -519,15 +519,9 @@ internal static class TraceDashboardReader
                 record.RepeatCount,
                 action ? "Unavailable" : record.DecisionOutcomeKind.ToString(),
                 action ? "Unavailable" : DecisionJournalValueNames.Decision(record.DecisionOutcomeCode),
-                "Unavailable",
                 action
                     ? record.ActionOutcome.Disposition + "/" + DecisionJournalValueNames.Action(record.ActionOutcome.Code)
                     : record.DecisionOutcomeKind + "/" + DecisionJournalValueNames.Decision(record.DecisionOutcomeCode),
-                action ? 1 : 0,
-                action && record.ActionOutcome.Disposition == ServiceActionDisposition.Committed ? 1 : 0,
-                0,
-                0,
-                0,
                 worker.Samples,
                 worker.AverageMilliseconds,
                 worker.MicrosecondsPerCapturedCandidate,
