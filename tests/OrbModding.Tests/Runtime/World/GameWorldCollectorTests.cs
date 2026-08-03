@@ -538,7 +538,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Fifty-six passes: the four categories
+        // The scope claim, asserted rather than described. Fifty-seven passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -551,21 +551,82 @@ public sealed class GameWorldCollectorTests : IDisposable
         // plot-and-action pairs, which belong to neither side, and
         // the two that belong to no per-type registry at all and are reached by uuid: the action
         // queues, the equipped spell loadout, the paired Concept registries, and the current
-        // targeting request, plus the two ordered consumable lists and their frame-local use gate.
+        // targeting request, plus the two ordered consumable lists, their frame-local use gate, and
+        // the runtime Brewing Station selector/lifecycle surface.
         // A pass that quietly stopped covering one would show
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(56, report.Categories.Length);
+        Assert.Equal(57, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "challenge decisions", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "ordinary alchemy loadout", "concept instances", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "challenge decisions", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "ordinary alchemy loadout", "concept instances", "crafting stations", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
+    }
+
+    [Fact]
+    public void Brewing_station_selection_lifecycle_and_drain_are_published_together()
+    {
+        var first = new FakeCraftingStationTooltipable { Identity = Guid.NewGuid() };
+        var second = new FakeCraftingStationTooltipable { Identity = Guid.NewGuid() };
+        var output = new FakeCraftingStationTooltipable { Identity = Guid.NewGuid() };
+        var resource = new FakeResource { Identity = Guid.NewGuid(), Quantity = 20d, Visible = true };
+        FakeResource.All.Add(resource);
+        var firstElement = new FakeCraftingStationElement { tooltipable = first };
+        var secondElement = new FakeCraftingStationElement { tooltipable = second, available = false };
+        var outputElement = new FakeCraftingStationElement { tooltipable = output };
+        var structure = new FakeCraftingStructure
+        {
+            ingredientLists =
+            {
+                new FakeCraftingStationElementList { elements = { firstElement } },
+                new FakeCraftingStationElementList { elements = { secondElement } },
+            },
+        };
+        var station = new FakeCraftingStation
+        {
+            reference = structure,
+            recipeId = new FakeCraftingStationGuid(Guid.NewGuid()),
+            firstIngredient = firstElement,
+            secondIngredient = secondElement,
+            output = outputElement,
+            outputOptions = { outputElement },
+            loaded = true,
+            active = true,
+            level = 4,
+            minimumLevel = 2,
+            maximumLevel = 7,
+            drain = new FakeCraftingResourceCostList().With(resource, new BigDouble(3)),
+        };
+        structure.instances.value.Add(station);
+        FakeCraftingStructure.All.Add(structure);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldCraftingStationLookup.TryFind(world.CraftingStations, station.Identity, out var row));
+        Assert.Equal(structure.Identity, row.StructureTypeId);
+        Assert.Equal(first.Identity, row.FirstIngredientId);
+        Assert.Equal(second.Identity, row.SecondIngredientId);
+        Assert.Equal(output.Identity, row.OutputId);
+        Assert.True(row.Loaded);
+        Assert.True(row.Active);
+        Assert.Equal(4, row.Level);
+        Assert.True(WorldCraftingStationLookup.TryFindOptions(
+            world.CraftingStationOptions, station.Identity, out _, out var optionCount));
+        Assert.Equal(3, optionCount);
+        Assert.True(WorldCraftingStationLookup.TryFindDrains(
+            world.CraftingStationDrains, station.Identity, out var drainStart, out var drainCount));
+        Assert.Equal(1, drainCount);
+        Assert.Equal(resource.Identity, world.CraftingStationDrains[drainStart].ResourceId);
+        Assert.Equal(3d, world.CraftingStationDrains[drainStart].Amount.ToDouble());
     }
 
     [Fact]
@@ -1606,8 +1667,6 @@ public sealed class GameWorldCollectorTests : IDisposable
             CanUse = true;
         }
     }
-
-    private interface IFakeTooltipable { string GetName(); }
 
     private sealed class FakeTargetingResultInfo { }
 

@@ -34,6 +34,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly AlchemyLoadoutGameAction? _alchemyLoadout;
     private readonly RitualLifecycleGameAction? _ritualLifecycle;
     private readonly GenericLevelGameAction? _genericLevel;
+    private readonly CraftingStationGameAction? _craftingStations;
     private readonly CraftingInstanceLifecycleGameAction? _craftingInstances;
     private readonly ChallengeGameAction? _challenges;
     private readonly PrestigeGameAction? _prestige;
@@ -59,6 +60,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         AlchemyLoadoutGameAction? alchemyLoadout = null,
         RitualLifecycleGameAction? ritualLifecycle = null,
         GenericLevelGameAction? genericLevel = null,
+        CraftingStationGameAction? craftingStations = null,
         CraftingInstanceLifecycleGameAction? craftingInstances = null,
         ChallengeGameAction? challenges = null,
         PrestigeGameAction? prestige = null,
@@ -80,6 +82,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _alchemyLoadout = alchemyLoadout;
         _ritualLifecycle = ritualLifecycle;
         _genericLevel = genericLevel;
+        _craftingStations = craftingStations;
         _craftingInstances = craftingInstances;
         _challenges = challenges;
         _prestige = prestige;
@@ -151,6 +154,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _alchemyLoadout?.InvalidateLifecycle();
         _ritualLifecycle?.InvalidateLifecycle();
         _genericLevel?.InvalidateLifecycle();
+        _craftingStations?.InvalidateLifecycle();
         _craftingInstances?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
         _prestige?.InvalidateLifecycle();
@@ -219,6 +223,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteRitualLifecycle(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.GenericLevel)
                 return ExecuteGenericLevel(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.CraftingStation)
+                return ExecuteCraftingStation(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Challenge)
                 return ExecuteChallenge(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Prestige)
@@ -658,6 +664,37 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             GameMcpGenericLevelProjection.Project(in submission));
     }
 
+    private GameMcpCommandResult ExecuteCraftingStation(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_craftingStations is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared Brewing Station GameAction was not composed", lifecycle,
+                configurationGeneration);
+        GameMcpNativeActionAdmission.AssertNativeType(command, "CraftingStructure");
+        var kind = command.Mode switch
+        {
+            "set_ingredient" => CraftingStationActionKind.SetIngredient,
+            "set_output" => CraftingStationActionKind.SetOutput,
+            "set_level" => CraftingStationActionKind.SetLevel,
+            "start" => CraftingStationActionKind.Start,
+            "stop" => CraftingStationActionKind.Stop,
+            _ => throw new ArgumentException("unsupported Brewing Station mode " + command.Mode),
+        };
+        var value = kind == CraftingStationActionKind.SetIngredient
+            ? command.Amount - 1
+            : kind == CraftingStationActionKind.SetLevel ? command.Amount : 0;
+        var action = new CraftingStationAction(kind, command.TargetId,
+            command.SecondaryId, value, command.ExpectedLifecycleGeneration);
+        var submission = _craftingStations.Submit(in action);
+        var result = CraftingStationActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason,
+            GameMcpCraftingStationProjection.Project(in submission));
+    }
+
     private GameMcpCommandResult ExecuteResearch(
         GameMcpCommand command,
         long lifecycle,
@@ -1035,6 +1072,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _alchemyLoadout?.Dispose();
             _ritualLifecycle?.Dispose();
             _genericLevel?.Dispose();
+            _craftingStations?.Dispose();
             _craftingInstances?.Dispose();
             _challenges?.Dispose();
             _prestige?.Dispose();

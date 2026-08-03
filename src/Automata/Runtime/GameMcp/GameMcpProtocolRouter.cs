@@ -375,6 +375,18 @@ internal sealed class GameMcpProtocolRouter
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
+            case "game_brewing_station":
+                builder.Mode = RequireOneOf(arguments, "mode",
+                    "set_ingredient", "set_output", "set_level", "start", "stop");
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                if (builder.Mode is "set_ingredient" or "set_output")
+                    builder.SecondaryUuid = RequireUuid(arguments, "selectionUuid");
+                if (builder.Mode == "set_ingredient")
+                    builder.SlotIndex = RequiredInt(arguments, "slot", 0, 1);
+                if (builder.Mode == "set_level")
+                    builder.Amount = RequiredInt(arguments, "level", 1, int.MaxValue);
+                break;
             case "game_challenge":
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "select", "activate", "abandon", "fetch_time", "fetch_prestige");
@@ -472,7 +484,7 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
-            "game_ritual" or "game_level" when
+            "game_ritual" or "game_level" or "game_brewing_station" when
                 !(name == "game_discover" && request.Mode == "preview") &&
                 !(name == "game_spell_loadout" && request.Mode == "preview") =>
                 GameMcpOperationClass.Gameplay,
@@ -502,7 +514,7 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
-            "game_ritual" or "game_level" =>
+            "game_ritual" or "game_level" or "game_brewing_station" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_navigate" or "game_continue" =>
@@ -830,6 +842,27 @@ internal sealed class GameMcpProtocolRouter
                 readOnly: false,
                 idempotent: false),
             Tool(
+                "game_brewing_station",
+                "Configure and run a Brewing Station",
+                "Choose either ingredient, choose a visible output, set the screen level, or start and stop one published Brewing Station instance.",
+                ModeSchema(ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("set_ingredient", "set_output", "set_level", "start", "stop"),
+                        ["uuid"] = StringSchema("Published Brewing Station instance UUID."),
+                        ["selectionUuid"] = StringSchema("Ingredient or output UUID offered by this station."),
+                        ["slot"] = IntegerSchema(0, 1),
+                        ["level"] = IntegerSchema(1, int.MaxValue),
+                    },
+                    "mode", "uuid"),
+                    ModeRule("set_ingredient", new[] { "selectionUuid", "slot" }, new[] { "level" }),
+                    ModeRule("set_output", new[] { "selectionUuid" }, new[] { "slot", "level" }),
+                    ModeRule("set_level", new[] { "level" }, new[] { "selectionUuid", "slot" }),
+                    ModeRule("start", forbidden: new[] { "selectionUuid", "slot", "level" }),
+                    ModeRule("stop", forbidden: new[] { "selectionUuid", "slot", "level" })),
+                readOnly: false,
+                idempotent: false),
+            Tool(
                 "game_challenge",
                 "Select, queue, abandon, or fetch challenges",
                 "Drive one exact native challenge decision. Target modes return the changed state; fetch modes return the named offers needed for the next decision.",
@@ -1112,6 +1145,33 @@ internal sealed class GameMcpProtocolRouter
                 errors.Add(ValidationError("missing_required", "level",
                     "required field 'level' is missing for mode 'set_level'"));
             else if (mode != "set_level" && level)
+                errors.Add(ValidationError("unexpected_for_mode", "level",
+                    "field 'level' is accepted only for mode 'set_level'"));
+        }
+
+        if (string.Equals(name, "game_brewing_station", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var selection = arguments.ContainsKey("selectionUuid");
+            var slot = arguments.ContainsKey("slot");
+            var level = arguments.ContainsKey("level");
+            if (mode is "set_ingredient" or "set_output" && !selection)
+                errors.Add(ValidationError("missing_required", "selectionUuid",
+                    "required field 'selectionUuid' is missing for mode '" + mode + "'"));
+            if (mode == "set_ingredient" && !slot)
+                errors.Add(ValidationError("missing_required", "slot",
+                    "required field 'slot' is missing for mode 'set_ingredient'"));
+            if (mode == "set_level" && !level)
+                errors.Add(ValidationError("missing_required", "level",
+                    "required field 'level' is missing for mode 'set_level'"));
+            if (mode is not ("set_ingredient" or "set_output") && selection)
+                errors.Add(ValidationError("unexpected_for_mode", "selectionUuid",
+                    "field 'selectionUuid' is accepted only for set_ingredient or set_output"));
+            if (mode != "set_ingredient" && slot)
+                errors.Add(ValidationError("unexpected_for_mode", "slot",
+                    "field 'slot' is accepted only for mode 'set_ingredient'"));
+            if (mode != "set_level" && level)
                 errors.Add(ValidationError("unexpected_for_mode", "level",
                     "field 'level' is accepted only for mode 'set_level'"));
         }

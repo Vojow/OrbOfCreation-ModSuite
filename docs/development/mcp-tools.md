@@ -109,7 +109,7 @@ does not refresh it by hidden navigation.
 
 ## Tool surface
 
-The registry is exactly 37 tools. It is built once per lifecycle and never changes mid-session, so
+The registry is exactly 38 tools. It is built once per lifecycle and never changes mid-session, so
 there is no `tools/list_changed` notification. The rows below are in `tools/list` order.
 
 | Tool | Purpose |
@@ -139,6 +139,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_alchemy` | Add, remove, or reorder one ordinary Alchemy recipe through its visible list |
 | `game_ritual` | Select a Ritual, set its starting level, activate it, or cancel its duration reward |
 | `game_level` | Buy one paid or bonus level from an ordinary level-list control |
+| `game_brewing_station` | Select Brewing Station ingredients/output, set level, or start/stop brewing |
 | `game_challenge` | Select, activate, abandon, or fetch the Time/prestige challenge offers |
 | `game_prestige` | Confirm and perform the irreversible persistent reset |
 | `game_research` | Develop/queue, pause, resume, cancel, or apply a free research bonus level |
@@ -366,6 +367,26 @@ returns only the settled paid- or bonus-level change plus the resulting total. T
 checks the game's persistent usage cost but does not perform a one-time payment; the concrete
 native level callback applies its own usage/effects. Research development and spell mastery stay
 on `game_research` and `game_spell_level`, respectively.
+
+### Brewing Station lifecycle
+
+The `crafting-stations` category is the complete pre-decision surface for the Brewing Station
+screen. A detail row names the runtime station and its selected ingredients/output, loaded and
+active state, selected/native level range, the two ordered ingredient-option lists, visible output
+options, and the current named per-second resource drain with spendable holdings. The internal
+matched-recipe UUID is not a player choice and is not part of the wire surface.
+
+Call `game_brewing_station(mode="set_ingredient", uuid=...)` with `slot` 0 or 1 and a
+`selectionUuid` from that slot's options. `set_output` takes a visible output `selectionUuid`;
+`set_level` takes a level inside the published range; `start` and `stop` take no mode-specific
+fields. Every other field combination is rejected at schema validation. Optional
+`expectedNativeType`, when supplied, must be `CraftingStructure`.
+
+The action resolves the exact runtime station and repeats selector availability, output visibility,
+level range, recipe-loaded, and active-state admission on Unity's main thread. Success returns the
+observed selected value, level, or active transition and the full settled next-decision station
+state, because native selector changes can rebuild the other selections and stop brewing. Drain
+rows are planning facts, never accounting postconditions.
 
 ### Challenge decision loop
 

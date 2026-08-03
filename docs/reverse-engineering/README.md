@@ -33,6 +33,7 @@ assets, or a live registry read belongs here.
 - [Requirements](requirements.md) — the requirement graph: what gates actually read, node visibility states, and walking a chain to the real blocker.
 - [Native action surfaces](native-action-surfaces.md) — the purchase, consumable and crafting paths, already decompiled.
 - [Unified level controls](unified-level-native-pipeline.md) — the complete levelable type matrix, visible list callbacks, and usage-cost admission.
+- [Brewing Station lifecycle](crafting-station-native-pipeline.md) — the runtime station selectors, level dial, activation callback, and drain read.
 
 The product-version-pinned authored model, progression graph, and census live under
 [`data/`](../../data/README.md).

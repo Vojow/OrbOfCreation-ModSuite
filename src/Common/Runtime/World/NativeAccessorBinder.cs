@@ -715,6 +715,45 @@ internal static class NativeAccessorBinder
     }
 
     /// <summary>
+    /// Binds an entity-returning method whose declared interface does not itself expose identity,
+    /// while every supported concrete result derives from one audited identity-bearing base type.
+    /// </summary>
+    /// <remarks>
+    /// Brewing-station selector entries are the motivating native shape:
+    /// <c>TypeElement.GetTooltipable()</c> declares <c>ITooltipable</c>, while its resource, glyph,
+    /// and consumable results are <c>TooltipableObject</c> instances. The type test keeps a future
+    /// non-entity tooltip result fail-closed as an empty identity and performs no reflection on the
+    /// collection path.
+    /// </remarks>
+    internal static Func<object, Guid>? CallReferenceGuid(
+        Type? owner,
+        string name,
+        Type? exactReturnType,
+        Type? identityType)
+    {
+        if (owner is null || exactReturnType is null || identityType is null ||
+            exactReturnType.IsValueType || identityType.IsValueType) return null;
+
+        var method = owner.GetMethod(name, Instance, null, Type.EmptyTypes, null);
+        var getGuid = identityType.GetMethod("GetGuid", Instance, null, Type.EmptyTypes, null);
+        if (method is null || method.ReturnType != exactReturnType ||
+            getGuid is null || getGuid.ReturnType != typeof(Guid)) return null;
+
+        var source = Expression.Parameter(typeof(object), "source");
+        var referenced = Expression.Variable(exactReturnType, "referenced");
+        var read = Expression.Block(
+            new[] { referenced },
+            Expression.Assign(referenced, Expression.Call(Expression.Convert(source, owner), method)),
+            Expression.Condition(
+                Expression.AndAlso(
+                    Expression.NotEqual(referenced, Expression.Constant(null, exactReturnType)),
+                    Expression.TypeIs(referenced, identityType)),
+                Expression.Call(Expression.Convert(referenced, identityType), getGuid),
+                Expression.Constant(Guid.Empty)));
+        return Compile<Guid>(read, source);
+    }
+
+    /// <summary>
     /// Reads a public static list member — the per-type <c>All</c> registry every category exposes,
     /// and the same discovery mechanism Auto Buy already uses for candidate enumeration.
     /// </summary>

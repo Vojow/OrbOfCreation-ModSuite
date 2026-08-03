@@ -31,6 +31,7 @@ internal static class AutomataServiceCycleComposition
         Func<AlchemyLoadoutGameAction>? createAlchemyLoadout = null,
         Func<RitualLifecycleGameAction>? createRitualLifecycle = null,
         Func<GenericLevelGameAction>? createGenericLevel = null,
+        Func<CraftingStationGameAction>? createCraftingStations = null,
         Func<CraftingInstanceLifecycleGameAction>? createCraftingInstances = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
@@ -54,6 +55,7 @@ internal static class AutomataServiceCycleComposition
                 createAlchemyLoadout,
                 createRitualLifecycle,
                 createGenericLevel,
+                createCraftingStations,
                 createCraftingInstances,
                 createChallenges,
                 createPrestige,
@@ -91,6 +93,7 @@ internal static class AutomataServiceCycleComposition
         Func<AlchemyLoadoutGameAction>? createAlchemyLoadout = null,
         Func<RitualLifecycleGameAction>? createRitualLifecycle = null,
         Func<GenericLevelGameAction>? createGenericLevel = null,
+        Func<CraftingStationGameAction>? createCraftingStations = null,
         Func<CraftingInstanceLifecycleGameAction>? createCraftingInstances = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
@@ -117,6 +120,7 @@ internal static class AutomataServiceCycleComposition
         AlchemyLoadoutGameAction? alchemyLoadout = null;
         RitualLifecycleGameAction? ritualLifecycle = null;
         GenericLevelGameAction? genericLevel = null;
+        CraftingStationGameAction? craftingStations = null;
         CraftingInstanceLifecycleGameAction? craftingInstances = null;
         ChallengeGameAction? challenges = null;
         PrestigeGameAction? prestige = null;
@@ -181,6 +185,7 @@ internal static class AutomataServiceCycleComposition
             alchemyLoadout = createAlchemyLoadout?.Invoke();
             ritualLifecycle = createRitualLifecycle?.Invoke();
             genericLevel = createGenericLevel?.Invoke();
+            craftingStations = createCraftingStations?.Invoke();
             craftingInstances = createCraftingInstances?.Invoke();
             challenges = createChallenges?.Invoke();
             prestige = createPrestige?.Invoke();
@@ -201,6 +206,7 @@ internal static class AutomataServiceCycleComposition
                 alchemyLoadout,
                 ritualLifecycle,
                 genericLevel,
+                craftingStations,
                 craftingInstances,
                 challenges,
                 prestige,
@@ -218,6 +224,7 @@ internal static class AutomataServiceCycleComposition
             alchemyLoadout?.Dispose();
             ritualLifecycle?.Dispose();
             genericLevel?.Dispose();
+            craftingStations?.Dispose();
             craftingInstances?.Dispose();
             challenges?.Dispose();
             prestige?.Dispose();

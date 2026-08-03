@@ -38,6 +38,7 @@ internal enum GameMcpCommandKind
     AlchemyLoadout = 27,
     RitualLifecycle = 28,
     GenericLevel = 29,
+    CraftingStation = 30,
 }
 
 internal static class GameMcpCommandKinds
@@ -51,7 +52,7 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.EquipmentLoadout or GameMcpCommandKind.Challenge or
             GameMcpCommandKind.Prestige or GameMcpCommandKind.Research or
             GameMcpCommandKind.AlchemyLoadout or GameMcpCommandKind.RitualLifecycle or
-            GameMcpCommandKind.GenericLevel;
+            GameMcpCommandKind.GenericLevel or GameMcpCommandKind.CraftingStation;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -73,6 +74,7 @@ internal static class GameMcpCommandKinds
         "game_alchemy" => GameMcpCommandKind.AlchemyLoadout,
         "game_ritual" => GameMcpCommandKind.RitualLifecycle,
         "game_level" => GameMcpCommandKind.GenericLevel,
+        "game_brewing_station" => GameMcpCommandKind.CraftingStation,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -125,6 +127,7 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.AlchemyLoadout => "game_alchemy",
         GameMcpCommandKind.RitualLifecycle => "game_ritual",
         GameMcpCommandKind.GenericLevel => "game_level",
+        GameMcpCommandKind.CraftingStation => "game_brewing_station",
         _ => string.Empty,
     };
 }
@@ -744,6 +747,20 @@ internal static class GameMcpActionResultCodeNames
             if (code == GenericLevelActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == GenericLevelActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == GenericLevelActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.CraftingStation)
+        {
+            if (code == CraftingStationActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == CraftingStationActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == CraftingStationActionResultCodes.IdentityUnavailable) return "identity_unavailable";
+            if (code == CraftingStationActionResultCodes.SelectionUnavailable) return "selection_unavailable";
+            if (code == CraftingStationActionResultCodes.SelectionHidden) return "selection_hidden";
+            if (code == CraftingStationActionResultCodes.LevelOutOfRange) return "level_out_of_range";
+            if (code == CraftingStationActionResultCodes.NotLoaded) return "recipe_incomplete";
+            if (code == CraftingStationActionResultCodes.AlreadyInRequestedState) return "already_in_requested_state";
+            if (code == CraftingStationActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == CraftingStationActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == CraftingStationActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

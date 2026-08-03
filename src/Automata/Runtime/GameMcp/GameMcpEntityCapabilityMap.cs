@@ -128,8 +128,26 @@ internal static class GameMcpEntityCapabilityMap
                     "rituals", capability, out reason),
             GameMcpCommandKind.GenericLevel =>
                 TryResolveGenericLevelType(world, target, out _, out reason),
+            GameMcpCommandKind.CraftingStation =>
+                CraftingStationTarget(world, target, out reason),
             _ => Unsupported(capability, out reason),
         };
+    }
+
+    private static bool CraftingStationTarget(
+        GameWorldState world,
+        Guid target,
+        out string reason)
+    {
+        if (!Supports("crafting-stations", GameMcpCommandKind.CraftingStation))
+            return Unsupported(GameMcpCommandKind.CraftingStation, out reason);
+        if (WorldCraftingStationLookup.TryFind(world.CraftingStations, target, out _))
+        {
+            reason = string.Empty;
+            return true;
+        }
+        reason = "Brewing Station " + target + " is not present in the published world.";
+        return false;
     }
 
     internal static bool TryResolveGenericLevelType(
@@ -455,6 +473,9 @@ internal static class GameMcpEntityCapabilityMap
         D("resource-types", "ResourceTypeSO", GameMcpCommandKind.GenericLevel),
         D("crafting-recipe-types", "CraftingRecipeTypeSO"),
         D("crafting-recipes", "CraftingRecipeSO", GameMcpCommandKind.Crafting),
+        D("crafting-stations", "CraftingStructure", GameMcpCommandKind.CraftingStation),
+        D("crafting-station-options", "CraftingStructureSO+TypeElement"),
+        D("crafting-station-drains", "ResourceCostList"),
         D("harvest-elements", "HarvestElementSO"),
         D("harvest-resources", "HarvestElementSO"),
         D("time-runes", "TimeRuneSO", GameMcpCommandKind.GenericDiscovery,

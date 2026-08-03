@@ -86,7 +86,9 @@ public sealed class WorldIdentityWalkTests
     /// current execution route and price evidence keyed by a recipe the crafting-recipe table
     /// already owns. <c>PurchaseViewRoutes</c> likewise holds authored edges between a
     /// candidate, list, and view whose identities belong to their primary tables.
-    /// <c>CollectionCategories</c> is availability evidence about one collector pass, not a native
+    /// <c>CraftingStationOptions</c> and <c>CraftingStationDrains</c> describe selectors and costs
+    /// keyed by a runtime station whose own row owns the identity. <c>CollectionCategories</c> is
+    /// availability evidence about one collector pass, not a native
     /// row and not a second identity namespace. <c>ScribeWork</c>,
     /// <c>StructureEnchantments</c>, <c>ScrollTargets</c>, and
     /// <c>ScrollTargetEvidence</c> are relationship or evidence rows keyed by recipes, structures,
@@ -130,6 +132,8 @@ public sealed class WorldIdentityWalkTests
         "EntityRequirements",
         "RequirementNativeVerdicts",
         "PrerequisiteLinkTiers",
+        "CraftingStationOptions",
+        "CraftingStationDrains",
     };
 
     /// <summary>

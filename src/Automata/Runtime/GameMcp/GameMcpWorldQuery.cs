@@ -210,6 +210,18 @@ internal static class GameMcpWorldQuery
                 ["state"] = ChallengeState(challenge.State),
                 ["level"] = new GameMcpDomainValue(new BigDouble(challenge.Level)),
             }.Freeze();
+        if (row is WorldCraftingStation station)
+        {
+            var identity = EntityIdentityFormatter.Describe(
+                station.StructureTypeId, world.EntityIdentities);
+            return new JObject
+            {
+                ["entityId"] = station.StationId.ToString("D"),
+                ["name"] = identity.HasName ? identity.Name : station.StationId.ToString("D"),
+                ["loaded"] = station.Loaded,
+                ["active"] = station.Active,
+            }.Freeze();
+        }
         return new GameMcpProjectedDomainValue(
             row,
             ListFields(category),
@@ -562,6 +574,7 @@ internal static class GameMcpWorldQuery
             GameMcpCommandKind.AlchemyLoadout => ProjectAlchemyLoadoutDelta(state, command),
             GameMcpCommandKind.RitualLifecycle => ProjectRitualLifecycleDelta(state, command),
             GameMcpCommandKind.GenericLevel => ProjectGenericLevelDelta(state, command),
+            GameMcpCommandKind.CraftingStation => ProjectCraftingStationDelta(state, command),
             GameMcpCommandKind.Research => ProjectResearchDelta(state, command),
             GameMcpCommandKind.GenericDiscovery => ProjectDiscoveryDelta(state, command),
             _ => ProjectPostState(state, PostStateCategory(command), command.TargetId),
@@ -801,6 +814,73 @@ internal static class GameMcpWorldQuery
             ["before"] = hadBefore ? previous.TotalLevel : (int?)null,
             ["after"] = current.TotalLevel,
         };
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectCraftingStationDelta(
+        GameMcpFrameContext state,
+        GameMcpCommand command)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        if (!WorldCraftingStationLookup.TryFind(
+                state.World.Snapshot.CraftingStations, command.TargetId, out var station))
+            return PostStateUnavailable("post_state_not_published",
+                "the settled world has no Brewing Station row for that station");
+        var oldWorld = Before(command);
+        WorldCraftingStation previous = default;
+        var hadBefore = oldWorld is not null && WorldCraftingStationLookup.TryFind(
+            oldWorld.CraftingStations, command.TargetId, out previous);
+        var result = new JObject { ["uuid"] = command.TargetId.ToString("D") };
+        switch (command.Mode)
+        {
+            case "set_ingredient":
+                var oldIngredient = command.Amount == 1
+                    ? previous.FirstIngredientId
+                    : previous.SecondIngredientId;
+                var newIngredient = command.Amount == 1
+                    ? station.FirstIngredientId
+                    : station.SecondIngredientId;
+                result["ingredient"] = new JObject
+                {
+                    ["slot"] = command.Amount - 1,
+                    ["before"] = hadBefore && oldIngredient != Guid.Empty
+                        ? oldIngredient.ToString("D")
+                        : null,
+                    ["after"] = newIngredient != Guid.Empty
+                        ? newIngredient.ToString("D")
+                        : null,
+                };
+                break;
+            case "set_output":
+                result["output"] = new JObject
+                {
+                    ["before"] = hadBefore && previous.OutputId != Guid.Empty
+                        ? previous.OutputId.ToString("D")
+                        : null,
+                    ["after"] = station.OutputId != Guid.Empty
+                        ? station.OutputId.ToString("D")
+                        : null,
+                };
+                break;
+            case "set_level":
+                result["level"] = new JObject
+                {
+                    ["before"] = hadBefore ? previous.Level : (int?)null,
+                    ["after"] = station.Level,
+                };
+                break;
+            default:
+                result["active"] = new JObject
+                {
+                    ["before"] = hadBefore && previous.Active,
+                    ["after"] = station.Active,
+                };
+                break;
+        }
+        var next = new JObject();
+        AddCraftingStationDecision(state.World.Snapshot, next, in station);
+        result["next"] = next;
         return result.Freeze();
     }
 
@@ -1263,6 +1343,7 @@ internal static class GameMcpWorldQuery
             "TimeRuneSO" => "time-runes",
             _ => string.Empty,
         },
+        GameMcpCommandKind.CraftingStation => "crafting-stations",
         GameMcpCommandKind.Research => "research",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
@@ -1829,6 +1910,8 @@ internal static class GameMcpWorldQuery
             ? ProjectResearch(world, in research)
             : row is WorldConceptRecipe conceptRecipe
             ? ProjectConceptRecipe(world, in conceptRecipe)
+            : row is WorldCraftingStation station
+            ? ProjectCraftingStation(world, in station)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -3660,6 +3743,96 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
+    private static GameMcpValue ProjectCraftingStation(
+        GameWorldState world,
+        in WorldCraftingStation station)
+    {
+        var stationIdentity = EntityIdentityFormatter.Describe(
+            station.StructureTypeId, world.EntityIdentities);
+        var result = new JObject
+        {
+            ["entityId"] = station.StationId.ToString("D"),
+            ["name"] = stationIdentity.HasName
+                ? stationIdentity.Name
+                : station.StationId.ToString("D"),
+            ["category"] = "crafting-stations",
+            ["nativeType"] = "CraftingStructure",
+        };
+        AddCraftingStationDecision(world, result, in station);
+        return result.Freeze();
+    }
+
+    private static void AddCraftingStationDecision(
+        GameWorldState world,
+        JObject result,
+        in WorldCraftingStation station)
+    {
+        result["loaded"] = station.Loaded;
+        result["active"] = station.Active;
+        result["level"] = station.Level;
+        if (station.FirstIngredientId != Guid.Empty)
+            result["firstIngredientId"] = station.FirstIngredientId.ToString("D");
+        if (station.SecondIngredientId != Guid.Empty)
+            result["secondIngredientId"] = station.SecondIngredientId.ToString("D");
+        if (station.OutputId != Guid.Empty) result["outputId"] = station.OutputId.ToString("D");
+
+        result["setLevel"] = new JObject
+        {
+            ["available"] = station.MinimumLevel < station.MaximumLevel,
+            ["minimum"] = station.MinimumLevel,
+            ["maximum"] = station.MaximumLevel,
+        };
+        result["start"] = station.Loaded && !station.Active
+            ? new JObject { ["available"] = true }
+            : new JObject
+            {
+                ["available"] = false,
+                ["reasonCode"] = station.Active ? "already_active" : "recipe_incomplete",
+            };
+        result["stop"] = station.Active
+            ? new JObject { ["available"] = true }
+            : new JObject { ["available"] = false, ["reasonCode"] = "already_stopped" };
+
+        var first = new JArray();
+        var second = new JArray();
+        var outputs = new JArray();
+        if (WorldCraftingStationLookup.TryFindOptions(
+                world.CraftingStationOptions, station.StationId, out var start, out var count))
+        {
+            for (var index = start; index < start + count; index++)
+            {
+                var option = world.CraftingStationOptions[index];
+                if (!option.Available) continue;
+                var row = new JObject { ["uuid"] = option.OptionId.ToString("D") };
+                if (option.Kind == WorldCraftingStationOptionKind.FirstIngredient) first.Add(row);
+                else if (option.Kind == WorldCraftingStationOptionKind.SecondIngredient) second.Add(row);
+                else outputs.Add(row);
+            }
+        }
+        result["ingredientOptions"] = new JArray(first, second);
+        result["outputOptions"] = outputs;
+
+        if (WorldCraftingStationLookup.TryFindDrains(
+                world.CraftingStationDrains, station.StationId, out var drainStart, out var drainCount))
+        {
+            var drains = new JArray();
+            for (var index = drainStart; index < drainStart + drainCount; index++)
+            {
+                var drain = world.CraftingStationDrains[index];
+                var row = new JObject
+                {
+                    ["resourceId"] = drain.ResourceId.ToString("D"),
+                    ["amount"] = new GameMcpDomainValue(drain.Amount),
+                };
+                if (WorldLookup.TryFind(world.Resources, drain.ResourceId, out var resource))
+                    row["spendableAmount"] = new GameMcpDomainValue(
+                        SpendableAmount(world, drain.ResourceId, resource.Reading.Quantity));
+                drains.Add(row);
+            }
+            result["drain"] = drains;
+        }
+    }
+
     private static void AddRitualDecision(
         GameWorldState world,
         JObject result,
@@ -4229,6 +4402,8 @@ internal static class GameMcpWorldQuery
             ? ProjectResearch(world, in research)
             : row is WorldConceptRecipe conceptRecipe
             ? ProjectConceptRecipe(world, in conceptRecipe)
+            : row is WorldCraftingStation station
+            ? ProjectCraftingStation(world, in station)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -4322,6 +4497,9 @@ internal static class GameMcpWorldQuery
             Entity(nameof(GameWorldState.ResourceTypes), world => world.ResourceTypes),
             Entity(nameof(GameWorldState.CraftingRecipeTypes), world => world.CraftingRecipeTypes),
             Entity(nameof(GameWorldState.CraftingRecipes), world => world.CraftingRecipes),
+            Entity(nameof(GameWorldState.CraftingStations), world => world.CraftingStations),
+            Composite(nameof(GameWorldState.CraftingStationOptions), world => world.CraftingStationOptions),
+            Composite(nameof(GameWorldState.CraftingStationDrains), world => world.CraftingStationDrains),
             Entity(nameof(GameWorldState.HarvestElements), world => world.HarvestElements),
             Entity(nameof(GameWorldState.HarvestResources), world => world.HarvestResources),
             Entity(nameof(GameWorldState.TimeRunes), world => world.TimeRunes),
@@ -4433,6 +4611,8 @@ internal static class GameMcpWorldQuery
             "crafting-decisions",
             "resources",
         },
+        "crafting-station-options" or "crafting-station-drains" =>
+            new[] { "crafting-stations" },
         "requirement-native-verdicts" => new[] { "requirement-native-verdicts" },
         "consumables" => new[] { "consumables", "consumable-inventory" },
         _ => new[] { category },
@@ -4544,6 +4724,16 @@ internal static class GameMcpWorldQuery
             "reading.generatedOutputCount", "reading.consumableOutputCount",
             "reading.engagementEffectCount",
         },
+        "crafting-stations" => new[]
+        {
+            "stationId", "structureTypeId", "firstIngredientId",
+            "secondIngredientId", "outputId", "loaded", "active", "level",
+            "minimumLevel", "maximumLevel",
+        },
+        "crafting-station-options" =>
+            new[] { "stationId", "kind", "optionId", "available" },
+        "crafting-station-drains" =>
+            new[] { "stationId", "resourceId", "amount" },
         "harvest-elements" => new[]
         {
             "entityId", "masteryLevel", "masteryXp", "instances", "harvestTime",

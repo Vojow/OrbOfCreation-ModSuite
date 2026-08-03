@@ -40,6 +40,13 @@ internal static class WorldCategoryFakes
         ["ResourceTypeSO"] = typeof(FakeResourceType),
         ["CraftingRecipeTypeSO"] = typeof(FakeCraftingRecipeType),
         ["CraftingRecipeSO"] = typeof(FakeScribeRecipe),
+        ["CraftingStructureSO"] = typeof(FakeCraftingStructure),
+        ["CraftingStructure"] = typeof(FakeCraftingStation),
+        ["CraftingStructureListVariable"] = typeof(FakeCraftingStationList),
+        ["CraftingStructureSO+TypeListElement"] = typeof(FakeCraftingStationElementList),
+        ["CraftingStructureSO+TypeElement"] = typeof(FakeCraftingStationElement),
+        ["ITooltipable"] = typeof(IFakeTooltipable),
+        ["TooltipableObject"] = typeof(FakeCraftingStationTooltipable),
         ["CraftingRecipeListVariable"] = typeof(FakeScribeRecipeList),
         ["CraftingInstanceListVariable"] = typeof(FakeScribeInstanceList),
         ["CraftingInstance"] = typeof(FakeScribeInstance),
@@ -114,6 +121,7 @@ internal static class WorldCategoryFakes
         FakeResourceType.All.Clear();
         FakeCraftingRecipeType.All.Clear();
         FakeScribeRecipe.All.Clear();
+        FakeCraftingStructure.All.Clear();
         FakeHarvestElement.All.Clear();
         FakeTimeRune.All.Clear();
         FakeGlyph.All.Clear();
@@ -304,6 +312,103 @@ internal sealed class FakeCraftingResourceTuple
     public BigDouble valueBig;
 
     public BigDouble GetValue() => valueBig;
+}
+
+internal interface IFakeTooltipable
+{
+    string GetName();
+}
+
+internal sealed class FakeCraftingStationTooltipable : IFakeTooltipable
+{
+    public Guid Identity = Guid.NewGuid();
+
+    public Guid GetGuid() => Identity;
+    public string GetName() => string.Empty;
+}
+
+internal sealed class FakeCraftingStationElement
+{
+    public IFakeTooltipable? tooltipable;
+    public bool available = true;
+
+    public IFakeTooltipable? GetTooltipable() => tooltipable;
+
+    public bool IsAvailable() => available;
+}
+
+internal sealed class FakeCraftingStationElementList
+{
+    public List<FakeCraftingStationElement> elements = new();
+
+    public List<FakeCraftingStationElement> GetElements() => elements;
+}
+
+internal sealed class FakeCraftingStation
+{
+    public Guid Identity = Guid.NewGuid();
+    public FakeCraftingStructure? reference;
+    public FakeCraftingStationGuid recipeId = new(Guid.Empty);
+    public FakeCraftingStationElement? firstIngredient;
+    public FakeCraftingStationElement? secondIngredient;
+    public FakeCraftingStationElement? output;
+    public List<FakeCraftingStationElement> outputOptions = new();
+    public FakeCraftingResourceCostList drain = new();
+    public bool loaded;
+    public bool active;
+    public int level = 1;
+    public int minimumLevel = 1;
+    public int maximumLevel = 1;
+
+    public Guid GetGuid() => Identity;
+
+    public FakeCraftingStructure? get_reference() => reference;
+
+    public FakeCraftingStationElement? GetIngredient(int slot) =>
+        slot == 0 ? firstIngredient : secondIngredient;
+
+    public FakeCraftingStationElement? GetOutput() => output;
+
+    public List<FakeCraftingStationElement> GetOutputList() => outputOptions;
+
+    public bool IsOutputVisible(FakeCraftingStationElement element) => element.IsAvailable();
+
+    public bool IsLoaded() => loaded;
+
+    public bool IsActive() => active;
+
+    public int GetLevel() => level;
+
+    public int GetMinSelectedLevel() => minimumLevel;
+
+    public int GetMaxSelectedLevel() => maximumLevel;
+
+    public FakeCraftingResourceCostList GetCurrentDrain() => drain;
+}
+
+internal sealed class FakeCraftingStationGuid
+{
+    private readonly Guid _guid;
+
+    internal FakeCraftingStationGuid(Guid guid) => _guid = guid;
+}
+
+internal sealed class FakeCraftingStructure
+{
+    public static readonly List<FakeCraftingStructure> All = new();
+
+    public Guid Identity = Guid.NewGuid();
+    public FakeCraftingStationList instances = new();
+    public List<FakeCraftingStationElementList> ingredientLists = new();
+
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeCraftingStationList
+{
+    public List<FakeCraftingStation> value = new();
+
+    public List<FakeCraftingStation> GetAll() => value;
 }
 
 internal class FakeCraftingEffectBlock
