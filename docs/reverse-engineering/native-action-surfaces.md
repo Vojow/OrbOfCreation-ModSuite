@@ -424,6 +424,10 @@ However, inherited `GenericListVariable<CraftingInstance>.Add()` does not set th
 public `CraftingInstance.SetAuto(bool)` remains mutable after insertion. World capture therefore
 verifies both facts and fails loudly if an instance contradicts its containing queue.
 
+This mechanism was audited from Orb of Creation v1.0.5 `Assembly-CSharp.dll`, SHA-256
+`46b723ad8e3df5adf7186ec32b220c338e26c1cc79369e01213c091155073bdc`, decompiled with
+ILSpy 10.1.1.8388.
+
 New queued work is proved by reference membership of the exact newly constructed instance, not by
 finding any instance with the same recipe and quantity. Instant work has no queue destination;
 `CraftingInstance.InstantCraft()` reaches `CompleteCraft`, whose monotonic sentinel for a one-shot

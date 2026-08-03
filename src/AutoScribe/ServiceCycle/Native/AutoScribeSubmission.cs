@@ -39,15 +39,21 @@ internal readonly struct AutoScribeSubmission
         AutoScribeNativeStage stage,
         NativeMutationOutcome outcome,
         NativeMutationCallOutcome callOutcome,
-        string reason)
+        string reason,
+        bool retryable = false)
     {
         if (preflight != AutoScribePreflight.Proceeded && string.IsNullOrWhiteSpace(reason))
             throw new ArgumentException("An Auto Scribe failure requires an exact reason.", nameof(reason));
+        if (retryable && preflight != AutoScribePreflight.IdentityUnavailable)
+            throw new ArgumentException(
+                "Only an identity resolution rejection can carry registry retryability.",
+                nameof(retryable));
         Preflight = preflight;
         Stage = stage;
         Outcome = outcome;
         CallOutcome = callOutcome;
         Reason = reason ?? string.Empty;
+        Retryable = retryable;
     }
 
     internal AutoScribePreflight Preflight { get; }
@@ -55,17 +61,20 @@ internal readonly struct AutoScribeSubmission
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
     internal string Reason { get; }
+    internal bool Retryable { get; }
     internal bool Verified =>
         Preflight == AutoScribePreflight.Proceeded &&
         Outcome == NativeMutationOutcome.Verified;
 
     internal static AutoScribeSubmission Reject(
         AutoScribePreflight preflight,
-        string reason) =>
+        string reason,
+        bool retryable = false) =>
         new(
             preflight,
             AutoScribeNativeStage.None,
             NativeMutationOutcome.BeforeCaptureFailed,
             default,
-            reason);
+            reason,
+            retryable);
 }

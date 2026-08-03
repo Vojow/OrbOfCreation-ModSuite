@@ -33,13 +33,13 @@ internal sealed class AutoScribeServiceAdapterComposition
             gameAction,
             dependencies.ReadLifecycleEpoch,
             dependencies.OwnsActionFamily,
-            dependencies.ReadOwnershipFailure,
             health);
         return new AutoScribeServiceAdapterComposition(
             AutoScribeService.Define(
                 dependencies.Profile,
                 actionPort,
-                dependencies.OwnsActionFamily),
+                dependencies.OwnsActionFamily,
+                () => gameAction.IsQuarantined),
             gameAction,
             health);
     }

@@ -51,10 +51,13 @@ internal static class AutoScribeServiceProjection
                 case BlockedRoleKey:
                     blockedRole = checked((int)entry.Value.Integer);
                     break;
-                case BlockedReasonKey
-                    when entry.Value.Integer is >= (int)AutoScribeEvidenceReason.None
-                        and <= (int)AutoScribeEvidenceReason.QueueEvidenceUnavailable:
-                    blockedReason = (AutoScribeEvidenceReason)entry.Value.Integer;
+                case BlockedReasonKey:
+                    blockedReason = entry.Value.Integer is >= int.MinValue and <= int.MaxValue &&
+                        System.Enum.IsDefined(
+                            typeof(AutoScribeEvidenceReason),
+                            (int)entry.Value.Integer)
+                        ? (AutoScribeEvidenceReason)entry.Value.Integer
+                        : AutoScribeEvidenceReason.Unknown;
                     break;
             }
         }

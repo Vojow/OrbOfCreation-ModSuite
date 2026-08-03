@@ -18,9 +18,15 @@ internal sealed class AutoScribeActionHealth
         }
         if (!IsFailure(in submission)) return false;
 
-        // Quarantine is the persistent consequence of the already-recorded failure, not a new
-        // failure on every publication. Keep the original stage and reason until recovery.
-        if (submission.Preflight == AutoScribePreflight.Quarantined && HasFailure)
+        // Quarantine is the persistent consequence of its root failure, not a new failure on every
+        // publication. Suppress only that same root: a different intervening failure must not hide
+        // the boundary's current quarantine state.
+        if (submission.Preflight == AutoScribePreflight.Quarantined &&
+            HasFailure &&
+            (Preflight is AutoScribePreflight.PostPaymentFault or
+                AutoScribePreflight.VerificationFailed or
+                AutoScribePreflight.Quarantined) &&
+            string.Equals(Reason, submission.Reason, System.StringComparison.Ordinal))
             return false;
         if (HasFailure &&
             Preflight == submission.Preflight &&

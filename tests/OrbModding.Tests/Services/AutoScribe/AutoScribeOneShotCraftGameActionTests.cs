@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using OrbAutomata;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using Xunit;
 
 namespace OrbModding.Tests.Services.AutoScribe;
@@ -239,7 +240,12 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         _lifecycle = 2;
         var stale = Submit(actionBoundary, fixture.Action);
         _lifecycle = 0;
-        var invalid = Submit(actionBoundary, fixture.Action);
+        var epochZero = new AutoScribeCycleAction(
+            fixture.Action.RecipeId,
+            fixture.Action.ScrollId,
+            fixture.Action.Level,
+            collectedAtEpoch: 0);
+        var invalid = Submit(actionBoundary, epochZero);
         _lifecycle = 1;
         var wrongThread = await Task.Run(() => Submit(actionBoundary, fixture.Action));
 
@@ -299,12 +305,76 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         Assert.Equal(0, fixture.Recipe.PurchaseCalls);
     }
 
-    private AutoScribeOneShotCraftGameAction GameAction()
+    [Fact]
+    public void RegistryNotReadyIdentityRejectionIsQuietBackpressure()
+    {
+        var fixture = Fixture();
+        using var actionBoundary = GameAction(
+            static () => TypedRegistrySourceSnapshot.NotReady("Registry publication pending."));
+
+        var result = Submit(actionBoundary, fixture.Action);
+        var health = new AutoScribeActionHealth();
+
+        Assert.Equal(AutoScribePreflight.IdentityUnavailable, result.Preflight);
+        Assert.True(result.Retryable);
+        Assert.Contains("Status=RegistryNotReady", result.Reason);
+        Assert.Equal(
+            ServiceActionDisposition.Rejected,
+            AutoScribeCycleActionAdapter.Map(in result).Disposition);
+        Assert.False(health.Observe(in result));
+        Assert.False(health.HasFailure);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+    }
+
+    [Fact]
+    public void WrongTypeIdentityRejectionEntersHealthOnceAndStaysUserVisible()
+    {
+        var fixture = Fixture();
+        var wrongType = new ConsumableSO();
+        wrongType.SetGuid(fixture.Action.RecipeId);
+        _registry[fixture.Action.RecipeId] = wrongType;
+        using var actionBoundary = GameAction();
+
+        var first = Submit(actionBoundary, fixture.Action);
+        var repeated = Submit(actionBoundary, fixture.Action);
+        var health = new AutoScribeActionHealth();
+
+        Assert.Equal(AutoScribePreflight.IdentityUnavailable, first.Preflight);
+        Assert.False(first.Retryable);
+        Assert.Contains("Status=WrongType", first.Reason);
+        Assert.Equal(
+            ServiceActionDisposition.Faulted,
+            AutoScribeCycleActionAdapter.Map(in first).Disposition);
+        Assert.True(health.Observe(in first));
+        Assert.False(health.Observe(in repeated));
+
+        var status = AutoScribeServiceCycleDiagnosticsBridge.ProjectStatus(
+            _profile,
+            emergencyDisabled: false,
+            ownsActionFamily: true,
+            ownershipReason: string.Empty,
+            bindingsAvailable: true,
+            bindingFailure: string.Empty,
+            health,
+            cycleObserved: true,
+            AutoScribeDecisionKind.Planned,
+            blockedRole: -1,
+            AutoScribeEvidenceReason.None);
+
+        Assert.Equal(FeatureStatusState.ContractUnavailable, status.State);
+        Assert.Equal(FeatureStatusReasonCode.IdentityMismatch, status.Reason);
+        Assert.Contains("Status=WrongType", status.Summary);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
+    }
+
+    private AutoScribeOneShotCraftGameAction GameAction(
+        Func<TypedRegistrySourceSnapshot>? readRegistry = null)
     {
         IDictionary dictionary = _registry;
+        readRegistry ??= () => TypedRegistrySourceSnapshot.Ready(dictionary);
         var resolver = new TypedRegistryResolver(
             () => _lifecycle,
-            () => TypedRegistrySourceSnapshot.Ready(dictionary),
+            readRegistry,
             value => value is IdScriptableObject item ? item.GetGuid() : null);
         return new AutoScribeOneShotCraftGameAction(
             resolver,

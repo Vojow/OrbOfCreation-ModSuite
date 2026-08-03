@@ -103,7 +103,8 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
 
     private AutoScribeFeatureStatus Project()
     {
-        var ownsActionFamily = OwnsActionFamily();
+        var ownsActionFamily = AutoScribeActionFamilyAccess.Owns(
+            _dependencies.OwnsActionFamily);
         return ProjectStatus(
             _dependencies.Profile,
             _emergencyDisabled,
@@ -133,10 +134,14 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
     {
         if (profile is null) throw new ArgumentNullException(nameof(profile));
         if (health is null) throw new ArgumentNullException(nameof(health));
+        // Player emergency control deliberately shadows retained health: its current stop command
+        // is the status the player must act on first.
         if (emergencyDisabled)
             return Blocked(
                 FeatureStatusReasonCode.EmergencyDisabled,
                 "Automata Emergency Disable is active.");
+        // A feature that does not own the action family is inert. Report that conflict before a
+        // retained failure from an earlier ownership period.
         if (!ownsActionFamily)
             return Blocked(
                 FeatureStatusReasonCode.ActionFamilyConflict,
@@ -192,35 +197,38 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
         var summary = string.IsNullOrWhiteSpace(health.Reason)
             ? $"Auto Scribe failed at {health.Stage}/{health.Preflight}."
             : health.Reason;
-        return health.Preflight switch
+        switch (health.Preflight)
         {
-            AutoScribePreflight.ContractUnavailable =>
-                new AutoScribeFeatureStatus(
+            case AutoScribePreflight.ContractUnavailable:
+                return new AutoScribeFeatureStatus(
                     FeatureStatusState.ContractUnavailable,
                     FeatureStatusReasonCode.ContractUnavailable,
-                    summary),
-            AutoScribePreflight.PostPaymentFault or
-            AutoScribePreflight.VerificationFailed or
-            AutoScribePreflight.Quarantined =>
-                new AutoScribeFeatureStatus(
-                    FeatureStatusState.Faulted,
-                    FeatureStatusReasonCode.MutationQuarantined,
-                    summary),
-            AutoScribePreflight.RelationshipMismatch =>
-                new AutoScribeFeatureStatus(
+                    summary);
+            case AutoScribePreflight.IdentityUnavailable:
+                return new AutoScribeFeatureStatus(
                     FeatureStatusState.ContractUnavailable,
                     FeatureStatusReasonCode.IdentityMismatch,
-                    summary),
-            AutoScribePreflight.WrongThread =>
-                new AutoScribeFeatureStatus(
+                    summary);
+            case AutoScribePreflight.PostPaymentFault:
+            case AutoScribePreflight.VerificationFailed:
+            case AutoScribePreflight.Quarantined:
+                return new AutoScribeFeatureStatus(
+                    FeatureStatusState.Faulted,
+                    FeatureStatusReasonCode.MutationQuarantined,
+                    summary);
+            case AutoScribePreflight.RelationshipMismatch:
+                return new AutoScribeFeatureStatus(
+                    FeatureStatusState.ContractUnavailable,
+                    FeatureStatusReasonCode.IdentityMismatch,
+                    summary);
+            case AutoScribePreflight.WrongThread:
+                return new AutoScribeFeatureStatus(
                     FeatureStatusState.Faulted,
                     FeatureStatusReasonCode.ContractUnavailable,
-                    summary),
-            _ => new AutoScribeFeatureStatus(
-                FeatureStatusState.Faulted,
-                FeatureStatusReasonCode.TemporarySafetyBlock,
-                summary),
-        };
+                    summary);
+        }
+        throw new InvalidOperationException(
+            $"Auto Scribe action health retained non-failure {health.Preflight}.");
     }
 
     private string OwnershipReason()
@@ -235,18 +243,6 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
         catch (Exception ex) when (ex is InvalidOperationException or MemberAccessException)
         {
             return "Auto Scribe ownership evidence failed: " + ex.GetBaseException().Message;
-        }
-    }
-
-    private bool OwnsActionFamily()
-    {
-        try
-        {
-            return _dependencies.OwnsActionFamily();
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or MemberAccessException)
-        {
-            return false;
         }
     }
 

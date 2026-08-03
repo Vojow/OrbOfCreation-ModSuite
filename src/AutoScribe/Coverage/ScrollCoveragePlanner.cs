@@ -7,6 +7,7 @@ namespace OrbAutomata;
 
 internal enum AutoScribeEvidenceReason
 {
+    Unknown = -1,
     None = 0,
     CollectionUnavailable = 1,
     RecipeRegistryIncomplete = 2,
@@ -257,7 +258,11 @@ internal static class ScrollCoveragePlanner
                 prefix + " is blocked because its Scroll target count contradicted the completeness marker.",
             AutoScribeEvidenceReason.QueueEvidenceUnavailable =>
                 prefix + " is blocked because ActiveScribeInstances capacity evidence was missing or contradictory.",
-            _ => prefix + " has complete evidence.",
+            AutoScribeEvidenceReason.None => prefix + " has complete evidence.",
+            AutoScribeEvidenceReason.Unknown =>
+                prefix + " is blocked because the service projection reported an unknown evidence reason.",
+            _ => prefix +
+                " is blocked because Auto Scribe does not recognize the evidence reason.",
         };
     }
 

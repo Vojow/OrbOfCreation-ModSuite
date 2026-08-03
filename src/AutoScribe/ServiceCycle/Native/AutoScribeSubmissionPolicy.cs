@@ -21,7 +21,6 @@ internal static class AutoScribeSubmissionPolicy
             return AutoScribeSubmissionClass.Failure;
         return submission.Preflight switch
         {
-            AutoScribePreflight.IdentityUnavailable or
             AutoScribePreflight.RecipeUnavailable or
             AutoScribePreflight.TargetUnavailable or
             AutoScribePreflight.QueueFull or
@@ -29,6 +28,8 @@ internal static class AutoScribeSubmissionPolicy
             AutoScribePreflight.Unaffordable or
             AutoScribePreflight.MutationPermitUnavailable or
             AutoScribePreflight.LifecycleReplaced => AutoScribeSubmissionClass.Backpressure,
+            AutoScribePreflight.IdentityUnavailable when submission.Retryable =>
+                AutoScribeSubmissionClass.Backpressure,
             _ => AutoScribeSubmissionClass.Failure,
         };
     }

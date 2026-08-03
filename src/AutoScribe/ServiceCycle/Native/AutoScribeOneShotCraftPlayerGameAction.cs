@@ -251,7 +251,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 : created is not null && admissionKnown && (instant
                     ? InstanceExpiredBestEffort(native, created)
                     : ContainsExactInstanceBestEffort(
-                        native, queue, created, action.RecipeId));
+                        native, queue, created));
             if (landed)
             {
                 return new CraftingPlayerSubmission(
@@ -317,7 +317,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         object instance,
         int calls)
     {
-        if (!ContainsExactInstance(native, queue, instance, action.RecipeId))
+        if (!ContainsExactInstance(native, queue, instance))
             return PlayerCraftingFault(
                 in action,
                 CraftingPlayerPreflight.VerificationFailed,
@@ -392,13 +392,11 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
     private static bool ContainsExactInstance(
         CraftingPlayerNativeBindings native,
         object queue,
-        object instance,
-        Guid recipeId)
+        object instance)
     {
         var values = native.QueueValues(queue);
         for (var index = 0; index < values.Count; index++)
-            if (ReferenceEquals(values[index], instance) &&
-                native.InstanceRecipe(instance) == recipeId)
+            if (ReferenceEquals(values[index], instance))
                 return true;
         return false;
     }
@@ -406,12 +404,11 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
     private static bool ContainsExactInstanceBestEffort(
         CraftingPlayerNativeBindings native,
         object queue,
-        object instance,
-        Guid recipeId)
+        object instance)
     {
         try
         {
-            return ContainsExactInstance(native, queue, instance, recipeId);
+            return ContainsExactInstance(native, queue, instance);
         }
         catch (Exception ex) when (IsExpected(ex))
         {

@@ -90,8 +90,9 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
                     out var recipeType,
                     out var activeQueue,
                     out var reason,
-                    out var rejection))
-                return AutoScribeSubmission.Reject(rejection, reason);
+                    out var rejection,
+                    out var retryable))
+                return AutoScribeSubmission.Reject(rejection, reason, retryable);
             if (!Invoke<bool>(native.RecipeVisible, recipe))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.RecipeUnavailable,
@@ -216,9 +217,9 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
             stage = AutoScribeNativeStage.Verification;
             var verified = instant
                 ? Invoke<bool>(native.InstanceExpired, instance)
-                : ContainsExactInstance(native, RequireList(
+                : ContainsExactInstance(RequireList(
                     native.InstanceListValue.GetValue(activeQueue),
-                    "ActiveScribeInstances.value"), instance, action.RecipeId, craftLevel);
+                    "ActiveScribeInstances.value"), instance);
             if (!verified)
                 return Quarantine(
                     in action,
@@ -241,9 +242,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
                 activeQueue,
                 instance,
                 admissionKnown,
-                instant,
-                action.RecipeId,
-                craftLevel);
+                instant);
             if (landed)
                 return new AutoScribeSubmission(
                     AutoScribePreflight.Proceeded,
@@ -289,12 +288,14 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
         out object recipeType,
         out object activeQueue,
         out string reason,
-        out AutoScribePreflight rejection)
+        out AutoScribePreflight rejection,
+        out bool retryable)
     {
         recipe = null!;
         scroll = null!;
         recipeType = null!;
         activeQueue = null!;
+        retryable = false;
         if (!_profile.TryFindByRecipe(action.RecipeId, out var recipeRole) ||
             !_profile.TryFindByScroll(action.ScrollId, out var scrollRole) ||
             recipeRole.Ordinal != scrollRole.Ordinal ||
@@ -329,6 +330,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
             !automaticResolution.IsResolved)
         {
             reason = FirstFailure(
+                out retryable,
                 recipeResolution,
                 scrollResolution,
                 enchantmentResolution,
@@ -711,21 +713,10 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
             recipe,
             new BigDouble(level, 0));
 
-    private static bool ContainsExactInstance(
-        AutoScribeNativeBindings native,
-        IList work,
-        object instance,
-        Guid recipeId,
-        int level)
+    private static bool ContainsExactInstance(IList work, object instance)
     {
         foreach (var value in work)
-        {
-            if (ReferenceEquals(value, instance) &&
-                Invoke<Guid>(native.InstanceRecipe, value) == recipeId &&
-                Level(InvokeObject(native.InstanceQuantity, value)) == level &&
-                !Invoke<bool>(native.InstanceExpired, value))
-                return true;
-        }
+            if (ReferenceEquals(value, instance)) return true;
         return false;
     }
 
@@ -734,17 +725,15 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
         object activeQueue,
         object? instance,
         bool admissionKnown,
-        bool instant,
-        Guid recipeId,
-        int level)
+        bool instant)
     {
         try
         {
             if (instance is null || !admissionKnown) return false;
             if (instant) return Invoke<bool>(native.InstanceExpired, instance);
-            return ContainsExactInstance(native, RequireList(
+            return ContainsExactInstance(RequireList(
                 native.InstanceListValue.GetValue(activeQueue),
-                "ActiveScribeInstances.value"), instance, recipeId, level);
+                "ActiveScribeInstances.value"), instance);
         }
         catch (Exception ex) when (IsExpected(ex))
         {
@@ -799,10 +788,28 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
         }
     }
 
-    private static string FirstFailure(params TypedRegistryResolution[] resolutions)
+    private static string FirstFailure(
+        out bool retryable,
+        params TypedRegistryResolution[] resolutions)
     {
+        TypedRegistryResolution? firstRetryable = null;
         for (var index = 0; index < resolutions.Length; index++)
-            if (!resolutions[index].IsResolved) return resolutions[index].Format();
+        {
+            var resolution = resolutions[index];
+            if (resolution.IsResolved) continue;
+            if (!resolution.IsRetryable)
+            {
+                retryable = false;
+                return resolution.Format();
+            }
+            firstRetryable ??= resolution;
+        }
+        if (firstRetryable is not null)
+        {
+            retryable = true;
+            return firstRetryable.Format();
+        }
+        retryable = false;
         return "An Auto Scribe live identity was unavailable.";
     }
 

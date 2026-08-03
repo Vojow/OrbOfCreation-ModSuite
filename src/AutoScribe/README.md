@@ -13,7 +13,9 @@ Published `ActiveScribeInstances` occupancy is normal backpressure: a full queue
 waits for another world publication. The GameAction still revalidates live room immediately before
 payment so a queue race is an ordinary refusal, not a feature fault. Action-family contention is
 also publication-level backpressure: the service does not start a worker or schedule an action
-until it owns `CraftingQueueSubmission`.
+until it owns `CraftingQueueSubmission`. A post-payment or verification quarantine is dead for the
+current lifecycle: later publications do not start another worker or grow fault backoff, and
+lifecycle replacement clears the quarantine before planning can resume.
 
 Selection uses stable semantic roles and an audited cost rank as a fair rotating order:
 Advancement, Power, Learning, Excellence, Development, then Echoing. The cursor survives across
@@ -63,6 +65,12 @@ wrong-thread execution, post-payment ambiguity, and failed verification enter ac
 warning logs. A warning is emitted when that failure state is entered or changes; a persistent
 quarantine does not warn again on each publication. Nothing attempts rollback of game-owned
 irreversible effects.
+
+Live identity resolution preserves the registry's retryability verdict. `RegistryNotReady`,
+`NotFound`, and `StaleGeneration` wait quietly for another publication; `WrongType`,
+`AmbiguousEvidence`, and `ContractUnavailable` are persistent contract failures that enter action
+health, warn once per failure state, and remain visible until verified recovery or lifecycle
+replacement.
 
 The same `AutoScribeOneShotCraftGameAction` also owns the manual one-shot player capability exposed
 as `game_craft`. Its player overload leaves the Auto Scribe planner and mutation boundary unchanged, but

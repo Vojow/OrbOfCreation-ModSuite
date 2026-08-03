@@ -11,14 +11,12 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
     private readonly AutoScribeOneShotCraftGameAction _gameAction;
     private readonly Func<long> _readLifecycleEpoch;
     private readonly Func<bool> _ownsActionFamily;
-    private readonly Func<string> _readOwnershipFailure;
     private readonly AutoScribeActionHealth _health;
 
     internal AutoScribeCycleActionAdapter(
         AutoScribeOneShotCraftGameAction gameAction,
         Func<long> readLifecycleEpoch,
         Func<bool> ownsActionFamily,
-        Func<string> readOwnershipFailure,
         AutoScribeActionHealth health)
     {
         _gameAction = gameAction ?? throw new ArgumentNullException(nameof(gameAction));
@@ -26,8 +24,6 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
             throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _ownsActionFamily = ownsActionFamily ??
             throw new ArgumentNullException(nameof(ownsActionFamily));
-        _readOwnershipFailure = readOwnershipFailure ??
-            throw new ArgumentNullException(nameof(readOwnershipFailure));
         _health = health ?? throw new ArgumentNullException(nameof(health));
     }
 
@@ -42,11 +38,6 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
             return ServiceActionResult.Rejected(CommonActionResultCodes.ServiceDisabled);
         if (!Owns())
         {
-            var ownership = ReadOwnershipFailure();
-            var rejected = AutoScribeSubmission.Reject(
-                AutoScribePreflight.MutationPermitUnavailable,
-                ownership);
-            _health.Observe(in rejected);
             return ServiceActionResult.Rejected(
                 AutoScribeActionResultCodes.MutationPermitUnavailable);
         }
@@ -107,29 +98,7 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
             : ServiceActionResult.Faulted(code);
     }
 
-    private bool Owns()
-    {
-        try { return _ownsActionFamily(); }
-        catch (Exception ex) when (ex is InvalidOperationException or MemberAccessException)
-        {
-            return false;
-        }
-    }
-
-    private string ReadOwnershipFailure()
-    {
-        try
-        {
-            var reason = _readOwnershipFailure();
-            return string.IsNullOrWhiteSpace(reason)
-                ? "Auto Scribe does not own CraftingQueueSubmission."
-                : reason;
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or MemberAccessException)
-        {
-            return "Auto Scribe ownership evidence failed: " + ex.GetBaseException().Message;
-        }
-    }
+    private bool Owns() => AutoScribeActionFamilyAccess.Owns(_ownsActionFamily);
 
     private bool EpochMatches(long planned)
     {

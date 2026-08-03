@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using OrbAutomata;
 using OrbModding.Common;
@@ -99,6 +100,73 @@ public sealed class AutoScribeServiceStatusProjectionTests
         Assert.Equal(failureReason, status.Summary);
     }
 
+    [Fact]
+    public void EveryDeclaredEvidenceReasonSurvivesProjectionAndRendersItsOwnSummary()
+    {
+        var summaries = new HashSet<string>();
+        foreach (AutoScribeEvidenceReason reason in
+            Enum.GetValues(typeof(AutoScribeEvidenceReason)))
+        {
+            // AutoScribeDecisionMetrics is the evaluator's complete output contract. Materialize
+            // each declared reason there so a future enum addition must survive the same state and
+            // projection path before it can acquire a user-facing summary.
+            var decision = new AutoScribeDecisionMetrics(
+                enabledRoles: 1,
+                deficientRoles: 0,
+                externalRoles: 0,
+                plannedActions: 0,
+                selectedCraftCostOrder: -1,
+                AutoScribeDecisionKind.EvidenceBlocked,
+                blockedRoleOrdinal: 0,
+                reason);
+            var state = AutoScribeCycleState.Create(new LifecycleGeneration(1));
+            state.RecordDecision(in decision);
+            var projection = Projection(in state);
+
+            Assert.True(AutoScribeServiceProjection.TryRead(
+                in projection,
+                out var kind,
+                out var blockedRole,
+                out var projectedReason));
+            Assert.Equal(AutoScribeDecisionKind.EvidenceBlocked, kind);
+            Assert.Equal(0, blockedRole);
+            Assert.Equal(reason, projectedReason);
+
+            var status = Status(kind, blockedRole, projectedReason);
+            Assert.Equal(ExpectedReasonText(reason), status.Summary);
+            Assert.True(summaries.Add(status.Summary), $"Duplicate summary for {reason}.");
+        }
+    }
+
+    [Fact]
+    public void UnknownProjectedReasonIsLoudInsteadOfClaimingCompleteEvidence()
+    {
+        var buffer = new ServiceStateProjectionWriteBuffer(
+            ServiceStateProjectionSnapshot.MaximumEntryCount);
+        var builder = new ServiceStateProjectionBuilder(buffer);
+        builder.Add(
+            new ServiceProjectionKey(AutoScribeServiceProjection.DecisionKindKey),
+            ServiceProjectionValue.FromInteger((int)AutoScribeDecisionKind.EvidenceBlocked));
+        builder.Add(
+            new ServiceProjectionKey(AutoScribeServiceProjection.BlockedRoleKey),
+            ServiceProjectionValue.FromInteger(0));
+        builder.Add(
+            new ServiceProjectionKey(AutoScribeServiceProjection.BlockedReasonKey),
+            ServiceProjectionValue.FromInteger(10));
+        var projection = builder.CaptureSnapshot();
+
+        Assert.True(AutoScribeServiceProjection.TryRead(
+            in projection,
+            out var kind,
+            out var blockedRole,
+            out var reason));
+        var status = Status(kind, blockedRole, reason);
+
+        Assert.Equal(AutoScribeEvidenceReason.Unknown, reason);
+        Assert.Contains("unknown evidence reason", status.Summary);
+        Assert.DoesNotContain("has complete evidence", status.Summary);
+    }
+
     private static ServiceStateProjectionSnapshot Projection(in AutoScribeCycleState state)
     {
         var buffer = new ServiceStateProjectionWriteBuffer(
@@ -106,6 +174,55 @@ public sealed class AutoScribeServiceStatusProjectionTests
         var builder = new ServiceStateProjectionBuilder(buffer);
         AutoScribeServiceProjection.Write(in state, builder);
         return builder.CaptureSnapshot();
+    }
+
+    private static AutoScribeServiceCycleDiagnosticsBridge.AutoScribeFeatureStatus Status(
+        AutoScribeDecisionKind kind,
+        int blockedRole,
+        AutoScribeEvidenceReason reason) =>
+        AutoScribeServiceCycleDiagnosticsBridge.ProjectStatus(
+            AutoScribeIdentityCatalog.Audited,
+            emergencyDisabled: false,
+            ownsActionFamily: true,
+            ownershipReason: string.Empty,
+            bindingsAvailable: true,
+            bindingFailure: string.Empty,
+            new AutoScribeActionHealth(),
+            cycleObserved: true,
+            kind,
+            blockedRole,
+            reason);
+
+    private static string ExpectedReasonText(AutoScribeEvidenceReason reason)
+    {
+        var role = AutoScribeIdentityCatalog.Audited.Roles[0];
+        var prefix = $"{role.DisplayName} ({role.Key.Value})";
+        return reason switch
+        {
+            AutoScribeEvidenceReason.Unknown =>
+                prefix + " is blocked because the service projection reported an unknown evidence reason.",
+            AutoScribeEvidenceReason.None => prefix + " has complete evidence.",
+            AutoScribeEvidenceReason.CollectionUnavailable =>
+                prefix + " is blocked because the Scribe relationship collection was incomplete.",
+            AutoScribeEvidenceReason.RecipeRegistryIncomplete =>
+                prefix + " is blocked because ScribeCraftingRecipes was not exactly the six audited recipes.",
+            AutoScribeEvidenceReason.RecipeMissing =>
+                prefix + $" is blocked because recipe {EntityIdentityFormatter.Format(role.Recipe!.Value.Uuid)} was absent.",
+            AutoScribeEvidenceReason.RecipeRelationshipMismatch =>
+                prefix + " is blocked because its live recipe/type/output/level relationship contradicted the audited role.",
+            AutoScribeEvidenceReason.TargetLevelUnavailable =>
+                prefix + " is blocked because its per-Scroll progression frontier was unavailable.",
+            AutoScribeEvidenceReason.TargetEvidenceMissing =>
+                prefix + " is blocked because its Scroll target relationship was unavailable.",
+            AutoScribeEvidenceReason.NonPositiveCarryLimit =>
+                prefix + " is blocked because native Gain() silently drops positive Scroll " +
+                "output when maximum carry load is non-positive.",
+            AutoScribeEvidenceReason.TargetEvidenceContradictory =>
+                prefix + " is blocked because its Scroll target count contradicted the completeness marker.",
+            AutoScribeEvidenceReason.QueueEvidenceUnavailable =>
+                prefix + " is blocked because ActiveScribeInstances capacity evidence was missing or contradictory.",
+            _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null),
+        };
     }
 
     private static GameWorldState WorldWithoutQueueEvidence(
