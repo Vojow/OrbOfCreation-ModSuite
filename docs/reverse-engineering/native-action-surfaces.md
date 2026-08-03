@@ -53,6 +53,15 @@ enumerate the interface's implementations in the assembly rather than assuming t
 
 ## Purchasing structures and upgrades
 
+The UI calls the levelled rows **Attributes**, but their concrete purchase target is
+`StructureSO`. `UIStructureList.PostSetupItem` wires each row to
+`UIStructureList.PurchaseStructure(StructureSO)` (`0x06002763`); its ordinary branch invokes the
+parameterless `StructureSO.Purchase()` (`0x06001783`), which delegates to
+`StructureSO.Purchase(bool)` (`0x06001784`) with `false`. The separate native `AttributeSO` type is
+the Statistics-tab descriptor: it has no purchase cost, level, admission, or mutation method and is
+not a player purchase target. A tool that added an `AttributeSO` purchase branch would therefore
+invent a verb the UI does not expose.
+
 ### Surface
 
 | Concern | Structure | Upgrade |

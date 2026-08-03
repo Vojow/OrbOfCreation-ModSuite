@@ -112,6 +112,58 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
+    public void PlayerFacingAttributePurchaseUsesTheStructureCapabilityAndSettledLevelDelta()
+    {
+        var attributeId = Guid.Parse("f2000000-0000-0000-0000-000000000001");
+        var before = new GameWorldState
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 632),
+            }),
+        };
+        Assert.True(GameMcpEntityCapabilityMap.Contains(
+            before,
+            attributeId,
+            GameMcpCommandKind.Purchase,
+            out var reason), reason);
+
+        var command = new GameMcpCommand(
+            1,
+            GameMcpCommandKind.Purchase,
+            expectedLifecycleGeneration: 9,
+            expectedConfigurationGeneration: 3,
+            mode: "structure",
+            targetId: attributeId,
+            secondaryId: Guid.Empty,
+            derivedNativeType: "StructureSO",
+            expectedNativeType: "StructureSO",
+            amount: 1,
+            payloadKey: string.Empty,
+            payloadValue: string.Empty,
+            capture: false,
+            saveCapture: false,
+            frameContext: GameMcpTestHarness.Context(before));
+        var after = new GameWorldState
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 633),
+            }),
+        };
+
+        var delta = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3)));
+
+        Assert.Equal(attributeId.ToString("D"), (string?)delta["uuid"]);
+        Assert.Equal("632", (string?)delta["level"]!["before"]);
+        Assert.Equal("633", (string?)delta["level"]!["after"]);
+        Assert.Equal(2, delta.Count);
+    }
+
+    [Fact]
     public void ActionFailureProjectionCarriesOnlyStableCodeAndActionableReason()
     {
         var context = GameMcpTestHarness.Context(
@@ -156,6 +208,43 @@ public sealed class GameMcpCorrectnessCoreTests
         Assert.Null(response["readWith"]);
         Assert.Null(response["lifecycleGenerationMismatch"]);
         Assert.Null(response["configurationGenerationMismatch"]);
+    }
+
+    private static WorldStructure Structure(Guid id, int level)
+    {
+        var modifiers = new RawStructureModifiers(
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            BigDouble.Zero);
+        var reading = new RawStructureSample(
+            id,
+            Guid.Empty,
+            new BigDouble(level),
+            BigDouble.Zero,
+            unlocked: true,
+            queuedEchos: 0,
+            completedEchos: 0,
+            selfBonusLevels: 0,
+            queueTimeLeft: BigDouble.Zero,
+            currentBuildTime: BigDouble.Zero,
+            flagged: false,
+            baseLevel: 0,
+            queueTimeTotal: 0,
+            quantity: level,
+            debugStructure: false,
+            disabled: false,
+            observableId: 0,
+            insufficientReqPenaltyActive: false,
+            bufferDevelopedQuantity: 0,
+            costPerQuantityId: Guid.Empty,
+            in modifiers);
+        return new WorldStructure(
+            in reading,
+            new BigDouble(level),
+            hasWorkInFlight: false,
+            new BigDouble(level),
+            developmentProgress: 0);
     }
 
     private static WorldPlotNode Plot(Guid plotId, int masteryLevel) => new(

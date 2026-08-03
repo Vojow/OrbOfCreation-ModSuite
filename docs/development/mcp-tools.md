@@ -124,7 +124,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `suite_health` | One compact runtime, feature, service, STOP, scene, and contract-health shape |
 | `suite_configuration` | Read the single committed configuration and writable setting catalog |
 | `trace_health` | Read trace-writer health, segment, record, and byte counters |
-| `game_purchase` | Buy a structure or upgrade derived from its UUID |
+| `game_purchase` | Buy an Attribute (`StructureSO`) or Upgrade derived from its UUID |
 | `game_cast` | Fire, release charge, or turn off one equipped toggle spell |
 | `game_concept` | Add or remove one owned concept assignment |
 | `game_harvest` | Harvest an audited pair derived from a plot UUID |
@@ -632,7 +632,7 @@ where components are supplied, it derives the target from the live resolver inst
 
 ```sh
 tools/game-mcp-client.py call game_purchase --arguments \
-  '{"uuid":"STRUCTURE_OR_UPGRADE_UUID","count":1}'
+  '{"uuid":"ATTRIBUTE_OR_UPGRADE_UUID","count":1}'
 tools/game-mcp-client.py call game_harvest --arguments \
   '{"uuid":"PLOT_UUID"}'
 tools/game-mcp-client.py call game_cast --arguments \

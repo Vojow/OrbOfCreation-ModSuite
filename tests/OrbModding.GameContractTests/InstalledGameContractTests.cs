@@ -101,6 +101,32 @@ public sealed class InstalledGameContractTests
     }
 
     [GameAssemblyFact]
+    public void PlayerFacingAttributes_AreStructurePurchaseRows()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal(0x06002763, assembly.GetMethodToken(
+            "UIStructureList", "PurchaseStructure", "StructureSO"));
+        Assert.Equal(
+            0x06001783,
+            assembly.GetMethodToken("StructureSO", "Purchase", Array.Empty<string>()));
+        AssertMethod(
+            assembly,
+            "UIStructureList",
+            "PurchaseStructure",
+            false,
+            "System.Void",
+            "StructureSO");
+        AssertMethod(assembly, "StructureSO", "Purchase", false, "System.Void");
+        Assert.Contains(
+            assembly.GetMethodBodyDefinitionReferences(
+                "UIStructureList", "PurchaseStructure", "StructureSO"),
+            reference => reference.DeclaringType == "StructureSO" &&
+                reference.MemberName == "Purchase");
+        Assert.Empty(assembly.GetMethods("AttributeSO", "Purchase"));
+    }
+
+    [GameAssemblyFact]
     public void AutoBuyAuthoredRouteAdmission_MatchesCompleteNativeBindingSet()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);

@@ -485,6 +485,8 @@ public sealed class GameMcpProtocolSurfaceTests
         var purchase = Assert.Single(
             tools,
             tool => (string?)tool["name"] == "game_purchase");
+        Assert.Equal("Purchase an attribute or upgrade", (string?)purchase["title"]);
+        Assert.Contains("native StructureSO", (string?)purchase["description"]);
         var required = purchase["inputSchema"]!["required"]!.Values<string>().ToArray();
         Assert.Equal(new[] { "uuid" }, required);
         var properties = (JObject)purchase["inputSchema"]!["properties"]!;

@@ -565,12 +565,12 @@ internal sealed class GameMcpProtocolRouter
                 ObjectSchema()),
             Tool(
                 "game_purchase",
-                "Purchase a structure or upgrade",
-                "Live-revalidate and apply one UUID-addressed native purchase; the terminal result is returned inline.",
+                "Purchase an attribute or upgrade",
+                "Live-revalidate and apply one UUID-addressed attribute (native StructureSO) or upgrade purchase; the settled level change is returned inline.",
                 ActionSchema(
                     new JObject
                     {
-                        ["uuid"] = StringSchema("Canonical UUID from structures or upgrades; kind is derived."),
+                        ["uuid"] = StringSchema("Canonical UUID from structures (shown in game as attributes) or upgrades; kind is derived."),
                         ["count"] = IntegerSchema(1, 1000),
                     },
                     "uuid")),
