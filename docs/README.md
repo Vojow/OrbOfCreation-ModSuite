@@ -15,7 +15,7 @@ Four knowledge layers and the practical pages. One line each; the link is that f
 
 ## Practical pages
 
-- [User guide](user-guide/installation.md) — install, configure, troubleshoot, uninstall. What
+- [User guide](user-guide/README.md) — install, configure, troubleshoot, uninstall. What
   players are told.
 - [Testing](testing/README.md) — evidence layers, test selection, and the ordered V0–V7 runtime
   gates. Read before calling anything green.
@@ -23,7 +23,7 @@ Four knowledge layers and the practical pages. One line each; the link is that f
   concrete defect. Read before arguing a review point.
 - [Development setup](development/setup.md) — build, portable tests, and an authorized local install.
 - [MCP tools](development/mcp-tools.md) — the performance-debug game MCP reference.
-- [Contributing](../CONTRIBUTING.md) — the contributor workflow.
+- [Contributing](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/CONTRIBUTING.md) — the contributor workflow.
 - [Releasing](releasing.md) — the owner's tag-and-publish procedure and the review checklist before it.
 - [The north star](north-star.md) — the goal every change serves. When a change conflicts with it,
   say which one is wrong.

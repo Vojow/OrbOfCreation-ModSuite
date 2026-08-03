@@ -15,7 +15,7 @@ failure.
 - Start with automation disabled and emergency stop engaged.
 - Record commit/archive hash, suite and game versions, assembly hashes, BepInEx
   version, settings, save, and exact commands — the fields of
-  [the report template](../../tests/runtime/report-template.md).
+  [the report template](https://github.com/Vojow/OrbOfCreation-ModSuite/blob/main/tests/runtime/report-template.md).
 
 ## V0 — repository and installed contract gate
 
