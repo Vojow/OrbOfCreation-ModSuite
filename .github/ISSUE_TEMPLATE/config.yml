@@ -1,5 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Private security report
-    url: https://github.com/OrbAutomata/OrbOfCreation-ModSuite/security/advisories/new
-    about: Report save-corruption, code-execution, or local-data vulnerabilities privately.

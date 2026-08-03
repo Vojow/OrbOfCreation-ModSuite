@@ -1,28 +1,37 @@
-# Installing the supported ModSuite
+# Installing the ModSuite
 
-[Back to documentation](../README.md)
+[Back to documentation](../README.md) · [Configuration](configuration.md) ·
+[Troubleshooting](troubleshooting.md)
 
-The supported suite is one BepInEx plugin, `OrbModSuite.dll`, containing every feature: Auto Buy,
-Auto Harvest, Auto Items, Auto Cast, Auto Concept, Spell Leveling, Mentor, and the in-game
-configuration UI. It targets the Windows 64-bit Mono build of Orb of Creation with BepInEx
-5.4.23.x. BepInEx 6 and native Linux packages are not supported. Steam Deck is targeted through
-the Windows game under Proton and requires separate runtime validation.
+The current release installs as one BepInEx plugin, `OrbModSuite.dll`. See
+[what is included](../README.md#whats-in-the-suite) before enabling features.
 
-The gameplay runtime starts normally only on an audited build. After a game update, a complete unknown assembly pair loads in compatibility quarantine so Mods and differential verification remain available while gameplay patches and services stay emergency-stopped. An incomplete assembly audit refuses the plugin and logs why.
+The supported baseline is the Windows 64-bit Mono build of Orb of Creation on Unity `6000.0.70`
+with BepInEx `5.4.23.x`. BepInEx 6 and native Linux packages are not supported. Steam Deck is
+targeted through the Windows game under Proton and requires separate runtime validation.
 
 ## 1. Back up your save
 
-Close the game and copy its save directory before installing or changing automation. On Windows the
-saves live under `%USERPROFILE%\AppData\LocalLow\MarpleGames\Orb of Creation`; under Proton, the same
-folder sits inside the game's `compatdata` prefix. Do not run the suite alongside AutobuyOrb or
-another automatic buyer.
+Close the game and make a manual copy of its save directory before installing or changing
+automation. On Windows, saves live under
+`%USERPROFILE%\AppData\LocalLow\MarpleGames\Orb of Creation`. Under Proton, the same folder sits
+inside the game's `compatdata` prefix.
+
+Before automation first runs for a suite version, the suite also creates and verifies a backup.
+Completed automatic backups are stored in the save directory under
+`backups/auto-modsuite-backup-<timestamp>`. Keep your manual backup until you have confirmed the
+game and suite start normally.
+
+Do not run the suite alongside another mod that automates the same game actions.
 
 ## 2. Install BepInEx 5
 
-1. Download `BepInEx_win_x64_5.4.23.5.zip` from the [BepInEx releases](https://github.com/BepInEx/BepInEx/releases/tag/v5.4.23.5).
+1. Download `BepInEx_win_x64_5.4.23.5.zip` from the
+   [BepInEx releases](https://github.com/BepInEx/BepInEx/releases/tag/v5.4.23.5).
 2. In Steam, open **Orb of Creation > Manage > Browse local files**.
 3. Extract the archive beside `Orb Of Creation.exe`, not inside `Orb Of Creation_Data`.
-4. Start and close the game once. Confirm that `BepInEx/config` and `BepInEx/LogOutput.log` exist.
+4. Start and close the game once. Confirm that `BepInEx/config` and
+   `BepInEx/LogOutput.log` exist.
 
 On Proton, add this Steam launch option:
 
@@ -30,9 +39,10 @@ On Proton, add this Steam launch option:
 WINEDLLOVERRIDES="winhttp=n,b" %command%
 ```
 
-## 3. Install the supported suite
+## 3. Install the current release
 
-1. Download the recommended archive from the project's [Releases page](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/releases).
+1. Download the recommended archive from the project's
+   [Releases page](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/releases).
 2. Extract it into the game directory and merge the included `BepInEx` folder.
 3. Confirm the following layout:
 
@@ -46,11 +56,18 @@ Orb of Creation/
             `-- OrbModSuite.dll
 ```
 
-Keep exactly one copy of `OrbModSuite.dll` anywhere under `BepInEx/plugins`; duplicate older copies can be loaded instead of the intended build. Delete any `OrbAutomata.dll`, `OrbMentor.dll`, `OrbModConfig.dll`, or `OrbModding.Common.dll` left over from a release before 0.4.0: they load under their own retired plugin GUIDs beside the merged DLL and would run a second copy of the same automation. On startup, `BepInEx/LogOutput.log` should list Orb Of Creation ModSuite once without dependency errors.
+Keep exactly one copy of `OrbModSuite.dll` anywhere under `BepInEx/plugins`. Remove separate
+`OrbAutomata.dll`, `OrbMentor.dll`, `OrbModConfig.dll`, and `OrbModding.Common.dll` files; they are
+not part of the one-plugin installation. On startup, `BepInEx/LogOutput.log` should list
+**Orb Of Creation ModSuite** once without dependency errors.
 
-Upgrading from a release before 0.4.0 does not carry your settings over. The suite has one configuration file named after its own plugin GUID, and the retired per-plugin files are never read, so the first start writes a fresh file with defaults. Note your old values before upgrading if you want to reapply them.
+The suite reads settings from
+`BepInEx/config/dev.vojow.orbofcreation.modsuite.cfg`. Other per-plugin configuration files are not
+imported.
 
-The suite detects the exact AutobuyOrb BepInEx GUID. If AutobuyOrb is installed, the suite disables only its overlapping Structure and Upgrade automation and leaves Auto Cast, Auto Concept, Spell Leveling, and Mentor available. This is best-effort safety, not universal third-party detection: unknown unregistered automation is not disabled and cannot be proven absent, so prefer one plugin per automated native action family.
+The exact AutobuyOrb plugin identity is detected and its overlapping Structure and Upgrade actions
+are disabled. This cannot detect every third-party automation mod, so use only one mod for each
+automated action family.
 
-Continue with [configuration and safety](configuration.md). If something
-misbehaves, start with [troubleshooting](troubleshooting.md).
+Next, open the game and follow [configuration and safety](configuration.md). If the suite does not
+load as described, go directly to [troubleshooting](troubleshooting.md).

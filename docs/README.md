@@ -1,34 +1,46 @@
-# Documentation
+# OrbOfCreation ModSuite
 
-Four knowledge layers and the practical pages. One line each; the link is that folder's own index.
+OrbOfCreation ModSuite is an unofficial collection of automation and quality-of-life tools for
+Orb of Creation. It installs as one BepInEx plugin and adds a native-styled **Mods** tab where you
+can configure features, see their current status, and create a diagnostic bundle when something
+goes wrong.
 
-## Knowledge layers
+## Start here
 
-- [Game systems](game-systems/README.md) — how Orb of Creation itself works, version 1.0.5. Facts
-  only. Read before reasoning about any in-game number.
-- [Strategy](strategy/README.md) — how to play it well: per-resource policies, run planning, the
-  advisor program. Opinion, built on game systems.
-- [Reverse engineering](reverse-engineering/README.md) — how to dig into the game's assemblies and
-  what the digging established. Read before touching a native member.
-- [Runtime architecture](runtime-architecture/README.md) — how the suite is built: three
-  publications, two service shapes, where the game may be touched. Read before changing runtime code.
+1. [Install the current release](user-guide/installation.md) and confirm that the suite loads once.
+2. [Configure the features and safety controls](user-guide/configuration.md) in the in-game
+   **Mods** tab.
+3. Keep [troubleshooting](user-guide/troubleshooting.md) handy for startup, compatibility, or
+   behavior problems.
+4. Follow [uninstalling](user-guide/uninstalling.md) when you want to remove the suite.
 
-## Practical pages
+## What's in the suite
 
-- [User guide](user-guide/README.md) — install, configure, troubleshoot, uninstall. What
-  players are told.
-- [Testing](testing/README.md) — evidence layers, test selection, and the ordered V0–V7 runtime
-  gates. Read before calling anything green.
-- [Engineering doctrine](development/engineering-doctrine.md) — the review rules, each earned by a
-  concrete defect. Read before arguing a review point.
-- [Development setup](development/setup.md) — build, portable tests, and an authorized local install.
-- [MCP tools](development/mcp-tools.md) — the performance-debug game MCP reference.
+- **Auto Buy**, including optional progression-aware Spell Leveling, manages structures and
+  upgrades while respecting configured spending and queue reserves.
+- **Auto Cast** casts selected spells, with optional full charging.
+- **Auto Concept** trains acquired Scholar Active Concepts.
+- **Auto Harvest** collects supported fruit and treasure trees.
+- **Auto Items** uses approved Scrolls, Relics, and explicitly selected temporary items.
+- **Auto Scribe** produces supported Scroll roles while yielding to the game's own Scribe work.
+- **Mentor** shares a configured portion of earned mastery XP with eligible spells, artifacts, and
+  ordinary alchemy recipes.
+- The **Mods** UI provides configuration, immediate safety controls, runtime status, activity
+  history, and a one-click bug-report bundle.
+
+All automation remains subject to the game's live rules and the suite's safety checks. Start with
+the defaults, enable one feature at a time, and keep only one mod responsible for each automated
+action.
+
+## Learn more
+
+- [User guide](user-guide/README.md) — install, configure, troubleshoot, and uninstall.
+- [Game systems](game-systems/README.md) — facts about Orb of Creation itself, version 1.0.5.
+- [Strategy](strategy/README.md) — opinions and policies for playing the game well.
+- [Runtime architecture](runtime-architecture/README.md) — how the suite is designed.
+- [Testing](testing/README.md) — evidence layers and runtime validation.
+- [Reverse engineering](reverse-engineering/README.md) — how native game contracts are established.
+- [Development](development/README.md) — contributor setup, engineering doctrine, and releases.
 - [Contributing](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/blob/main/CONTRIBUTING.md) — the contributor workflow.
-- [Releasing](releasing.md) — the owner's tag-and-publish procedure and the review checklist before it.
-- [The north star](north-star.md) — the goal every change serves. When a change conflicts with it,
-  say which one is wrong.
-
-Released behavior is documented beside the code it describes: `src/README.md` for the layout, then
-the per-feature `src/Automata`, `src/AutoItems`, `src/AutoScribe`, `src/Mentor`, and `src/ModConfig`
-READMEs. This tree explains the game, the strategy, the design, and the process — never what a
-shipped feature currently does.
+- [Releasing](releasing.md) — the owner publication procedure.
+- [The north star](north-star.md) — the goal that guides the project.

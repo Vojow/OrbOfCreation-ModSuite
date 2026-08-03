@@ -1,10 +1,22 @@
 # Uninstalling
 
-[Back to documentation](../README.md)
+[Back to documentation](../README.md) · [Installation](installation.md) ·
+[Troubleshooting](troubleshooting.md)
 
 1. Close the game.
 2. Remove `BepInEx/plugins/OrbModSuite/OrbModSuite.dll`.
-3. Search `BepInEx/plugins` for duplicate copies of `OrbModSuite.dll`, and for any `OrbAutomata.dll`, `OrbMentor.dll`, `OrbModConfig.dll`, or `OrbModding.Common.dll` left over from a release before 0.4.0, and remove them as well.
-4. Retain or delete the configuration file `BepInEx/config/dev.vojow.orbofcreation.modsuite.cfg` as preferred. Retired `dev.vojow.orbofcreation.{automata,mentor,modconfig}.cfg` files are no longer read by anything; installing the suite moves any it finds into a timestamped folder under `BepInEx/modsuite-backups/`, so look there rather than in `BepInEx/config` if you want to keep them.
+3. Search `BepInEx/plugins` for other copies of `OrbModSuite.dll` and remove them.
+4. Remove separate `OrbAutomata.dll`, `OrbMentor.dll`, `OrbModConfig.dll`, and
+   `OrbModding.Common.dll` files if they are still present.
+5. Keep or delete `BepInEx/config/dev.vojow.orbofcreation.modsuite.cfg`, depending on whether you
+   want to preserve your settings for a later reinstall.
+6. Keep or delete generated problem reports under
+   `BepInEx/config/OrbOfCreation-ModSuite/diagnostics/`.
 
-The supported mods do not add custom save-file records. Keep a save backup until you have confirmed that the unmodified game loads normally.
+The suite does not add custom records to save files. Automatic save backups under the game's save
+directory at `backups/auto-modsuite-backup-<timestamp>` are ordinary copied files and are not removed
+when the plugin is deleted. Keep at least one backup until the unmodified game loads normally; after
+that, retain or delete those copies as you prefer.
+
+To reinstall, return to the [installation guide](installation.md) and download the current build
+from the [Releases page](https://github.com/OrbAutomata/OrbOfCreation-ModSuite/releases).
