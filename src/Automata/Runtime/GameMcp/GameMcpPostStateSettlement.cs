@@ -54,6 +54,15 @@ internal static class GameMcpPostStateSettlement
                 slot.Toggled &&
                 !slot.Casting;
         }
+        if (command.Kind == GameMcpCommandKind.StructureLifecycle)
+        {
+            return WorldLookup.TryFind(
+                    state.World!.Snapshot.Structures,
+                    command.TargetId,
+                    out var structure) &&
+                structure.Reading.Disabled ==
+                    string.Equals(command.Mode, "disable", System.StringComparison.Ordinal);
+        }
         if (command.Kind != GameMcpCommandKind.SpellComposition) return true;
         var workbench = state.World!.Snapshot.SpellWorkbench;
         return command.Mode switch
@@ -85,6 +94,12 @@ internal static class GameMcpPostStateSettlement
             return GameMcpWorldQuery.PostStateUnavailable(
                 "requested_state_not_reached",
                 "the settled spell slot did not show the requested toggle as off");
+        }
+        if (command.Kind == GameMcpCommandKind.StructureLifecycle)
+        {
+            return GameMcpWorldQuery.PostStateUnavailable(
+                "requested_state_not_reached",
+                "the settled attribute did not show the requested enabled state");
         }
         return GameMcpWorldQuery.PostStateUnavailable(
             "post_state_timeout",

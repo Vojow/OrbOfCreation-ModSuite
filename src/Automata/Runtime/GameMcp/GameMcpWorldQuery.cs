@@ -600,6 +600,7 @@ internal static class GameMcpWorldQuery
             GameMcpCommandKind.CraftingStation => ProjectCraftingStationDelta(state, command),
             GameMcpCommandKind.Loadout => ProjectLoadoutDelta(state, command),
             GameMcpCommandKind.HarvestLifecycle => ProjectHarvestLifecycleDelta(state, command),
+            GameMcpCommandKind.StructureLifecycle => ProjectStructureLifecycleDelta(state, command),
             GameMcpCommandKind.Research => ProjectResearchDelta(state, command),
             GameMcpCommandKind.GenericDiscovery => ProjectDiscoveryDelta(state, command),
             _ => ProjectPostState(state, PostStateCategory(command), command.TargetId),
@@ -695,6 +696,26 @@ internal static class GameMcpWorldQuery
         }
         return PostStateUnavailable("post_state_not_published",
             "the settled world has no purchased target row");
+    }
+
+    private static GameMcpValue ProjectStructureLifecycleDelta(
+        GameMcpFrameContext state,
+        GameMcpCommand command)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var after = state.World.Snapshot;
+        if (!WorldLookup.TryFind(after.Structures, command.TargetId, out var current))
+            return PostStateUnavailable("post_state_not_published",
+                "the settled world has no structure row for that attribute");
+        var before = Before(command);
+        WorldStructure previous = default;
+        var hadBefore = before is not null &&
+            WorldLookup.TryFind(before.Structures, command.TargetId, out previous);
+        return Change(command.TargetId,
+            hadBefore ? !previous.Reading.Disabled : (bool?)null,
+            !current.Reading.Disabled,
+            "enabled");
     }
 
     private static GameMcpValue ProjectConceptDelta(
@@ -2204,6 +2225,8 @@ internal static class GameMcpWorldQuery
         object row) =>
         row is WorldResource resource
             ? ProjectResource(in resource)
+            : row is WorldStructure structure
+            ? ProjectStructure(in structure)
             : row is WorldPurchaseCost purchaseCost
             ? ProjectPurchaseCost(world, in purchaseCost)
             : row is WorldCraftingRecipe craftingRecipe
@@ -2253,6 +2276,28 @@ internal static class GameMcpWorldQuery
                 category.ScanFields,
                 category.Name,
                 category.ExpectedNativeType);
+
+    private static GameMcpValue ProjectStructure(in WorldStructure structure)
+    {
+        var enabled = !structure.Reading.Disabled;
+        var toggle = new JObject
+        {
+            ["available"] = structure.Reading.Unlocked,
+        };
+        if (structure.Reading.Unlocked)
+            toggle["next"] = enabled ? "disable" : "enable";
+        else
+            toggle["reasonCode"] = "not_available";
+        return new JObject
+        {
+            ["entityId"] = structure.EntityId.ToString("D"),
+            ["category"] = "structures",
+            ["nativeType"] = "StructureSO",
+            ["level"] = new GameMcpDomainValue(structure.CommittedLevel),
+            ["enabled"] = enabled,
+            ["toggle"] = toggle,
+        }.Freeze();
+    }
 
     private static GameMcpValue ProjectHarvestElement(
         GameWorldState world,

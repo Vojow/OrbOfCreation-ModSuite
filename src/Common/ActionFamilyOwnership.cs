@@ -30,6 +30,7 @@ public enum AutomationActionFamily
     GenericLevel = 514,
     PlayerLoadout = 515,
     HarvestLifecycle = 516,
+    StructureLifecycle = 517,
     SpellMasteryExperienceGrant = 600,
     ArtifactMasteryExperienceGrant = 601,
     AlchemyMasteryExperienceGrant = 602,

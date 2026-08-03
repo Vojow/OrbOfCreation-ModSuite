@@ -174,8 +174,9 @@ only a zero delta is a miss.
 
 `UIStructureList.ToggleDisableStructure` (`0x06002765`) calls `StructureSO.ToggleDisabled`, and each
 half is ordered: `DisableStructure` sets the disabled flag and then calls `RemoveEffects`, while
-`EnableStructure` clears the flag and then calls `ApplyEffects`. Flag and effects are separate
-observations, so one having moved without the other is a real failure mode rather than display lag.
+`EnableStructure` clears the flag and then calls `ApplyEffects`. The UI callback performs no other
+admission or state write. The stable `disabled` flag is therefore the action's one outcome sentinel;
+effect application is the native callback's consequence, not a second suite-owned ledger.
 
 ### Where an upgrade's reward lands
 

@@ -858,6 +858,9 @@ public class StructureSO : UpgradeableObject, Targeting.ITargetable, IActionable
     public ValueModifierRecord echoBuildRating = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord powerBuildRating = new ValueModifierRecord(new BigDouble(0.0, 0));
     public bool ApplyPurchaseMutation { get; set; } = true;
+    public bool ApplyToggleMutation { get; set; } = true;
+    public int ApplyEffectsCalls { get; private set; }
+    public int RemoveEffectsCalls { get; private set; }
     public int GetPurchaseCostCalls { get; private set; }
     public bool Available { get => available; set => available = value; }
     public bool Purchasable { get => purchasable; set => purchasable = value; }
@@ -890,6 +893,24 @@ public class StructureSO : UpgradeableObject, Targeting.ITargetable, IActionable
     }
     public int GetPurchaseLevel() => quantity;
     public int GetQueuedQuantity() => queuedQuantity;
+    public void ToggleDisabled()
+    {
+        if (!ApplyToggleMutation) return;
+        if (disabled) EnableStructure();
+        else DisableStructure();
+    }
+    public void DisableStructure()
+    {
+        disabled = true;
+        RemoveEffects();
+    }
+    public void EnableStructure()
+    {
+        disabled = false;
+        ApplyEffects();
+    }
+    public void ApplyEffects() => ApplyEffectsCalls++;
+    public void RemoveEffects() => RemoveEffectsCalls++;
     public void Purchase(bool forceOne)
     {
         if (!forceOne || !CanPurchase() || !purchaseCost.HasEnough() || !ApplyPurchaseMutation) return;

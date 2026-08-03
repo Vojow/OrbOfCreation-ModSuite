@@ -487,7 +487,7 @@ public sealed class GameMcpProtocolSurfaceTests
         var actionNames = new HashSet<string>(StringComparer.Ordinal)
         {
             "game_purchase", "game_cast", "game_concept", "game_harvest",
-            "game_harvest_setup",
+            "game_harvest_setup", "game_structure",
             "game_spell_level", "game_casting_dial", "game_spell_loadout", "game_discover",
             "game_equipment", "game_alchemy", "game_ritual", "suite_config_set",
             "game_brewing_station", "game_loadout",

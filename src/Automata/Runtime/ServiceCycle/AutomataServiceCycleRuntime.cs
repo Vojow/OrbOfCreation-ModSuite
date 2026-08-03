@@ -39,6 +39,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly LoadoutGameAction? _loadouts;
     private readonly HarvestLifecycleGameAction? _harvestLifecycle;
     private readonly PlotLifecycleGameAction? _plotLifecycle;
+    private readonly StructureLifecycleGameAction? _structureLifecycle;
     private readonly ChallengeGameAction? _challenges;
     private readonly PrestigeGameAction? _prestige;
     private readonly ResearchGameAction? _research;
@@ -68,6 +69,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         LoadoutGameAction? loadouts = null,
         HarvestLifecycleGameAction? harvestLifecycle = null,
         PlotLifecycleGameAction? plotLifecycle = null,
+        StructureLifecycleGameAction? structureLifecycle = null,
         ChallengeGameAction? challenges = null,
         PrestigeGameAction? prestige = null,
         ResearchGameAction? research = null)
@@ -93,6 +95,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _loadouts = loadouts;
         _harvestLifecycle = harvestLifecycle;
         _plotLifecycle = plotLifecycle;
+        _structureLifecycle = structureLifecycle;
         _challenges = challenges;
         _prestige = prestige;
         _research = research;
@@ -168,6 +171,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _loadouts?.InvalidateLifecycle();
         _harvestLifecycle?.InvalidateLifecycle();
         _plotLifecycle?.InvalidateLifecycle();
+        _structureLifecycle?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
         _prestige?.InvalidateLifecycle();
         _research?.InvalidateLifecycle();
@@ -243,6 +247,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteHarvestLifecycle(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Harvest)
                 return ExecutePlotLifecycle(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.StructureLifecycle)
+                return ExecuteStructureLifecycle(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Challenge)
                 return ExecuteChallenge(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Prestige)
@@ -708,6 +714,31 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             configurationGeneration, submission.Reason);
     }
 
+    private GameMcpCommandResult ExecuteStructureLifecycle(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_structureLifecycle is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared structure GameAction was not composed", lifecycle,
+                configurationGeneration);
+        GameMcpNativeActionAdmission.AssertNativeType(command, "StructureSO");
+        var kind = command.Mode switch
+        {
+            "enable" => StructureLifecycleActionKind.Enable,
+            "disable" => StructureLifecycleActionKind.Disable,
+            _ => throw new ArgumentException("unsupported structure mode " + command.Mode),
+        };
+        var action = new StructureLifecycleAction(
+            kind, command.TargetId, command.ExpectedLifecycleGeneration);
+        var submission = _structureLifecycle.Submit(in action);
+        var result = StructureLifecycleActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason,
+            GameMcpStructureLifecycleProjection.Project(in submission));
+    }
+
     private GameMcpCommandResult ExecuteGenericLevel(
         GameMcpCommand command,
         long lifecycle,
@@ -1132,6 +1163,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _loadouts?.Dispose();
             _harvestLifecycle?.Dispose();
             _plotLifecycle?.Dispose();
+            _structureLifecycle?.Dispose();
             _challenges?.Dispose();
             _prestige?.Dispose();
             _research?.Dispose();

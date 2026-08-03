@@ -287,6 +287,11 @@ internal sealed class GameMcpProtocolRouter
                 builder.Amount = OptionalIntInRange(
                     arguments, "amount", 1, 1, int.MaxValue);
                 break;
+            case "game_structure":
+                builder.Mode = RequireOneOf(arguments, "mode", "enable", "disable");
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                break;
             case "game_spell_level":
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 builder.Mode = RequireOneOf(arguments, "mode", "single", "all");
@@ -514,7 +519,7 @@ internal sealed class GameMcpProtocolRouter
         GameMcpOperationRequestBuilder request) => name switch
     {
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_harvest_setup" or
+            "game_harvest_setup" or "game_structure" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
@@ -545,7 +550,7 @@ internal sealed class GameMcpProtocolRouter
         "trace_health" => GameMcpFrameData.TraceWriterHealth,
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_harvest_setup" or
+            "game_harvest_setup" or "game_structure" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
@@ -706,6 +711,21 @@ internal sealed class GameMcpProtocolRouter
                     ModeRule("remove_element", forbidden: new[] { "actionUuid" }),
                     ModeRule("add_action", new[] { "actionUuid" }),
                     ModeRule("remove_action", new[] { "actionUuid" })),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_structure",
+                "Enable or disable an attribute",
+                "Apply the same native enable or disable control shown for a published StructureSO attribute.",
+                ModeSchema(ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("enable", "disable"),
+                        ["uuid"] = StringSchema("Published structure UUID; shown in game as an attribute."),
+                    },
+                    "mode", "uuid"),
+                    ModeRule("enable"),
+                    ModeRule("disable")),
                 readOnly: false,
                 idempotent: false),
             Tool(

@@ -22903,6 +22903,22 @@
     {
       "id": "plot-lifecycle.list-remove-action", "assembly": "assembly-csharp", "type": "PlotNodeActionInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "RemoveInstance",
       "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["PlotNodeActionInstance", "System.Int32"], "owners": ["Automata plot lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "structure-lifecycle.structure.type-action", "assembly": "assembly-csharp", "type": "StructureSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata structure lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "structure-lifecycle.available-action", "assembly": "assembly-csharp", "type": "StructureSO", "typeVisibility": "public", "kind": "method", "member": "IsAvailable",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata structure lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "structure-lifecycle.disabled-action", "assembly": "assembly-csharp", "type": "StructureSO", "typeVisibility": "public", "kind": "field", "member": "disabled",
+      "visibility": "public", "static": false, "valueType": "System.Boolean", "owners": ["Automata structure lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "structure-lifecycle.toggle-action", "assembly": "assembly-csharp", "type": "StructureSO", "typeVisibility": "public", "kind": "method", "member": "ToggleDisabled",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [], "owners": ["Automata structure lifecycle GameAction"], "usages": ["reflection"], "place": "action"
     }
   ],
   "sourceAudit": {
@@ -22921,6 +22937,7 @@
       "src/DiscoveryTree",
       "src/HarvestLifecycle",
       "src/PlotLifecycle",
+      "src/StructureLifecycle",
     "src/GenericDiscovery",
       "src/GenericLevel",
       "src/Loadout",

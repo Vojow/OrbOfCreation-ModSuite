@@ -109,7 +109,7 @@ does not refresh it by hidden navigation.
 
 ## Tool surface
 
-The registry is exactly 40 tools. It is built once per lifecycle and never changes mid-session, so
+The registry is exactly 41 tools. It is built once per lifecycle and never changes mid-session, so
 there is no `tools/list_changed` notification. The rows below are in `tools/list` order.
 
 | Tool | Purpose |
@@ -129,6 +129,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_concept` | Add or remove one owned concept assignment |
 | `game_harvest` | Add, increase, decrease, or cancel any action offered by a plot |
 | `game_harvest_setup` | Add or remove active harvest elements and their offered actions |
+| `game_structure` | Enable or disable one available attribute |
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
 | `game_casting_dial` | Set the global Output Level or Reserve Level shown on the Casting screen |
 | `game_spell_loadout` | Preview or add a discovered recipe with an explicit glyph layout, remove one equipped runtime spell, or move it |
@@ -407,6 +408,19 @@ Remove decrements an existing quantity; at the native minimum it uses that UI ha
 Success returns the observed active quantity change and the settled next decision. The only
 postcondition is the exact pair's game-written active quantity moving in the requested direction;
 refund behavior on cancellation is neither recomputed nor verified.
+
+### Structure enable and disable
+
+Every `structures` detail row reports the attribute's current `enabled` state and the one next
+toggle the player can take. An unavailable structure carries only `not_available`; the MCP does
+not expose the native callback until the same availability fact the screen uses is true.
+
+Call `game_structure(mode="enable"|"disable", uuid=...)` with a published structure UUID.
+The boundary revalidates exact `StructureSO` identity, availability, and current state on Unity's
+main thread, then invokes the screen's `ToggleDisabled()` route. Success returns only the settled
+`enabled` value before and after. The single postcondition is the game-written `disabled` flag
+reaching the requested state; `ApplyEffects` and `RemoveEffects` remain native consequences of
+that callback and are not independently replayed or audited by the suite.
 
 ### Brewing Station lifecycle
 

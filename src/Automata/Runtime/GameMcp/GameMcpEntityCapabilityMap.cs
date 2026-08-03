@@ -135,6 +135,9 @@ internal static class GameMcpEntityCapabilityMap
             GameMcpCommandKind.HarvestLifecycle =>
                 Entity(world.EntityIdentities, world.HarvestElements, target,
                     "harvest-elements", capability, out reason),
+            GameMcpCommandKind.StructureLifecycle =>
+                Entity(world.EntityIdentities, world.Structures, target,
+                    "structures", capability, out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -479,7 +482,8 @@ internal static class GameMcpEntityCapabilityMap
     private static GameMcpEntityCapabilityDescriptor[] Create() => new[]
     {
         D("resources", "ResourceSO"),
-        D("structures", "StructureSO", GameMcpCommandKind.Purchase, GameMcpCommandKind.Targeting),
+        D("structures", "StructureSO", GameMcpCommandKind.Purchase,
+            GameMcpCommandKind.Targeting, GameMcpCommandKind.StructureLifecycle),
         D("upgrades", "UpgradeSO", GameMcpCommandKind.Purchase),
         D("research", "ResearchSO", GameMcpCommandKind.Research),
         D("double-variables", "DoubleVariable"),

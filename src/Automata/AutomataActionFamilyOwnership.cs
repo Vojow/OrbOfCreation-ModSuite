@@ -61,6 +61,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.PlayerLoadout };
     private static readonly AutomationActionFamily[] HarvestLifecycleFamilies =
         { AutomationActionFamily.HarvestLifecycle };
+    private static readonly AutomationActionFamily[] StructureLifecycleFamilies =
+        { AutomationActionFamily.StructureLifecycle };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -183,6 +185,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.PlayerLoadout);
     public bool TryCaptureHarvestLifecycleMutationPermit() =>
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.HarvestLifecycle);
+    public bool TryCaptureStructureLifecycleMutationPermit() =>
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.StructureLifecycle);
     public string ItemsOwnershipFailure =>
         _itemsClaimFailure.Length != 0
             ? _itemsClaimFailure
@@ -225,6 +229,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         "The current MCP operation does not hold HarvestAction.";
     public string HarvestLifecycleOwnershipFailure =>
         "The current MCP operation does not hold HarvestLifecycle.";
+    public string StructureLifecycleOwnershipFailure =>
+        "The current MCP operation does not hold StructureLifecycle.";
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -523,6 +529,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.GenericLevel => GenericLevelFamilies,
         GameMcpCommandKind.Loadout => PlayerLoadoutFamilies,
         GameMcpCommandKind.HarvestLifecycle => HarvestLifecycleFamilies,
+        GameMcpCommandKind.StructureLifecycle => StructureLifecycleFamilies,
         _ => Array.Empty<AutomationActionFamily>(),
     };
 
@@ -570,6 +577,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         AutomationActionFamily.GenericLevel => false,
         AutomationActionFamily.PlayerLoadout => false,
         AutomationActionFamily.HarvestLifecycle => false,
+        AutomationActionFamily.StructureLifecycle => false,
         _ => false,
     };
 
