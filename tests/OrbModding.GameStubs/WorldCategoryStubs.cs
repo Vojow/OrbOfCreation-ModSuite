@@ -322,6 +322,7 @@ public sealed class GlyphSO : IdScriptableObject
 public sealed class ConsumableTypeSO : IdScriptableObject
 {
     public string DisplayName = string.Empty;
+    public IntVariable maximumCarryLoad = new IntVariable();
 
     public string GetName() => DisplayName;
 }

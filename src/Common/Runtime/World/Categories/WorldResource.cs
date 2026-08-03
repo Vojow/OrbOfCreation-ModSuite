@@ -19,7 +19,6 @@ internal readonly struct RawResourceSample : IWorldEntity
         Guid resourceId,
         BigDouble quantity,
         BigDouble capacity,
-        BigDouble rate,
         bool visible,
         BigDouble lifetimeQuantity,
         BigDouble discoveryTime,
@@ -40,7 +39,6 @@ internal readonly struct RawResourceSample : IWorldEntity
         ResourceId = resourceId;
         Quantity = quantity;
         Capacity = capacity;
-        Rate = rate;
         Visible = visible;
         LifetimeQuantity = lifetimeQuantity;
         DiscoveryTime = discoveryTime;
@@ -80,9 +78,6 @@ internal readonly struct RawResourceSample : IWorldEntity
     /// uncapped and silently disable every capacity-relative stance.
     /// </remarks>
     internal BigDouble Capacity { get; }
-
-    /// <summary>Net change per second, which may legitimately be negative for a draining resource.</summary>
-    internal BigDouble Rate { get; }
 
     /// <summary>Whether the player has discovered this resource. Undiscovered resources still sample.</summary>
     internal bool Visible { get; }
@@ -527,11 +522,9 @@ internal readonly struct WorldResource : IWorldEntity
 /// nothing has touched since the save loaded. See <see cref="NativeAccessorBinder.ModifierRecord"/>.
 /// </para>
 /// <para>
-/// Two readings still call the game. <c>GetTrueRate()</c> composes several rate terms and reaches
-/// <c>GetValue()</c> underneath, so it can make the game recompute on the suite's schedule; the port
-/// that replaces it lives in <c>GameResourceRateMath</c>, and the arguments it needs are now
-/// collected. The three mode flags are private fields with no accessor at all, which is why they are
-/// read as fields.
+/// The rate answer is never asked of the game: the port in <c>GameResourceRateMath</c> owns that
+/// composition from the raw arguments below. The three mode flags are private fields with no
+/// accessor at all, which is why they are read as fields.
 /// </para>
 /// </remarks>
 internal sealed class WorldResourceMembers
@@ -539,7 +532,6 @@ internal sealed class WorldResourceMembers
     private Func<object, Guid>? _id;
     private Func<object, BigDouble>? _quantity;
     private Func<object, BigDouble>? _capacity;
-    private Func<object, BigDouble>? _rate;
     private Func<object, bool>? _visible;
     private Func<object, BigDouble>? _lifetimeQuantity;
     private Func<object, BigDouble>? _discoveryTime;
@@ -609,7 +601,6 @@ internal sealed class WorldResourceMembers
         _id = bind.Call<Guid>("GetGuid");
         _quantity = bind.Call<BigDouble>("GetQuantity");
         _capacity = bind.ModifierRecord("maxQuantity");
-        _rate = bind.Call<BigDouble>("GetTrueRate");
         _visible = bind.Call<bool>("IsVisible");
         _lifetimeQuantity = bind.Field<BigDouble>("lifetimeQuantity");
         _discoveryTime = bind.Field<BigDouble>("discoveryTime");
@@ -622,8 +613,7 @@ internal sealed class WorldResourceMembers
         _inRestMode = bind.Field<bool>("inRestMode");
         _inRallyMode = bind.Field<bool>("inRallyMode");
 
-        // The rate chain's own arguments. GetTrueRate() above still supplies the answer; these are
-        // what let the ported chain compute it off the Unity thread instead.
+        // The rate chain's own arguments. These are the only source of the owned answer.
         _rateFlat = bind.ModifierRecord("rate");
         _rateSplash = bind.ModifierRecord("rateSplash");
         _rateMaxPercent = bind.ModifierRecord("rateMaxPercent");
@@ -685,7 +675,6 @@ internal sealed class WorldResourceMembers
             _id!(entity),
             _quantity!(entity),
             _capacity!(entity),
-            _rate!(entity),
             _visible!(entity),
             _lifetimeQuantity!(entity),
             _discoveryTime!(entity),

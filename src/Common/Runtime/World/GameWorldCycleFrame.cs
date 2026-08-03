@@ -1,3 +1,4 @@
+using System;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime;
 
@@ -60,7 +61,7 @@ internal sealed class GameWorldCycleFrame
     /// The game's action queues, and the slots inside them. A queue is an entity; a slot is a
     /// position in one, so the two cannot share a buffer.
     /// </summary>
-    internal WorldSampleBuffer<WorldActionQueue, WorldActionQueue> ActionQueues { get; } = new();
+    internal WorldSampleBuffer<RawWorldActionQueue, WorldActionQueue> ActionQueues { get; } = new();
 
     internal WorldActionQueueSlotBuffer ActionQueueSlots { get; } = new();
 
@@ -121,7 +122,8 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<RawHarvestResourceSample, WorldHarvestResource> HarvestResources { get; } = new();
     internal WorldSampleBuffer<WorldTimeRune, WorldTimeRune> TimeRunes { get; } = new();
     internal WorldSampleBuffer<WorldGlyph, WorldGlyph> Glyphs { get; } = new();
-    internal WorldSampleBuffer<WorldConsumable, WorldConsumable> Consumables { get; } = new();
+    internal WorldSampleBuffer<RawConsumableSample, WorldConsumable> Consumables { get; } = new();
+    internal Guid ConsumableMaximumCarryLoadVariableId { get; set; }
     internal WorldConsumableTypeBuffer ConsumableTypes { get; } = new();
     internal WorldConsumableCostBuffer ConsumableCosts { get; } = new();
     internal WorldConsumableUsageBuffer ConsumableUsages { get; } = new();
@@ -242,6 +244,9 @@ internal static class GameWorldFrameDeriver
         var plotNodes = frame.PlotNodes.Build(WorldPlotNodeDeriver.Shared);
         var plotNodeActions = frame.PlotNodeActions.Build(WorldIdentityDeriver<WorldPlotNodeAction>.Shared);
         var plotActions = new WorldPlotActionDeriver(plotNodes, plotNodeActions).Build(frame.PlotActions);
+        var purchaseViews = WorldPurchaseViewRelationDeriver.Build(
+            frame.PurchaseViewRelations,
+            frame.PurchaseViewRoutes);
 
         return new GameWorldState
         {
@@ -272,7 +277,13 @@ internal static class GameWorldFrameDeriver
             HarvestResources = frame.HarvestResources.Build(new WorldHarvestResourceDeriver(frame.FrameGlobals)),
             TimeRunes = frame.TimeRunes.Build(WorldIdentityDeriver<WorldTimeRune>.Shared),
             Glyphs = frame.Glyphs.Build(WorldIdentityDeriver<WorldGlyph>.Shared),
-            Consumables = frame.Consumables.Build(WorldIdentityDeriver<WorldConsumable>.Shared),
+            Consumables = frame.Consumables.Build(new WorldConsumableDeriver(
+                WorldLookup.TryFind(
+                    intVariables,
+                    frame.ConsumableMaximumCarryLoadVariableId,
+                    out var maximumCarryLoad)
+                    ? maximumCarryLoad.Value.ToInt()
+                    : 0)),
             ConsumableTypes = WorldConsumableRelationDeriver.Build(frame.ConsumableTypes),
             ConsumableCosts = WorldConsumableRelationDeriver.Build(frame.ConsumableCosts),
             ConsumableUsages = WorldConsumableRelationDeriver.Build(frame.ConsumableUsages),
@@ -328,18 +339,8 @@ internal static class GameWorldFrameDeriver
             ThoughtStreams = frame.ThoughtStreams.Build(WorldIdentityDeriver<WorldThoughtStream>.Shared),
             Tutorials = frame.Tutorials.Build(WorldIdentityDeriver<WorldTutorial>.Shared),
             Views = frame.Views.Build(WorldIdentityDeriver<WorldView>.Shared),
-            PurchaseViewRelations = WorldScribeRelationDeriver.Build(
-                frame.PurchaseViewRelations,
-                static (left, right) => left.CandidateId.CompareTo(right.CandidateId)),
-            PurchaseViewRoutes = WorldScribeRelationDeriver.Build(
-                frame.PurchaseViewRoutes,
-                static (left, right) =>
-                {
-                    var candidate = left.CandidateId.CompareTo(right.CandidateId);
-                    if (candidate != 0) return candidate;
-                    var view = left.ViewId.CompareTo(right.ViewId);
-                    return view != 0 ? view : left.ListId.CompareTo(right.ListId);
-                }),
+            PurchaseViewRelations = purchaseViews.Relations,
+            PurchaseViewRoutes = purchaseViews.Routes,
             PlotNodeActions = plotNodeActions,
             PassiveAbilities = frame.PassiveAbilities.Build(WorldIdentityDeriver<WorldPassiveAbility>.Shared),
             Characters = frame.Characters.Build(WorldIdentityDeriver<WorldCharacter>.Shared),
@@ -348,7 +349,7 @@ internal static class GameWorldFrameDeriver
             PlotNodes = plotNodes,
             PlotActions = plotActions,
             PlotActionInstances = WorldPlotActionInstanceDeriver.Build(frame.PlotActionInstances),
-            ActionQueues = frame.ActionQueues.Build(WorldIdentityDeriver<WorldActionQueue>.Shared),
+            ActionQueues = frame.ActionQueues.Build(new WorldActionQueueDeriver(intVariables)),
             ActionQueueSlots = WorldActionQueueSlotDeriver.Build(frame.ActionQueueSlots),
             SpellSlots = WorldSpellSlotDeriver.Build(frame.SpellSlots),
             SpellCosts = WorldSpellCostDeriver.Build(frame.SpellCosts),

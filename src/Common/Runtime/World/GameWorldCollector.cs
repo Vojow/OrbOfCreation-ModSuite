@@ -30,13 +30,10 @@ namespace OrbModding.Common.Runtime.World;
 /// <see cref="NativeModifierRecordAccess"/>.
 /// </para>
 /// <para>
-/// <b>Two readings still call the game, and both should stop.</b> <c>GetTrueRate()</c> composes
-/// several rate terms and <c>IsAvailable()</c> walks a prerequisite graph, and each reaches
-/// <c>GetValue()</c> underneath — so these are precisely the calls that can still make the game
-/// recompute on the suite's schedule. They are next in line for the same
-/// port-then-differentially-verify treatment the purchase-cost chain has had. Porting them one at a
-/// time is deliberate: two unverified transcriptions at once leave a differential failure
-/// unattributable to either.
+/// <b>Composed answers stay exceptional.</b> Resource rate is owned and differentially verified;
+/// <c>IsAvailable()</c> still walks a prerequisite graph and reaches <c>GetValue()</c> underneath.
+/// That game-only validator remains explicit rather than allowing other composed answers to drift
+/// back into capture unnoticed.
 /// </para>
 /// <para>
 /// <b>Accessors bind once.</b> Each category compiles its readers at construction, so the warm path
@@ -229,7 +226,9 @@ internal sealed class GameWorldCollector
         _harvestResources = Reader(new WorldHarvestResourceBinder(), resolveType, static frame => frame.HarvestResources);
         _timeRunes = Reader(new WorldTimeRuneBinder(), resolveType, static frame => frame.TimeRunes);
         _glyphs = Reader(new WorldGlyphBinder(), resolveType, static frame => frame.Glyphs);
-        _consumables = new WorldConsumableReader(resolveType("ConsumableSO"));
+        _consumables = new WorldConsumableReader(
+            resolveType("ConsumableSO"),
+            resolveType("IdScriptableObject"));
         _scribeRelations = new WorldScribeRelationReader(resolveType);
         _rituals = Reader(new WorldRitualBinder(), resolveType, static frame => frame.Rituals);
         _achievements = Reader(new WorldAchievementBinder(), resolveType, static frame => frame.Achievements);

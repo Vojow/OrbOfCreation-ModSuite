@@ -2011,8 +2011,7 @@
       "returnType": "System.Boolean",
       "parameters": [],
       "owners": [
-        "Automata Auto Harvest slots",
-        "Common world collection"
+        "Automata Auto Harvest slots"
       ],
       "usages": [
         "reflection"
@@ -2046,8 +2045,7 @@
       "returnType": "System.Int32",
       "parameters": [],
       "owners": [
-        "Automata Auto Harvest slots",
-        "Common world collection"
+        "Automata Auto Harvest slots"
       ],
       "usages": [
         "reflection"
@@ -7937,16 +7935,51 @@
       "place": "capture"
     },
     {
-      "id": "resource-drain.ratio",
+      "id": "resource-drain.is-applied",
       "assembly": "assembly-csharp",
       "type": "ResourceDrain",
       "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetRatio",
-      "visibility": "public",
+      "kind": "field",
+      "member": "isDrainApplied",
+      "visibility": "private",
       "static": false,
-      "returnType": "BigDouble",
-      "parameters": [],
+      "valueType": "System.Boolean",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "resource-drain.current-ratio",
+      "assembly": "assembly-csharp",
+      "type": "ResourceDrain",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "currentRatio",
+      "visibility": "private",
+      "static": false,
+      "valueType": "BigDouble",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "resource-drain.usage-ratio",
+      "assembly": "assembly-csharp",
+      "type": "ResourceDrain",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "usageRatio",
+      "visibility": "private",
+      "static": false,
+      "valueType": "BigDouble",
       "owners": [
         "Automata world collection"
       ],
@@ -9137,7 +9170,6 @@
       "parameters": [],
       "owners": [
         "Automata Auto Concept drain",
-        "Automata world collection",
         "Automata rate-math verification"
       ],
       "usages": [
@@ -14548,16 +14580,15 @@
       "place": "capture"
     },
     {
-      "id": "consumable.get-maximum-carry-load",
+      "id": "consumable-type.maximum-carry-load",
       "assembly": "assembly-csharp",
-      "type": "ConsumableSO",
+      "type": "ConsumableTypeSO",
       "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetMaximumCarryLoad",
+      "kind": "field",
+      "member": "maximumCarryLoad",
       "visibility": "public",
       "static": false,
-      "returnType": "System.Int32",
-      "parameters": [],
+      "valueType": "IntVariable",
       "owners": [
         "Automata world collection"
       ],

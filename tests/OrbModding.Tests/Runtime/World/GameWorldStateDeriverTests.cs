@@ -29,7 +29,7 @@ public sealed class GameWorldStateDeriverTests
         Assert.Equal(0.6d, row.FillFraction, 10);
         Assert.Equal(40d, row.Headroom.ToDouble());
         Assert.False(row.IsAtCapacity);
-        Assert.Equal(2d, row.Reading.Rate.ToDouble());
+        Assert.Equal(2d, row.TrueRate.ToDouble());
     }
 
     [Fact]

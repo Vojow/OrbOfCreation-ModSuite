@@ -179,7 +179,6 @@ public sealed class AutoItemsCycleEvaluatorTests
             KnownEntities.PotionToxicity.Uuid,
             new BigDouble(100),
             new BigDouble(100),
-            BigDouble.Zero,
             visible: true,
             lifetimeQuantity: BigDouble.Zero,
             discoveryTime: BigDouble.Zero,

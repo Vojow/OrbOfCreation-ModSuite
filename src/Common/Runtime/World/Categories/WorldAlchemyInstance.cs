@@ -55,6 +55,36 @@ internal readonly struct WorldAlchemyInstance
     internal BigDouble DrainRatio { get; }
 }
 
+/// <summary>The drain inputs captured from one active Concept assignment.</summary>
+internal readonly struct RawWorldAlchemyInstance
+{
+    internal RawWorldAlchemyInstance(
+        Guid recipeId,
+        int quantity,
+        int queuedQuantity,
+        bool drainReadable,
+        bool isDrainApplied,
+        BigDouble currentRatio,
+        BigDouble usageRatio)
+    {
+        RecipeId = recipeId;
+        Quantity = quantity;
+        QueuedQuantity = queuedQuantity;
+        DrainReadable = drainReadable;
+        IsDrainApplied = isDrainApplied;
+        CurrentRatio = currentRatio;
+        UsageRatio = usageRatio;
+    }
+
+    internal Guid RecipeId { get; }
+    internal int Quantity { get; }
+    internal int QueuedQuantity { get; }
+    internal bool DrainReadable { get; }
+    internal bool IsDrainApplied { get; }
+    internal BigDouble CurrentRatio { get; }
+    internal BigDouble UsageRatio { get; }
+}
+
 internal enum WorldAlchemyCostKind
 {
     RecipeDrain = 0,
@@ -126,15 +156,28 @@ internal sealed class WorldConceptRecipeBuffer
 
 internal sealed class WorldAlchemyInstanceBuffer
 {
-    private WorldAlchemyInstance[] _samples = new WorldAlchemyInstance[16];
+    private RawWorldAlchemyInstance[] _samples = new RawWorldAlchemyInstance[16];
     private int _count;
     internal int Count => _count;
-    internal ref readonly WorldAlchemyInstance this[int index] => ref _samples[index];
+    internal ref readonly RawWorldAlchemyInstance this[int index] => ref _samples[index];
     internal void Reset() => _count = 0;
-    internal void Append(in WorldAlchemyInstance sample)
+    internal void Append(in RawWorldAlchemyInstance sample)
     {
         if (_count >= _samples.Length) Array.Resize(ref _samples, _samples.Length * 2);
         _samples[_count++] = sample;
+    }
+
+    internal void Append(in WorldAlchemyInstance row)
+    {
+        var sample = new RawWorldAlchemyInstance(
+            row.RecipeId,
+            row.Quantity,
+            row.QueuedQuantity,
+            row.DrainReadable,
+            isDrainApplied: true,
+            row.DrainRatio,
+            row.DrainRatio);
+        Append(in sample);
     }
 }
 
@@ -151,7 +194,21 @@ internal static class WorldAlchemyRowDeriver
     internal static PublicationTable<WorldAlchemyInstance> Build(WorldAlchemyInstanceBuffer buffer)
     {
         var rows = new WorldAlchemyInstance[buffer.Count];
-        for (var index = 0; index < buffer.Count; index++) rows[index] = buffer[index];
+        for (var index = 0; index < buffer.Count; index++)
+        {
+            var sample = buffer[index];
+            var ratio = !sample.IsDrainApplied
+                ? BigDouble.One
+                : sample.CurrentRatio.CompareTo(sample.UsageRatio) <= 0
+                    ? sample.CurrentRatio
+                    : sample.UsageRatio;
+            rows[index] = new WorldAlchemyInstance(
+                sample.RecipeId,
+                sample.Quantity,
+                sample.QueuedQuantity,
+                sample.DrainReadable,
+                ratio);
+        }
         Array.Sort(rows, static (left, right) => left.RecipeId.CompareTo(right.RecipeId));
         return PublicationTable<WorldAlchemyInstance>.Create(rows, rows.Length);
     }
@@ -335,7 +392,9 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
     private readonly Func<object, int>? _quantity;
     private readonly Func<object, int>? _queuedQuantity;
     private readonly Func<object, object?>? _resourceDrain;
-    private readonly Func<object, BigDouble>? _drainRatio;
+    private readonly Func<object, bool>? _isDrainApplied;
+    private readonly Func<object, BigDouble>? _currentRatio;
+    private readonly Func<object, BigDouble>? _usageRatio;
     private readonly MethodInfo? _currentDrain;
     private readonly FieldInfo? _instanceQuantityField;
     private readonly ConstructorInfo? _instanceConstructor;
@@ -383,7 +442,9 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         _resourceDrain = NativeAccessorBinder.Reference(_instanceType, "resourceDrain");
 
         var drainType = _instanceType?.GetField("resourceDrain", Instance)?.FieldType;
-        _drainRatio = NativeAccessorBinder.Call<BigDouble>(drainType, "GetRatio");
+        _isDrainApplied = NativeAccessorBinder.Field<bool>(drainType, "isDrainApplied");
+        _currentRatio = NativeAccessorBinder.Field<BigDouble>(drainType, "currentRatio");
+        _usageRatio = NativeAccessorBinder.Field<BigDouble>(drainType, "usageRatio");
         _currentDrain = drainType?.GetMethod("GetCurrentDrain", Instance, null, Type.EmptyTypes, null);
 
         _instanceConstructor = _instanceType?.GetConstructor(
@@ -490,11 +551,16 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
                 var drain = _resourceDrain!(instance);
                 var current = drain is null ? null : _currentDrain!.Invoke(drain, null);
                 var readable = drain is not null && current is not null;
-                var ratio = readable ? _drainRatio!(drain!) : default;
                 if (readable)
                     AppendCosts(id, WorldAlchemyCostKind.CurrentDrain, current, frame.AlchemyCosts);
-                frame.AlchemyInstances.Append(new WorldAlchemyInstance(
-                    id, _quantity!(instance), _queuedQuantity!(instance), readable, ratio));
+                frame.AlchemyInstances.Append(new RawWorldAlchemyInstance(
+                    id,
+                    _quantity!(instance),
+                    _queuedQuantity!(instance),
+                    readable,
+                    readable && _isDrainApplied!(drain!),
+                    readable ? _currentRatio!(drain!) : default,
+                    readable ? _usageRatio!(drain!) : default));
                 quantitiesById[id] = Math.Max(0, _quantity(instance));
             }
 
@@ -601,7 +667,8 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         _recipeId is not null && _coreTypeId is not null && _recipeDrain is not null &&
         _instanceIsEmpty is not null && _instanceRecipeId is not null &&
         _quantity is not null && _queuedQuantity is not null &&
-        _resourceDrain is not null && _drainRatio is not null && _currentDrain is not null &&
+        _resourceDrain is not null && _isDrainApplied is not null &&
+        _currentRatio is not null && _usageRatio is not null && _currentDrain is not null &&
         _instanceQuantityField is not null && _instanceConstructor is not null &&
         _getDrainCostMod is not null && _asPercent is not null && _multiplyCost is not null &&
         _maximumQuantity?.ReturnType == typeof(int) &&

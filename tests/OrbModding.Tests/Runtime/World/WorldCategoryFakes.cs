@@ -641,10 +641,11 @@ internal sealed class FakeUnexpectedAlchemyInstance : FakeAlchemyInstance
 
 internal sealed class FakeAlchemyDrain
 {
-    public BigDouble ratio = new(1d);
+    public bool isDrainApplied = true;
+    public BigDouble currentRatio = new(1d);
+    public BigDouble usageRatio = new(1d);
     public FakeSpellCostList current = new();
 
-    public BigDouble GetRatio() => ratio;
     public FakeSpellCostList GetCurrentDrain() => current;
 }
 
@@ -1162,6 +1163,13 @@ internal sealed class FakeConsumable
 }
 
 internal sealed class FakeConsumableType
+{
+    public Guid Identity = Guid.NewGuid();
+    public FakeConsumableVariable maximumCarryLoad = new();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeConsumableVariable
 {
     public Guid Identity = Guid.NewGuid();
     public Guid GetGuid() => Identity;

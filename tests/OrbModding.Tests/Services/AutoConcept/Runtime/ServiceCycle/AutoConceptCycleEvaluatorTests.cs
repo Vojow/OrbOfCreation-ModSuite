@@ -609,7 +609,6 @@ public sealed class AutoConceptCycleEvaluatorTests
             id,
             new BigDouble(quantity),
             new BigDouble(capacity),
-            new BigDouble(trueRate),
             visible: true,
             lifetimeQuantity: default,
             discoveryTime: default,

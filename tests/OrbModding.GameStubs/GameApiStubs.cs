@@ -1624,6 +1624,9 @@ public sealed class ConceptDrainMultiplier
 
 public sealed class ConceptDrainState
 {
+    public bool isDrainApplied = true;
+    public BigDouble currentRatio = new BigDouble(1.0, 0);
+    public BigDouble usageRatio = new BigDouble(1.0, 0);
     public ConceptCostVector Current { get; set; } = new ConceptCostVector();
     public BigDouble GetRatio() => new BigDouble(1.0, 0);
     public ConceptCostVector GetCurrentDrain() => Current;
