@@ -325,7 +325,10 @@ internal sealed class GameMcpProtocolRouter
                 }
                 break;
             case "game_craft":
-                builder.Mode = "craft";
+                builder.Mode = arguments.ContainsKey("mode")
+                    ? RequireOneOf(arguments, "mode", "craft", "automate",
+                        "cancel_manual", "cancel_automation")
+                    : "craft";
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
@@ -720,14 +723,20 @@ internal sealed class GameMcpProtocolRouter
                 idempotent: false),
             Tool(
                 "game_craft",
-                "Craft one recipe",
-                "Execute one exact direct or queued recipe. Success returns the changed recipe quantity or queue fact.",
-                ActionSchema(
+                "Craft or control one recipe",
+                "Craft one exact recipe, add its UI-sized automation increment, or cancel its manual or automated instance. Success returns only the settled quantity change.",
+                ModeSchema(ActionSchema(
                     new JObject
                     {
+                        ["mode"] = EnumSchema(
+                            "craft", "automate", "cancel_manual", "cancel_automation"),
                         ["uuid"] = StringSchema("Published CraftingRecipeSO UUID."),
                     },
                     "uuid"),
+                    ModeRule("craft"),
+                    ModeRule("automate"),
+                    ModeRule("cancel_manual"),
+                    ModeRule("cancel_automation")),
                 readOnly: false,
                 idempotent: false),
             Tool(

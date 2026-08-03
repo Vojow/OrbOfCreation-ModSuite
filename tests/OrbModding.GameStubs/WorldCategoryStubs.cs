@@ -198,6 +198,7 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     public int StartingQuantityCalls;
     public int CanBuyCalls;
     public int ExecuteCalls;
+    public BigDouble? MultiBuyQuantityOverride;
     private readonly PassiveObservable.Channel effectChannel = new("craft");
 
     public bool IsVisible()
@@ -216,6 +217,9 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     public bool CanBuy() => IsVisible() && CanBuyAt(GetPurchaseQuantity(BigDouble.One));
     public BigDouble GetPurchaseQuantity(BigDouble previousQuantity) =>
         useQuantityAsLevel ? GetStartingQuantity() : BigDouble.One;
+    public BigDouble GetMultiBuyQuantity(BigDouble previousQuantity) =>
+        MultiBuyQuantityOverride ?? previousQuantity + GlobalVariables.GetMultiBuy().AsInt();
+    public static int CalcAutomatedQuantity(BigDouble quantity) => quantity.ToInt();
     public BigDouble GetStartingQuantity()
     {
         StartingQuantityCalls++;
@@ -254,6 +258,8 @@ public sealed class CraftingRecipeSO : IdScriptableObject
 public sealed class CraftingInstanceListVariable : GenericListVariable<CraftingInstance>
 {
     public bool isAutoList;
+    public bool SuppressAutomation;
+    public bool SuppressAutomationRemoval;
 
     public BigDouble GetQuantity(CraftingRecipeSO recipe)
     {
@@ -262,14 +268,48 @@ public sealed class CraftingInstanceListVariable : GenericListVariable<CraftingI
             if (ReferenceEquals(value[index].reference, recipe)) total += value[index].Quantity;
         return total;
     }
+
+    public CraftingInstance? GetInstance(CraftingRecipeSO recipe) =>
+        value.Find(instance => ReferenceEquals(instance.reference, recipe));
+
+    public CraftingInstance AutomateCraft(CraftingRecipeSO recipe, int amount)
+    {
+        var instance = GetInstance(recipe);
+        if (instance is not null)
+        {
+            if (!SuppressAutomation) instance.AddAutomationQuantity(amount);
+            return instance;
+        }
+        instance = new CraftingInstance(recipe, amount).SetAuto(true);
+        instance.Initiate();
+        if (!SuppressAutomation) instance.SetAutomationQuantity(amount);
+        Add(instance);
+        return instance;
+    }
+
+    public void RemoveAutomation(CraftingInstance instance, int amount)
+    {
+        if (SuppressAutomationRemoval) return;
+        instance.AddAutomationQuantity(-amount);
+        if (instance.Quantity <= BigDouble.Zero)
+        {
+            instance.Remove();
+            Remove(instance);
+        }
+    }
 }
 
 public sealed class UICraftingPage : UnityEngine.Object
 {
     public CraftingRecipeListVariable availableRecipes = new CraftingRecipeListVariable();
     public CraftingInstanceListVariable craftingQueueInstances = new CraftingInstanceListVariable();
+    public CraftingInstanceListVariable craftingAutomationInstances =
+        new CraftingInstanceListVariable { isAutoList = true };
     public IntVariable craftMode = new IntVariable();
     public CraftingRecipeTypeSO mainCraftType = new CraftingRecipeTypeSO();
+
+    private int GetAutoCraftingQuantity(CraftingRecipeSO recipe) =>
+        craftingAutomationInstances.GetInstance(recipe)?.GetAutomationQuantity() ?? 0;
 }
 
 public sealed class CraftingInstance : AbstractRefInstance<CraftingRecipeSO>
@@ -280,6 +320,8 @@ public sealed class CraftingInstance : AbstractRefInstance<CraftingRecipeSO>
     public bool Initiated;
     public bool SuppressAddQuantity;
     public bool ThrowAfterAddQuantity;
+    public int AutomationQuantity;
+    public bool Removed;
 
     public CraftingInstance()
     {
@@ -308,6 +350,24 @@ public sealed class CraftingInstance : AbstractRefInstance<CraftingRecipeSO>
         if (ThrowAfterAddQuantity)
             throw new InvalidOperationException("injected failure after quantity addition");
     }
+
+    public CraftingInstance SetAuto(bool automatic)
+    {
+        Automatic = automatic;
+        return this;
+    }
+
+    public int GetAutomationQuantity() => AutomationQuantity;
+    public void AddAutomationQuantity(int amount) =>
+        SetAutomationQuantity(AutomationQuantity + amount);
+    public void SetAutomationQuantity(int amount)
+    {
+        AutomationQuantity = amount;
+        Quantity = new BigDouble(amount);
+    }
+
+    public void Remove() => Removed = true;
+    public void CancelCraft() => Remove();
 
     public void InstantCraft()
     {

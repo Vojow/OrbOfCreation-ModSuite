@@ -464,8 +464,10 @@ internal static class GameMcpActionResultCodeNames
             return "the consumable boundary returned " + disposition +
                 " with exact preflight code " + exact;
         if (commandKind == GameMcpCommandKind.Crafting)
+        {
             return "the one-shot crafting boundary returned " + disposition +
                 " with exact preflight code " + exact;
+        }
         if (commandKind == GameMcpCommandKind.GenericDiscovery)
             return "the generic discovery boundary returned " + disposition +
                 " with exact preflight code " + exact;
@@ -621,6 +623,17 @@ internal static class GameMcpActionResultCodeNames
         }
         if (commandKind == GameMcpCommandKind.Crafting)
         {
+            if (code == CraftingInstanceLifecycleActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == CraftingInstanceLifecycleActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == CraftingInstanceLifecycleActionResultCodes.IdentityUnavailable) return "identity_unavailable";
+            if (code == CraftingInstanceLifecycleActionResultCodes.NotVisible) return "not_visible";
+            if (code == CraftingInstanceLifecycleActionResultCodes.PageRelationAmbiguous) return "page_relation_ambiguous";
+            if (code == CraftingInstanceLifecycleActionResultCodes.InstanceUnavailable) return "instance_unavailable";
+            if (code == CraftingInstanceLifecycleActionResultCodes.AutomationFull) return "automation_full";
+            if (code == CraftingInstanceLifecycleActionResultCodes.MultiBuyUnavailable) return "multi_buy_unavailable";
+            if (code == CraftingInstanceLifecycleActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == CraftingInstanceLifecycleActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == CraftingInstanceLifecycleActionResultCodes.VerificationFailed) return "verification_failed";
             if (code == CraftingPlayerActionResultCodes.ContractUnavailable) return "contract_unavailable";
             if (code == CraftingPlayerActionResultCodes.WrongThread) return "wrong_thread";
             if (code == CraftingPlayerActionResultCodes.RecipeUnavailable) return "recipe_unavailable";

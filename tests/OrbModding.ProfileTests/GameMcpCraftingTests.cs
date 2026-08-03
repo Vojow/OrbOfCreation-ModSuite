@@ -32,9 +32,22 @@ public sealed class GameMcpCraftingTests
         var schema = tool["inputSchema"]!;
         Assert.Equal(new[] { "uuid" }, schema["required"]!.Values<string>());
         Assert.NotNull(schema["properties"]!["uuid"]);
+        Assert.NotNull(schema["properties"]!["mode"]);
+        Assert.Equal(
+            new[] { "craft", "automate", "cancel_manual", "cancel_automation" },
+            schema["properties"]!["mode"]!["enum"]!.Values<string>());
         Assert.NotNull(schema["properties"]!["expectedNativeType"]);
         Assert.Null(schema["properties"]!["worldGeneration"]);
         Assert.Null(schema["properties"]!["amount"]);
+        var operation = GameMcpProtocolRouter.BuildOperation(
+            "game_craft",
+            new JObject
+            {
+                ["mode"] = "automate",
+                ["uuid"] = RecipeId.ToString("D"),
+            });
+        Assert.Equal(GameMcpOperationClass.Gameplay, operation.Classification);
+        Assert.Equal("automate", operation.Mode);
     }
 
     [Fact]
@@ -103,6 +116,10 @@ public sealed class GameMcpCraftingTests
         Assert.Equal("75", (string?)cost["cost"]);
         Assert.Equal("900", (string?)cost["amount"]);
         Assert.True((bool)cost["affordable"]!);
+        Assert.True((bool)row["cancelManual"]!["available"]!);
+        Assert.Equal(3, (int)row["automation"]!["amount"]!);
+        Assert.True((bool)row["automation"]!["available"]!);
+        Assert.True((bool)row["automation"]!["canCancel"]!);
     }
 
     [Fact]
@@ -124,6 +141,29 @@ public sealed class GameMcpCraftingTests
         Assert.Null(postState["receipt"]);
         Assert.Null(postState["payment"]);
         Assert.Null(postState["worldGeneration"]);
+    }
+
+    [Theory]
+    [InlineData("automate", 3, 5)]
+    [InlineData("cancel_automation", 5, 2)]
+    public void Automated_modes_return_only_the_settled_quantity_change(
+        string mode,
+        int before,
+        int after)
+    {
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Crafting, 15, 8, mode, RecipeId, Guid.Empty,
+            "CraftingRecipeSO", string.Empty, 1, string.Empty, string.Empty,
+            false, false, frameContext: Context(automationQuantity: before));
+        var committed = GameMcpCommandResult.Committed("committed", 15, 8);
+
+        var postState = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            Context(automationQuantity: after), command, committed));
+
+        Assert.Equal("Craft Sigils", (string?)postState["name"]);
+        Assert.Equal(before, (int)postState["automation"]!["before"]!);
+        Assert.Equal(after, (int)postState["automation"]!["after"]!);
+        Assert.Null(postState["receipt"]);
     }
 
     [Fact]
@@ -152,16 +192,18 @@ public sealed class GameMcpCraftingTests
         Assert.Empty(success.Properties());
     }
 
-    private static GameMcpFrameContext Context(int queuedAmount = 4)
+    private static GameMcpFrameContext Context(
+        int queuedAmount = 4,
+        int automationQuantity = 3)
     {
         using var publisher =
             new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
-        publisher.Publish(World(queuedAmount), new WorldGeneration(2201));
+        publisher.Publish(World(queuedAmount, automationQuantity), new WorldGeneration(2201));
         return GameMcpTestHarness.Context(
             publisher.ReadLatest(), configurationGeneration: 8, lifecycleGeneration: 15);
     }
 
-    private static GameWorldState World(int queuedAmount = 4)
+    private static GameWorldState World(int queuedAmount = 4, int automationQuantity = 3)
     {
         var reading = new RawCraftingRecipeSample(
             RecipeId,
@@ -200,7 +242,11 @@ public sealed class GameMcpCraftingTests
                     queueUsed: 1,
                     queueMaximum: 3,
                     canStart: true,
-                    reasonCode: "ready"),
+                    reasonCode: "ready",
+                    automationQuantity: automationQuantity,
+                    automationUsed: 1,
+                    automationMaximum: 3,
+                    canAutomate: true),
             }),
             CraftingDecisionCosts = PublicationTable<WorldCraftingDecisionCost>.Create(new[]
             {

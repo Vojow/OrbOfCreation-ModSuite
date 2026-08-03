@@ -343,9 +343,11 @@ internal sealed class FakeScribeInstance
     public BigDouble Quantity = BigDouble.Zero;
     public bool Automatic = false;
     public bool Expired = false;
+    public int AutomationQuantity = 0;
 
     public Guid GetGuidReference() => RecipeId;
     public BigDouble GetQuantity() => Quantity;
+    public int GetAutomationQuantity() => AutomationQuantity;
     public bool IsAuto() => Automatic;
     public bool IsExpired() => Expired;
 }

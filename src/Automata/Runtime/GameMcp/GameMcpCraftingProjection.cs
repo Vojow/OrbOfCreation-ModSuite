@@ -14,5 +14,16 @@ internal static class GameMcpCraftingProjection
             ["missingOutcome"] = "requested craft completion",
         }.Freeze();
     }
+
+    internal static GameMcpValue Project(
+        in CraftingInstanceLifecycleSubmission submission)
+    {
+        if (submission.Verified || submission.CallOutcome.MutationAttempts == 0)
+            return new JObject().Freeze();
+        return new JObject
+        {
+            ["missingOutcome"] = "requested crafting-instance transition",
+        }.Freeze();
+    }
 }
 #endif

@@ -34,6 +34,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly AlchemyLoadoutGameAction? _alchemyLoadout;
     private readonly RitualLifecycleGameAction? _ritualLifecycle;
     private readonly GenericLevelGameAction? _genericLevel;
+    private readonly CraftingInstanceLifecycleGameAction? _craftingInstances;
     private readonly ChallengeGameAction? _challenges;
     private readonly PrestigeGameAction? _prestige;
     private readonly ResearchGameAction? _research;
@@ -58,6 +59,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         AlchemyLoadoutGameAction? alchemyLoadout = null,
         RitualLifecycleGameAction? ritualLifecycle = null,
         GenericLevelGameAction? genericLevel = null,
+        CraftingInstanceLifecycleGameAction? craftingInstances = null,
         ChallengeGameAction? challenges = null,
         PrestigeGameAction? prestige = null,
         ResearchGameAction? research = null)
@@ -78,6 +80,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _alchemyLoadout = alchemyLoadout;
         _ritualLifecycle = ritualLifecycle;
         _genericLevel = genericLevel;
+        _craftingInstances = craftingInstances;
         _challenges = challenges;
         _prestige = prestige;
         _research = research;
@@ -148,6 +151,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _alchemyLoadout?.InvalidateLifecycle();
         _ritualLifecycle?.InvalidateLifecycle();
         _genericLevel?.InvalidateLifecycle();
+        _craftingInstances?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
         _prestige?.InvalidateLifecycle();
         _research?.InvalidateLifecycle();
@@ -427,6 +431,34 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         ulong configurationGeneration)
     {
         GameMcpNativeActionAdmission.AssertNativeType(command, "CraftingRecipeSO");
+        if (command.Mode != "craft")
+        {
+            if (_craftingInstances is null)
+                return GameMcpCommandResult.Rejected(
+                    "contract_unavailable",
+                    "the shared crafting-instance GameAction was not composed",
+                    lifecycle,
+                    configurationGeneration);
+            var kind = command.Mode switch
+            {
+                "automate" => CraftingInstanceLifecycleActionKind.Automate,
+                "cancel_manual" => CraftingInstanceLifecycleActionKind.CancelManual,
+                "cancel_automation" => CraftingInstanceLifecycleActionKind.CancelAutomation,
+                _ => throw new ArgumentException("unsupported crafting mode " + command.Mode),
+            };
+            var instanceAction = new CraftingInstanceLifecycleAction(
+                kind, command.TargetId, command.ExpectedLifecycleGeneration);
+            var instanceSubmission = _craftingInstances.Submit(in instanceAction);
+            var instanceResult = CraftingInstanceLifecycleActionResultMapper.Map(
+                in instanceSubmission);
+            return GameMcpCommandResult.FromAction(
+                in instanceResult,
+                command.Kind,
+                lifecycle,
+                configurationGeneration,
+                instanceSubmission.Reason,
+                GameMcpCraftingProjection.Project(in instanceSubmission));
+        }
         var feature = FindFeature(command.Kind);
         var action = new CraftingPlayerAction(
             command.TargetId,
@@ -1003,6 +1035,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _alchemyLoadout?.Dispose();
             _ritualLifecycle?.Dispose();
             _genericLevel?.Dispose();
+            _craftingInstances?.Dispose();
             _challenges?.Dispose();
             _prestige?.Dispose();
             _research?.Dispose();

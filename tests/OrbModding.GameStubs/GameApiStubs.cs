@@ -499,6 +499,7 @@ public class AbstractListVariable<T> : AbstractListVariable
     public void Empty() => value.Clear();
     public bool IsAtMax() => value.Count >= GetMax();
     public bool Contains(T element) => value.Contains(element);
+    public virtual void Remove(T element) => value.Remove(element);
     public bool SuppressSwap { get; set; }
     public bool ThrowBeforeSwap { get; set; }
     public bool ThrowAfterSwap { get; set; }
@@ -580,8 +581,6 @@ public class GenericListVariable<T> : AbstractListVariable<T>
         if (!SuppressAdd) value.Add(element);
         if (ThrowAfterAdd) throw new InvalidOperationException("injected failure after admission");
     }
-
-    public virtual void Remove(T element) => value.Remove(element);
 
     public bool SuppressToggle { get; set; }
     public bool ThrowAfterToggle { get; set; }

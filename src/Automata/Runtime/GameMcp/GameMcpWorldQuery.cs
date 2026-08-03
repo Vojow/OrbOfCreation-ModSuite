@@ -1113,6 +1113,22 @@ internal static class GameMcpWorldQuery
             return PostStateUnavailable(
                 "post_state_not_published",
                 "the settled world has no crafting decision for the committed recipe");
+        if (command.Mode is "automate" or "cancel_automation")
+        {
+            return Change(
+                command.TargetId,
+                hasBefore ? previous.AutomationQuantity : null,
+                current.AutomationQuantity,
+                "automation");
+        }
+        if (command.Mode == "cancel_manual")
+        {
+            return Change(
+                command.TargetId,
+                hasBefore ? new GameMcpDomainValue(previous.QueuedAmount) : null,
+                new GameMcpDomainValue(current.QueuedAmount),
+                "queued");
+        }
         if (current.Pipeline != WorldCraftingPipeline.Direct)
         {
             return Change(
@@ -3926,6 +3942,22 @@ internal static class GameMcpWorldQuery
                     ["used"] = decision.QueueUsed,
                     ["maximum"] = decision.QueueMaximum,
                 };
+                if (decision.CanCancelManual)
+                    result["cancelManual"] = new JObject { ["available"] = true };
+                var automation = new JObject
+                {
+                    ["amount"] = decision.AutomationQuantity,
+                    ["available"] = decision.CanAutomate,
+                };
+                if (decision.CanCancelAutomation) automation["canCancel"] = true;
+                if (decision.AutomationMaximum > 0)
+                {
+                    automation["used"] = decision.AutomationUsed;
+                    automation["maximum"] = decision.AutomationMaximum;
+                }
+                if (!decision.CanAutomate)
+                    automation["reason"] = "automation_full";
+                result["automation"] = automation;
             }
             if (!decision.CanStart && decision.ReasonCode.Length > 0 &&
                 decision.ReasonCode != "hidden_or_undiscovered" &&

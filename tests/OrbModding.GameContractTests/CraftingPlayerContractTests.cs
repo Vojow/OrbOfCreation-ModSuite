@@ -148,6 +148,74 @@ public sealed class CraftingPlayerContractTests
             reference => reference.MemberName == "Find");
     }
 
+    [GameAssemblyFact]
+    public void CraftingInstanceLifecycleBinding_PinsEveryNewNativeMemberToken()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal(0x04000F6C,
+            assembly.GetFieldToken("UICraftingPage", "craftingAutomationInstances"));
+        Assert.Equal(0x06001650,
+            assembly.GetMethodToken("CraftingInstanceListVariable", "GetInstance"));
+        Assert.Equal(0x06001651,
+            assembly.GetMethodToken("CraftingInstanceListVariable", "AutomateCraft"));
+        Assert.Equal(0x06001652,
+            assembly.GetMethodToken("CraftingInstanceListVariable", "RemoveAutomation"));
+        Assert.Equal(0x06000DE3,
+            assembly.GetMethodToken("CraftingInstance", "GetAutomationQuantity"));
+        Assert.Equal(0x06000DE9,
+            assembly.GetMethodToken("CraftingInstance", "CancelCraft"));
+        Assert.Equal(0x06000DF3,
+            assembly.GetMethodToken("CraftingInstance", "IsAuto"));
+        Assert.Equal(0x06000A2E,
+            assembly.GetMethodToken("CraftingRecipeSO", "GetMultiBuyQuantity"));
+        Assert.Equal(0x06000A53,
+            assembly.GetMethodToken("CraftingRecipeSO", "CalcAutomatedQuantity"));
+        Assert.Equal(0x060022F1,
+            assembly.GetMethodToken("UICraftingPage", "GetAutoCraftingQuantity"));
+    }
+
+    [GameAssemblyFact]
+    public void AutomationClick_ComputesTheUiIncrementBeforeTheNativeQueueMutation()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        var multiQuantity = assembly.MethodReferenceOffset(
+            "UICraftingPage", "ContextRecipeClick", "CraftingRecipeSO", "GetMultiBuyQuantity");
+        var automated = assembly.MethodReferenceOffset(
+            "UICraftingPage", "ContextRecipeClick", "CraftingRecipeSO", "CalcAutomatedQuantity");
+        var current = assembly.MethodReferenceOffset(
+            "UICraftingPage", "ContextRecipeClick", "UICraftingPage", "GetAutoCraftingQuantity");
+        var multiBuy = assembly.MethodReferenceOffset(
+            "UICraftingPage", "ContextRecipeClick", "GlobalVariables", "GetMultiBuy");
+        var mutate = assembly.MethodReferenceOffset(
+            "UICraftingPage", "ContextRecipeClick", "CraftingInstanceListVariable", "AutomateCraft");
+
+        Assert.True(multiQuantity >= 0 && automated > multiQuantity && current > automated);
+        Assert.True(multiBuy > current && mutate > multiBuy);
+    }
+
+    [GameAssemblyFact]
+    public void InstanceClick_UsesDistinctAutomatedAndManualCancellationRoutes()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.True(assembly.MethodReferencesMethod(
+            "UICraftingInstanceList", "OnClickInstance",
+            "CraftingInstanceListVariable", "RemoveAutomation"));
+        Assert.True(assembly.MethodReferencesMethod(
+            "UICraftingInstanceList", "OnClickInstance",
+            "CraftingInstance", "CancelCraft"));
+        Assert.Contains(
+            assembly.GetMethodBodyMemberReferences(
+                "UICraftingInstanceList", "OnClickInstance"),
+            reference => reference.MemberName == "Remove" &&
+                reference.DeclaringType.StartsWith(
+                    "AbstractListVariable`1", System.StringComparison.Ordinal));
+        Assert.False(assembly.MethodReferencesMethod(
+            "CraftingInstance", "CancelCraft", "ResourceCostList", "PerformCost"));
+    }
+
     private static void AssertMethod(
         GameAssemblyMetadata assembly,
         string typeName,

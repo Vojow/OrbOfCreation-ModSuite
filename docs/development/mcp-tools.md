@@ -133,7 +133,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_spell_loadout` | Preview or add a discovered recipe with an explicit glyph layout, remove one equipped runtime spell, or move it |
 | `game_targeting` | Submit one exact eligible target or let the native request choose one |
 | `game_consumable` | Use, cancel, discard, randomize, or reorder one published consumable |
-| `game_craft` | Execute one published direct or queued crafting recipe |
+| `game_craft` | Craft a recipe or control its manual/automated instance |
 | `game_discover` | Preview or confirm one composed discovery on seven surfaces, or drive one Discovery Tree offer lifecycle |
 | `game_equipment` | Equip/increase or unequip/decrease one created artifact using live native multi-buy |
 | `game_alchemy` | Add, remove, or reorder one ordinary Alchemy recipe through its visible list |
@@ -765,12 +765,19 @@ clamped holding removal, randomization flag, or exact destination. Payment and d
 accounting do not gate success; a committed result returns only the changed amount, flag, or slot.
 
 `game_craft` requires one recipe `uuid`; `expectedNativeType`, when supplied, must be
-`CraftingRecipeSO`. The boundary re-resolves the exact recipe, authored page/queue route, native
-purchase amount, affordability, and room on Unity's main thread, then captures the shared crafting
-permit last. Direct recipes invoke native `CraftingRecipeSO.Execute`; page recipes re-drive the
-audited stack/new/instant `UICraftingPage.QueueCraft` sequence. Queue success is the exact recipe
-quantity and instance outcome. Payment accounting never gates success. A committed result returns
-the changed recipe quantity or queue fact.
+`CraftingRecipeSO`. Its optional mode defaults to `craft` for compatibility and may be
+`craft`, `automate`, `cancel_manual`, or `cancel_automation`. `craft` re-resolves the exact
+recipe, authored page/queue route, native purchase amount, affordability, and room on Unity's main
+thread, then captures the shared crafting permit last. Direct recipes invoke native
+`CraftingRecipeSO.Execute`; page recipes re-drive the audited stack/new/instant
+`UICraftingPage.QueueCraft` sequence.
+
+The other modes use the same authored page relation and exact recipe identity.
+`automate` repeats the UI's native multi-buy and automation-quantity calculation before calling
+`CraftingInstanceListVariable.AutomateCraft`; the two cancel modes call the exact manual or
+automated instance route shown by the UI. The recipe row publishes manual queued amount and the
+automated quantity/capacity needed for the next decision. Success is one settled quantity change;
+refund accounting is neither computed nor used as a gate.
 
 `game_discover`'s composition modes require `surface` plus `components` and accept no target UUID;
 optional `expectedNativeType` remains an exact assertion, not a selector. `preview` resolves the

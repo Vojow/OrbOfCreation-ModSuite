@@ -22081,6 +22081,102 @@
       "type": "ResourceSO", "typeVisibility": "public", "kind": "method", "member": "HasAmount",
       "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": ["BigDouble"],
       "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.page-automation-action", "assembly": "assembly-csharp",
+      "type": "UICraftingPage", "typeVisibility": "public", "kind": "field", "member": "craftingAutomationInstances",
+      "visibility": "public", "static": false, "valueType": "CraftingInstanceListVariable",
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.queue-get-instance-action", "assembly": "assembly-csharp",
+      "type": "CraftingInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "GetInstance",
+      "visibility": "public", "static": false, "returnType": "CraftingInstance", "parameters": ["CraftingRecipeSO"],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.queue-automate-action", "assembly": "assembly-csharp",
+      "type": "CraftingInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "AutomateCraft",
+      "visibility": "public", "static": false, "returnType": "CraftingInstance", "parameters": ["CraftingRecipeSO", "System.Int32"],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.queue-remove-automation-action", "assembly": "assembly-csharp",
+      "type": "CraftingInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "RemoveAutomation",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["CraftingInstance", "System.Int32"],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.instance-automation-quantity-action", "assembly": "assembly-csharp",
+      "type": "CraftingInstance", "typeVisibility": "public", "kind": "method", "member": "GetAutomationQuantity",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.instance-is-auto-action", "assembly": "assembly-csharp",
+      "type": "CraftingInstance", "typeVisibility": "public", "kind": "method", "member": "IsAuto",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.instance-cancel-action", "assembly": "assembly-csharp",
+      "type": "CraftingInstance", "typeVisibility": "public", "kind": "method", "member": "CancelCraft",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.queue-remove-action", "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "method", "member": "Remove",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["!0"],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.recipe-multi-buy-quantity-action", "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO", "typeVisibility": "public", "kind": "method", "member": "GetMultiBuyQuantity",
+      "visibility": "public", "static": false, "returnType": "BigDouble", "parameters": ["BigDouble"],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.recipe-calc-automated-action", "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO", "typeVisibility": "public", "kind": "method", "member": "CalcAutomatedQuantity",
+      "visibility": "public", "static": true, "returnType": "System.Int32", "parameters": ["BigDouble"],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.page-current-automation-action", "assembly": "assembly-csharp",
+      "type": "UICraftingPage", "typeVisibility": "public", "kind": "method", "member": "GetAutoCraftingQuantity",
+      "visibility": "private", "static": false, "returnType": "System.Int32", "parameters": ["CraftingRecipeSO"],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.global-multi-buy-action", "assembly": "assembly-csharp",
+      "type": "GlobalVariables", "typeVisibility": "public", "kind": "method", "member": "GetMultiBuy",
+      "visibility": "public", "static": true, "returnType": "IntVariable", "parameters": [],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-instance.int-as-int-action", "assembly": "assembly-csharp",
+      "type": "IntVariable", "typeVisibility": "public", "kind": "method", "member": "AsInt",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata crafting-instance GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "crafting-decision.page-automation-capture", "assembly": "assembly-csharp",
+      "type": "UICraftingPage", "typeVisibility": "public", "kind": "field", "member": "craftingAutomationInstances",
+      "visibility": "public", "static": false, "valueType": "CraftingInstanceListVariable",
+      "owners": ["Common crafting decision world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "crafting-decision.instance-automation-quantity-capture", "assembly": "assembly-csharp",
+      "type": "CraftingInstance", "typeVisibility": "public", "kind": "method", "member": "GetAutomationQuantity",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Common crafting decision world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "crafting-decision.instance-is-auto-capture", "assembly": "assembly-csharp",
+      "type": "CraftingInstance", "typeVisibility": "public", "kind": "method", "member": "IsAuto",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Common crafting decision world collection"], "usages": ["reflection"], "place": "capture"
     }
   ],
   "sourceAudit": {
@@ -22099,6 +22195,7 @@
       "src/DiscoveryTree",
     "src/GenericDiscovery",
     "src/GenericLevel",
+    "src/CraftingLifecycle",
     "src/EquipmentLoadout",
       "src/Challenge",
       "src/Prestige",

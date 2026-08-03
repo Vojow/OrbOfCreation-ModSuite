@@ -31,6 +31,7 @@ internal static class AutomataServiceCycleComposition
         Func<AlchemyLoadoutGameAction>? createAlchemyLoadout = null,
         Func<RitualLifecycleGameAction>? createRitualLifecycle = null,
         Func<GenericLevelGameAction>? createGenericLevel = null,
+        Func<CraftingInstanceLifecycleGameAction>? createCraftingInstances = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
         Func<ResearchGameAction>? createResearch = null)
@@ -53,6 +54,7 @@ internal static class AutomataServiceCycleComposition
                 createAlchemyLoadout,
                 createRitualLifecycle,
                 createGenericLevel,
+                createCraftingInstances,
                 createChallenges,
                 createPrestige,
                 createResearch);
@@ -89,6 +91,7 @@ internal static class AutomataServiceCycleComposition
         Func<AlchemyLoadoutGameAction>? createAlchemyLoadout = null,
         Func<RitualLifecycleGameAction>? createRitualLifecycle = null,
         Func<GenericLevelGameAction>? createGenericLevel = null,
+        Func<CraftingInstanceLifecycleGameAction>? createCraftingInstances = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
         Func<ResearchGameAction>? createResearch = null)
@@ -114,6 +117,7 @@ internal static class AutomataServiceCycleComposition
         AlchemyLoadoutGameAction? alchemyLoadout = null;
         RitualLifecycleGameAction? ritualLifecycle = null;
         GenericLevelGameAction? genericLevel = null;
+        CraftingInstanceLifecycleGameAction? craftingInstances = null;
         ChallengeGameAction? challenges = null;
         PrestigeGameAction? prestige = null;
         ResearchGameAction? research = null;
@@ -177,6 +181,7 @@ internal static class AutomataServiceCycleComposition
             alchemyLoadout = createAlchemyLoadout?.Invoke();
             ritualLifecycle = createRitualLifecycle?.Invoke();
             genericLevel = createGenericLevel?.Invoke();
+            craftingInstances = createCraftingInstances?.Invoke();
             challenges = createChallenges?.Invoke();
             prestige = createPrestige?.Invoke();
             research = createResearch?.Invoke();
@@ -196,6 +201,7 @@ internal static class AutomataServiceCycleComposition
                 alchemyLoadout,
                 ritualLifecycle,
                 genericLevel,
+                craftingInstances,
                 challenges,
                 prestige,
                 research);
@@ -212,6 +218,7 @@ internal static class AutomataServiceCycleComposition
             alchemyLoadout?.Dispose();
             ritualLifecycle?.Dispose();
             genericLevel?.Dispose();
+            craftingInstances?.Dispose();
             challenges?.Dispose();
             prestige?.Dispose();
             research?.Dispose();

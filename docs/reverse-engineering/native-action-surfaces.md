@@ -455,6 +455,14 @@ However, inherited `GenericListVariable<CraftingInstance>.Add()` does not set th
 public `CraftingInstance.SetAuto(bool)` remains mutable after insertion. World capture therefore
 verifies both facts and fails loudly if an instance contradicts its containing queue.
 
+The visible automated add route is
+`UICraftingPage.ContextRecipeClick` → the recipe's multi-buy/automation helpers →
+`CraftingInstanceListVariable.AutomateCraft`. Its increment is capped by the global
+multi-buy. The instance-list click route calls `RemoveAutomation` for automated work;
+manual work calls `CancelCraft` and then removes the exact instance from the queue.
+`CancelCraft` contains no resource-cost or refund call, so cancellation success is queue
+state only and refund behavior remains a live-validation question.
+
 This mechanism was audited from Orb of Creation v1.0.5 `Assembly-CSharp.dll`, SHA-256
 `46b723ad8e3df5adf7186ec32b220c338e26c1cc79369e01213c091155073bdc`, decompiled with
 ILSpy 10.1.1.8388.

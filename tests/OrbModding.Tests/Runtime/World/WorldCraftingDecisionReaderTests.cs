@@ -74,6 +74,32 @@ public sealed class WorldCraftingDecisionReaderTests : IDisposable
     }
 
     [Fact]
+    public void Page_recipe_publishes_manual_and_automated_instance_decisions()
+    {
+        var recipe = Recipe();
+        CraftingRecipeSO.All.Add(recipe);
+        var page = Page(recipe, mode: 0, maximum: 2);
+        page.craftingQueueInstances.value.Add(
+            new CraftingInstance(recipe, new BigDouble(4)));
+        var automatic = new CraftingInstance(recipe, new BigDouble(3)).SetAuto(true);
+        automatic.SetAutomationQuantity(3);
+        page.craftingAutomationInstances.value.Add(automatic);
+        var reader = Reader();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 7 };
+
+        var report = reader.Collect(new HashSet<Guid>(), frame);
+
+        Assert.Equal(1, report.Sampled);
+        ref readonly var decision = ref frame.CraftingDecisions[0];
+        Assert.True(decision.CanCancelManual);
+        Assert.True(decision.CanCancelAutomation);
+        Assert.True(decision.CanAutomate);
+        Assert.Equal(3, decision.AutomationQuantity);
+        Assert.Equal(1, decision.AutomationUsed);
+        Assert.Equal(2, decision.AutomationMaximum);
+    }
+
+    [Fact]
     public void AuthoredPageRoutingIsPinnedForLifecycleAndRecapturedAfterEpochChanges()
     {
         var recipe = Recipe();
@@ -148,6 +174,12 @@ public sealed class WorldCraftingDecisionReaderTests : IDisposable
             {
                 uuid = Guid.NewGuid(),
                 Maximum = maximum,
+            },
+            craftingAutomationInstances = new CraftingInstanceListVariable
+            {
+                uuid = Guid.NewGuid(),
+                Maximum = maximum,
+                isAutoList = true,
             },
         };
         page.availableRecipes.value.Add(recipe);

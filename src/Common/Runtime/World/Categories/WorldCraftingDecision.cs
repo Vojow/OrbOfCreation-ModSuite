@@ -25,7 +25,11 @@ internal readonly struct WorldCraftingDecision
         int queueUsed,
         int queueMaximum,
         bool canStart,
-        string reasonCode)
+        string reasonCode,
+        int automationQuantity = 0,
+        int automationUsed = 0,
+        int automationMaximum = 0,
+        bool canAutomate = false)
     {
         RecipeId = recipeId;
         Pipeline = pipeline;
@@ -36,6 +40,10 @@ internal readonly struct WorldCraftingDecision
         QueueMaximum = queueMaximum;
         CanStart = canStart;
         ReasonCode = reasonCode ?? string.Empty;
+        AutomationQuantity = automationQuantity;
+        AutomationUsed = automationUsed;
+        AutomationMaximum = automationMaximum;
+        CanAutomate = canAutomate;
     }
 
     internal Guid RecipeId { get; }
@@ -47,6 +55,12 @@ internal readonly struct WorldCraftingDecision
     internal int QueueMaximum { get; }
     internal bool CanStart { get; }
     internal string ReasonCode { get; }
+    internal int AutomationQuantity { get; }
+    internal int AutomationUsed { get; }
+    internal int AutomationMaximum { get; }
+    internal bool CanAutomate { get; }
+    internal bool CanCancelManual => QueuedAmount > BigDouble.Zero;
+    internal bool CanCancelAutomation => AutomationQuantity > 0;
 }
 
 internal readonly struct WorldCraftingDecisionCost
@@ -128,6 +142,7 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
     private readonly Func<object, double>? _timeToComplete;
     private readonly Func<object, object?>? _pageRecipes;
     private readonly Func<object, object?>? _pageQueue;
+    private readonly Func<object, object?>? _pageAutomation;
     private readonly Func<object, object?>? _pageMode;
     private readonly Func<object, object?>? _pageMainType;
     private readonly Func<object, IList?>? _recipeListValues;
@@ -138,6 +153,8 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
     private readonly Func<object, int>? _queueMaximum;
     private readonly Type? _instanceType;
     private readonly Func<object, Guid>? _instanceRecipe;
+    private readonly Func<object, int>? _instanceAutomationQuantity;
+    private readonly Func<object, bool>? _instanceIsAuto;
     private readonly Func<object, int>? _modeValue;
     private readonly Func<object, bool>? _costHasEnough;
     private readonly Func<object, BigDouble, object?>? _costMultiply;
@@ -185,6 +202,7 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
         var page = new WorldMemberBinding(_pageType, "UICraftingPage");
         _pageRecipes = page.Reference("availableRecipes", recipeListType);
         _pageQueue = page.Reference("craftingQueueInstances", queueType);
+        _pageAutomation = page.Reference("craftingAutomationInstances", queueType);
         _pageMode = page.Reference("craftMode", intVariableType);
         _pageMainType = page.Reference("mainCraftType", recipeMainType);
         var recipeList = new WorldMemberBinding(recipeListType, "CraftingRecipeListVariable");
@@ -197,6 +215,8 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
         _queueMaximum = queue.Call<int>("GetMax");
         var instance = new WorldMemberBinding(_instanceType, "CraftingInstance");
         _instanceRecipe = instance.Call<Guid>("GetGuidReference");
+        _instanceAutomationQuantity = instance.Call<int>("GetAutomationQuantity");
+        _instanceIsAuto = instance.Call<bool>("IsAuto");
         var mode = new WorldMemberBinding(intVariableType, "IntVariable");
         _modeValue = mode.Call<int>("AsInt");
 
@@ -341,6 +361,14 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
         var amountToBuy = _purchaseAmount!(recipe, previous);
         var valuesInQueue = _queueValues!(queue) ??
             throw new InvalidOperationException("page queue value was null");
+        var automation = _pageAutomation!(matchedPage) ??
+            throw new InvalidOperationException("page automation queue was null");
+        var valuesInAutomation = _queueValues!(automation) ??
+            throw new InvalidOperationException("page automation value was null");
+        var automationQuantity = AutomationQuantity(valuesInAutomation, recipeId);
+        var automationHasExisting = automationQuantity > 0;
+        var canAutomate = visible &&
+            (automationHasExisting || _queueHasRoom!(automation));
         var hasExisting = HasRecipe(valuesInQueue, recipeId);
         var hasSpace = hasExisting && mode == 0 || _queueHasRoom!(queue);
         var targetAmount = previous +
@@ -375,7 +403,11 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
             CountNonNull(valuesInQueue),
             _queueMaximum!(queue),
             canQueue,
-            reasonCode));
+            reasonCode,
+            automationQuantity,
+            CountNonNull(valuesInAutomation),
+            _queueMaximum!(automation),
+            canAutomate));
     }
 
     private void AppendCosts(Guid recipeId, object cost, GameWorldCycleFrame frame)
@@ -438,6 +470,27 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
                 return true;
         }
         return false;
+    }
+
+    private int AutomationQuantity(IList instances, Guid recipeId)
+    {
+        var found = false;
+        var quantity = 0;
+        for (var index = 0; index < instances.Count; index++)
+        {
+            var instance = instances[index];
+            if (instance is null || instance.GetType() != _instanceType) continue;
+            if (_instanceRecipe!(instance) != recipeId) continue;
+            if (!_instanceIsAuto!(instance))
+                throw new InvalidOperationException(
+                    "automation queue contained a non-automatic crafting instance");
+            if (found)
+                throw new InvalidOperationException(
+                    "automation queue contained duplicate instances for one recipe");
+            found = true;
+            quantity = _instanceAutomationQuantity!(instance);
+        }
+        return quantity;
     }
 
     private static bool SameReferences(object[] first, object[] second)

@@ -1965,6 +1965,8 @@ public sealed class GameWorldCollectorTests : IDisposable
     {
         public FakeScribeRecipeList availableRecipes = new();
         public FakeScribeInstanceList craftingQueueInstances = new();
+        public FakeScribeInstanceList craftingAutomationInstances =
+            new() { isAutoList = true };
         public FakeCount craftMode = new(0);
         public FakeCraftingRecipeType mainCraftType = new();
     }
