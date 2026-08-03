@@ -20,9 +20,9 @@ internal enum SpellLevelActionKind
 /// the boundary so a native refusal can be read against the snapshot that produced it.
 /// </summary>
 /// <remarks>
-/// Spell Leveling's planner sees strictly less than its boundary does: prerequisites and affordability
-/// are re-read live and are deliberately not published (W59). The belief therefore records only what
-/// the snapshot did say, which is what makes a refusal legible — a spell refused for "no ready mastery
+/// Spell Leveling's planner sees strictly less than its boundary does: prerequisites remain live-only,
+/// while published readiness and affordability are repeated at the action boundary before spending.
+/// The belief records the facts needed to make a refusal legible — a spell refused for "no ready mastery
 /// level" while the plan believed <see cref="MasteryLevelReady"/> is a capture bug, and the same
 /// refusal against a belief of "not ready" would be a planner bug.
 /// </remarks>
@@ -31,12 +31,14 @@ internal readonly struct SpellLevelPlanBelief
     public SpellLevelPlanBelief(
         bool discovered,
         bool masteryLevelReady,
+        bool masteryLevelAffordable,
         int masteryLevel,
         int readySpellCount,
         int levelAllUpgradeLevel)
     {
         Discovered = discovered;
         MasteryLevelReady = masteryLevelReady;
+        MasteryLevelAffordable = masteryLevelAffordable;
         MasteryLevel = masteryLevel;
         ReadySpellCount = readySpellCount;
         LevelAllUpgradeLevel = levelAllUpgradeLevel;
@@ -44,6 +46,7 @@ internal readonly struct SpellLevelPlanBelief
 
     public bool Discovered { get; }
     public bool MasteryLevelReady { get; }
+    public bool MasteryLevelAffordable { get; }
     public int MasteryLevel { get; }
 
     /// <summary>How many spells the snapshot showed as ready, which is what an <c>All</c> would spend on.</summary>

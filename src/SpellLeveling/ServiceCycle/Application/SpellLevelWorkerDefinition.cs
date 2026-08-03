@@ -23,7 +23,7 @@ internal sealed class SpellLevelWorkerDefinition :
     /// </summary>
     /// <remarks>
     /// There is no projection step and no scratch. Auto Buy needs one because it prices hundreds of
-    /// candidates against a cost table; Spell Leveling reads two published fields off each spell row
+    /// candidates against a cost table; Spell Leveling reads three published fields off each spell row
     /// and one upgrade, so the world is already the frame.
     /// <para>
     /// The bulletin is taken and not read. Spell leveling spends resources, so it is a reserve

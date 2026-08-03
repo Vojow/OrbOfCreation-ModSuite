@@ -15,7 +15,7 @@ namespace OrbAutomata;
 /// <remarks>
 /// <para>
 /// The admission ladder is the legacy engine's, term for term and in its order. Occupancy first, then
-/// the game's own readiness answer, then the reserve floor, then the start threshold. The order is
+/// the game's manager-wide and per-spell readiness answers, then the reserve floor, then the start threshold. The order is
 /// load-bearing rather than incidental: the resource terms run before anything expensive so that a
 /// spell nobody can pay for is cheap to reject, and the one term that is missing here — the target
 /// preflight — is missing because it is a live graph walk the boundary owns (W60).
@@ -211,6 +211,12 @@ internal static class AutoCastCycleEvaluator
         double startFraction)
     {
         if (!row.Occupied) return AutoCastExclusion.Empty;
+
+        // CanCastASpell is a manager-wide ordinary wait state. It was previously asked only at the
+        // boundary, which made every publication submit one cast solely to have the live gate bounce
+        // it. The published answer keeps that backpressure in planning; the boundary still repeats
+        // the same native question immediately before firing (M3).
+        if (!row.CasterAvailable) return AutoCastExclusion.Busy;
 
         // An aura that is up and a spell mid-cast are the same refusal to the rotation: the slot is
         // doing something, so it is not this slot's turn.

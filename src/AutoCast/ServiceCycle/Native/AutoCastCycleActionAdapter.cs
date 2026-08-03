@@ -171,11 +171,11 @@ internal sealed class AutoCastCycleActionAdapter : IAutoCastCycleActionPort
             case AutoCastPreflight.TargetingInProgress:
                 return ServiceActionResult.Rejected(AutoCastActionResultCodes.TargetingInProgress);
             case AutoCastPreflight.CasterBusy:
-                return ServiceActionResult.Rejected(AutoCastActionResultCodes.NativeCasterBusy);
+                return ServiceActionResult.Skipped(AutoCastActionResultCodes.NativeCasterBusy);
             case AutoCastPreflight.SlotIdentityChanged:
                 return ServiceActionResult.Rejected(AutoCastActionResultCodes.SlotIdentityChanged);
             case AutoCastPreflight.NotReady:
-                return ServiceActionResult.Rejected(AutoCastActionResultCodes.SpellNotReady);
+                return ServiceActionResult.Skipped(AutoCastActionResultCodes.SpellNotReady);
             case AutoCastPreflight.NoValidTarget:
                 return ServiceActionResult.Rejected(AutoCastActionResultCodes.NoValidTarget);
             case AutoCastPreflight.ChargeHoldRefused:

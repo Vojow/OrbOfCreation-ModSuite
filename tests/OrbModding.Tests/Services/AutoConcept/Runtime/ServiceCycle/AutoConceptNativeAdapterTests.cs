@@ -131,7 +131,7 @@ public sealed class AutoConceptNativeAdapterTests : IDisposable
 
         var submission = runtime.Submit(in action, new AutoConceptConfiguration());
 
-        Assert.Equal(AutoConceptPreflight.ProjectionRefused, submission.Preflight);
+        Assert.Equal(AutoConceptPreflight.ResourceBackpressure, submission.Preflight);
         Assert.Contains("at zero", submission.Reason);
     }
 

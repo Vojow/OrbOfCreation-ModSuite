@@ -224,7 +224,7 @@ public sealed class MentorCycleEvaluatorTests
         new(sequence, domain, id, mastery, true, new BigDouble(amount));
 
     private static WorldSpellRecipe Spell(Guid id, int mastery) =>
-        new(id, true, 0, default, mastery, false, false, false, 0, 0, 0, false,
+        new(id, true, 0, default, mastery, false, false, false, false, 0, 0, 0, false,
             default, default, default, default, default, default, false);
 
     private static WorldSpellSlot Slot(Guid id) =>

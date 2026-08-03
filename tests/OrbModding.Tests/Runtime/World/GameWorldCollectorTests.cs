@@ -246,7 +246,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
-    public void ASpellsMasteryReadinessIsCollectedFromTheGamesOwnAnswer()
+    public void ASpellsMasteryReadinessAndAffordabilityAreCollectedFromTheGamesOwnAnswers()
     {
         // The one fact on a spell recipe that is not a field. Its threshold lives in a container the
         // snapshot does not publish, so MasteryXp has nothing to be compared against and the game's
@@ -266,6 +266,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             discovered = true,
             masteryLevel = 4,
             readyToLevel = false,
+            levelCost = new FakeSpellLevelCost { affordable = false },
         });
 
         var collector = Collector();
@@ -274,8 +275,10 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         Assert.True(WorldLookup.TryFind(world.SpellRecipes, ready, out var readyRow));
         Assert.True(readyRow.MasteryLevelReady);
+        Assert.True(readyRow.MasteryLevelAffordable);
         Assert.True(WorldLookup.TryFind(world.SpellRecipes, banking, out var bankingRow));
         Assert.False(bankingRow.MasteryLevelReady);
+        Assert.False(bankingRow.MasteryLevelAffordable);
 
         // Same mastery level on both: readiness is its own fact, not one the level implies.
         Assert.Equal(readyRow.MasteryLevel, bankingRow.MasteryLevel);
@@ -300,6 +303,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             timeScalingMod = new FakeModifierRecord(80d),
             cachedCompletionTime = new BigDouble(4d),
             cachedRequiredXp = default,
+            maxUsageSlots = new FakeModifierRecord(4d),
             experienceContainer = new FakeExperienceContainer
             {
                 cachedRequiredXp = new BigDouble(12d),
@@ -368,6 +372,16 @@ public sealed class GameWorldCollectorTests : IDisposable
             out var currentCount));
         Assert.Equal(1, currentCount);
         Assert.Equal(11d, world.AlchemyCosts[currentStart].Amount.ToDouble());
+
+        Assert.True(WorldAlchemyCostLookup.TryFindProspectiveRange(
+            world.AlchemyCosts,
+            recipe.Identity,
+            targetQuantity: 4,
+            out var prospectiveStart,
+            out var prospectiveCount));
+        Assert.Equal(1, prospectiveCount);
+        Assert.Equal(resource, world.AlchemyCosts[prospectiveStart].ResourceId);
+        Assert.Equal(28d, world.AlchemyCosts[prospectiveStart].Amount.ToDouble());
     }
 
     [Fact]
@@ -2851,6 +2865,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EachSlotCarriesTheGamesOwnAnswerForEveryStateItDistinguishes()
     {
+        FakeSpellManager.NativeCanCast = false;
         var loadout = new FakeSpellLoadout();
         loadout.value.Add(new FakeSpell
         {
@@ -2888,6 +2903,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         // An occupant with no recipe behind it still publishes a row: the slot is filled, and a
         // consumer that cannot name what is in it should see that rather than see nothing.
         Assert.True(busy.Occupied);
+        Assert.False(busy.CasterAvailable);
         Assert.Equal(Guid.Empty, busy.SpellRecipeId);
 
         // The neighbouring slot is the negative of all of it, from the same pass.
@@ -2897,6 +2913,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.False(idle.Attuning);
         Assert.False(idle.Channeled);
         Assert.False(idle.Toggled);
+        Assert.False(idle.CasterAvailable);
         Assert.True(idle.CastReady);
     }
 

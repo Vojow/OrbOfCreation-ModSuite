@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.GameMath;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.World;
@@ -89,13 +90,13 @@ internal static class AutoConceptCycleEvaluator
         }
         var ranked = AutoConceptBalancer.Rank(progress);
 
-        if (TryPreferredReplacement(byId, world, in context, ref state, out action))
+        if (TryPreferredReplacement(byId, world, in config, in context, ref state, out action))
             return action.RecipeId == Guid.Empty
                 ? WakePolicy.OnPublication
                 : Plan(action, candidates.Count, active, owned, AutoConceptDecisionKind.PreferredReplacement,
                     actions, ref state, out metrics);
 
-        if (TryBreadth(ranked, byId, world, ref state, out action))
+        if (TryBreadth(ranked, byId, world, in config, ref state, out action))
             return Plan(action, candidates.Count, active, owned, AutoConceptDecisionKind.Breadth,
                 actions, ref state, out metrics);
 
@@ -103,7 +104,7 @@ internal static class AutoConceptCycleEvaluator
             return Plan(action, candidates.Count, active, owned, AutoConceptDecisionKind.Rebalance,
                 actions, ref state, out metrics);
 
-        if (TryDepth(ranked, byId, world, ref state, out action))
+        if (TryDepth(ranked, byId, world, in config, ref state, out action))
             return Plan(action, candidates.Count, active, owned, AutoConceptDecisionKind.Depth,
                 actions, ref state, out metrics);
 
@@ -297,6 +298,7 @@ internal static class AutoConceptCycleEvaluator
         IReadOnlyList<ConceptProgress> ranked,
         IReadOnlyDictionary<string, Candidate> byId,
         GameWorldState world,
+        in SuiteRuntimeConfiguration config,
         ref AutoConceptCycleState state,
         out AutoConceptCycleAction action)
     {
@@ -304,8 +306,9 @@ internal static class AutoConceptCycleEvaluator
         {
             var index = Normalize(state.CandidateCursor + offset, ranked.Count);
             var candidate = byId[ranked[index].Uuid];
-            if (!candidate.IsSettled || candidate.Quantity != 0 || !CanAdd(candidate)) continue;
-            action = Action(AutoConceptActionKind.Add, candidate, 1, Guid.Empty, world.CollectedAtEpoch);
+            if (!candidate.IsSettled || candidate.Quantity != 0 || !CanAdd(candidate) ||
+                !TryFindSafeTarget(world, candidate, 1, in config, out var target)) continue;
+            action = Action(AutoConceptActionKind.Add, candidate, target, Guid.Empty, world.CollectedAtEpoch);
             return true;
         }
         action = default;
@@ -326,7 +329,8 @@ internal static class AutoConceptCycleEvaluator
             var desiredProgress = ranked[desiredIndex];
             var desired = byId[desiredProgress.Uuid];
             if (!desired.IsSettled || desired.Quantity != 0 ||
-                desired.CoreTypeId == Guid.Empty || desired.MaximumQuantity <= 0) continue;
+                desired.CoreTypeId == Guid.Empty || desired.MaximumQuantity <= 0 ||
+                !TryFindSafeTarget(world, desired, 1, in config, out _)) continue;
             var timedCycle =
                 config.AutoConcept.SlotManagement == AutoConceptSlotManagementMode.TimedCycle;
             if (timedCycle &&
@@ -363,6 +367,7 @@ internal static class AutoConceptCycleEvaluator
         IReadOnlyList<ConceptProgress> ranked,
         IReadOnlyDictionary<string, Candidate> byId,
         GameWorldState world,
+        in SuiteRuntimeConfiguration config,
         ref AutoConceptCycleState state,
         out AutoConceptCycleAction action)
     {
@@ -373,7 +378,8 @@ internal static class AutoConceptCycleEvaluator
             if (!candidate.IsSettled || candidate.Quantity <= 0 ||
                 candidate.Quantity >= candidate.MaximumQuantity) continue;
             var desired = candidate.MaximumQuantity;
-            action = Action(AutoConceptActionKind.Add, candidate, desired, Guid.Empty, world.CollectedAtEpoch);
+            if (!TryFindSafeTarget(world, candidate, desired, in config, out var target)) continue;
+            action = Action(AutoConceptActionKind.Add, candidate, target, Guid.Empty, world.CollectedAtEpoch);
             return true;
         }
         action = default;
@@ -383,6 +389,7 @@ internal static class AutoConceptCycleEvaluator
     private static bool TryPreferredReplacement(
         IReadOnlyDictionary<string, Candidate> byId,
         GameWorldState world,
+        in SuiteRuntimeConfiguration config,
         in ServiceCycleContext context,
         ref AutoConceptCycleState state,
         out AutoConceptCycleAction action)
@@ -400,8 +407,93 @@ internal static class AutoConceptCycleEvaluator
             state.PreferredReplacement = Guid.Empty;
             return false;
         }
-        if (!candidate.IsSettled || !CanAdd(candidate)) return true;
-        action = Action(AutoConceptActionKind.Add, candidate, 1, Guid.Empty, world.CollectedAtEpoch);
+        if (!candidate.IsSettled || !CanAdd(candidate) ||
+            !TryFindSafeTarget(world, candidate, 1, in config, out var target)) return true;
+        action = Action(AutoConceptActionKind.Add, candidate, target, Guid.Empty, world.CollectedAtEpoch);
+        return true;
+    }
+
+    /// <summary>
+    /// Chooses the same halving ladder as the native boundary, but from the immutable publication.
+    /// A configured reserve or quantity floor is ordinary backpressure and therefore prevents the
+    /// action from being scheduled; the boundary repeats this check against live native state (M3).
+    /// </summary>
+    private static bool TryFindSafeTarget(
+        GameWorldState world,
+        Candidate candidate,
+        int desiredTarget,
+        in SuiteRuntimeConfiguration config,
+        out int safeTarget)
+    {
+        safeTarget = candidate.Quantity;
+        desiredTarget = Math.Min(desiredTarget, candidate.MaximumQuantity);
+        if (desiredTarget <= candidate.Quantity) return false;
+        if (candidate.AuthoredDrainResources == 0)
+        {
+            safeTarget = desiredTarget;
+            return true;
+        }
+
+        var delta = desiredTarget - candidate.Quantity;
+        while (delta > 0)
+        {
+            var target = candidate.Quantity + delta;
+            if (IsProjectedDrainSafe(world, candidate, target, in config))
+            {
+                safeTarget = target;
+                return true;
+            }
+            delta /= 2;
+        }
+        return false;
+    }
+
+    private static bool IsProjectedDrainSafe(
+        GameWorldState world,
+        Candidate candidate,
+        int target,
+        in SuiteRuntimeConfiguration config)
+    {
+        if (!WorldAlchemyCostLookup.TryFindProspectiveRange(
+                world.AlchemyCosts, candidate.Id, target, out var start, out var count))
+            return false;
+
+        WorldAlchemyCostLookup.TryFindRange(
+            world.AlchemyCosts, candidate.Id, WorldAlchemyCostKind.CurrentDrain,
+            out var currentStart, out var currentCount);
+
+        for (var offset = 0; offset < count; offset++)
+        {
+            var prospective = world.AlchemyCosts[start + offset];
+            var current = default(BigDouble);
+            for (var currentOffset = 0; currentOffset < currentCount; currentOffset++)
+            {
+                var row = world.AlchemyCosts[currentStart + currentOffset];
+                if (row.ResourceId != prospective.ResourceId) continue;
+                current = row.Amount;
+                break;
+            }
+
+            var incremental = prospective.Amount - current;
+            if (incremental.CompareTo(default) <= 0) continue;
+            if (!WorldLookup.TryFind(world.Resources, prospective.ResourceId, out var resource) ||
+                resource.Reading.Quantity.CompareTo(default) <= 0)
+                return false;
+
+            var quality = OrbGameMath.AsPercent(resource.Reading.Quality);
+            if (quality.CompareTo(default) <= 0) return false;
+            var trueIncrement = incremental / quality;
+            var currentDrain = resource.Reading.Drain / quality;
+            var grossRate = resource.TrueRate + currentDrain;
+            var reserve = grossRate.CompareTo(default) < 0
+                ? default
+                : grossRate * (Math.Clamp(config.AutoConcept.RateReservePercent, 0f, 100f) / 100d);
+            if ((resource.TrueRate - trueIncrement).CompareTo(reserve) < 0) return false;
+
+            if (resource.IsCapped && resource.Reading.Capacity.CompareTo(default) != 0 &&
+                resource.FillFraction * 100d < config.AutoConcept.MinimumResourcePercent)
+                return false;
+        }
         return true;
     }
 

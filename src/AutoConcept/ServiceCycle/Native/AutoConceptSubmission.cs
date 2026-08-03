@@ -14,6 +14,7 @@ internal enum AutoConceptPreflight
     SlotUnavailable,
     ProjectionRefused,
     MasteryLimitChanged,
+    ResourceBackpressure,
 }
 
 internal readonly struct AutoConceptSubmission

@@ -294,6 +294,40 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     }
 
     /// <summary>
+    /// StructureSO.CanPurchase() does not include affordability, so the action boundary must ask the
+    /// exact native cost list before calling Purchase(true). Otherwise the native method silently
+    /// declines the purchase and the verifier can report only an unexplained zero delta.
+    /// </summary>
+    [Fact]
+    public void Submit_StructureUnaffordable_RefusesBeforeTheNativeCall()
+    {
+        var resource = new global::ResourceSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            quantity = new BigDouble(1.0, 0),
+        };
+        var structure = new global::StructureSO
+        {
+            uuid = Guid.NewGuid().ToString(),
+            available = true,
+            purchasable = true,
+        };
+        structure.purchaseCost.costs.Add(
+            new global::ResourceTuple(resource, new BigDouble(2.0, 0)));
+        global::StructureSO.All.Add(structure);
+
+        var submission = NativeAdapter()
+            .Submit(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), count: 1);
+
+        Assert.Equal(AutoBuyPurchasePreflight.NotAdmissible, submission.Preflight);
+        Assert.False(submission.HasEvidence);
+        Assert.Equal(AutoBuyAdmissionTerm.Refused, submission.Diagnosis.HasEnough);
+        Assert.Equal(AutoBuyRefusalClassification.AffordabilityChanged, submission.Diagnosis.Classification);
+        Assert.Equal(0, structure.queuedQuantity);
+        Assert.Equal(0, structure.purchaseCost.PerformCalls);
+    }
+
+    /// <summary>
     /// The exact reported shape — affordable in the plan, price-only refusal at the boundary — is a
     /// pre-native skip. It records the disagreement but does not turn it into a structural rejection.
     /// </summary>
@@ -841,7 +875,7 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
-    public void Execute_MutationDidNotApply_SkipsWithZeroCommitEvidence()
+    public void Execute_MutationDidNotApply_FaultsWithZeroCommitEvidence()
     {
         var structure = new global::StructureSO
         {
@@ -855,8 +889,8 @@ public sealed class AutoBuyCycleActionAdapterTests : IDisposable
 
         var result = Execute(AutoBuyCandidateKind.Structure, Guid.Parse(structure.uuid), nativeEpoch: PlannedEpoch);
 
-        Assert.Equal(ServiceActionDisposition.Skipped, result.Disposition);
-        Assert.Equal(CommonActionResultCodes.Skipped, result.Code);
+        Assert.Equal(ServiceActionDisposition.Faulted, result.Disposition);
+        Assert.Equal(CommonActionResultCodes.AdapterFault, result.Code);
         Assert.True(result.HasNativeEvidence);
         Assert.NotEqual(NativeMutationOutcome.Verified, result.NativeEvidence.Outcome);
         Assert.Equal(1, result.NativeEvidence.CallOutcome.MutationAttempts);

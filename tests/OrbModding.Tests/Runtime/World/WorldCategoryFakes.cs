@@ -80,6 +80,7 @@ internal static class WorldCategoryFakes
         // Nor is the equipped loadout: Spell belongs to no per-type registry either, so the list
         // holding it is reached by uuid the same way and the slots are read out of that list.
         ["SpellListVariable"] = typeof(FakeSpellLoadout),
+        ["SpellManager"] = typeof(FakeSpellManager),
 
         // Not categories either: an effect block's one modifier and one script are read past their
         // counts, and the lists holding them are typed as interfaces, so the two kinds the suite
@@ -95,6 +96,7 @@ internal static class WorldCategoryFakes
         FakeAlchemyType.All.Clear();
         FakeSpellRecipe.All.Clear();
         FakeSpellType.All.Clear();
+        FakeSpellManager.NativeCanCast = true;
         FakeEquipment.All.Clear();
         FakeEquipmentType.All.Clear();
         FakeResourceType.All.Clear();
@@ -614,6 +616,19 @@ internal class FakeAlchemyInstance : FakeAbstractRefInstance<FakeAlchemyRecipe>
     public int quantity;
     public int queuedQuantity;
     public FakeAlchemyDrain resourceDrain = new();
+
+    public FakeConceptDrainMultiplier GetDrainCostMod() =>
+        new(new BigDouble(quantity));
+}
+
+internal readonly struct FakeConceptDrainMultiplier
+{
+    private readonly BigDouble _percent;
+
+    internal FakeConceptDrainMultiplier(BigDouble multiplier) =>
+        _percent = multiplier * new BigDouble(100d);
+
+    public BigDouble AsPercent() => _percent / new BigDouble(100d);
 }
 
 internal sealed class FakeUnexpectedAlchemyInstance : FakeAlchemyInstance
@@ -692,6 +707,13 @@ internal sealed class FakeSpellLoadout
     public Guid GetGuid() => Identity;
 }
 
+internal static class FakeSpellManager
+{
+    internal static bool NativeCanCast = true;
+
+    public static bool CanCastASpell() => NativeCanCast;
+}
+
 /// <summary>One equipped spell, answering exactly what the loadout reader asks it.</summary>
 internal sealed class FakeSpell
 {
@@ -741,6 +763,16 @@ internal sealed class FakeSpellCostList
         costs.Add(new FakeSpellCostEntry(resource, amount));
         return this;
     }
+
+    public FakeSpellCostList Multiply(BigDouble multiplier)
+    {
+        var result = new FakeSpellCostList();
+        foreach (var entry in costs)
+            result.costs.Add(new FakeSpellCostEntry(
+                entry.resource.GetGuid(),
+                (entry.valueBig * multiplier).ToDouble()));
+        return result;
+    }
 }
 
 /// <summary>
@@ -768,6 +800,7 @@ internal sealed class FakeSpellRecipe
     public BigDouble masteryExperience;
     public int masteryLevel;
     public bool readyToLevel;
+    public FakeSpellLevelCost levelCost = new();
     public bool hiddenDiscovery;
     public bool isRequiredDiscovery;
     public int penaltyUsageCost;
@@ -785,6 +818,13 @@ internal sealed class FakeSpellRecipe
     public Guid GetGuid() => Identity;
 
     public bool IsReadyToLevelMastery() => readyToLevel;
+    public FakeSpellLevelCost GetLevelCost() => levelCost;
+}
+
+internal sealed class FakeSpellLevelCost
+{
+    public bool affordable = true;
+    public bool HasEnough() => affordable;
 }
 
 internal sealed class FakeSpellType

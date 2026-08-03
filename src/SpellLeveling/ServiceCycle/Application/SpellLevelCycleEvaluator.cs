@@ -15,12 +15,11 @@ namespace OrbAutomata;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The plan is deliberately thinner than the boundary's verdict. Discovery and mastery readiness are
-/// published facts and are tested here; the leveling prerequisite and the level's affordability are
-/// not published (W59) and are re-read live by the action adapter. That split is the M3 ruling made
-/// concrete: the boundary is the authority on feasibility, so a planner that proposes a level the game
-/// refuses costs one penalty-free rejection, while a planner that cannot see readiness would propose
-/// one on every cycle forever.
+/// Discovery, mastery readiness, and current affordability are published facts and are tested here.
+/// Leveling prerequisites remain boundary-only, while readiness and affordability are re-read live
+/// immediately before mutation. This follows the game-boundary doctrine's capture-then-decide rule:
+/// an already-known wait is quiet planning backpressure, while the boundary remains the authority on
+/// facts that can move after publication.
 /// </para>
 /// <para>
 /// Ranking is lowest mastery level first, so the spell furthest behind catches up rather than the
@@ -53,7 +52,9 @@ internal static class SpellLevelCycleEvaluator
 
         var undiscovered = 0;
         var notReady = 0;
+        var unaffordable = 0;
         var ready = 0;
+        var affordableReady = 0;
         var chosen = default(WorldSpellRecipe);
         var hasChoice = false;
 
@@ -74,6 +75,13 @@ internal static class SpellLevelCycleEvaluator
             }
 
             ready++;
+            if (!spell.MasteryLevelAffordable)
+            {
+                unaffordable++;
+                continue;
+            }
+
+            affordableReady++;
             if (!hasChoice || Outranks(in spell, in chosen))
             {
                 chosen = spell;
@@ -84,7 +92,8 @@ internal static class SpellLevelCycleEvaluator
         var histogram = new SpellLevelExclusionHistogram(
             undiscovered,
             notReady,
-            outranked: ready == 0 ? 0 : ready - 1);
+            unaffordable,
+            outranked: affordableReady == 0 ? 0 : affordableReady - 1);
 
         if (!hasChoice)
         {
@@ -106,6 +115,7 @@ internal static class SpellLevelCycleEvaluator
             new SpellLevelPlanBelief(
                 chosen.Discovered,
                 chosen.MasteryLevelReady,
+                chosen.MasteryLevelAffordable,
                 chosen.MasteryLevel,
                 ready,
                 ReadLevelAllUpgradeLevel(world))));

@@ -48,8 +48,11 @@ internal enum SpellLevelExclusion
     /// <summary>Discovered, but the mastery track has not banked the next level's experience.</summary>
     NotReady = 2,
 
+    /// <summary>Ready, but the published native level cost is not currently covered.</summary>
+    Unaffordable = 3,
+
     /// <summary>Ready, but another ready spell outranked it. Exactly one action is planned per cycle.</summary>
-    Outranked = 3,
+    Outranked = 4,
 }
 
 /// <summary>How many spells each exclusion term accounted for in one cycle.</summary>
@@ -59,23 +62,26 @@ internal enum SpellLevelExclusion
 /// </remarks>
 internal readonly struct SpellLevelExclusionHistogram
 {
-    internal SpellLevelExclusionHistogram(int undiscovered, int notReady, int outranked)
+    internal SpellLevelExclusionHistogram(int undiscovered, int notReady, int unaffordable, int outranked)
     {
         Undiscovered = undiscovered;
         NotReady = notReady;
+        Unaffordable = unaffordable;
         Outranked = outranked;
     }
 
     public int Undiscovered { get; }
     public int NotReady { get; }
+    public int Unaffordable { get; }
     public int Outranked { get; }
 
-    public int Total => Undiscovered + NotReady + Outranked;
+    public int Total => Undiscovered + NotReady + Unaffordable + Outranked;
 
     public int For(SpellLevelExclusion exclusion) => exclusion switch
     {
         SpellLevelExclusion.Undiscovered => Undiscovered,
         SpellLevelExclusion.NotReady => NotReady,
+        SpellLevelExclusion.Unaffordable => Unaffordable,
         SpellLevelExclusion.Outranked => Outranked,
         _ => 0,
     };
