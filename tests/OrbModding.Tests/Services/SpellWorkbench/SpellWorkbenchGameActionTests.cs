@@ -367,6 +367,43 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     }
 
     [Fact]
+    public void StagedLayoutReadAggregatesInOrderWithoutMutationOwnership()
+    {
+        var (_, core, _) = Recipe(discovered: true);
+        var augment = Augment();
+        SpellManager.instance!.selectedCoreGlyphs.value.Add(core);
+        SpellManager.instance.selectedCoreGlyphs.value.Add(core);
+        SpellManager.instance.selectedAugmentGlyphs.value.Add(augment);
+        using var action = Action(permit: false);
+
+        var layout = action.ReadStagedLayout();
+
+        Assert.True(layout.Available, layout.Reason);
+        var coreRow = Assert.Single(layout.Core);
+        Assert.Equal(core.GetGuid(), coreRow.GlyphId);
+        Assert.Equal(2, coreRow.Count);
+        var augmentRow = Assert.Single(layout.Augments);
+        Assert.Equal(augment.GetGuid(), augmentRow.GlyphId);
+        Assert.Equal(1, augmentRow.Count);
+        Assert.Equal(new[] { core, core }, SpellManager.instance.selectedCoreGlyphs.value);
+        Assert.Equal(new[] { augment }, SpellManager.instance.selectedAugmentGlyphs.value);
+        Assert.Empty(SpellManager.instance.activeSpells.value);
+    }
+
+    [Fact]
+    public void StagedLayoutReadFailsClosedWhenItsBindingSetIsIncomplete()
+    {
+        using var action = Action(include: name =>
+            name != "spell-workbench.manager-selected-core-action");
+
+        var layout = action.ReadStagedLayout();
+
+        Assert.False(layout.Available);
+        Assert.Equal(SpellWorkbenchPreflight.ContractUnavailable, layout.Preflight);
+        Assert.Contains("complete spell workbench binding set", layout.Reason);
+    }
+
+    [Fact]
     public void PricePreviewNamesTheShortResourceAndRefusesASelectionThatDoesNotResolve()
     {
         var (recipe, _, _) = Recipe(discovered: true);

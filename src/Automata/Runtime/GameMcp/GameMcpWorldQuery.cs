@@ -222,6 +222,8 @@ internal static class GameMcpWorldQuery
                 ["active"] = station.Active,
             }.Freeze();
         }
+        if (row is WorldCraftingQueueEntry queueEntry)
+            return ProjectCraftingQueueEntry(in queueEntry);
         if (row is WorldPlayerLoadout playerLoadout)
             return new JObject
             {
@@ -250,6 +252,21 @@ internal static class GameMcpWorldQuery
             ListFields(category),
             category.Name,
             category.ExpectedNativeType);
+    }
+
+    private static GameMcpValue ProjectCraftingQueueEntry(
+        in WorldCraftingQueueEntry entry)
+    {
+        var result = new JObject
+        {
+            ["queueId"] = entry.QueueId,
+            ["slot"] = entry.Slot,
+            ["recipeId"] = entry.RecipeId,
+            ["amount"] = new GameMcpDomainValue(entry.Amount),
+            ["automatic"] = entry.Automatic,
+        };
+        if (entry.Automatic) result["repetitions"] = entry.Repetitions;
+        return result.Freeze();
     }
 
     private static GameMcpValue PurchaseListRow(
@@ -283,6 +300,10 @@ internal static class GameMcpWorldQuery
         "glyphs" => new[] { "entityId", "level" },
         "consumables" => new[] { "entityId", "quantity" },
         "crafting-recipes" => new[] { "entityId", "reading.startingQuantity" },
+        "crafting-queue-entries" => new[]
+        {
+            "queueId", "slot", "recipeId", "amount", "automatic", "repetitions",
+        },
         "plot-nodes" => new[] { "entityId", "reading.masteryLevel" },
         "discovery-trees" => new[] { "entityId", "actionMode" },
         "challenges" => new[] { "entityId", "level", "state" },
@@ -5135,6 +5156,9 @@ internal static class GameMcpWorldQuery
             Entity(nameof(GameWorldState.ResourceTypes), world => world.ResourceTypes),
             Entity(nameof(GameWorldState.CraftingRecipeTypes), world => world.CraftingRecipeTypes),
             Entity(nameof(GameWorldState.CraftingRecipes), world => world.CraftingRecipes),
+            Composite(
+                nameof(GameWorldState.CraftingQueueEntries),
+                world => world.CraftingQueueEntries),
             Entity(nameof(GameWorldState.CraftingStations), world => world.CraftingStations),
             Composite(nameof(GameWorldState.CraftingStationOptions), world => world.CraftingStationOptions),
             Composite(nameof(GameWorldState.CraftingStationDrains), world => world.CraftingStationDrains),
@@ -5257,6 +5281,7 @@ internal static class GameMcpWorldQuery
             "crafting-decisions",
             "resources",
         },
+        "crafting-queue-entries" => new[] { "crafting-decisions" },
         "crafting-station-options" or "crafting-station-drains" =>
             new[] { "crafting-stations" },
         "player-loadouts" or "player-loadout-entries" or "snapshot-loadouts" or
@@ -5373,6 +5398,10 @@ internal static class GameMcpWorldQuery
             "reading.outputCapacityReasonCode", "reading.authoredInputCount",
             "reading.generatedOutputCount", "reading.consumableOutputCount",
             "reading.engagementEffectCount",
+        },
+        "crafting-queue-entries" => new[]
+        {
+            "queueId", "slot", "recipeId", "amount", "automatic", "repetitions",
         },
         "crafting-stations" => new[]
         {

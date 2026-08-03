@@ -21,9 +21,13 @@ public sealed class GameMcpSpellLoadoutTests
         Guid.Parse("13b37dd5-44f7-4eb5-af6b-168454578466");
     private static readonly Guid SecondInstanceId =
         Guid.Parse("f40dfa54-2b96-4aee-97ec-5a8e8392a771");
+    private static readonly Guid CoreGlyphId =
+        Guid.Parse("f3000000-0000-0000-0000-000000000001");
+    private static readonly Guid AugmentGlyphId =
+        Guid.Parse("f3000000-0000-0000-0000-000000000002");
 
     [Fact]
-    public void ToolUsesOnePreviewAddRemoveMoveShapeAndBakesGlyphsOnlyOnAdd()
+    public void ToolUsesOneStagedPreviewAddRemoveMoveShapeAndBakesGlyphsOnlyOnAdd()
     {
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
@@ -35,7 +39,7 @@ public sealed class GameMcpSpellLoadoutTests
             new[] { "mode" },
             schema["required"]!.Values<string>().ToArray());
         Assert.Equal(
-            new[] { "preview", "add", "remove", "move" },
+            new[] { "staged", "preview", "add", "remove", "move" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
         Assert.NotNull(schema["properties"]!["uuid"]);
         Assert.NotNull(schema["properties"]!["glyphs"]);
@@ -118,6 +122,64 @@ public sealed class GameMcpSpellLoadoutTests
         Assert.Equal(GameMcpOperationClass.ReadOnly, operation.Classification);
         Assert.Equal(FirstRecipeId, operation.Uuid);
         Assert.Empty(operation.UuidCounts);
+    }
+
+    [Fact]
+    public void StagedReadIsParameterlessReadOnlyAndRejectsMutationArguments()
+    {
+        var operation = GameMcpProtocolRouter.BuildOperation(
+            "game_spell_loadout",
+            new JObject { ["mode"] = "staged" });
+        Assert.Equal(GameMcpOperationClass.ReadOnly, operation.Classification);
+        Assert.Equal(GameMcpFrameData.None, operation.RequiredData);
+
+        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
+        var rejected = router.Handle(GameMcpAcceptanceFixture.Request(
+            1,
+            "tools/call",
+            new JObject
+            {
+                ["name"] = "game_spell_loadout",
+                ["arguments"] = new JObject
+                {
+                    ["mode"] = "staged",
+                    ["uuid"] = FirstRecipeId.ToString("D"),
+                    ["glyphs"] = new JArray(),
+                },
+            }));
+        var errors = rejected.Body!["error"]!["data"]!["validationErrors"]!
+            .Values<JObject>().ToArray();
+        Assert.Contains(errors, error =>
+            (string?)error?["field"] == "uuid" &&
+            (string?)error?["code"] == "unexpected_for_mode");
+        Assert.Contains(errors, error =>
+            (string?)error?["field"] == "glyphs" &&
+            (string?)error?["code"] == "unexpected_for_mode");
+    }
+
+    [Fact]
+    public void StagedReadReturnsTheExactNamedOrderedLayout()
+    {
+        var layout = SpellWorkbenchStagedLayout.Captured(
+            new[] { new SpellWorkbenchGlyphStack(CoreGlyphId, 2) },
+            new[] { new SpellWorkbenchGlyphStack(AugmentGlyphId, 1) });
+        var catalog = EntityIdentityCatalogSnapshot.Bound(9, new[]
+        {
+            new EntityIdentityName(CoreGlyphId, "GlyphSO", "Channel", "channelGlyph"),
+            new EntityIdentityName(AugmentGlyphId, "GlyphSO", "Bright", "brightGlyph"),
+        });
+
+        var response = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            GameMcpSpellWorkbenchProjection.ProjectStagedLayout(in layout),
+            catalog));
+
+        Assert.Equal("available", (string?)response["status"]);
+        var core = Assert.Single(response["core"]!).Value<JObject>()!;
+        var augment = Assert.Single(response["augments"]!).Value<JObject>()!;
+        Assert.Equal("Channel", (string?)core["glyph"]!["name"]);
+        Assert.Equal(2, (int)core["count"]!);
+        Assert.Equal("Bright", (string?)augment["glyph"]!["name"]);
+        Assert.Equal(1, (int)augment["count"]!);
     }
 
     [Fact]

@@ -316,6 +316,19 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         return _spellWorkbench.Preview(in request);
     }
 
+    public SpellWorkbenchStagedLayout ReadStagedSpellWorkbench()
+    {
+        if (_disposed)
+            return SpellWorkbenchStagedLayout.Unavailable(
+                SpellWorkbenchPreflight.ContractUnavailable,
+                "The ServiceCycle runtime has been disposed.");
+        if (_spellWorkbench is null)
+            return SpellWorkbenchStagedLayout.Unavailable(
+                SpellWorkbenchPreflight.ContractUnavailable,
+                "The shared Spellcraft boundary is unavailable.");
+        return _spellWorkbench.ReadStagedLayout();
+    }
+
     private GameMcpCommandResult ExecuteSpellComposition(
         GameMcpCommand command,
         long lifecycle,

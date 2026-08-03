@@ -141,6 +141,10 @@ public sealed record GameWorldState
     internal PublicationTable<WorldCraftingDecisionCost> CraftingDecisionCosts { get; init; } =
         PublicationTable<WorldCraftingDecisionCost>.Empty;
 
+    /// <summary>Ordered visible manual and automatic crafting queue contents.</summary>
+    internal PublicationTable<WorldCraftingQueueEntry> CraftingQueueEntries { get; init; } =
+        PublicationTable<WorldCraftingQueueEntry>.Empty;
+
     /// <summary>Runtime Brewing Stations and the choices exposed by their owning screen.</summary>
     internal PublicationTable<WorldCraftingStation> CraftingStations { get; init; } =
         PublicationTable<WorldCraftingStation>.Empty;

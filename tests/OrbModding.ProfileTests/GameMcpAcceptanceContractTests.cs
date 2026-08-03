@@ -286,7 +286,7 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(overview["unlocks"]);
         Assert.Null(overview["harvest"]);
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(
-            overview.ToString(Newtonsoft.Json.Formatting.None)) < 1_600);
+            overview.ToString(Newtonsoft.Json.Formatting.None)) < 1_650);
 
         var exact = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             state,

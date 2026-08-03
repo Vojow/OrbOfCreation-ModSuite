@@ -22173,6 +22173,12 @@
       "owners": ["Common crafting decision world collection"], "usages": ["reflection"], "place": "capture"
     },
     {
+      "id": "crafting-decision.instance-quantity-capture", "assembly": "assembly-csharp",
+      "type": "CraftingInstance", "typeVisibility": "public", "kind": "method", "member": "GetQuantity",
+      "visibility": "public", "static": false, "returnType": "BigDouble", "parameters": [],
+      "owners": ["Common crafting decision world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
       "id": "crafting-decision.instance-is-auto-capture", "assembly": "assembly-csharp",
       "type": "CraftingInstance", "typeVisibility": "public", "kind": "method", "member": "IsAuto",
       "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],

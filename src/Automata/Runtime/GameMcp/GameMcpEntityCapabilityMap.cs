@@ -503,6 +503,7 @@ internal static class GameMcpEntityCapabilityMap
         D("resource-types", "ResourceTypeSO", GameMcpCommandKind.GenericLevel),
         D("crafting-recipe-types", "CraftingRecipeTypeSO"),
         D("crafting-recipes", "CraftingRecipeSO", GameMcpCommandKind.Crafting),
+        D("crafting-queue-entries", "CraftingInstance"),
         D("crafting-stations", "CraftingStructure", GameMcpCommandKind.CraftingStation),
         D("crafting-station-options", "CraftingStructureSO+TypeElement"),
         D("crafting-station-drains", "ResourceCostList"),

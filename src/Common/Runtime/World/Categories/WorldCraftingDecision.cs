@@ -84,6 +84,32 @@ internal readonly struct WorldCraftingDecisionCost
     internal bool Affordable => Amount.CompareTo(Cost) >= 0;
 }
 
+internal readonly struct WorldCraftingQueueEntry
+{
+    internal WorldCraftingQueueEntry(
+        Guid queueId,
+        int slot,
+        Guid recipeId,
+        BigDouble amount,
+        bool automatic,
+        int repetitions)
+    {
+        QueueId = queueId;
+        Slot = slot;
+        RecipeId = recipeId;
+        Amount = amount;
+        Automatic = automatic;
+        Repetitions = repetitions;
+    }
+
+    internal Guid QueueId { get; }
+    internal int Slot { get; }
+    internal Guid RecipeId { get; }
+    internal BigDouble Amount { get; }
+    internal bool Automatic { get; }
+    internal int Repetitions { get; }
+}
+
 internal static class WorldCraftingDecisionLookup
 {
     internal static bool TryFind(
@@ -153,6 +179,7 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
     private readonly Func<object, int>? _queueMaximum;
     private readonly Type? _instanceType;
     private readonly Func<object, Guid>? _instanceRecipe;
+    private readonly Func<object, BigDouble>? _instanceQuantity;
     private readonly Func<object, int>? _instanceAutomationQuantity;
     private readonly Func<object, bool>? _instanceIsAuto;
     private readonly Func<object, int>? _modeValue;
@@ -215,6 +242,7 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
         _queueMaximum = queue.Call<int>("GetMax");
         var instance = new WorldMemberBinding(_instanceType, "CraftingInstance");
         _instanceRecipe = instance.Call<Guid>("GetGuidReference");
+        _instanceQuantity = instance.Call<BigDouble>("GetQuantity");
         _instanceAutomationQuantity = instance.Call<int>("GetAutomationQuantity");
         _instanceIsAuto = instance.Call<bool>("IsAuto");
         var mode = new WorldMemberBinding(intVariableType, "IntVariable");
@@ -256,9 +284,23 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
     {
         frame.CraftingDecisions.Reset();
         frame.CraftingDecisionCosts.Reset();
+        frame.CraftingQueueEntries.Reset();
         if (!IsAvailable) return WorldCategoryReport.Missing(Category, _unavailable);
         if (!TryPinPages(frame.CollectedAtEpoch, out var stabilityReason))
             return WorldCategoryReport.Missing(Category, stabilityReason);
+
+        try
+        {
+            AppendQueueEntries(frame);
+        }
+        catch (Exception exception)
+        {
+            frame.CraftingQueueEntries.Reset();
+            return WorldCategoryReport.Missing(
+                Category,
+                "reading the visible crafting queues failed: " +
+                exception.GetBaseException().Message);
+        }
 
         var recipes = _allRecipes!() ??
             throw new InvalidOperationException("CraftingRecipeSO.All was null.");
@@ -408,6 +450,71 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
             CountNonNull(valuesInAutomation),
             _queueMaximum!(automation),
             canAutomate));
+    }
+
+    private void AppendQueueEntries(GameWorldCycleFrame frame)
+    {
+        var queues = new Dictionary<Guid, object>();
+        for (var pageIndex = 0; pageIndex < _pages.Length; pageIndex++)
+        {
+            AppendQueue(
+                _pageQueue!(_pages[pageIndex]) ??
+                    throw new InvalidOperationException("page manual queue was null"),
+                expectedAutomatic: false,
+                queues,
+                frame);
+            AppendQueue(
+                _pageAutomation!(_pages[pageIndex]) ??
+                    throw new InvalidOperationException("page automation queue was null"),
+                expectedAutomatic: true,
+                queues,
+                frame);
+        }
+    }
+
+    private void AppendQueue(
+        object queue,
+        bool expectedAutomatic,
+        Dictionary<Guid, object> queues,
+        GameWorldCycleFrame frame)
+    {
+        var queueId = _queueIdentity!(queue);
+        if (queueId == Guid.Empty)
+            throw new InvalidOperationException("a crafting queue UUID was empty");
+        if (queues.TryGetValue(queueId, out var existing))
+        {
+            if (!ReferenceEquals(existing, queue))
+                throw new InvalidOperationException(
+                    "two crafting queues shared identity " + queueId.ToString("D"));
+            return;
+        }
+        queues.Add(queueId, queue);
+        var values = _queueValues!(queue) ??
+            throw new InvalidOperationException("crafting queue value was null");
+        for (var slot = 0; slot < values.Count; slot++)
+        {
+            var value = values[slot];
+            if (value is null) continue;
+            if (value.GetType() != _instanceType)
+                throw new InvalidOperationException(
+                    "crafting queue slot " + slot + " had the wrong native type");
+            var automatic = _instanceIsAuto!(value);
+            if (automatic != expectedAutomatic)
+                throw new InvalidOperationException(
+                    "crafting queue slot " + slot +
+                    " contradicted its manual or automatic list");
+            var recipeId = _instanceRecipe!(value);
+            if (recipeId == Guid.Empty)
+                throw new InvalidOperationException(
+                    "crafting queue slot " + slot + " had no recipe identity");
+            frame.CraftingQueueEntries.Append(new WorldCraftingQueueEntry(
+                queueId,
+                slot,
+                recipeId,
+                _instanceQuantity!(value),
+                automatic,
+                automatic ? _instanceAutomationQuantity!(value) : 0));
+        }
     }
 
     private void AppendCosts(Guid recipeId, object cost, GameWorldCycleFrame frame)

@@ -82,7 +82,8 @@ public sealed class WorldIdentityWalkTests
     /// <c>ConsumableTypes</c>, <c>ConsumableCosts</c>, <c>ConsumableUsages</c>, and
     /// <c>ConsumableCounts</c> are relation rows keyed by a consumable the primary table already
     /// owns. Their secondary identities or levels describe one edge or stock tier rather than a
-    /// second entity namespace. <c>CraftingDecisions</c> and <c>CraftingDecisionCosts</c> are the
+    /// second entity namespace. <c>CraftingDecisions</c>, <c>CraftingDecisionCosts</c>, and
+    /// <c>CraftingQueueEntries</c> are the
     /// current execution route and price evidence keyed by a recipe the crafting-recipe table
     /// already owns. <c>PurchaseViewRoutes</c> likewise holds authored edges between a
     /// candidate, list, and view whose identities belong to their primary tables.
@@ -123,6 +124,7 @@ public sealed class WorldIdentityWalkTests
         "ConsumableCounts",
         "CraftingDecisions",
         "CraftingDecisionCosts",
+        "CraftingQueueEntries",
         "ConceptRecipes",
         "AlchemyInstances",
         "AlchemyCosts",

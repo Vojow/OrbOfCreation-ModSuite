@@ -97,6 +97,20 @@ public sealed class WorldCraftingDecisionReaderTests : IDisposable
         Assert.Equal(3, decision.AutomationQuantity);
         Assert.Equal(1, decision.AutomationUsed);
         Assert.Equal(2, decision.AutomationMaximum);
+        Assert.Equal(2, frame.CraftingQueueEntries.Count);
+        ref readonly var manualEntry = ref frame.CraftingQueueEntries[0];
+        Assert.Equal(page.craftingQueueInstances.GetGuid(), manualEntry.QueueId);
+        Assert.Equal(0, manualEntry.Slot);
+        Assert.Equal(recipe.GetGuid(), manualEntry.RecipeId);
+        Assert.Equal(new BigDouble(4), manualEntry.Amount);
+        Assert.False(manualEntry.Automatic);
+        Assert.Equal(0, manualEntry.Repetitions);
+        ref readonly var automaticEntry = ref frame.CraftingQueueEntries[1];
+        Assert.Equal(page.craftingAutomationInstances.GetGuid(), automaticEntry.QueueId);
+        Assert.Equal(recipe.GetGuid(), automaticEntry.RecipeId);
+        Assert.Equal(new BigDouble(3), automaticEntry.Amount);
+        Assert.True(automaticEntry.Automatic);
+        Assert.Equal(3, automaticEntry.Repetitions);
     }
 
     [Fact]
@@ -118,6 +132,25 @@ public sealed class WorldCraftingDecisionReaderTests : IDisposable
         frame.CollectedAtEpoch = 8;
         reader.Collect(new HashSet<Guid>(), frame);
         Assert.Equal(WorldCraftingPipeline.QueueNew, frame.CraftingDecisions[0].Pipeline);
+    }
+
+    [Fact]
+    public void QueueRoleContradictionFailsTheQueueContentReadInsteadOfPublishingAGuess()
+    {
+        var recipe = Recipe();
+        CraftingRecipeSO.All.Add(recipe);
+        var page = Page(recipe, mode: 0, maximum: 2);
+        page.craftingQueueInstances.value.Add(
+            new CraftingInstance(recipe, BigDouble.One));
+        page.craftingQueueInstances.value.Add(
+            new CraftingInstance(recipe, BigDouble.One).SetAuto(true));
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 7 };
+
+        var report = Reader().Collect(new HashSet<Guid>(), frame);
+
+        Assert.Equal(WorldCategoryOutcome.Unavailable, report.Outcome);
+        Assert.Contains("contradicted its manual or automatic list", report.FirstFailure);
+        Assert.Equal(0, frame.CraftingQueueEntries.Count);
     }
 
     [Fact]

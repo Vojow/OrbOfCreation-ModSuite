@@ -18,6 +18,8 @@ public sealed class GameMcpCraftingTests
         Guid.Parse("f2000000-0000-0000-0000-000000000001");
     private static readonly Guid QueueId =
         Guid.Parse("f2000000-0000-0000-0000-000000000002");
+    private static readonly Guid AutomationQueueId =
+        Guid.Parse("f2000000-0000-0000-0000-000000000004");
     private static readonly Guid ResourceId =
         Guid.Parse("f2000000-0000-0000-0000-000000000003");
 
@@ -120,6 +122,31 @@ public sealed class GameMcpCraftingTests
         Assert.Equal(3, (int)row["automation"]!["amount"]!);
         Assert.True((bool)row["automation"]!["available"]!);
         Assert.True((bool)row["automation"]!["canCancel"]!);
+    }
+
+    [Fact]
+    public void QueueContentsAreOrderedNamedAndOmitManualAutomationFields()
+    {
+        var result = Json(GameMcpWorldQuery.ListRows(
+            Context(),
+            "crafting-queue-entries",
+            0,
+            10));
+
+        Assert.Equal("available", (string?)result["status"]);
+        var rows = result["rows"]!.Values<JObject>().ToArray();
+        Assert.Equal(2, rows.Length);
+        Assert.Equal("Sigil Queue", (string?)rows[0]?["queue"]?["name"]);
+        Assert.Equal("Craft Sigils", (string?)rows[0]?["recipe"]?["name"]);
+        Assert.Equal(0, (int?)rows[0]?["slot"]);
+        Assert.Equal("4", (string?)rows[0]?["amount"]);
+        Assert.False((bool?)rows[0]?["automatic"]);
+        Assert.Null(rows[0]?["repetitions"]);
+        Assert.Equal("Auto Sigil Queue", (string?)rows[1]?["queue"]?["name"]);
+        Assert.Equal(1, (int?)rows[1]?["slot"]);
+        Assert.Equal("3", (string?)rows[1]?["amount"]);
+        Assert.True((bool?)rows[1]?["automatic"]);
+        Assert.Equal(3, (int?)rows[1]?["repetitions"]);
     }
 
     [Fact]
@@ -248,6 +275,14 @@ public sealed class GameMcpCraftingTests
                     automationMaximum: 3,
                     canAutomate: true),
             }),
+            CraftingQueueEntries = PublicationTable<WorldCraftingQueueEntry>.Create(new[]
+            {
+                new WorldCraftingQueueEntry(
+                    QueueId, 0, RecipeId, new BigDouble(queuedAmount), false, 0),
+                new WorldCraftingQueueEntry(
+                    AutomationQueueId, 1, RecipeId,
+                    new BigDouble(automationQuantity), true, automationQuantity),
+            }),
             CraftingDecisionCosts = PublicationTable<WorldCraftingDecisionCost>.Create(new[]
             {
                 new WorldCraftingDecisionCost(
@@ -271,6 +306,9 @@ public sealed class GameMcpCraftingTests
                 RecipeId, "CraftingRecipeSO", "Craft Sigils", "craftSigils"),
             new EntityIdentityName(
                 QueueId, "CraftingInstanceListVariable", "Sigil Queue", "sigilQueue"),
+            new EntityIdentityName(
+                AutomationQueueId, "CraftingInstanceListVariable",
+                "Auto Sigil Queue", "autoSigilQueue"),
             new EntityIdentityName(
                 ResourceId, "ResourceSO", "Arcane Dust", "arcaneDust"),
         }).OrderBy(row => row.EntityId).ToArray();

@@ -132,7 +132,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_structure` | Enable or disable one available attribute |
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
 | `game_casting_dial` | Set the global Output Level or Reserve Level shown on the Casting screen |
-| `game_spell_loadout` | Preview or add a discovered recipe with an explicit glyph layout, remove one equipped runtime spell, or move it |
+| `game_spell_loadout` | Read staged Spellcraft glyphs; preview/add an explicit layout; or remove/move one equipped runtime spell |
 | `game_targeting` | Submit one exact eligible target or let the native request choose one |
 | `game_consumable` | Use, cancel, discard, randomize, or reorder one published consumable |
 | `game_craft` | Craft a recipe or control its manual/automated instance |
@@ -250,6 +250,13 @@ uses `cost` for the recipe requirement and canonical `amount` for what is spenda
 headroom for a bandwidth resource); outputs use `yield`. Only failed engagement-drain evidence is
 emitted in `drainBlockers`. The category is unavailable unless both recipe and resource collectors
 are clean.
+
+`crafting-queue-entries` is the ordered live contents of every loaded manual and automation queue.
+Each lean row names the queue and recipe, reports its zero-based slot, current amount, and whether
+the instance is automatic; only automatic entries carry their repetition count. The same
+lifecycle-bound crafting reader supplies these rows and recipe decisions, so a malformed instance,
+queue-role contradiction, or unstable page roster makes the category unavailable rather than
+publishing a partial queue.
 
 `world_search` deliberately indexes only categories whose identity mode is
 `stable_entity_uuid`. It does not pretend that an owner/resource UUID uniquely identifies a
@@ -392,6 +399,11 @@ standing usage capacity, and mastery-derived action maximum on Unity's main thre
 only the active count before and after plus the settled next decision for the affected element or
 pair. The one mutation sentinel is that game-written active count moving in the requested
 direction; resource reservations and drain math are planning facts, never postcondition ledgers.
+
+World / Aspects uses this exact `harvest-elements` plus `harvest-actions` surface; it is not a
+separate MCP category. World / Dimensional uses the complete `plot-nodes` plus `plot-actions`
+surface below. These mappings follow the UI's concrete interaction archetypes, keeping one reader
+and one vocabulary for the same native element/action or plot/action concepts.
 
 ### Plot action lifecycle
 
@@ -576,18 +588,22 @@ discovered recipe's `loadoutAdd` decision. `loadBudget` — `used`, `maximum`, a
 
 The MCP-only loadout sequence is:
 
-1. Read `world_list(category="spell-slots")` and choose one exact runtime `spellInstance.uuid`, or
+1. Call `game_spell_loadout(mode="staged")` when the current Spellcraft core/augment selection is
+   relevant. The request-scoped read returns ordered named `core` and `augments` stacks and does
+   not acquire mutation ownership or change the UI selection.
+2. Read `world_list(category="spell-slots")` and choose one exact runtime `spellInstance.uuid`, or
    read a discovered `spell-recipes` row's `loadoutAdd` decision to add a new one.
-2. Call `game_spell_loadout(mode="preview", uuid=..., glyphs=[{uuid,count}, ...])` to resolve and
+3. Call `game_spell_loadout(mode="preview", uuid=..., glyphs=[{uuid,count}, ...])` to resolve and
    price that exact layout without changing the staged UI selection. `[]` is a valid intentional
    empty augment layout, not "reuse whatever the UI last selected".
-3. Call `game_spell_loadout(mode="add", uuid=..., glyphs=[...])` with the previewed layout.
-4. Call `game_spell_loadout(mode="move", uuid=..., destination=...)`; success returns the slot
+4. Call `game_spell_loadout(mode="add", uuid=..., glyphs=[...])` with the previewed layout.
+5. Call `game_spell_loadout(mode="move", uuid=..., destination=...)`; success returns the slot
    change.
-5. Call `game_spell_loadout(mode="remove", uuid=...)` only when that row's `remove.available` is
+6. Call `game_spell_loadout(mode="remove", uuid=...)` only when that row's `remove.available` is
    true; success returns the removed spell's former slot.
 
-The `uuid` means a recipe for `preview`/`add` and a runtime spell instance for `remove`/`move`.
+`staged` accepts no other field. The `uuid` means a recipe for `preview`/`add` and a runtime spell
+instance for `remove`/`move`.
 `glyphs` belongs to `preview`/`add` only; `destination` belongs to `move` only. Anything else is a
 named `unexpected_for_mode` validation failure rather than a silently ignored field.
 When supplied, `expectedNativeType` is asserted against the resolved recipe/output on both preview
@@ -802,6 +818,8 @@ tools/game-mcp-client.py call game_discover --arguments \
 tools/game-mcp-client.py call game_casting_dial --arguments \
   '{"dial":"output","value":4}'
 tools/game-mcp-client.py call game_spell_loadout --arguments \
+  '{"mode":"staged"}'
+tools/game-mcp-client.py call game_spell_loadout --arguments \
   '{"mode":"preview","uuid":"SPELL_RECIPE_UUID","glyphs":[{"uuid":"GLYPH_UUID","count":2}]}'
 tools/game-mcp-client.py call game_spell_loadout --arguments \
   '{"mode":"add","uuid":"SPELL_RECIPE_UUID","glyphs":[{"uuid":"GLYPH_UUID","count":2}]}'
@@ -838,7 +856,9 @@ variable and its purchased maximum on the Unity main thread, rejects a value out
 range, and verifies that the requested value became observable. Success is the exact requested
 global value; a committed result is the dial's `before` and `after` value plus its maximum.
 
-`game_spell_loadout` requires `mode` and `uuid`. For `preview` and `add`, `uuid` is a spell-recipe
+`game_spell_loadout` requires `mode`. `staged` is a request-scoped main-thread read with no other
+arguments; it reports the exact current core/augment selection and never mutates it. For `preview`
+and `add`, `uuid` is a spell-recipe
 identity and an explicit `glyphs` array is required. Preview combines the recipe's authored core
 with those explicit augments and prices the resulting layout through
 `SpellManager.GetSpellCreateCost` without changing the staged UI

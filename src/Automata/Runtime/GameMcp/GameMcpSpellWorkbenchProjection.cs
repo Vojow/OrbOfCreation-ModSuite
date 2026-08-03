@@ -6,6 +6,28 @@ namespace OrbAutomata.GameMcp;
 
 internal static class GameMcpSpellWorkbenchProjection
 {
+    internal static GameMcpValue ProjectStagedLayout(
+        in SpellWorkbenchStagedLayout layout)
+    {
+        if (!layout.Available)
+        {
+            return new JObject
+            {
+                ["status"] = "unavailable",
+                ["reasonCode"] = GameMcpActionResultCodeNames.Name(
+                    SpellWorkbenchActionResultMapper.Code(layout.Preflight),
+                    GameMcpCommandKind.SpellWorkbench),
+                ["reason"] = layout.Reason,
+            }.Freeze();
+        }
+        return new JObject
+        {
+            ["status"] = "available",
+            ["core"] = ProjectGlyphs(layout.Core),
+            ["augments"] = ProjectGlyphs(layout.Augments),
+        }.Freeze();
+    }
+
     internal static GameMcpValue ProjectPricePreview(
         in SpellWorkbenchPricePreview preview,
         string expectedNativeType = "")
@@ -54,6 +76,20 @@ internal static class GameMcpSpellWorkbenchProjection
         {
             ["missingOutcome"] = "requested spell workbench transition",
         }.Freeze();
+    }
+
+    private static GameMcpValue ProjectGlyphs(SpellWorkbenchGlyphStack[] glyphs)
+    {
+        var rows = new JArray();
+        for (var index = 0; index < glyphs.Length; index++)
+        {
+            rows.Add(new JObject
+            {
+                ["glyphId"] = glyphs[index].GlyphId,
+                ["count"] = glyphs[index].Count,
+            });
+        }
+        return rows.Freeze();
     }
 }
 #endif

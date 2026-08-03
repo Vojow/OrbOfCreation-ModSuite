@@ -39,6 +39,91 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
 
+    internal SpellWorkbenchStagedLayout ReadStagedLayout()
+    {
+        if (Environment.CurrentManagedThreadId != _mainThreadId)
+            return SpellWorkbenchStagedLayout.Unavailable(
+                SpellWorkbenchPreflight.WrongThread,
+                "The staged Spellcraft layout must be read on the Unity main thread.");
+        if (_bindings is not { } native)
+            return SpellWorkbenchStagedLayout.Unavailable(
+                SpellWorkbenchPreflight.ContractUnavailable,
+                _bindingFailure);
+        try
+        {
+            var manager = native.ReadManager();
+            if (manager is null)
+                return SpellWorkbenchStagedLayout.Unavailable(
+                    SpellWorkbenchPreflight.SelectionUnavailable,
+                    "Spellcraft is not available in the current game state.");
+            if (!TryReadStagedGlyphs(
+                    native,
+                    native.ReadGlyphValues(native.ReadCore(manager)),
+                    out var core,
+                    out var coreReason))
+                return SpellWorkbenchStagedLayout.Unavailable(
+                    SpellWorkbenchPreflight.SelectionUnavailable,
+                    coreReason);
+            if (!TryReadStagedGlyphs(
+                    native,
+                    native.ReadGlyphValues(native.ReadAugments(manager)),
+                    out var augments,
+                    out var augmentReason))
+                return SpellWorkbenchStagedLayout.Unavailable(
+                    SpellWorkbenchPreflight.SelectionUnavailable,
+                    augmentReason);
+            return SpellWorkbenchStagedLayout.Captured(core, augments);
+        }
+        catch (Exception exception) when (IsExpected(exception))
+        {
+            return SpellWorkbenchStagedLayout.Unavailable(
+                SpellWorkbenchPreflight.ContractUnavailable,
+                "The staged Spellcraft layout could not be read: " +
+                exception.GetBaseException().Message);
+        }
+    }
+
+    private static bool TryReadStagedGlyphs(
+        SpellWorkbenchNativeBindings native,
+        IList values,
+        out SpellWorkbenchGlyphStack[] layout,
+        out string reason)
+    {
+        var counts = new Dictionary<Guid, int>();
+        var order = new List<Guid>();
+        for (var index = 0; index < values.Count; index++)
+        {
+            var glyph = values[index];
+            if (glyph is null || glyph.GetType() != native.GlyphType)
+            {
+                layout = Array.Empty<SpellWorkbenchGlyphStack>();
+                reason = "The staged Spellcraft layout contains an invalid glyph.";
+                return false;
+            }
+            var id = native.ReadIdentity(glyph);
+            if (id == Guid.Empty)
+            {
+                layout = Array.Empty<SpellWorkbenchGlyphStack>();
+                reason = "A staged Spellcraft glyph has no stable identity.";
+                return false;
+            }
+            if (!counts.ContainsKey(id)) order.Add(id);
+            counts.TryGetValue(id, out var count);
+            if (count == int.MaxValue)
+            {
+                layout = Array.Empty<SpellWorkbenchGlyphStack>();
+                reason = "A staged Spellcraft glyph count exceeds the supported range.";
+                return false;
+            }
+            counts[id] = count + 1;
+        }
+        layout = new SpellWorkbenchGlyphStack[order.Count];
+        for (var index = 0; index < order.Count; index++)
+            layout[index] = new SpellWorkbenchGlyphStack(order[index], counts[order[index]]);
+        reason = string.Empty;
+        return true;
+    }
+
     internal bool TryValidateStoredSpell(
         object spell,
         out Guid spellId,

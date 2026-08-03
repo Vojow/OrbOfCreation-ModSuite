@@ -1550,6 +1550,18 @@ public sealed class Plugin : BaseUnityPlugin
                         in preview,
                         request.ExpectedNativeType));
                 return true;
+            case "game_spell_loadout" when request.Mode == "staged":
+                SpellWorkbenchStagedLayout staged;
+                if (_serviceCycleActivation is null ||
+                    !_serviceCycleActivation.TryReadStagedSpellWorkbench(out staged))
+                {
+                    staged = SpellWorkbenchStagedLayout.Unavailable(
+                        SpellWorkbenchPreflight.ContractUnavailable,
+                        "The ServiceCycle runtime is not active in this scene.");
+                }
+                execution = GameMcpToolExecution.Read(
+                    GameMcpSpellWorkbenchProjection.ProjectStagedLayout(in staged));
+                return true;
             case "resource_read":
                 execution = ExecuteGameMcpResource(request.ResourceUri, context);
                 return true;

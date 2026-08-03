@@ -306,14 +306,16 @@ internal sealed class GameMcpProtocolRouter
                 builder.Amount = RequiredInt(arguments, "value", 1, int.MaxValue);
                 break;
             case "game_spell_loadout":
-                builder.Mode = RequireOneOf(arguments, "mode", "preview", "add", "remove", "move");
+                builder.Mode = RequireOneOf(
+                    arguments, "mode", "staged", "preview", "add", "remove", "move");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 if (builder.Mode is "preview" or "add")
                 {
                     builder.Uuid = RequireUuid(arguments, "uuid");
                     builder.UuidCounts = RequireUuidCountArray(arguments, "glyphs", 64);
                 }
-                else builder.Uuid = RequireUuid(arguments, "uuid");
+                else if (builder.Mode != "staged")
+                    builder.Uuid = RequireUuid(arguments, "uuid");
                 if (builder.Mode == "move")
                     builder.SlotIndex = RequiredInt(arguments, "destination", 0, 255);
                 break;
@@ -526,7 +528,7 @@ internal sealed class GameMcpProtocolRouter
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
             "game_ritual" or "game_level" or "game_brewing_station" or "game_loadout" when
                 !(name == "game_discover" && request.Mode == "preview") &&
-                !(name == "game_spell_loadout" && request.Mode == "preview") =>
+                !(name == "game_spell_loadout" && request.Mode is "preview" or "staged") =>
                 GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
@@ -550,6 +552,7 @@ internal sealed class GameMcpProtocolRouter
             GameMcpFrameData.Configuration | GameMcpFrameData.WritableConfiguration,
         "trace_health" => GameMcpFrameData.TraceWriterHealth,
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
+        "game_spell_loadout" when request?.Mode == "staged" => GameMcpFrameData.None,
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_harvest_setup" or "game_structure" or "game_return_to_menu" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
@@ -757,12 +760,12 @@ internal sealed class GameMcpProtocolRouter
                 idempotent: false),
             Tool(
                 "game_spell_loadout",
-                "Preview, add, remove, or move a spell",
-                "Preview the exact native price of a submitted recipe and augment layout without changing the staged UI selection; add that layout baked into a new spell; or remove or move an equipped spell. Success returns the settled slot change.",
+                "Read staging; preview, add, remove, or move a spell",
+                "Read the exact staged Spellcraft core and augment layout; preview an explicit layout's native price without changing staging; add that layout baked into a new spell; or remove or move an equipped spell. Success returns the settled slot change.",
                 ModeSchema(ActionSchema(
                     new JObject
                     {
-                        ["mode"] = EnumSchema("preview", "add", "remove", "move"),
+                        ["mode"] = EnumSchema("staged", "preview", "add", "remove", "move"),
                         ["uuid"] = StringSchema("A discovered recipe UUID for preview or add; an equipped spell-instance UUID for remove or move."),
                         ["glyphs"] = ArraySchema(
                             ObjectSchema(new JObject
@@ -773,6 +776,10 @@ internal sealed class GameMcpProtocolRouter
                         ["destination"] = IntegerSchema(0, 255),
                     },
                     "mode"),
+                    ModeRule("staged", forbidden: new[]
+                    {
+                        "uuid", "glyphs", "destination", "expectedNativeType",
+                    }),
                     ModeRule("preview", new[] { "uuid", "glyphs" }, new[] { "destination" }),
                     ModeRule("add", new[] { "uuid", "glyphs" }, new[] { "destination" }),
                     ModeRule("remove", new[] { "uuid" }, new[] { "glyphs", "destination" }),
@@ -1361,7 +1368,18 @@ internal sealed class GameMcpProtocolRouter
             var subject = arguments.ContainsKey("uuid");
             var glyphs = arguments.ContainsKey("glyphs");
             var destination = arguments.ContainsKey("destination");
-            if (mode is "preview" or "add")
+            var expectedType = arguments.ContainsKey("expectedNativeType");
+            if (mode == "staged")
+            {
+                if (subject) errors.Add(ValidationError("unexpected_for_mode", "uuid",
+                    "field 'uuid' is not accepted for mode 'staged'"));
+                if (glyphs) errors.Add(ValidationError("unexpected_for_mode", "glyphs",
+                    "field 'glyphs' is not accepted for mode 'staged'"));
+                if (expectedType) errors.Add(ValidationError(
+                    "unexpected_for_mode", "expectedNativeType",
+                    "field 'expectedNativeType' is not accepted for mode 'staged'"));
+            }
+            else if (mode is "preview" or "add")
             {
                 if (!subject) errors.Add(ValidationError("missing_required", "uuid",
                     "required field 'uuid' is missing for mode '" + mode + "'"));
