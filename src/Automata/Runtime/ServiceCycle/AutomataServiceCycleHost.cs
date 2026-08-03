@@ -17,6 +17,7 @@ internal sealed class AutomataServiceCycleHost : IDisposable
 {
     private readonly Func<long> _readFrameIdentity;
     private readonly IServiceCyclePumpTimingSink? _pumpTiming;
+    private readonly Action<string>? _attributionFailureLog;
     private readonly SuiteFramePump _pump;
     private readonly int _serviceCapacity;
     private readonly ServiceCycleTraceRoster _roster;
@@ -58,6 +59,7 @@ internal sealed class AutomataServiceCycleHost : IDisposable
         _readFrameIdentity = readFrameIdentity ??
             throw new ArgumentNullException(nameof(readFrameIdentity));
         _pumpTiming = pumpTiming;
+        _attributionFailureLog = attributionFailureLog;
         _serviceCapacity = registry.OrdinalCount;
         // Read before the seal, while every registration is present and nothing can add another: this
         // is the one moment the suite knows its whole roster.
@@ -70,7 +72,6 @@ internal sealed class AutomataServiceCycleHost : IDisposable
 #if SERVICE_CYCLE_PROFILE
             , profileProbe
 #endif
-            , attributionFailureLog
             );
     }
 
@@ -86,9 +87,27 @@ internal sealed class AutomataServiceCycleHost : IDisposable
         _pump.ApplyConfiguredEmergencyStop();
         _observability?.BeforePump();
         var report = _pump.PumpFrame(_readFrameIdentity());
+        LogAttributionFailures();
         _pumpTiming?.Observe(in report);
         _observability?.AfterPump();
         return report;
+    }
+
+    private void LogAttributionFailures()
+    {
+        try
+        {
+            if (_attributionFailureLog is null) return;
+            for (var index = 0; index < _pump.AttributionFailureCount; index++)
+            {
+                var failure = _pump.AttributionFailureAt(index);
+                _attributionFailureLog(
+                    $"ServiceCycle action attribution failed for service ordinal " +
+                    $"{failure.ServiceOrdinal + 1}, cycle {failure.Cycle}, action {failure.Action}; " +
+                    $"the action executed and the journal marked attribution failed: {failure.Reason}");
+            }
+        }
+        finally { _pump.ClearAttributionFailures(); }
     }
 
     internal void AttachObservability(

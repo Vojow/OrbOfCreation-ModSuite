@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using OrbAutomata;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
@@ -142,17 +143,24 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
             ThrowOnDescribeAction = true,
         };
         using var registration = registry.Register(definition, new LifecycleGeneration(1));
-        registry.Seal();
         var messages = new List<string>();
-        using var pump = new SuiteFramePump(registry, null, null, messages.Add);
+        var frameIdentity = 3L;
+        using var host = new AutomataServiceCycleHost(
+            registry,
+            () => frameIdentity,
+            pumpTiming: null,
+            semanticTrace: null,
+            actionOutcomes: null,
+            attributionFailureLog: messages.Add);
+        var pump = host.Pump;
         TestWorldCollector.CollectedAtActivation(registry);
         using var storage = new DecisionJournalRuntimeTestStorage();
         var runtime = Runtime(pump, storage);
         using var teardown = new JournalTeardown(runtime);
         AdvanceTo(runtime, DecisionJournalRuntimeState.Recording);
 
-        var frame = ServiceRunnerTestWait.PrepareBatch(pump, registration);
-        Assert.Equal(1, pump.PumpFrame(frame).ActionsAttempted);
+        Assert.Equal(frameIdentity, ServiceRunnerTestWait.PrepareBatch(pump, registration));
+        Assert.Equal(1, host.Tick().ActionsAttempted);
         Assert.Equal(1, definition.ActionExecutionCount);
         runtime.RequestStop();
         AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);

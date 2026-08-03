@@ -13,7 +13,7 @@ internal sealed class SuiteFramePumpEvidenceEmitter
 {
     private readonly SuiteFramePumpTraceSession _traces;
     private readonly SuiteFramePumpJournalSession _journal;
-    private readonly Action<string>? _attributionFailureLog;
+    private readonly ServiceActionAttributionFailureBuffer _attributionFailures;
 #if SERVICE_CYCLE_PROFILE
     private readonly SuiteFramePumpEvidenceProfiler _profiler;
 #endif
@@ -21,7 +21,7 @@ internal sealed class SuiteFramePumpEvidenceEmitter
     internal SuiteFramePumpEvidenceEmitter(
         SuiteFramePumpTraceSession traces,
         SuiteFramePumpJournalSession journal,
-        Action<string>? attributionFailureLog
+        ServiceActionAttributionFailureBuffer attributionFailures
 #if SERVICE_CYCLE_PROFILE
         , SuiteFramePumpEvidenceProfiler profiler
 #endif
@@ -29,7 +29,7 @@ internal sealed class SuiteFramePumpEvidenceEmitter
     {
         _traces = traces;
         _journal = journal;
-        _attributionFailureLog = attributionFailureLog;
+        _attributionFailures = attributionFailures;
 #if SERVICE_CYCLE_PROFILE
         _profiler = profiler;
 #endif
@@ -128,10 +128,11 @@ internal sealed class SuiteFramePumpEvidenceEmitter
         if (dispatch.AttributionFailureReason is { } reason)
         {
             var action = dispatch.ActionFact.Context;
-            _attributionFailureLog?.Invoke(
-                $"ServiceCycle action attribution failed for service ordinal {ordinal + 1}, " +
-                $"cycle {action.Cycle.Cycle.Value}, action {action.Action.Value}; " +
-                $"the action executed and the journal marked attribution failed: {reason}");
+            _attributionFailures.Observe(
+                ordinal,
+                action.Cycle.Cycle.Value,
+                action.Action.Value,
+                reason);
         }
     }
 

@@ -28,29 +28,26 @@ public sealed class SuiteFramePump : IDisposable
         ServiceCycleRegistry registry,
         ServiceCycleSemanticRecorder? semanticRecorder)
 #if SERVICE_CYCLE_PROFILE
-        : this(registry, semanticRecorder, null, new ServiceCycleProfileProbe(), null) { }
+        : this(registry, semanticRecorder, null, new ServiceCycleProfileProbe()) { }
 
     internal SuiteFramePump(
         ServiceCycleRegistry registry,
         ServiceCycleSemanticRecorder? semanticRecorder,
         ServiceActionOutcomeWindowRegistry? outcomeWindows,
-        ServiceCycleProfileProbe profileProbe,
-        Action<string>? attributionFailureLog = null)
+        ServiceCycleProfileProbe profileProbe)
 #else
-        : this(registry, semanticRecorder, null, null) { }
+        : this(registry, semanticRecorder, null) { }
 
     internal SuiteFramePump(
         ServiceCycleRegistry registry,
         ServiceCycleSemanticRecorder? semanticRecorder,
-        ServiceActionOutcomeWindowRegistry? outcomeWindows,
-        Action<string>? attributionFailureLog = null)
+        ServiceActionOutcomeWindowRegistry? outcomeWindows)
 #endif
     {
         _state = new SuiteFramePumpState(
             registry,
             semanticRecorder,
-            outcomeWindows,
-            attributionFailureLog
+            outcomeWindows
 #if SERVICE_CYCLE_PROFILE
             , profileProbe
 #endif
@@ -158,6 +155,20 @@ public sealed class SuiteFramePump : IDisposable
 
     public SuiteFramePumpReport PumpFrame(long frameIdentity) =>
         _executor.Pump(frameIdentity);
+
+    internal int AttributionFailureCount => _state.AttributionFailures.Count;
+
+    internal ServiceActionAttributionFailure AttributionFailureAt(int index)
+    {
+        EnsureIdle("Action-attribution failures cannot be read while a frame is being pumped.");
+        return _state.AttributionFailures.At(index);
+    }
+
+    internal void ClearAttributionFailures()
+    {
+        EnsureIdle("Action-attribution failures cannot be cleared while a frame is being pumped.");
+        _state.AttributionFailures.Clear();
+    }
 
     /// <summary>
     /// Applies what the configuration slot says about the emergency stop, ahead of the frame.
