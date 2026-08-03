@@ -120,6 +120,9 @@ internal static class GameMcpEntityCapabilityMap
                 AvailableGlobal(world.ChallengeContext.Available, "prestige decision state", out reason),
             GameMcpCommandKind.Research =>
                 Entity(world.EntityIdentities, world.Research, target, "research", capability, out reason),
+            GameMcpCommandKind.AlchemyLoadout =>
+                Entity(world.EntityIdentities, world.AlchemyRecipes, target,
+                    "alchemy-recipes", capability, out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -389,7 +392,7 @@ internal static class GameMcpEntityCapabilityMap
         D("modifier-variables", "ValueModifierVariable"),
         D("purchase-costs", "StructureSO|UpgradeSO"),
         D("alchemy-recipes", "AlchemyRecipeSO", GameMcpCommandKind.Concept,
-            GameMcpCommandKind.GenericDiscovery),
+            GameMcpCommandKind.GenericDiscovery, GameMcpCommandKind.AlchemyLoadout),
         D("alchemy-types", "AlchemyTypeSO"),
         D("spell-recipes", "SpellRecipeSO", GameMcpCommandKind.Cast, GameMcpCommandKind.SpellLevel,
             GameMcpCommandKind.SpellWorkbench),
@@ -431,6 +434,8 @@ internal static class GameMcpEntityCapabilityMap
         D("concept-recipes", "AlchemyRecipeSO"),
         D("alchemy-instances", "AlchemyInstance"),
         D("alchemy-costs", "AlchemyInstance"),
+        D("alchemy-loadout", "AlchemyInstance"),
+        D("alchemy-usage-costs", "ResourceCostList"),
         D("plot-authoring", "PlotNodeSO"),
         D("plot-phase-descriptors", "PlotNodeSO"),
         D("effect-blocks", "EffectSO"),

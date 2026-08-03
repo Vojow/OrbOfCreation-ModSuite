@@ -85,6 +85,10 @@ internal sealed class GameWorldCycleFrame
 
     internal WorldAlchemyCostBuffer AlchemyCosts { get; } = new();
 
+    internal WorldRelationBuffer<WorldAlchemyLoadoutDecision> AlchemyLoadout { get; } = new();
+
+    internal WorldRelationBuffer<WorldAlchemyUsageCost> AlchemyUsageCosts { get; } = new();
+
     /// <summary>
     /// What each plot's author decided, and the phases it authors. Keyed by the plot rather than
     /// carrying its identity, so the plot is claimed once.
@@ -403,6 +407,16 @@ internal static class GameWorldFrameDeriver
             ConceptRecipes = WorldAlchemyRowDeriver.Build(frame.ConceptRecipes),
             AlchemyInstances = WorldAlchemyRowDeriver.Build(frame.AlchemyInstances),
             AlchemyCosts = WorldAlchemyCostDeriver.Build(frame.AlchemyCosts),
+            AlchemyLoadout = WorldScribeRelationDeriver.Build(
+                frame.AlchemyLoadout,
+                static (left, right) => left.RecipeId.CompareTo(right.RecipeId)),
+            AlchemyUsageCosts = WorldScribeRelationDeriver.Build(
+                frame.AlchemyUsageCosts,
+                static (left, right) =>
+                {
+                    var recipe = left.RecipeId.CompareTo(right.RecipeId);
+                    return recipe != 0 ? recipe : left.ResourceId.CompareTo(right.ResourceId);
+                }),
             PlotAuthoring = WorldPlotAuthoringDeriver.Build(frame.PlotAuthoring),
             PlotPhaseDescriptors =
                 WorldPlotPhaseDescriptorDeriver.Build(frame.PlotPhaseDescriptors),

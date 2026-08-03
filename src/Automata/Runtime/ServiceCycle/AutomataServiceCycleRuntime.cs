@@ -31,6 +31,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly TargetingGameAction? _targeting;
     private readonly GenericDiscoveryGameAction? _genericDiscovery;
     private readonly EquipmentLoadoutGameAction? _equipmentLoadout;
+    private readonly AlchemyLoadoutGameAction? _alchemyLoadout;
     private readonly ChallengeGameAction? _challenges;
     private readonly PrestigeGameAction? _prestige;
     private readonly ResearchGameAction? _research;
@@ -52,6 +53,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         TargetingGameAction? targeting = null,
         GenericDiscoveryGameAction? genericDiscovery = null,
         EquipmentLoadoutGameAction? equipmentLoadout = null,
+        AlchemyLoadoutGameAction? alchemyLoadout = null,
         ChallengeGameAction? challenges = null,
         PrestigeGameAction? prestige = null,
         ResearchGameAction? research = null)
@@ -69,6 +71,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _targeting = targeting;
         _genericDiscovery = genericDiscovery;
         _equipmentLoadout = equipmentLoadout;
+        _alchemyLoadout = alchemyLoadout;
         _challenges = challenges;
         _prestige = prestige;
         _research = research;
@@ -136,6 +139,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _targeting?.InvalidateLifecycle();
         _genericDiscovery?.InvalidateLifecycle();
         _equipmentLoadout?.InvalidateLifecycle();
+        _alchemyLoadout?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
         _prestige?.InvalidateLifecycle();
         _research?.InvalidateLifecycle();
@@ -197,6 +201,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                     configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.EquipmentLoadout)
                 return ExecuteEquipmentLoadout(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.AlchemyLoadout)
+                return ExecuteAlchemyLoadout(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Challenge)
                 return ExecuteChallenge(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Prestige)
@@ -508,6 +514,33 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
             configurationGeneration, submission.Reason,
             GameMcpChallengeProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecuteAlchemyLoadout(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_alchemyLoadout is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared ordinary Alchemy GameAction was not composed", lifecycle,
+                configurationGeneration);
+        GameMcpNativeActionAdmission.AssertNativeType(command, "AlchemyRecipeSO");
+        var kind = command.Mode switch
+        {
+            "add" => AlchemyLoadoutActionKind.Add,
+            "remove" => AlchemyLoadoutActionKind.Remove,
+            "move" => AlchemyLoadoutActionKind.Move,
+            _ => throw new ArgumentException("unsupported Alchemy mode " + command.Mode),
+        };
+        var destination = kind == AlchemyLoadoutActionKind.Move ? command.Amount - 1 : -1;
+        var action = new AlchemyLoadoutAction(kind, command.TargetId, destination,
+            command.ExpectedLifecycleGeneration);
+        var submission = _alchemyLoadout.Submit(in action);
+        var result = AlchemyLoadoutActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason,
+            GameMcpAlchemyLoadoutProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecutePrestige(
@@ -901,6 +934,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _targeting?.Dispose();
             _genericDiscovery?.Dispose();
             _equipmentLoadout?.Dispose();
+            _alchemyLoadout?.Dispose();
             _challenges?.Dispose();
             _prestige?.Dispose();
             _research?.Dispose();

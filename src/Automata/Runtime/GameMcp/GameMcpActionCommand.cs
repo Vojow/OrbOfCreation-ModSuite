@@ -35,6 +35,7 @@ internal enum GameMcpCommandKind
     Challenge = 24,
     Prestige = 25,
     Research = 26,
+    AlchemyLoadout = 27,
 }
 
 internal static class GameMcpCommandKinds
@@ -46,7 +47,8 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.Targeting or GameMcpCommandKind.Consumable or
             GameMcpCommandKind.Crafting or GameMcpCommandKind.GenericDiscovery or
             GameMcpCommandKind.EquipmentLoadout or GameMcpCommandKind.Challenge or
-            GameMcpCommandKind.Prestige or GameMcpCommandKind.Research;
+            GameMcpCommandKind.Prestige or GameMcpCommandKind.Research or
+            GameMcpCommandKind.AlchemyLoadout;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -65,6 +67,7 @@ internal static class GameMcpCommandKinds
         "game_challenge" => GameMcpCommandKind.Challenge,
         "game_prestige" => GameMcpCommandKind.Prestige,
         "game_research" => GameMcpCommandKind.Research,
+        "game_alchemy" => GameMcpCommandKind.AlchemyLoadout,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -114,6 +117,7 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.Challenge => "game_challenge",
         GameMcpCommandKind.Prestige => "game_prestige",
         GameMcpCommandKind.Research => "game_research",
+        GameMcpCommandKind.AlchemyLoadout => "game_alchemy",
         _ => string.Empty,
     };
 }
@@ -690,6 +694,22 @@ internal static class GameMcpActionResultCodeNames
             if (code == ResearchActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == ResearchActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == ResearchActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.AlchemyLoadout)
+        {
+            if (code == AlchemyLoadoutActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == AlchemyLoadoutActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == AlchemyLoadoutActionResultCodes.IdentityUnavailable) return "identity_unavailable";
+            if (code == AlchemyLoadoutActionResultCodes.WrongDomain) return "wrong_alchemy_surface";
+            if (code == AlchemyLoadoutActionResultCodes.NotDiscovered) return "not_discovered";
+            if (code == AlchemyLoadoutActionResultCodes.AlreadyInRequestedState) return "already_in_requested_state";
+            if (code == AlchemyLoadoutActionResultCodes.LoadoutFull) return "loadout_full";
+            if (code == AlchemyLoadoutActionResultCodes.UsageUnavailable) return "usage_unavailable";
+            if (code == AlchemyLoadoutActionResultCodes.MultiBuyUnavailable) return "multi_buy_unavailable";
+            if (code == AlchemyLoadoutActionResultCodes.DestinationOutOfRange) return "destination_out_of_range";
+            if (code == AlchemyLoadoutActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == AlchemyLoadoutActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == AlchemyLoadoutActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

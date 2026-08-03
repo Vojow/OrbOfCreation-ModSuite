@@ -507,7 +507,7 @@ public sealed class GameMcpProtocolSurfaceTests
         {
             "game_purchase", "game_cast", "game_concept", "game_harvest",
             "game_spell_level", "game_casting_dial", "game_spell_loadout", "game_discover",
-            "game_equipment", "suite_config_set",
+            "game_equipment", "game_alchemy", "suite_config_set",
             "suite_emergency_stop", "game_screenshot", "game_continue",
             "game_navigate", "game_tooltip",
             "game_targeting",

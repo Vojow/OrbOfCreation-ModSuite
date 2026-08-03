@@ -352,6 +352,13 @@ internal sealed class GameMcpProtocolRouter
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
                 break;
+            case "game_alchemy":
+                builder.Mode = RequireOneOf(arguments, "mode", "add", "remove", "move");
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                if (builder.Mode == "move")
+                    builder.SlotIndex = RequiredInt(arguments, "destination", 0, int.MaxValue);
+                break;
             case "game_challenge":
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "select", "activate", "abandon", "fetch_time", "fetch_prestige");
@@ -448,7 +455,7 @@ internal sealed class GameMcpProtocolRouter
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
-            "game_challenge" or "game_prestige" or "game_research" when
+            "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" when
                 !(name == "game_discover" && request.Mode == "preview") &&
                 !(name == "game_spell_loadout" && request.Mode == "preview") =>
                 GameMcpOperationClass.Gameplay,
@@ -477,7 +484,7 @@ internal sealed class GameMcpProtocolRouter
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
-            "game_challenge" or "game_prestige" or "game_research" =>
+            "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_navigate" or "game_continue" =>
@@ -749,6 +756,23 @@ internal sealed class GameMcpProtocolRouter
                 readOnly: false,
                 idempotent: false),
             Tool(
+                "game_alchemy",
+                "Change the ordinary Alchemy loadout",
+                "Add, remove, or move one discovered ordinary Alchemy recipe using the live multi-buy and native usage-capacity decision. Concept assignments stay on game_concept.",
+                ModeSchema(ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("add", "remove", "move"),
+                        ["uuid"] = StringSchema("Published ordinary AlchemyRecipeSO UUID."),
+                        ["destination"] = IntegerSchema(0, int.MaxValue),
+                    },
+                    "mode", "uuid"),
+                    ModeRule("add", forbidden: new[] { "destination" }),
+                    ModeRule("remove", forbidden: new[] { "destination" }),
+                    ModeRule("move", new[] { "destination" })),
+                readOnly: false,
+                idempotent: false),
+            Tool(
                 "game_challenge",
                 "Select, queue, abandon, or fetch challenges",
                 "Drive one exact native challenge decision. Target modes return the changed state; fetch modes return the named offers needed for the next decision.",
@@ -1007,6 +1031,19 @@ internal sealed class GameMcpProtocolRouter
             else if (mode is "fetch_time" or "fetch_prestige" && hasUuid)
                 errors.Add(ValidationError("unexpected_for_mode", "uuid",
                     "field 'uuid' is not accepted for mode '" + mode + "'"));
+        }
+
+        if (string.Equals(name, "game_alchemy", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var destination = arguments.ContainsKey("destination");
+            if (mode == "move" && !destination)
+                errors.Add(ValidationError("missing_required", "destination",
+                    "required field 'destination' is missing for mode 'move'"));
+            else if (mode != "move" && destination)
+                errors.Add(ValidationError("unexpected_for_mode", "destination",
+                    "field 'destination' is accepted only for mode 'move'"));
         }
 
         if (string.Equals(name, "game_spell_level", StringComparison.Ordinal) &&

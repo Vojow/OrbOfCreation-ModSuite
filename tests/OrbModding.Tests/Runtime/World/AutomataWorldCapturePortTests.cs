@@ -36,6 +36,7 @@ public sealed class AutomataWorldCapturePortTests
         finally
         {
             global::ResourceSO.All.Clear();
+            global::AlchemyManager.instance = null;
             foreach (var identity in seeded)
                 global::IdScriptableObject.RuntimeLookup.Remove(identity);
         }
@@ -87,6 +88,7 @@ public sealed class AutomataWorldCapturePortTests
         }
         finally
         {
+            global::AlchemyManager.instance = null;
             foreach (var identity in seeded)
                 global::IdScriptableObject.RuntimeLookup.Remove(identity);
         }
@@ -94,6 +96,7 @@ public sealed class AutomataWorldCapturePortTests
 
     private static IReadOnlyList<System.Guid> SeedScribeRelations()
     {
+        global::AlchemyManager.instance = new global::AlchemyManager();
         var identities = new List<System.Guid>();
         void Register(System.Guid identity, global::IdScriptableObject value)
         {

@@ -118,6 +118,7 @@ public sealed class WorldIdentityWalkTests
         "ConceptRecipes",
         "AlchemyInstances",
         "AlchemyCosts",
+        "AlchemyUsageCosts",
         "ScribeWork",
         "StructureEnchantments",
         "ScrollTargets",

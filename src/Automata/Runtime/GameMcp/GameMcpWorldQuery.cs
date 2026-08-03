@@ -559,6 +559,7 @@ internal static class GameMcpWorldQuery
             GameMcpCommandKind.SpellLevel => ProjectSpellLevelDelta(state, command),
             GameMcpCommandKind.Crafting => ProjectCraftingDelta(state, command),
             GameMcpCommandKind.EquipmentLoadout => ProjectEquipmentDelta(state, command),
+            GameMcpCommandKind.AlchemyLoadout => ProjectAlchemyLoadoutDelta(state, command),
             GameMcpCommandKind.Research => ProjectResearchDelta(state, command),
             GameMcpCommandKind.GenericDiscovery => ProjectDiscoveryDelta(state, command),
             _ => ProjectPostState(state, PostStateCategory(command), command.TargetId),
@@ -672,6 +673,41 @@ internal static class GameMcpWorldQuery
             ? previous.Quantity
             : 0;
         return Change(command.TargetId, before, after, "stack");
+    }
+
+    private static GameMcpValue ProjectAlchemyLoadoutDelta(
+        GameMcpFrameContext state,
+        GameMcpCommand command)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        if (!WorldAlchemyLoadoutLookup.TryFind(
+                state.World.Snapshot.AlchemyLoadout, command.TargetId, out var current))
+            return PostStateUnavailable("post_state_not_published",
+                "the settled world has no ordinary Alchemy row for that recipe");
+        var oldWorld = Before(command);
+        WorldAlchemyLoadoutDecision previous = default;
+        var hadBefore = oldWorld is not null && WorldAlchemyLoadoutLookup.TryFind(
+            oldWorld.AlchemyLoadout, command.TargetId, out previous);
+        if (command.Mode == "move")
+        {
+            if (!current.IsActive || current.Position != command.Amount - 1)
+                return PostStateUnavailable("requested_state_not_reached",
+                    "the settled Alchemy loadout does not show the requested slot");
+            return new JObject
+            {
+                ["uuid"] = command.TargetId.ToString("D"),
+                ["slot"] = new JObject
+                {
+                    ["before"] = hadBefore ? previous.Position : (int?)null,
+                    ["after"] = current.Position,
+                },
+            }.Freeze();
+        }
+        return Change(command.TargetId,
+            hadBefore ? (object)previous.TargetAmount : null,
+            current.TargetAmount,
+            "activeAmount");
     }
 
     private static GameMcpValue ProjectHarvestDelta(
@@ -1073,6 +1109,7 @@ internal static class GameMcpWorldQuery
             _ => throw new ArgumentOutOfRangeException(nameof(command.DerivedNativeType)),
         },
         GameMcpCommandKind.EquipmentLoadout => "equipment",
+        GameMcpCommandKind.AlchemyLoadout => "alchemy-recipes",
         GameMcpCommandKind.Research => "research",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
@@ -3036,8 +3073,81 @@ internal static class GameMcpWorldQuery
             ["masteryLevel"] = recipe.MasteryLevel,
         };
         if (recipe.MaxLevel >= 0) result["maximumLevel"] = recipe.MaxLevel;
+        AddAlchemyLoadoutDecision(world, result, recipe.RecipeId);
         AddDiscoveryDecision(world, result, recipe.Discovery);
         return result.Freeze();
+    }
+
+    private static void AddAlchemyLoadoutDecision(
+        GameWorldState world,
+        JObject result,
+        Guid recipeId)
+    {
+        if (!WorldAlchemyLoadoutLookup.TryFind(world.AlchemyLoadout, recipeId, out var decision))
+            return;
+        var loadout = new JObject
+        {
+            ["activeAmount"] = decision.Amount,
+            ["targetAmount"] = decision.TargetAmount,
+        };
+        if (decision.IsActive) loadout["slot"] = decision.Position;
+        var addAvailable = decision.Discovered && decision.CanAdd && decision.NextAdd > 0;
+        var add = new JObject { ["available"] = addAvailable };
+        if (addAvailable)
+        {
+            add["maximumAmount"] = decision.NextAdd;
+            add["freeUsesRemaining"] = decision.FreeUsesRemaining;
+            var costs = ProjectAlchemyUsageCosts(world, recipeId);
+            if (costs.Count > 0) add["usageCosts"] = costs;
+        }
+        else
+        {
+            add["reasonCode"] = !decision.Discovered
+                ? "not_discovered"
+                : !decision.CanAdd
+                    ? "loadout_full"
+                    : decision.MultiBuy <= 0
+                        ? "multi_buy_unavailable"
+                        : "usage_unavailable";
+        }
+        loadout["add"] = add;
+        loadout["remove"] = decision.NextRemove > 0
+            ? new JObject { ["available"] = true, ["maximumAmount"] = decision.NextRemove }
+            : new JObject { ["available"] = false, ["reasonCode"] = "not_active" };
+        loadout["move"] = decision.IsActive && decision.SlotCount > 1
+            ? new JObject
+            {
+                ["available"] = true,
+                ["maximumDestination"] = decision.SlotCount - 1,
+            }
+            : new JObject
+            {
+                ["available"] = false,
+                ["reasonCode"] = decision.IsActive ? "single_slot" : "not_active",
+            };
+        result["alchemyLoadout"] = loadout;
+    }
+
+    private static JArray ProjectAlchemyUsageCosts(GameWorldState world, Guid recipeId)
+    {
+        var result = new JArray();
+        if (!WorldAlchemyLoadoutLookup.TryFindCostRange(
+                world.AlchemyUsageCosts, recipeId, out var start, out var count))
+            return result;
+        for (var index = start; index < start + count; index++)
+        {
+            var cost = world.AlchemyUsageCosts[index];
+            var row = new JObject
+            {
+                ["resourceId"] = cost.ResourceId.ToString("D"),
+                ["amount"] = new GameMcpDomainValue(cost.Amount),
+            };
+            if (WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource))
+                row["spendableAmount"] = new GameMcpDomainValue(
+                    SpendableAmount(world, cost.ResourceId, resource.Reading.Quantity));
+            result.Add(row);
+        }
+        return result;
     }
 
     private static GameMcpValue ProjectEquipment(GameWorldState world, in WorldEquipment equipment)
@@ -3894,6 +4004,8 @@ internal static class GameMcpWorldQuery
             Entity(nameof(GameWorldState.ConceptRecipes), world => world.ConceptRecipes),
             Composite(nameof(GameWorldState.AlchemyInstances), world => world.AlchemyInstances),
             Composite(nameof(GameWorldState.AlchemyCosts), world => world.AlchemyCosts),
+            Composite(nameof(GameWorldState.AlchemyLoadout), world => world.AlchemyLoadout),
+            Composite(nameof(GameWorldState.AlchemyUsageCosts), world => world.AlchemyUsageCosts),
             Composite(nameof(GameWorldState.PlotAuthoring), world => world.PlotAuthoring),
             Composite(nameof(GameWorldState.PlotPhaseDescriptors), world => world.PlotPhaseDescriptors),
             Composite(nameof(GameWorldState.EffectBlocks), world => world.EffectBlocks),
@@ -3962,6 +4074,8 @@ internal static class GameMcpWorldQuery
         "targeting" => new[] { "targeting" },
         "concept-recipes" or "alchemy-instances" or "alchemy-costs" =>
             new[] { "concept-instances" },
+        "alchemy-loadout" or "alchemy-usage-costs" =>
+            new[] { "ordinary-alchemy-loadout" },
         "plot-phase-descriptors" => new[] { "plot-authoring" },
         "mastery-experience" =>
             new[] { "spell-recipes", "alchemy-recipes", "equipment" },
@@ -4040,6 +4154,13 @@ internal static class GameMcpWorldQuery
         {
             "entityId", "selectedLevelId", "level", "maxUsageByMastery",
         },
+        "alchemy-loadout" => new[]
+        {
+            "recipeId", "position", "slotCount", "amount", "targetAmount", "multiBuy",
+            "freeUsesRemaining", "maximumAdd", "discovered", "canAdd", "isActive",
+            "nextAdd", "nextRemove",
+        },
+        "alchemy-usage-costs" => new[] { "recipeId", "resourceId", "amount" },
         "spell-recipes" => new[]
         {
             "entityId", "discovered", "masteryLevel", "masteryLevelReady",

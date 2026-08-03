@@ -21436,6 +21436,184 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "alchemy-loadout.recipe.type-action", "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.manager.type-action", "assembly": "assembly-csharp",
+      "type": "AlchemyManager", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.list.type-action", "assembly": "assembly-csharp",
+      "type": "AlchemyInstanceListVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.instance.type-action", "assembly": "assembly-csharp",
+      "type": "AlchemyInstance", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.cost.type-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.int-variable.type-action", "assembly": "assembly-csharp",
+      "type": "IntVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.global-variables.type-action", "assembly": "assembly-csharp",
+      "type": "GlobalVariables", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.manager-instance-action", "assembly": "assembly-csharp",
+      "type": "AlchemyManager", "typeVisibility": "public", "kind": "field", "member": "instance",
+      "visibility": "public", "static": true, "valueType": "AlchemyManager",
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.manager-active-action", "assembly": "assembly-csharp",
+      "type": "AlchemyManager", "typeVisibility": "public", "kind": "field", "member": "activeAlchemy",
+      "visibility": "public", "static": false, "valueType": "AlchemyInstanceListVariable",
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.recipe-discovered-action", "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO", "typeVisibility": "public", "kind": "method", "member": "IsDiscovered",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.recipe-usage-cost-action", "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO", "typeVisibility": "public", "kind": "method", "member": "GetUsageCost",
+      "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.recipe-free-uses-action", "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO", "typeVisibility": "public", "kind": "method", "member": "GetFreeUsageSlots",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.recipe-maximum-uses-action", "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO", "typeVisibility": "public", "kind": "method", "member": "GetMaxUsageSlots",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.list-can-add-action", "assembly": "assembly-csharp",
+      "type": "AlchemyInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "CanAddInstance",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": ["AlchemyRecipeSO"],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.list-values-action", "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "field", "member": "value",
+      "visibility": "public", "static": false, "valueType": "System.Collections.Generic.List`1<!0>",
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.instance-reference-action", "assembly": "assembly-csharp",
+      "type": "AbstractRefInstance`1", "typeVisibility": "public", "kind": "method", "member": "get_reference",
+      "visibility": "public", "static": false, "returnType": "!0", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.instance-queued-action", "assembly": "assembly-csharp",
+      "type": "AlchemyInstance", "typeVisibility": "public", "kind": "method", "member": "GetQueuedQuantity",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.instance-remaining-free-action", "assembly": "assembly-csharp",
+      "type": "AlchemyInstance", "typeVisibility": "public", "kind": "method", "member": "GetRemainingFreeUsageSlots",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.instance-remaining-maximum-action", "assembly": "assembly-csharp",
+      "type": "AlchemyInstance", "typeVisibility": "public", "kind": "method", "member": "GetRemainingMaxUsageSlots",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.cost-maximum-times-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "MaximumCostTimes",
+      "visibility": "public", "static": false, "returnType": "BigDouble", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.cost-empty-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "IsEmpty",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.global-multi-buy-action", "assembly": "assembly-csharp",
+      "type": "GlobalVariables", "typeVisibility": "public", "kind": "method", "member": "GetMultiBuy",
+      "visibility": "public", "static": true, "returnType": "IntVariable", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.int-as-int-action", "assembly": "assembly-csharp",
+      "type": "IntVariable", "typeVisibility": "public", "kind": "method", "member": "AsInt",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.list-engage-action", "assembly": "assembly-csharp",
+      "type": "AlchemyInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "EngageAlchemy",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["AlchemyRecipeSO"],
+      "owners": ["Automata ordinary Alchemy GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.list-disengage-action", "assembly": "assembly-csharp",
+      "type": "AlchemyInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "DisengageAlchemy",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["AlchemyRecipeSO"],
+      "owners": ["Automata ordinary Alchemy GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.list-swap-action", "assembly": "assembly-csharp",
+      "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "method", "member": "SwapPositions",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["System.Int32", "System.Int32"],
+      "owners": ["Automata ordinary Alchemy GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "alchemy-loadout.list-update-action", "assembly": "assembly-csharp",
+      "type": "AbstractListVariable", "typeVisibility": "public", "kind": "method", "member": "UpdateObservable",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata ordinary Alchemy GameAction"], "usages": ["reflection"], "place": "action"
     }
   ],
   "sourceAudit": {
@@ -21447,6 +21625,7 @@
       "src/AutoHarvest",
       "src/AutoItems",
       "src/AutoScribe",
+      "src/AlchemyLoadout",
       "src/Automata",
       "src/Common",
       "src/DiscoveryTree",

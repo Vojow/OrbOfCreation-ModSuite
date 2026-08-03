@@ -321,6 +321,14 @@ public sealed record GameWorldState
     internal PublicationTable<WorldAlchemyCost> AlchemyCosts { get; init; } =
         PublicationTable<WorldAlchemyCost>.Empty;
 
+    /// <summary>The ordinary alchemy list and next native click decision, keyed by recipe.</summary>
+    internal PublicationTable<WorldAlchemyLoadoutDecision> AlchemyLoadout { get; init; } =
+        PublicationTable<WorldAlchemyLoadoutDecision>.Empty;
+
+    /// <summary>Per-active-stack resource use for each ordinary alchemy recipe.</summary>
+    internal PublicationTable<WorldAlchemyUsageCost> AlchemyUsageCosts { get; init; } =
+        PublicationTable<WorldAlchemyUsageCost>.Empty;
+
     /// <summary>
     /// What each plot's author decided about it. Keyed by plot rather than keyed <em>as</em> a plot,
     /// so the plot's identity stays claimed exactly once.

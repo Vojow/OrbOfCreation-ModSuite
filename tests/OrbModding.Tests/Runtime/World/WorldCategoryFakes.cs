@@ -26,7 +26,9 @@ internal static class WorldCategoryFakes
     {
         ["AlchemyRecipeSO"] = typeof(FakeAlchemyRecipe),
         ["AlchemyTypeSO"] = typeof(FakeAlchemyType),
+        ["AlchemyManager"] = typeof(FakeAlchemyManager),
         ["AlchemyInstanceListVariable"] = typeof(FakeAlchemyInstanceList),
+        ["AlchemyInstance"] = typeof(FakeAlchemyInstance),
         ["AlchemyRecipeListVariable"] = typeof(FakeAlchemyRecipeList),
         ["SpellRecipeSO"] = typeof(FakeSpellRecipe),
         ["SpellManager"] = typeof(FakeSpellManager),
@@ -100,6 +102,7 @@ internal static class WorldCategoryFakes
     {
         FakeAlchemyRecipe.All.Clear();
         FakeAlchemyType.All.Clear();
+        FakeAlchemyManager.instance = new FakeAlchemyManager();
         FakeSpellRecipe.All.Clear();
         FakeSpellManager.instance = null;
         FakeSpellType.All.Clear();
@@ -247,6 +250,7 @@ internal sealed class FakeCraftingResourceCostList
             cost.resource is not null &&
             cost.valueBig.CompareTo(cost.resource.GetTrueQuantity()) <= 0));
     public BigDouble MaximumCostTimes() => maximumCostTimes;
+    public bool IsEmpty() => costs.Count == 0;
     public List<FakeCraftingResourceTuple> GetEntries() => costs;
 
     public FakeCraftingResourceCostList Multiply(BigDouble factor)
@@ -706,6 +710,7 @@ internal sealed class FakeAlchemyRecipe : global::IDiscoverable
     public BigDouble cachedRequiredXp;
     public FakeExperienceContainer experienceContainer = new();
     public FakeSpellCostList drainCost = new();
+    public FakeCraftingResourceCostList usageCost = new();
     public global::ResourceCostList genericDiscoveryCost = new();
     public List<global::GlyphSO> genericDiscoveryGlyphs = new();
     public List<global::ResourceSO> genericDiscoveryResources = new();
@@ -714,6 +719,9 @@ internal sealed class FakeAlchemyRecipe : global::IDiscoverable
     public FakeAlchemyType coreType = new();
 
     public FakeAlchemyType GetCoreType() => coreType;
+    public bool IsDiscovered() => discovered;
+    public FakeCraftingResourceCostList GetUsageCost() => usageCost;
+    public int GetFreeUsageSlots() => freeUsageSlots.GetValue().ToInt();
 
     public BigDouble GetRequiredExperience() =>
         experienceContainer.GetRequiredExperience();
@@ -745,7 +753,14 @@ internal sealed class FakeExperienceContainer
 
 internal sealed class FakeAlchemyRecipeList
 {
-    public List<FakeAlchemyRecipe> value = new();
+    internal FakeAlchemyRecipeList()
+        : this(new List<FakeAlchemyRecipe>())
+    {
+    }
+
+    internal FakeAlchemyRecipeList(List<FakeAlchemyRecipe> value) => this.value = value;
+
+    public List<FakeAlchemyRecipe> value;
 }
 
 internal sealed class FakeAlchemyInstanceList
@@ -753,6 +768,13 @@ internal sealed class FakeAlchemyInstanceList
     public List<FakeAlchemyInstance> value = new();
 
     public bool CanAddInstance(FakeAlchemyRecipe recipe) => true;
+}
+
+internal sealed class FakeAlchemyManager
+{
+    public static FakeAlchemyManager instance = new();
+    public FakeAlchemyInstanceList activeAlchemy = new();
+    public FakeAlchemyRecipeList allAlchemy = new(FakeAlchemyRecipe.All);
 }
 
 internal class FakeAbstractRefInstance<T>
@@ -780,6 +802,12 @@ internal class FakeAlchemyInstance : FakeAbstractRefInstance<FakeAlchemyRecipe>
     public int quantity;
     public int queuedQuantity;
     public FakeAlchemyDrain resourceDrain = new();
+
+    public int GetQueuedQuantity() => queuedQuantity;
+    public int GetRemainingFreeUsageSlots() =>
+        Math.Max((reference?.GetFreeUsageSlots() ?? 0) - queuedQuantity, 0);
+    public int GetRemainingMaxUsageSlots() =>
+        Math.Max((reference?.GetMaxUsageSlots() ?? 0) - queuedQuantity, 0);
 }
 
 internal sealed class FakeUnexpectedAlchemyInstance : FakeAlchemyInstance

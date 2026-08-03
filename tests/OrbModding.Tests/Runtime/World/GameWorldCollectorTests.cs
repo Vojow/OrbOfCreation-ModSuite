@@ -478,7 +478,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Fifty-five passes: the four categories
+        // The scope claim, asserted rather than described. Fifty-six passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -496,13 +496,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(55, report.Categories.Length);
+        Assert.Equal(56, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "challenge decisions", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "concept instances", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "challenge decisions", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "ordinary alchemy loadout", "concept instances", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -973,6 +973,55 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, recipe.Identity, out var row));
         Assert.Equal(-1d, recipe.maxUsageSlots.GetValue().ToDouble());
         Assert.Equal(5d, row.ResolvedMaxUsageSlots.ToDouble());
+    }
+
+    [Fact]
+    public void OrdinaryAlchemyPublishesTheOrderedClickDecisionAndUsageHoldings()
+    {
+        var resource = new FakeResource
+        {
+            Identity = Guid.NewGuid(),
+            Quantity = 80d,
+            maxQuantity = new FakeModifierRecord(100d),
+            Visible = true,
+        };
+        FakeResource.All.Add(resource);
+        var type = new FakeAlchemyType { Identity = KnownEntities.Alchemy.Uuid };
+        FakeAlchemyType.All.Add(type);
+        var recipe = new FakeAlchemyRecipe
+        {
+            Identity = Guid.NewGuid(),
+            coreType = type,
+            discovered = true,
+            freeUsageSlots = new FakeModifierRecord(1d),
+            maxUsageSlots = new FakeModifierRecord(5d),
+            usageCost = new FakeCraftingResourceCostList()
+                .With(resource, new BigDouble(5d)),
+        };
+        FakeAlchemyRecipe.All.Add(recipe);
+        FakeAlchemyManager.instance.activeAlchemy.value.Add(new FakeAlchemyInstance(recipe)
+        {
+            quantity = 1,
+            queuedQuantity = 2,
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldAlchemyLoadoutLookup.TryFind(
+            world.AlchemyLoadout, recipe.Identity, out var decision));
+        Assert.Equal(0, decision.Position);
+        Assert.Equal(1, decision.Amount);
+        Assert.Equal(2, decision.TargetAmount);
+        Assert.Equal(1, decision.NextAdd);
+        Assert.Equal(1, decision.NextRemove);
+        Assert.True(WorldAlchemyLoadoutLookup.TryFindCostRange(
+            world.AlchemyUsageCosts, recipe.Identity, out var start, out var count));
+        Assert.Equal(1, count);
+        Assert.Equal(resource.Identity, world.AlchemyUsageCosts[start].ResourceId);
+        Assert.Equal(5d, world.AlchemyUsageCosts[start].Amount.ToDouble());
     }
 
     [Fact]

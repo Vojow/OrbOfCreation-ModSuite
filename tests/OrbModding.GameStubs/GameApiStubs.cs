@@ -396,6 +396,7 @@ public sealed class AlchemyRecipeSO : IdScriptableObject, IDiscoverable
     public readonly List<AlchemyTypeSO> alchemyTypes = new List<AlchemyTypeSO>();
     public ConceptCostVector drainCost = new ConceptCostVector();
     public ResourceCostList baseDiscoveryCost = new ResourceCostList();
+    public ResourceCostList usageCost = new ResourceCostList();
     public List<GlyphSO> glyphRecipe = new List<GlyphSO>();
     public List<ResourceSO> resourceRecipe = new List<ResourceSO>();
     public bool NativeDiscoverVisible { get; set; } = true;
@@ -417,6 +418,8 @@ public sealed class AlchemyRecipeSO : IdScriptableObject, IDiscoverable
     }
     public bool IsDiscovered() => discovered;
     public ResourceCostList GetDiscoverCost() => baseDiscoveryCost;
+    public ResourceCostList GetUsageCost() => usageCost;
+    public int GetFreeUsageSlots() => freeUsageSlots.GetValue().ToInt();
     public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(glyphRecipe);
     public List<ResourceSO> GetResourceRecipe() => new List<ResourceSO>(resourceRecipe);
     public bool IsDiscoverVisible() => NativeDiscoverVisible;
@@ -1275,6 +1278,7 @@ public class ResourceCostList
     public bool affordable = true;
 
     public bool IsWithinCapacity() => WithinCapacity;
+    public bool IsEmpty() => costs.Count == 0;
 
     // How many more purchases the holdings cover. Spending is what makes a price unaffordable in the
     // game, so a fixture that wants a purchase to stop being possible partway says how far the
@@ -2420,11 +2424,15 @@ public sealed class AlchemyInstance : AbstractRefInstance<AlchemyRecipeSO>
     public ConceptDrainState resourceDrain = new ConceptDrainState();
 
     public ConceptDrainMultiplier GetDrainCostMod() => new ConceptDrainMultiplier(this);
+    public int GetQueuedQuantity() => queuedQuantity;
+    public int GetRemainingFreeUsageSlots() =>
+        Math.Max(reference.GetFreeUsageSlots() - queuedQuantity, 0);
+    public int GetRemainingMaxUsageSlots() =>
+        Math.Max(reference.GetMaxUsageSlots() - queuedQuantity, 0);
 }
 
-public sealed class AlchemyInstanceListVariable : IdScriptableObject
+public sealed class AlchemyInstanceListVariable : AbstractListVariable<AlchemyInstance>
 {
-    public List<AlchemyInstance> value = new List<AlchemyInstance>();
     public bool SuppressAddMutation { get; set; }
     public bool SuppressRemoveMutation { get; set; }
     public bool ThrowOnCanAdd { get; set; }
@@ -2476,8 +2484,27 @@ public sealed class AlchemyInstanceListVariable : IdScriptableObject
     public void RemoveAlchemyInstances(AlchemyRecipeSO recipe, int delta)
     {
         if (SuppressRemoveMutation) return;
-        value.Single(item => ReferenceEquals(item.reference, recipe)).queuedQuantity -= delta;
+        var instance = value.Single(item => ReferenceEquals(item.reference, recipe));
+        instance.queuedQuantity = Math.Max(instance.queuedQuantity - delta, 0);
+        if (instance.queuedQuantity == 0) value.Remove(instance);
     }
+
+    public void EngageAlchemy(AlchemyRecipeSO recipe)
+    {
+        if (!CanAddInstance(recipe)) return;
+        var instance = value.SingleOrDefault(item => ReferenceEquals(item.reference, recipe));
+        var free = instance?.GetRemainingFreeUsageSlots() ?? recipe.GetFreeUsageSlots();
+        var remaining = instance?.GetRemainingMaxUsageSlots() ?? recipe.GetMaxUsageSlots();
+        var cost = recipe.GetUsageCost();
+        var maximum = cost.IsEmpty()
+            ? int.MaxValue
+            : (cost.MaximumCostTimes() + new BigDouble(Math.Max(free, 0))).ToInt();
+        var amount = Math.Min(GlobalVariables.GetMultiBuy().AsInt(), Math.Min(remaining, maximum));
+        if (amount > 0) AddAlchemyInstances(recipe, amount);
+    }
+
+    public void DisengageAlchemy(AlchemyRecipeSO recipe) =>
+        RemoveAlchemyInstances(recipe, GlobalVariables.GetMultiBuy().AsInt());
 
     public void RebuildCounts()
     {

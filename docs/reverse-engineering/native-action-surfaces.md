@@ -526,6 +526,34 @@ and cap paths do not agree — see [requirements.md](requirements.md).
 
 ---
 
+## Ordinary Alchemy list lifecycle
+
+The ordinary Alchemy page is one global ordered `AlchemyManager.activeAlchemy` list. It is not the
+concept-assignment surface and it is not a per-recipe level selector. Cecil evidence from the pinned
+v1.0.5 assembly fixes the visible routes:
+
+| UI gesture | Native route |
+|---|---|
+| Click an ordinary recipe | `UIAlchemyRecipeList.ClickItem` (`0x0600217B`) → `AlchemyInstanceListVariable.EngageAlchemy` (`0x06001604`) |
+| Click an active instance | `UIAlchemyInstanceList.ClickItem` (`0x06002167`) → `DisengageAlchemy` (`0x06001606`) |
+| Drop an active instance | `UIAlchemyInstanceList.OnDrop` (`0x06002168`) → `AbstractListVariable<AlchemyInstance>.SwapPositions(int,int)` → `UpdateObservable()` |
+
+`EngageAlchemy` first requires either list room or an existing instance. It then derives remaining
+free and maximum uses from `GetFreeUsageSlots` / `GetMaxUsageSlots` for a new recipe, or the instance's
+remaining-use accessors for an existing one. `GetUsageCost().MaximumCostTimes()` contributes the
+resource ceiling, and `GlobalVariables.GetMultiBuy()` clamps the amount before the private
+`AddAlchemyInstances` call. `DisengageAlchemy` reads the same current multi-buy and passes it to
+`RemoveAlchemyInstances`. Therefore the player verb is one click-sized increase or decrease, not an
+arbitrary amount parameter.
+
+The list's game-written queued quantity is the simplest directional outcome sentinel: it must rise
+after engage and fall after disengage. Reordering requires the same exact recipe to appear at the
+requested index after the swap. Resource debits and free-use accounting are admission inputs, not
+postcondition ledgers. The shared `AlchemyGameplayDomainClassifier` is the boundary between these six
+ordinary families and recipes in the native `ConceptRecipes` list.
+
+---
+
 ## Discovering a discoverable
 
 `IDiscoverable` has exactly six implementers in this build:

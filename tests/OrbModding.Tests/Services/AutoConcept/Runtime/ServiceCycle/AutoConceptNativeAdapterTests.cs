@@ -213,7 +213,7 @@ public sealed class AutoConceptNativeAdapterTests : IDisposable
 
         Assert.True(submission.Verified, submission.Reason);
         Assert.Equal(-1, submission.AppliedDelta);
-        Assert.Equal(0, Assert.Single(active.value).queuedQuantity);
+        Assert.Empty(active.value);
     }
 
     [Fact]

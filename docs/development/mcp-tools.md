@@ -109,7 +109,7 @@ does not refresh it by hidden navigation.
 
 ## Tool surface
 
-The registry is exactly 34 tools. It is built once per lifecycle and never changes mid-session, so
+The registry is exactly 35 tools. It is built once per lifecycle and never changes mid-session, so
 there is no `tools/list_changed` notification. The rows below are in `tools/list` order.
 
 | Tool | Purpose |
@@ -134,8 +134,9 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_targeting` | Submit one exact eligible target or let the native request choose one |
 | `game_consumable` | Use, cancel, discard, randomize, or reorder one published consumable |
 | `game_craft` | Execute one published direct or queued crafting recipe |
-| `game_discover` | Preview or confirm one composed discovery on six surfaces, or drive one Discovery Tree offer lifecycle |
+| `game_discover` | Preview or confirm one composed discovery on seven surfaces, or drive one Discovery Tree offer lifecycle |
 | `game_equipment` | Equip/increase or unequip/decrease one created artifact using live native multi-buy |
+| `game_alchemy` | Add, remove, or reorder one ordinary Alchemy recipe through its visible list |
 | `game_challenge` | Select, activate, abandon, or fetch the Time/prestige challenge offers |
 | `game_prestige` | Confirm and perform the irreversible persistent reset |
 | `game_research` | Develop/queue, pause, resume, cancel, or apply a free research bonus level |
@@ -314,6 +315,22 @@ or refusal. Call `game_equipment` with `mode:"equip"` or `mode:"unequip"`; there
 argument because one call reproduces one native player click. A committed call returns the stack
 count before and after. Usage reservations, effects, and
 attunement are post-state evidence, never payment-verification gates.
+
+### Ordinary Alchemy loadout loop
+
+An `alchemy-recipes` detail row carries `alchemyLoadout` only for the six ordinary Alchemy families.
+It reports the current and queued amount, ordered slot when active, and the next visible add, remove,
+and move decisions. An available add includes the live click-sized maximum and named per-use resource
+costs with current spendable holdings; an unavailable add carries only its binding reason. Concept
+recipes remain on `game_concept`, composed Alchemy discovery remains on `game_discover`, and recipe
+leveling belongs to the unified level surface rather than this list lifecycle.
+
+`game_alchemy(mode="add"|"remove", uuid=...)` reproduces one list click using the game's current
+multi-buy and live usage-capacity calculation. `mode="move"` also requires the zero-based
+`destination` exposed by the row. Success returns only the settled queued amount before and after, or
+the ordered slot before and after for a move. The action boundary revalidates exact recipe identity,
+ordinary-family classification, discovery, capacity, and multi-buy before invoking the same native
+engage, disengage, or list-swap route as the UI.
 
 ### Challenge decision loop
 
