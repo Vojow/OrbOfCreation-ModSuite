@@ -1094,6 +1094,12 @@ public sealed class AutoBuyCycleEvaluatorTests
         Assert.Equal(cost, belief.BindingCost.ToDouble(), 12);
         Assert.Equal(available, belief.BindingAvailable.ToDouble(), 12);
         Assert.Equal(0.0, belief.BindingReserveFloor.ToDouble(), 12);
+
+        var plannedSpend = Assert.Single(action.PlannedSpend.AsSpan().ToArray());
+        Assert.Equal(expectedResource, plannedSpend.ResourceId);
+        Assert.Equal(cost, plannedSpend.Cost.ToDouble(), 12);
+        Assert.Equal(available, plannedSpend.RemainingBeforeSpend.ToDouble(), 12);
+        Assert.Equal(0.0, plannedSpend.ReserveFloor.ToDouble(), 12);
     }
 
     private static SuiteRuntimeConfiguration Config(

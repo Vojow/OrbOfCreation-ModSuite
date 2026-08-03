@@ -70,6 +70,119 @@ internal readonly struct WorldPurchaseViewRelation : IWorldEntity
     internal WorldPurchaseViewRelationStatus Status { get; }
 }
 
+internal readonly struct WorldPurchaseViewPublication
+{
+    internal WorldPurchaseViewPublication(
+        PublicationTable<WorldPurchaseViewRelation> relations,
+        PublicationTable<WorldPurchaseViewRoute> routes)
+    {
+        Relations = relations;
+        Routes = routes;
+    }
+
+    internal PublicationTable<WorldPurchaseViewRelation> Relations { get; }
+    internal PublicationTable<WorldPurchaseViewRoute> Routes { get; }
+}
+
+/// <summary>Validates the complete detached candidate/edge graph on the worker.</summary>
+internal static class WorldPurchaseViewRelationDeriver
+{
+    internal static WorldPurchaseViewPublication Build(
+        WorldRelationBuffer<WorldPurchaseViewRelation> relationBuffer,
+        WorldRelationBuffer<WorldPurchaseViewRoute> routeBuffer)
+    {
+        var routesByCandidate = new Dictionary<Guid, List<WorldPurchaseViewRoute>>();
+        var edgeKeys = new HashSet<RouteKey>();
+        for (var index = 0; index < routeBuffer.Count; index++)
+        {
+            var route = routeBuffer[index];
+            if (route.CandidateId == Guid.Empty || route.ListId == Guid.Empty ||
+                route.ViewId == Guid.Empty ||
+                !edgeKeys.Add(new RouteKey(route.CandidateId, route.ListId, route.ViewId)))
+                continue;
+            if (!routesByCandidate.TryGetValue(route.CandidateId, out var routes))
+                routesByCandidate.Add(route.CandidateId, routes = new List<WorldPurchaseViewRoute>());
+            routes.Add(route);
+        }
+
+        var relations = new WorldPurchaseViewRelation[relationBuffer.Count];
+        var publishedRoutes = new WorldPurchaseViewRoute[routeBuffer.Count];
+        var relationIds = new HashSet<Guid>();
+        var relationCount = 0;
+        var routeCount = 0;
+        for (var index = 0; index < relationBuffer.Count; index++)
+        {
+            var relation = relationBuffer[index];
+            routesByCandidate.TryGetValue(relation.CandidateId, out var routes);
+            var count = routes?.Count ?? 0;
+            var shapeValid = relation.CandidateId != Guid.Empty &&
+                relationIds.Add(relation.CandidateId) &&
+                (relation.Kind == WorldPurchaseCandidateKind.Structure
+                    ? relation.CategoryId != Guid.Empty
+                    : relation.CategoryId == Guid.Empty) &&
+                relation.Status == WorldPurchaseViewRelationStatus.Resolved &&
+                relation.RouteCount == count && count > 0;
+            var status = shapeValid
+                ? WorldPurchaseViewRelationStatus.Resolved
+                : relation.Status == WorldPurchaseViewRelationStatus.Resolved
+                    ? WorldPurchaseViewRelationStatus.Contradictory
+                    : relation.Status;
+            relations[relationCount++] = new WorldPurchaseViewRelation(
+                relation.CandidateId,
+                relation.Kind,
+                relation.CategoryId,
+                status == WorldPurchaseViewRelationStatus.Resolved ? count : 0,
+                status);
+            if (status != WorldPurchaseViewRelationStatus.Resolved || routes is null) continue;
+            for (var routeIndex = 0; routeIndex < routes.Count; routeIndex++)
+                publishedRoutes[routeCount++] = routes[routeIndex];
+        }
+
+        Array.Sort(relations, 0, relationCount, RelationComparer.Instance);
+        Array.Sort(publishedRoutes, 0, routeCount, RouteComparer.Instance);
+        return new WorldPurchaseViewPublication(
+            PublicationTable<WorldPurchaseViewRelation>.Create(relations, relationCount),
+            PublicationTable<WorldPurchaseViewRoute>.Create(publishedRoutes, routeCount));
+    }
+
+    private readonly struct RouteKey : IEquatable<RouteKey>
+    {
+        internal RouteKey(Guid candidate, Guid list, Guid view)
+        {
+            Candidate = candidate;
+            List = list;
+            View = view;
+        }
+        private Guid Candidate { get; }
+        private Guid List { get; }
+        private Guid View { get; }
+        public bool Equals(RouteKey other) =>
+            Candidate == other.Candidate && List == other.List && View == other.View;
+        public override bool Equals(object? value) => value is RouteKey other && Equals(other);
+        public override int GetHashCode() =>
+            unchecked(((Candidate.GetHashCode() * 397) ^ List.GetHashCode()) * 397 ^ View.GetHashCode());
+    }
+
+    private sealed class RelationComparer : IComparer<WorldPurchaseViewRelation>
+    {
+        internal static readonly IComparer<WorldPurchaseViewRelation> Instance = new RelationComparer();
+        public int Compare(WorldPurchaseViewRelation left, WorldPurchaseViewRelation right) =>
+            left.CandidateId.CompareTo(right.CandidateId);
+    }
+
+    private sealed class RouteComparer : IComparer<WorldPurchaseViewRoute>
+    {
+        internal static readonly IComparer<WorldPurchaseViewRoute> Instance = new RouteComparer();
+        public int Compare(WorldPurchaseViewRoute left, WorldPurchaseViewRoute right)
+        {
+            var candidate = left.CandidateId.CompareTo(right.CandidateId);
+            if (candidate != 0) return candidate;
+            var view = left.ViewId.CompareTo(right.ViewId);
+            return view != 0 ? view : left.ListId.CompareTo(right.ListId);
+        }
+    }
+}
+
 /// <summary>One lifecycle-bound native route used only for live action admission.</summary>
 internal readonly struct NativePurchaseViewRoute
 {
@@ -192,32 +305,292 @@ internal sealed class NativePurchaseViewAdmissionResolver
         if (output is null) throw new ArgumentNullException(nameof(output));
         unresolved = 0;
         skipped = 0;
-        var sampled = 0;
         var identities = new HashSet<Guid>();
+        var identityCache = new Dictionary<object, Guid>(ReferenceComparer.Instance);
+        var candidates = new List<ForwardCandidate>();
         var snapshot = new Dictionary<CandidateKey, NativePurchaseViewResolution>();
-        sampled += ReadRegistry(
+        ReadForwardRegistry(
             WorldPurchaseCandidateKind.Structure,
             _native.StructureAll,
             _native.StructureType,
             identities,
-            snapshot,
-            output,
-            routeOutput,
-            ref unresolved,
+            identityCache,
+            candidates,
             ref skipped);
-        sampled += ReadRegistry(
+        ReadForwardRegistry(
             WorldPurchaseCandidateKind.Upgrade,
             _native.UpgradeAll,
             _native.UpgradeType,
             identities,
-            snapshot,
-            output,
-            routeOutput,
-            ref unresolved,
+            identityCache,
+            candidates,
             ref skipped);
+
+        ValidateStructureCategories(candidates, identityCache);
+        try
+        {
+            ReadForwardViews(candidates, identityCache);
+        }
+        catch (RelationFailure failure)
+        {
+            for (var index = 0; index < candidates.Count; index++)
+                candidates[index].Status = failure.Status;
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            for (var index = 0; index < candidates.Count; index++)
+                candidates[index].Status = WorldPurchaseViewRelationStatus.Unreadable;
+        }
+
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var candidate = candidates[index];
+            candidate.Routes.Sort(static (left, right) =>
+            {
+                var view = left.ViewId.CompareTo(right.ViewId);
+                return view != 0 ? view : left.ListId.CompareTo(right.ListId);
+            });
+            var status = candidate.Status != WorldPurchaseViewRelationStatus.Resolved
+                ? candidate.Status
+                : candidate.Routes.Count == 0
+                    ? WorldPurchaseViewRelationStatus.Missing
+                    : WorldPurchaseViewRelationStatus.Resolved;
+            var relation = new WorldPurchaseViewRelation(
+                candidate.Id,
+                candidate.Kind,
+                candidate.CategoryId,
+                status == WorldPurchaseViewRelationStatus.Resolved ? candidate.Routes.Count : 0,
+                status);
+            var routes = status == WorldPurchaseViewRelationStatus.Resolved
+                ? candidate.Routes.ToArray()
+                : Array.Empty<NativePurchaseViewRoute>();
+            output.Append(relation);
+            for (var routeIndex = 0; routeIndex < routes.Length; routeIndex++)
+                routeOutput.Append(new WorldPurchaseViewRoute(
+                    candidate.Id, routes[routeIndex].ListId, routes[routeIndex].ViewId));
+            snapshot.Add(
+                new CandidateKey(candidate.Kind, candidate.Id),
+                new NativePurchaseViewResolution(
+                    in relation, routes, DiagnosticName(candidate.Native)));
+            if (status != WorldPurchaseViewRelationStatus.Resolved) unresolved++;
+        }
         _snapshot = snapshot;
         _snapshotEpoch = lifecycleEpoch;
-        return sampled;
+        return candidates.Count;
+    }
+
+    private void ReadForwardRegistry(
+        WorldPurchaseCandidateKind kind,
+        FieldInfo registryField,
+        Type expectedType,
+        HashSet<Guid> identities,
+        Dictionary<object, Guid> identityCache,
+        List<ForwardCandidate> candidates,
+        ref int skipped)
+    {
+        var registry = List(registryField.GetValue(null), expectedType.Name + ".All");
+        foreach (var value in registry)
+        {
+            if (value is null || value.GetType() != expectedType)
+            {
+                skipped++;
+                continue;
+            }
+
+            try
+            {
+                var id = CachedIdentity(CandidateIdentity(kind), value, identityCache);
+                if (id == Guid.Empty || !identities.Add(id))
+                {
+                    skipped++;
+                    continue;
+                }
+                candidates.Add(new ForwardCandidate(kind, id, value));
+            }
+            catch (Exception ex) when (ex is RelationFailure || IsExpected(ex))
+            {
+                skipped++;
+            }
+        }
+    }
+
+    private void ValidateStructureCategories(
+        List<ForwardCandidate> candidates,
+        Dictionary<object, Guid> identityCache)
+    {
+        var categories = new Dictionary<object, List<ForwardCandidate>>(ReferenceComparer.Instance);
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var candidate = candidates[index];
+            if (candidate.Kind != WorldPurchaseCandidateKind.Structure) continue;
+            try
+            {
+                var category = Exact(
+                    _native.StructureCategory.GetValue(candidate.Native),
+                    _native.StructureCategoryType,
+                    "StructureSO.structureType");
+                candidate.CategoryId = CachedIdentity(
+                    _native.StructureCategoryIdentity, category, identityCache);
+                if (candidate.CategoryId == Guid.Empty)
+                {
+                    candidate.Status = WorldPurchaseViewRelationStatus.Contradictory;
+                    continue;
+                }
+                if (!categories.TryGetValue(category, out var members))
+                    categories.Add(category, members = new List<ForwardCandidate>());
+                members.Add(candidate);
+            }
+            catch (Exception ex) when (ex is RelationFailure || IsExpected(ex))
+            {
+                candidate.Status = WorldPurchaseViewRelationStatus.Unreadable;
+            }
+        }
+
+        foreach (var pair in categories)
+        {
+            try
+            {
+                var authored = List(
+                    _native.StructureCategoryMembers.GetValue(pair.Key),
+                    "StructureTypeSO.structures");
+                var counts = new Dictionary<object, int>(ReferenceComparer.Instance);
+                foreach (var value in authored)
+                {
+                    var member = Exact(value, _native.StructureType, "StructureTypeSO.structures[]");
+                    if (CachedIdentity(_native.StructureIdentity, member, identityCache) == Guid.Empty)
+                        throw new RelationFailure(WorldPurchaseViewRelationStatus.Contradictory);
+                    counts.TryGetValue(member, out var count);
+                    counts[member] = count + 1;
+                }
+                for (var index = 0; index < pair.Value.Count; index++)
+                {
+                    var candidate = pair.Value[index];
+                    if (!counts.TryGetValue(candidate.Native, out var count) || count != 1)
+                        candidate.Status = WorldPurchaseViewRelationStatus.Contradictory;
+                }
+            }
+            catch (Exception ex) when (ex is RelationFailure || IsExpected(ex))
+            {
+                for (var index = 0; index < pair.Value.Count; index++)
+                    pair.Value[index].Status = WorldPurchaseViewRelationStatus.Unreadable;
+            }
+        }
+    }
+
+    private void ReadForwardViews(
+        List<ForwardCandidate> candidates,
+        Dictionary<object, Guid> identityCache)
+    {
+        var byNative = new Dictionary<object, ForwardCandidate>(ReferenceComparer.Instance);
+        for (var index = 0; index < candidates.Count; index++)
+            byNative[candidates[index].Native] = candidates[index];
+        var listMembers = new Dictionary<object, List<ForwardCandidate>>(ReferenceComparer.Instance);
+        var seenViews = new HashSet<Guid>();
+        var views = List(_native.ViewAll.GetValue(null), "ViewSO.All");
+        foreach (var value in views)
+        {
+            var view = Exact(value, _native.ViewType, "ViewSO");
+            var viewId = CachedIdentity(_native.ViewIdentity, view, identityCache);
+            if (viewId == Guid.Empty || !seenViews.Add(viewId))
+                throw new RelationFailure(WorldPurchaseViewRelationStatus.Contradictory);
+            ReadForwardLists(view, viewId, _native.RelevantLists, byNative, listMembers, identityCache);
+            ReadForwardLists(view, viewId, _native.AvailableLists, byNative, listMembers, identityCache);
+        }
+    }
+
+    private void ReadForwardLists(
+        object view,
+        Guid viewId,
+        FieldInfo source,
+        Dictionary<object, ForwardCandidate> candidates,
+        Dictionary<object, List<ForwardCandidate>> listMembers,
+        Dictionary<object, Guid> identityCache)
+    {
+        var lists = List(source.GetValue(view), "ViewSO." + source.Name);
+        foreach (var value in lists)
+        {
+            if (value is null) throw new RelationFailure(WorldPurchaseViewRelationStatus.Contradictory);
+            var runtimeType = value.GetType();
+            WorldPurchaseCandidateKind kind;
+            if (runtimeType == _native.StructureListType) kind = WorldPurchaseCandidateKind.Structure;
+            else if (runtimeType == _native.UpgradeListType) kind = WorldPurchaseCandidateKind.Upgrade;
+            else continue;
+
+            var listId = CachedIdentity(_native.ListIdentity, value, identityCache);
+            if (listId == Guid.Empty)
+                throw new RelationFailure(WorldPurchaseViewRelationStatus.Contradictory);
+            if (!listMembers.TryGetValue(value, out var members))
+            {
+                members = new List<ForwardCandidate>();
+                var authored = List(
+                    CandidateListMembers(kind).GetValue(value), runtimeType.Name + ".value");
+                var seen = new HashSet<object>(ReferenceComparer.Instance);
+                foreach (var memberValue in authored)
+                {
+                    var member = Exact(memberValue, CandidateType(kind), runtimeType.Name + ".value[]");
+                    if (CachedIdentity(CandidateIdentity(kind), member, identityCache) == Guid.Empty ||
+                        !candidates.TryGetValue(member, out var candidate) ||
+                        candidate.Kind != kind || !seen.Add(member))
+                        throw new RelationFailure(WorldPurchaseViewRelationStatus.Contradictory);
+                    members.Add(candidate);
+                }
+                listMembers.Add(value, members);
+            }
+
+            for (var index = 0; index < members.Count; index++)
+            {
+                var candidate = members[index];
+                var duplicate = false;
+                for (var routeIndex = 0; routeIndex < candidate.Routes.Count; routeIndex++)
+                {
+                    var route = candidate.Routes[routeIndex];
+                    if (route.ViewId == viewId && route.ListId == listId) duplicate = true;
+                }
+                if (!duplicate)
+                    candidate.Routes.Add(new NativePurchaseViewRoute(
+                        listId,
+                        DiagnosticName(value),
+                        viewId,
+                        DiagnosticName(view),
+                        view));
+            }
+        }
+    }
+
+    private static Guid CachedIdentity(
+        MethodInfo method,
+        object target,
+        Dictionary<object, Guid> cache)
+    {
+        if (cache.TryGetValue(target, out var id)) return id;
+        if (method.Invoke(target, Array.Empty<object>()) is not Guid value)
+            throw new RelationFailure(WorldPurchaseViewRelationStatus.Unreadable);
+        cache.Add(target, value);
+        return value;
+    }
+
+    private sealed class ForwardCandidate
+    {
+        internal ForwardCandidate(WorldPurchaseCandidateKind kind, Guid id, object native)
+        {
+            Kind = kind;
+            Id = id;
+            Native = native;
+        }
+
+        internal WorldPurchaseCandidateKind Kind { get; }
+        internal Guid Id { get; }
+        internal object Native { get; }
+        internal Guid CategoryId { get; set; }
+        internal WorldPurchaseViewRelationStatus Status { get; set; }
+        internal List<NativePurchaseViewRoute> Routes { get; } = new();
+    }
+
+    private sealed class ReferenceComparer : IEqualityComparer<object>
+    {
+        internal static readonly IEqualityComparer<object> Instance = new ReferenceComparer();
+        public new bool Equals(object? left, object? right) => ReferenceEquals(left, right);
+        public int GetHashCode(object value) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(value);
     }
 
     internal void Invalidate()

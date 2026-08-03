@@ -58,8 +58,10 @@ Every rejection names the check that refused, in the named-cache vocabulary
 (`UpgradeSO.cachedCostLevel` is the naming precedent). "The game said no" is not a reason.
 
 Action dispatch deliberately continues under the cycle-pinned configuration even when a newer
-committed generation appears while its batch drains. That staleness is bounded by the batch's
-one-or-two-frame execution (normally one or two publications), and configuration has one
+committed generation appears while its batch drains. Dispatch is bounded per frame, so a batch of
+`N` actions under bound `B` spans `ceil(N / B)` frames; world staleness across those frames is
+expected and is handled by live boundary revalidation plus feature-local spend reconciliation.
+Configuration has one
 player-driven writer operating at human rate; adding a second configuration read or invalidation
 path would buy only an imperceptible narrowing window. A future design with long-running batches
 changes this invariant and must revisit the decision. Master-disable also releases feature

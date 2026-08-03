@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using OrbModding.Common.Runtime.GameMath;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
@@ -55,11 +56,41 @@ internal readonly struct WorldAlchemyInstance
     internal BigDouble DrainRatio { get; }
 }
 
+/// <summary>The drain inputs captured from one active Concept assignment.</summary>
+internal readonly struct RawWorldAlchemyInstance
+{
+    internal RawWorldAlchemyInstance(
+        Guid recipeId,
+        int quantity,
+        int queuedQuantity,
+        bool drainReadable,
+        bool isDrainApplied,
+        BigDouble currentRatio,
+        BigDouble usageRatio)
+    {
+        RecipeId = recipeId;
+        Quantity = quantity;
+        QueuedQuantity = queuedQuantity;
+        DrainReadable = drainReadable;
+        IsDrainApplied = isDrainApplied;
+        CurrentRatio = currentRatio;
+        UsageRatio = usageRatio;
+    }
+
+    internal Guid RecipeId { get; }
+    internal int Quantity { get; }
+    internal int QueuedQuantity { get; }
+    internal bool DrainReadable { get; }
+    internal bool IsDrainApplied { get; }
+    internal BigDouble CurrentRatio { get; }
+    internal BigDouble UsageRatio { get; }
+}
+
 internal enum WorldAlchemyCostKind
 {
     RecipeDrain = 0,
     CurrentDrain = 1,
-    ProspectiveDrain = 2,
+    Bandwidth = 2,
 }
 
 internal static class WorldConceptRecipeLookup
@@ -126,12 +157,12 @@ internal sealed class WorldConceptRecipeBuffer
 
 internal sealed class WorldAlchemyInstanceBuffer
 {
-    private WorldAlchemyInstance[] _samples = new WorldAlchemyInstance[16];
+    private RawWorldAlchemyInstance[] _samples = new RawWorldAlchemyInstance[16];
     private int _count;
     internal int Count => _count;
-    internal ref readonly WorldAlchemyInstance this[int index] => ref _samples[index];
+    internal ref readonly RawWorldAlchemyInstance this[int index] => ref _samples[index];
     internal void Reset() => _count = 0;
-    internal void Append(in WorldAlchemyInstance sample)
+    internal void Append(in RawWorldAlchemyInstance sample)
     {
         if (_count >= _samples.Length) Array.Resize(ref _samples, _samples.Length * 2);
         _samples[_count++] = sample;
@@ -151,7 +182,21 @@ internal static class WorldAlchemyRowDeriver
     internal static PublicationTable<WorldAlchemyInstance> Build(WorldAlchemyInstanceBuffer buffer)
     {
         var rows = new WorldAlchemyInstance[buffer.Count];
-        for (var index = 0; index < buffer.Count; index++) rows[index] = buffer[index];
+        for (var index = 0; index < buffer.Count; index++)
+        {
+            var sample = buffer[index];
+            var ratio = !sample.IsDrainApplied
+                ? BigDouble.One
+                : sample.CurrentRatio.CompareTo(sample.UsageRatio) <= 0
+                    ? sample.CurrentRatio
+                    : sample.UsageRatio;
+            rows[index] = new WorldAlchemyInstance(
+                sample.RecipeId,
+                sample.Quantity,
+                sample.QueuedQuantity,
+                sample.DrainReadable,
+                ratio);
+        }
         Array.Sort(rows, static (left, right) => left.RecipeId.CompareTo(right.RecipeId));
         return PublicationTable<WorldAlchemyInstance>.Create(rows, rows.Length);
     }
@@ -213,37 +258,6 @@ internal static class WorldAlchemyCostLookup
             count++;
         }
 
-        return count > 0;
-    }
-
-    internal static bool TryFindProspectiveRange(
-        PublicationTable<WorldAlchemyCost> table,
-        Guid recipeId,
-        int targetQuantity,
-        out int start,
-        out int count)
-    {
-        var rows = table.AsSpan();
-        var low = 0;
-        var high = rows.Length - 1;
-        while (low <= high)
-        {
-            var middle = low + ((high - low) / 2);
-            var comparison = Compare(
-                rows[middle].RecipeId, rows[middle].Kind, rows[middle].TargetQuantity,
-                recipeId, WorldAlchemyCostKind.ProspectiveDrain, targetQuantity);
-            if (comparison < 0) low = middle + 1;
-            else high = middle - 1;
-        }
-
-        start = low;
-        count = 0;
-        while (start + count < rows.Length &&
-               Compare(
-                   rows[start + count].RecipeId, rows[start + count].Kind,
-                   rows[start + count].TargetQuantity,
-                   recipeId, WorldAlchemyCostKind.ProspectiveDrain, targetQuantity) == 0)
-            count++;
         return count > 0;
     }
 
@@ -328,21 +342,42 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
     private readonly Func<object, IList?>? _recipeValues;
     private readonly MethodInfo? _canAddInstance;
     private readonly Func<object, Guid>? _recipeId;
+    private readonly MethodInfo? _coreType;
     private readonly Func<object, Guid>? _coreTypeId;
     private readonly Func<object, object?>? _recipeDrain;
+    private readonly Func<object, object?>? _bandwidthCost;
+    private readonly Func<object, int>? _advancementLevel;
+    private readonly Func<object, object?>? _instanceScalingRef;
+    private readonly Func<object, object?>? _instanceScaling;
+    private readonly Func<object, Guid>? _instanceScalingId;
+    private readonly Func<object, bool>? _useRarity;
+    private readonly Func<object, IList?>? _rarityBlacklist;
+    private readonly Func<object, object?>? _scalingConversion;
+    private readonly Func<object, object?>? _scalingValues;
+    private readonly Func<object, object?>? _listReferenceVariable;
+    private readonly Func<object, object?>? _listVariableValue;
+    private readonly Func<object, object?>? _drainCostMod;
+    private readonly Func<object, object?>? _speed;
+    private readonly Func<object, object?>? _freeUsageSlots;
+    private readonly Func<object, object?>? _overdriveSpeed;
+    private readonly Func<object, object?>? _overdriveDrain;
+    private readonly Func<object, object?>? _completionCostAdvance;
+    private readonly Func<object, object?>? _drainCostLevel;
+    private readonly Func<object, object?>? _requirementCostPenalty;
+    private readonly Func<object, object?>? _requirementSpeedPenalty;
+    private readonly Func<object, int>? _modifierType;
+    private readonly Func<object, int>? _modifierOrder;
+    private readonly Func<object, BigDouble>? _modifierAmount;
+    private readonly NativeModifierProgramReader? _programReader;
     private readonly Func<object, bool>? _instanceIsEmpty;
     private readonly Func<object, Guid>? _instanceRecipeId;
     private readonly Func<object, int>? _quantity;
     private readonly Func<object, int>? _queuedQuantity;
     private readonly Func<object, object?>? _resourceDrain;
-    private readonly Func<object, BigDouble>? _drainRatio;
+    private readonly Func<object, bool>? _isDrainApplied;
+    private readonly Func<object, BigDouble>? _currentRatio;
+    private readonly Func<object, BigDouble>? _usageRatio;
     private readonly MethodInfo? _currentDrain;
-    private readonly FieldInfo? _instanceQuantityField;
-    private readonly ConstructorInfo? _instanceConstructor;
-    private readonly MethodInfo? _getDrainCostMod;
-    private readonly MethodInfo? _asPercent;
-    private readonly MethodInfo? _multiplyCost;
-    private readonly MethodInfo? _maximumQuantity;
     private readonly Func<object, IList?>? _costEntries;
     private readonly Func<object, Guid>? _entryResourceId;
     private readonly Func<object, BigDouble>? _entryAmount;
@@ -372,38 +407,63 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         if (_canAddInstance?.ReturnType != typeof(bool)) _canAddInstance = null;
         _instanceType = NativeAccessorBinder.CollectionElementType(activeListType, "value");
         _recipeId = NativeAccessorBinder.Call<Guid>(_recipeType, "GetGuid");
-        _coreTypeId = NativeAccessorBinder.CallReferenceGuid(_recipeType, "GetCoreType");
+        _coreType = _recipeType.GetMethod("GetCoreType", Instance, null, Type.EmptyTypes, null);
+        var alchemyType = resolveType("AlchemyTypeSO");
+        _coreTypeId = NativeAccessorBinder.Call<Guid>(alchemyType, "GetGuid");
         _recipeDrain = NativeAccessorBinder.Reference(_recipeType, "drainCost");
+        _bandwidthCost = NativeAccessorBinder.Reference(_recipeType, "bandwidthCost");
+        _advancementLevel = NativeAccessorBinder.Field<int>(_recipeType, "advancementLevel");
+
+        _instanceScalingRef = NativeAccessorBinder.Reference(_recipeType, "instanceScaling");
+        var scalingRefType = _recipeType.GetField("instanceScaling", Instance)?.FieldType;
+        _instanceScaling = NativeAccessorBinder.Reference(scalingRefType, "scaling");
+        var scalingType = resolveType("InstanceScalingSO");
+        _instanceScalingId = NativeAccessorBinder.Call<Guid>(scalingType, "GetGuid");
+        _useRarity = NativeAccessorBinder.Field<bool>(scalingType, "useRarity");
+        _rarityBlacklist = NativeAccessorBinder.CollectionField(scalingType, "rarityAttributeBlacklist");
+        _scalingConversion = NativeAccessorBinder.Reference(scalingType, "instanceScaling");
+        var conversionType = scalingType?.GetField("instanceScaling", Instance)?.FieldType;
+        var scalingValuesField = FindInstanceField(conversionType, "values");
+        _scalingValues = scalingValuesField is null ? null : scalingValuesField.GetValue;
+
+        var listRefType = resolveType("ModifierListRef");
+        var listVariableType = resolveType("ModifierListVariable");
+        var listType = resolveType("ValueModifierList");
+        _listReferenceVariable = NativeAccessorBinder.Reference(listRefType, "variable");
+        _listVariableValue = NativeAccessorBinder.Reference(listVariableType, "value");
+        _drainCostMod = NativeAccessorBinder.Reference(_recipeType, "drainCostMod");
+        _speed = NativeAccessorBinder.Reference(_recipeType, "speed");
+        _freeUsageSlots = NativeAccessorBinder.Reference(_recipeType, "freeUsageSlots");
+        _overdriveSpeed = NativeAccessorBinder.Reference(_recipeType, "overdriveSpeed");
+        _overdriveDrain = NativeAccessorBinder.Reference(_recipeType, "overdriveDrainCostMod");
+        _completionCostAdvance = NativeAccessorBinder.Reference(_recipeType, "completionCostAdvanceMod");
+        _drainCostLevel = NativeAccessorBinder.Reference(_recipeType, "drainCostLevelMod");
+        _requirementCostPenalty = NativeAccessorBinder.BoxedField(alchemyType, "reqCostPenalty");
+        _requirementSpeedPenalty = NativeAccessorBinder.BoxedField(alchemyType, "reqSpeedPenalty");
+
+        var valueModifierType = alchemyType?.GetField("reqCostPenalty", Instance)?.FieldType;
+        _modifierType = NativeAccessorBinder.EnumField(valueModifierType, "type");
+        _modifierOrder = NativeAccessorBinder.Field<int>(valueModifierType, "order");
+        _modifierAmount = NativeAccessorBinder.Field<BigDouble>(valueModifierType, "adjustReal");
+        _programReader = new NativeModifierProgramReader(resolveType("ValueModifierRecord"), listType);
 
         _instanceIsEmpty = NativeAccessorBinder.Call<bool>(_instanceType, "IsEmpty");
         _instanceRecipeId = NativeAccessorBinder.CallReferenceGuid(_instanceType, "get_reference");
         _quantity = NativeAccessorBinder.Field<int>(_instanceType, "quantity");
-        _instanceQuantityField = _instanceType?.GetField("quantity", Instance);
         _queuedQuantity = NativeAccessorBinder.Field<int>(_instanceType, "queuedQuantity");
         _resourceDrain = NativeAccessorBinder.Reference(_instanceType, "resourceDrain");
 
         var drainType = _instanceType?.GetField("resourceDrain", Instance)?.FieldType;
-        _drainRatio = NativeAccessorBinder.Call<BigDouble>(drainType, "GetRatio");
+        _isDrainApplied = NativeAccessorBinder.Field<bool>(drainType, "isDrainApplied");
+        _currentRatio = NativeAccessorBinder.Field<BigDouble>(drainType, "currentRatio");
+        _usageRatio = NativeAccessorBinder.Field<BigDouble>(drainType, "usageRatio");
         _currentDrain = drainType?.GetMethod("GetCurrentDrain", Instance, null, Type.EmptyTypes, null);
-
-        _instanceConstructor = _instanceType?.GetConstructor(
-            Instance, null, new[] { _recipeType }, null);
-        _getDrainCostMod = _instanceType?.GetMethod(
-            "GetDrainCostMod", Instance, null, Type.EmptyTypes, null);
-        _asPercent = _getDrainCostMod?.ReturnType.GetMethod(
-            "AsPercent", Instance, null, Type.EmptyTypes, null);
-        _maximumQuantity = _recipeType.GetMethod(
-            "GetMaxUsageSlots", Instance, null, Type.EmptyTypes, null);
 
         var costListType = _recipeType.GetField("drainCost", Instance)?.FieldType;
         var entryType = NativeAccessorBinder.CollectionElementType(costListType, "costs");
         _costEntries = NativeAccessorBinder.CollectionField(costListType, "costs");
         _entryResourceId = NativeAccessorBinder.ReferenceGuid(entryType, "resource");
         _entryAmount = NativeAccessorBinder.Field<BigDouble>(entryType, "valueBig");
-        _multiplyCost = costListType?.GetMethod(
-            "Multiply", Instance, null,
-            _asPercent is null ? Type.EmptyTypes : new[] { _asPercent.ReturnType }, null);
-
         _unavailable = IsBound()
             ? string.Empty
             : "the active Concept instance or drain-vector members were unavailable";
@@ -418,6 +478,7 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         frame.ConceptRecipes.Reset();
         frame.AlchemyInstances.Reset();
         frame.AlchemyCosts.Reset();
+        frame.ConceptDrainBasis.Reset();
         if (!IsAvailable) return WorldCategoryReport.Missing(Category, _unavailable);
 
         var registry = NativeAccessorBinder.StaticDictionary(_registryType, "RuntimeLookup");
@@ -436,8 +497,7 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
             var recipes = _recipeValues!(recipeList);
             var active = _activeValues!(activeList);
             var conceptIds = new HashSet<Guid>();
-            var recipesById = new Dictionary<Guid, object>();
-            var quantitiesById = new Dictionary<Guid, int>();
+            var capturedScalings = new HashSet<Guid>();
             var sampled = 0;
             var skipped = 0;
             var firstFailure = string.Empty;
@@ -452,7 +512,8 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
                 }
 
                 var id = _recipeId!(recipe);
-                var core = _coreTypeId!(recipe);
+                var coreObject = _coreType!.Invoke(recipe, null);
+                var core = coreObject is null ? Guid.Empty : _coreTypeId!(coreObject);
                 if (id == Guid.Empty || core == Guid.Empty || !conceptIds.Add(id))
                 {
                     Skip(ref skipped, ref firstFailure, $"recipe {index} had an invalid identity or core type");
@@ -464,8 +525,9 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
                     throw new InvalidOperationException(
                         "AlchemyInstanceListVariable.CanAddInstance returned no Boolean value");
                 frame.ConceptRecipes.Append(new WorldConceptRecipe(id, core, canAddNow));
-                recipesById.Add(id, recipe);
                 AppendCosts(id, WorldAlchemyCostKind.RecipeDrain, _recipeDrain!(recipe), frame.AlchemyCosts);
+                AppendCosts(id, WorldAlchemyCostKind.Bandwidth, _bandwidthCost!(recipe), frame.AlchemyCosts);
+                CaptureFormulaBasis(id, recipe, coreObject!, core, capturedScalings, frame);
                 sampled++;
             }
 
@@ -490,19 +552,16 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
                 var drain = _resourceDrain!(instance);
                 var current = drain is null ? null : _currentDrain!.Invoke(drain, null);
                 var readable = drain is not null && current is not null;
-                var ratio = readable ? _drainRatio!(drain!) : default;
                 if (readable)
                     AppendCosts(id, WorldAlchemyCostKind.CurrentDrain, current, frame.AlchemyCosts);
-                frame.AlchemyInstances.Append(new WorldAlchemyInstance(
-                    id, _quantity!(instance), _queuedQuantity!(instance), readable, ratio));
-                quantitiesById[id] = Math.Max(0, _quantity(instance));
-            }
-
-            foreach (var pair in recipesById)
-            {
-                quantitiesById.TryGetValue(pair.Key, out var quantity);
-                AppendProspectiveCosts(
-                    pair.Key, pair.Value, quantity, frame.AlchemyCosts);
+                frame.AlchemyInstances.Append(new RawWorldAlchemyInstance(
+                    id,
+                    _quantity!(instance),
+                    _queuedQuantity!(instance),
+                    readable,
+                    readable && _isDrainApplied!(drain!),
+                    readable ? _currentRatio!(drain!) : default,
+                    readable ? _usageRatio!(drain!) : default));
             }
 
             return new WorldCategoryReport(
@@ -536,75 +595,148 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         }
     }
 
-    private void AppendProspectiveCosts(
+    private void CaptureFormulaBasis(
         Guid recipeId,
         object recipe,
-        int quantity,
-        WorldAlchemyCostBuffer destination)
+        object core,
+        Guid coreId,
+        HashSet<Guid> capturedScalings,
+        GameWorldCycleFrame frame)
     {
-        var maximumValue = _maximumQuantity!.Invoke(recipe, null);
-        if (maximumValue is not int maximum || maximum <= quantity) return;
+        var scalingReference = _instanceScalingRef!(recipe) ??
+            throw new InvalidOperationException("instanceScaling was null");
+        var scaling = _instanceScaling!(scalingReference) ??
+            throw new InvalidOperationException("instanceScaling.scaling was null");
+        var scalingId = _instanceScalingId!(scaling);
+        if (scalingId == Guid.Empty)
+            throw new InvalidOperationException("instanceScaling carried no identity");
 
-        var targets = new HashSet<int> { 1 };
-        var delta = maximum - quantity;
-        while (delta > 0)
-        {
-            targets.Add(quantity + delta);
-            delta /= 2;
-        }
+        var useRarity = _useRarity!(scaling);
+        var blacklist = _rarityBlacklist!(scaling);
+        var costUsesRarity = useRarity && !ContainsScalingKind(blacklist, 4);
+        var speedUsesRarity = useRarity && !ContainsScalingKind(blacklist, 6);
 
-        foreach (var target in targets)
-        {
-            if (target <= quantity || target > maximum) continue;
-            var temporary = _instanceConstructor!.Invoke(new[] { recipe });
-            _instanceQuantityField!.SetValue(temporary, target);
-            var multiplier = _getDrainCostMod!.Invoke(temporary, null);
-            var percent = multiplier is null ? null : _asPercent!.Invoke(multiplier, null);
-            var baseDrain = _recipeDrain!(recipe);
-            var prospective = baseDrain is null || percent is null
-                ? null
-                : _multiplyCost!.Invoke(baseDrain, new[] { percent });
-            if (prospective is null)
-                throw new InvalidOperationException("native prospective Concept drain was unavailable");
-            AppendCosts(
-                recipeId,
-                WorldAlchemyCostKind.ProspectiveDrain,
-                prospective,
-                destination,
-                target);
-        }
+        var reqCost = ReadModifier(_requirementCostPenalty!(core));
+        var reqSpeed = ReadModifier(_requirementSpeedPenalty!(core));
+        frame.ConceptDrainBasis.Append(new RawConceptDrainBasis(
+            recipeId,
+            coreId,
+            scalingId,
+            _advancementLevel!(recipe),
+            in reqCost,
+            in reqSpeed,
+            costUsesRarity,
+            speedUsesRarity));
+
+        CaptureRecord(recipeId, WorldModifierProgramRole.ConceptDrain, _drainCostMod!(recipe), frame);
+        CaptureRecord(recipeId, WorldModifierProgramRole.ConceptSpeed, _speed!(recipe), frame);
+        CaptureRecord(
+            recipeId, WorldModifierProgramRole.ConceptFreeUsageSlots, _freeUsageSlots!(recipe), frame);
+        CaptureRecord(
+            recipeId, WorldModifierProgramRole.ConceptOverdriveSpeed, _overdriveSpeed!(recipe), frame);
+        CaptureRecord(
+            recipeId, WorldModifierProgramRole.ConceptOverdriveDrain, _overdriveDrain!(recipe), frame);
+        CaptureList(
+            recipeId, WorldModifierProgramRole.ConceptCompletionCost,
+            _completionCostAdvance!(recipe), frame);
+        CaptureList(
+            recipeId, WorldModifierProgramRole.ConceptDrainLevel,
+            _drainCostLevel!(recipe), frame);
+
+        if (!capturedScalings.Add(scalingId)) return;
+        var conversion = _scalingConversion!(scaling) ??
+            throw new InvalidOperationException("instanceScaling.instanceScaling was null");
+        var values = _scalingValues!(conversion) as IDictionary;
+        CaptureList(
+            scalingId, WorldModifierProgramRole.InstanceScalingCost,
+            FindScalingList(values, 4), frame, resolved: true);
+        CaptureList(
+            scalingId, WorldModifierProgramRole.InstanceScalingSpeed,
+            FindScalingList(values, 6), frame, resolved: true);
     }
 
-    private void AppendCosts(
-        Guid recipeId,
-        WorldAlchemyCostKind kind,
-        object? costList,
-        WorldAlchemyCostBuffer destination,
-        int targetQuantity)
+    private void CaptureRecord(
+        Guid owner,
+        WorldModifierProgramRole role,
+        object? record,
+        GameWorldCycleFrame frame)
     {
-        if (costList is null) return;
-        var entries = _costEntries!(costList);
-        for (var index = 0; index < (entries?.Count ?? 0); index++)
+        if (record is null) throw new InvalidOperationException($"{role} record was null");
+        _programReader!.CaptureRecord(
+            owner, role, record, frame.ModifierPrograms, frame.ModifierProgramEntries);
+    }
+
+    private void CaptureList(
+        Guid owner,
+        WorldModifierProgramRole role,
+        object? referenceOrList,
+        GameWorldCycleFrame frame,
+        bool resolved = false)
+    {
+        object? list = referenceOrList;
+        if (!resolved)
         {
-            var entry = entries![index];
-            if (entry is null) continue;
-            var resourceId = _entryResourceId!(entry);
-            if (resourceId == Guid.Empty) continue;
-            destination.Append(new WorldAlchemyCost(
-                recipeId, kind, resourceId, _entryAmount!(entry), targetQuantity));
+            var variable = referenceOrList is null ? null : _listReferenceVariable!(referenceOrList);
+            list = variable is null ? null : _listVariableValue!(variable);
         }
+        _programReader!.CaptureList(
+            owner, role, list, frame.ModifierPrograms, frame.ModifierProgramEntries);
+    }
+
+    private GameValueModifier ReadModifier(object? modifier)
+    {
+        if (modifier is null) throw new InvalidOperationException("a requirement penalty was null");
+        return new GameValueModifier(
+            (GameValueModifierType)_modifierType!(modifier),
+            _modifierAmount!(modifier),
+            _modifierOrder!(modifier));
+    }
+
+    private static bool ContainsScalingKind(IList? source, int kind)
+    {
+        for (var index = 0; index < (source?.Count ?? 0); index++)
+            if (source![index] is not null && Convert.ToInt32(source[index]) == kind) return true;
+        return false;
+    }
+
+    private static object? FindScalingList(IDictionary? source, int kind)
+    {
+        if (source is null) return null;
+        foreach (DictionaryEntry pair in source)
+            if (pair.Key is not null && Convert.ToInt32(pair.Key) == kind) return pair.Value;
+        return null;
+    }
+
+    private static FieldInfo? FindInstanceField(Type? type, string name)
+    {
+        while (type is not null)
+        {
+            var field = type.GetField(name, Instance | BindingFlags.DeclaredOnly);
+            if (field is not null) return field;
+            type = type.BaseType;
+        }
+        return null;
     }
 
     private bool IsBound() =>
         _activeValues is not null && _recipeValues is not null && _canAddInstance is not null &&
         _instanceType is not null &&
-        _recipeId is not null && _coreTypeId is not null && _recipeDrain is not null &&
+        _recipeId is not null && _coreType is not null && _coreTypeId is not null &&
+        _recipeDrain is not null && _bandwidthCost is not null && _advancementLevel is not null &&
+        _instanceScalingRef is not null && _instanceScaling is not null &&
+        _instanceScalingId is not null && _useRarity is not null && _rarityBlacklist is not null &&
+        _scalingConversion is not null && _scalingValues is not null &&
+        _listReferenceVariable is not null && _listVariableValue is not null &&
+        _drainCostMod is not null && _speed is not null && _freeUsageSlots is not null &&
+        _overdriveSpeed is not null && _overdriveDrain is not null &&
+        _completionCostAdvance is not null && _drainCostLevel is not null &&
+        _requirementCostPenalty is not null && _requirementSpeedPenalty is not null &&
+        _modifierType is not null && _modifierOrder is not null && _modifierAmount is not null &&
+        _programReader?.IsAvailable == true &&
         _instanceIsEmpty is not null && _instanceRecipeId is not null &&
         _quantity is not null && _queuedQuantity is not null &&
-        _resourceDrain is not null && _drainRatio is not null && _currentDrain is not null &&
-        _instanceQuantityField is not null && _instanceConstructor is not null &&
-        _getDrainCostMod is not null && _asPercent is not null && _multiplyCost is not null &&
-        _maximumQuantity?.ReturnType == typeof(int) &&
+        _resourceDrain is not null && _isDrainApplied is not null &&
+        _currentRatio is not null && _usageRatio is not null && _currentDrain is not null &&
         _costEntries is not null && _entryResourceId is not null && _entryAmount is not null;
 
     private static void Skip(ref int skipped, ref string firstFailure, string reason)

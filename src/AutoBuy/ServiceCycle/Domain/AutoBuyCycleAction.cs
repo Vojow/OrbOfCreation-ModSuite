@@ -1,5 +1,6 @@
 using System;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbAutomata;
 
@@ -86,6 +87,31 @@ internal readonly struct AutoBuyPlanBelief
 }
 
 /// <summary>
+/// One resource term that admitted a planned action against the worker's cumulative batch ledger.
+/// It travels with the action so verified earlier spend can be reconciled before native dispatch.
+/// </summary>
+internal readonly struct AutoBuyPlannedSpend
+{
+    public AutoBuyPlannedSpend(
+        Guid resourceId,
+        BigDouble cost,
+        BigDouble remainingBeforeSpend,
+        BigDouble reserveFloor)
+    {
+        if (resourceId == Guid.Empty) throw new ArgumentException("A planned spend needs a resource UUID.", nameof(resourceId));
+        ResourceId = resourceId;
+        Cost = cost;
+        RemainingBeforeSpend = remainingBeforeSpend;
+        ReserveFloor = reserveFloor;
+    }
+
+    public Guid ResourceId { get; }
+    public BigDouble Cost { get; }
+    public BigDouble RemainingBeforeSpend { get; }
+    public BigDouble ReserveFloor { get; }
+}
+
+/// <summary>
 /// One planned purchase for a specific candidate. Unlike Auto Harvest's family-only action, an Auto
 /// Buy target must be a specific candidate, so the action carries the stable UUID plus the exact
 /// family (Structure/Upgrade) and a <see cref="Count"/> of levels to request. The action adapter
@@ -121,7 +147,8 @@ internal readonly struct AutoBuyCycleAction
         AutoBuyPlanBelief belief,
         MonotonicTimestamp worldCollectedAt,
         Guid owningListId = default,
-        Guid owningViewId = default)
+        Guid owningViewId = default,
+        PublicationTable<AutoBuyPlannedSpend>? plannedSpend = null)
     {
         if (kind is not (AutoBuyCandidateKind.Structure or AutoBuyCandidateKind.Upgrade))
             throw new ArgumentOutOfRangeException(nameof(kind));
@@ -137,6 +164,7 @@ internal readonly struct AutoBuyCycleAction
         WorldCollectedAt = worldCollectedAt;
         OwningListId = owningListId;
         OwningViewId = owningViewId;
+        PlannedSpend = plannedSpend ?? PublicationTable<AutoBuyPlannedSpend>.Empty;
     }
 
     public AutoBuyCandidateKind Kind { get; }
@@ -164,6 +192,9 @@ internal readonly struct AutoBuyCycleAction
     /// <summary>The deterministic authored list/view route that admitted this candidate.</summary>
     public Guid OwningListId { get; }
     public Guid OwningViewId { get; }
+
+    /// <summary>The exact resource terms whose reconciled margin decides whether this action dispatches.</summary>
+    public PublicationTable<AutoBuyPlannedSpend> PlannedSpend { get; }
 
     /// <summary>
     /// How many levels this action should request for its candidate — the live bulk or multiplier

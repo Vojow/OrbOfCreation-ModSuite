@@ -1,3 +1,4 @@
+using System;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime;
 
@@ -60,7 +61,7 @@ internal sealed class GameWorldCycleFrame
     /// The game's action queues, and the slots inside them. A queue is an entity; a slot is a
     /// position in one, so the two cannot share a buffer.
     /// </summary>
-    internal WorldSampleBuffer<WorldActionQueue, WorldActionQueue> ActionQueues { get; } = new();
+    internal WorldSampleBuffer<RawWorldActionQueue, WorldActionQueue> ActionQueues { get; } = new();
 
     internal WorldActionQueueSlotBuffer ActionQueueSlots { get; } = new();
 
@@ -84,6 +85,14 @@ internal sealed class GameWorldCycleFrame
     internal WorldAlchemyInstanceBuffer AlchemyInstances { get; } = new();
 
     internal WorldAlchemyCostBuffer AlchemyCosts { get; } = new();
+    internal RawConceptDrainBasisBuffer ConceptDrainBasis { get; } = new();
+    internal WorldModifierProgramBuffer ModifierPrograms { get; } = new();
+    internal WorldModifierProgramEntryBuffer ModifierProgramEntries { get; } = new();
+    internal RawMasteryCostBuffer MasteryCosts { get; } = new();
+    internal Guid MasteryCostStandardId { get; set; }
+    internal WorldRelationBuffer<WorldSpellRecipeAuthoring> SpellRecipeAuthoring { get; } = new();
+    internal WorldRelationBuffer<WorldSpellAuthoredCost> SpellAuthoredCosts { get; } = new();
+    internal WorldRelationBuffer<WorldSpellRelation> SpellRelations { get; } = new();
 
     /// <summary>
     /// What each plot's author decided, and the phases it authors. Keyed by the plot rather than
@@ -111,7 +120,7 @@ internal sealed class GameWorldCycleFrame
     internal WorldRelationBuffer<WorldPurchaseViewRoute> PurchaseViewRoutes { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyRecipe, WorldAlchemyRecipe> AlchemyRecipes { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyType, WorldAlchemyType> AlchemyTypes { get; } = new();
-    internal WorldSampleBuffer<WorldSpellRecipe, WorldSpellRecipe> SpellRecipes { get; } = new();
+    internal WorldSampleBuffer<RawSpellRecipeSample, WorldSpellRecipe> SpellRecipes { get; } = new();
     internal WorldSampleBuffer<WorldSpellType, WorldSpellType> SpellTypes { get; } = new();
     internal WorldSampleBuffer<WorldEquipment, WorldEquipment> Equipment { get; } = new();
     internal WorldSampleBuffer<WorldEquipmentType, WorldEquipmentType> EquipmentTypes { get; } = new();
@@ -121,7 +130,8 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<RawHarvestResourceSample, WorldHarvestResource> HarvestResources { get; } = new();
     internal WorldSampleBuffer<WorldTimeRune, WorldTimeRune> TimeRunes { get; } = new();
     internal WorldSampleBuffer<WorldGlyph, WorldGlyph> Glyphs { get; } = new();
-    internal WorldSampleBuffer<WorldConsumable, WorldConsumable> Consumables { get; } = new();
+    internal WorldSampleBuffer<RawConsumableSample, WorldConsumable> Consumables { get; } = new();
+    internal Guid ConsumableMaximumCarryLoadVariableId { get; set; }
     internal WorldConsumableTypeBuffer ConsumableTypes { get; } = new();
     internal WorldConsumableCostBuffer ConsumableCosts { get; } = new();
     internal WorldConsumableUsageBuffer ConsumableUsages { get; } = new();
@@ -225,6 +235,19 @@ internal static class GameWorldFrameDeriver
             frame.ModifierVariables.Build(WorldIdentityDeriver<WorldModifierVariable>.Shared);
         var intVariables =
             frame.IntVariables.Build(WorldIdentityDeriver<WorldNumberVariable>.Shared);
+        var alchemyTypes = frame.AlchemyTypes.Build(WorldIdentityDeriver<WorldAlchemyType>.Shared);
+        var alchemyCosts = WorldAlchemyCostDeriver.Build(frame.AlchemyCosts);
+        var modifierPrograms = WorldModifierProgramDeriver.Build(frame.ModifierPrograms);
+        var modifierProgramEntries = WorldModifierProgramDeriver.Build(frame.ModifierProgramEntries);
+        var conceptDrainBasis = WorldConceptDrainBasisDeriver.Build(
+            frame.ConceptDrainBasis, alchemyTypes, intVariables, alchemyCosts, resources);
+        var spellLevelCosts = OwnedMasteryCostMath.Build(
+            frame.MasteryCosts,
+            frame.SpellRecipes,
+            frame.MasteryCostStandardId,
+            modifierPrograms,
+            modifierProgramEntries,
+            resources);
 
         // Built after the three tables it reads, because a cost is the one derived fact that is not a
         // function of its own category: it needs the entity's modifiers, each resource's attribute
@@ -242,6 +265,9 @@ internal static class GameWorldFrameDeriver
         var plotNodes = frame.PlotNodes.Build(WorldPlotNodeDeriver.Shared);
         var plotNodeActions = frame.PlotNodeActions.Build(WorldIdentityDeriver<WorldPlotNodeAction>.Shared);
         var plotActions = new WorldPlotActionDeriver(plotNodes, plotNodeActions).Build(frame.PlotActions);
+        var purchaseViews = WorldPurchaseViewRelationDeriver.Build(
+            frame.PurchaseViewRelations,
+            frame.PurchaseViewRoutes);
 
         return new GameWorldState
         {
@@ -260,9 +286,34 @@ internal static class GameWorldFrameDeriver
             IntVariables = intVariables,
             BoolVariables = frame.BoolVariables.Build(WorldIdentityDeriver<WorldBoolVariable>.Shared),
             ModifierVariables = modifierVariables,
-            AlchemyRecipes = frame.AlchemyRecipes.Build(WorldIdentityDeriver<WorldAlchemyRecipe>.Shared),
-            AlchemyTypes = frame.AlchemyTypes.Build(WorldIdentityDeriver<WorldAlchemyType>.Shared),
-            SpellRecipes = frame.SpellRecipes.Build(WorldIdentityDeriver<WorldSpellRecipe>.Shared),
+            AlchemyRecipes = WorldAlchemyRecipeDeriver.Build(
+                frame.AlchemyRecipes, alchemyTypes, intVariables),
+            AlchemyTypes = alchemyTypes,
+            SpellRecipes = frame.SpellRecipes.Build(new WorldSpellRecipeDeriver(spellLevelCosts)),
+            SpellRecipeAuthoring = WorldSpellGraphDeriver.Build(
+                frame.SpellRecipeAuthoring,
+                static (left, right) => left.RecipeId.CompareTo(right.RecipeId)),
+            SpellAuthoredCosts = WorldSpellGraphDeriver.Build(
+                frame.SpellAuthoredCosts,
+                static (left, right) =>
+                {
+                    var recipe = left.RecipeId.CompareTo(right.RecipeId);
+                    if (recipe != 0) return recipe;
+                    var kind = ((int)left.Kind).CompareTo((int)right.Kind);
+                    return kind != 0 ? kind : left.Ordinal.CompareTo(right.Ordinal);
+                }),
+            SpellRelations = WorldSpellGraphDeriver.Build(
+                frame.SpellRelations,
+                static (left, right) =>
+                {
+                    var recipe = left.RecipeId.CompareTo(right.RecipeId);
+                    if (recipe != 0) return recipe;
+                    var kind = ((int)left.Kind).CompareTo((int)right.Kind);
+                    return kind != 0 ? kind : left.Ordinal.CompareTo(right.Ordinal);
+                }),
+            MasteryCosts = spellLevelCosts,
+            ModifierPrograms = modifierPrograms,
+            ModifierProgramEntries = modifierProgramEntries,
             SpellTypes = frame.SpellTypes.Build(WorldIdentityDeriver<WorldSpellType>.Shared),
             Equipment = frame.Equipment.Build(WorldIdentityDeriver<WorldEquipment>.Shared),
             EquipmentTypes = frame.EquipmentTypes.Build(WorldIdentityDeriver<WorldEquipmentType>.Shared),
@@ -272,7 +323,13 @@ internal static class GameWorldFrameDeriver
             HarvestResources = frame.HarvestResources.Build(new WorldHarvestResourceDeriver(frame.FrameGlobals)),
             TimeRunes = frame.TimeRunes.Build(WorldIdentityDeriver<WorldTimeRune>.Shared),
             Glyphs = frame.Glyphs.Build(WorldIdentityDeriver<WorldGlyph>.Shared),
-            Consumables = frame.Consumables.Build(WorldIdentityDeriver<WorldConsumable>.Shared),
+            Consumables = frame.Consumables.Build(new WorldConsumableDeriver(
+                WorldLookup.TryFind(
+                    intVariables,
+                    frame.ConsumableMaximumCarryLoadVariableId,
+                    out var maximumCarryLoad)
+                    ? maximumCarryLoad.Value.ToInt()
+                    : 0)),
             ConsumableTypes = WorldConsumableRelationDeriver.Build(frame.ConsumableTypes),
             ConsumableCosts = WorldConsumableRelationDeriver.Build(frame.ConsumableCosts),
             ConsumableUsages = WorldConsumableRelationDeriver.Build(frame.ConsumableUsages),
@@ -328,18 +385,8 @@ internal static class GameWorldFrameDeriver
             ThoughtStreams = frame.ThoughtStreams.Build(WorldIdentityDeriver<WorldThoughtStream>.Shared),
             Tutorials = frame.Tutorials.Build(WorldIdentityDeriver<WorldTutorial>.Shared),
             Views = frame.Views.Build(WorldIdentityDeriver<WorldView>.Shared),
-            PurchaseViewRelations = WorldScribeRelationDeriver.Build(
-                frame.PurchaseViewRelations,
-                static (left, right) => left.CandidateId.CompareTo(right.CandidateId)),
-            PurchaseViewRoutes = WorldScribeRelationDeriver.Build(
-                frame.PurchaseViewRoutes,
-                static (left, right) =>
-                {
-                    var candidate = left.CandidateId.CompareTo(right.CandidateId);
-                    if (candidate != 0) return candidate;
-                    var view = left.ViewId.CompareTo(right.ViewId);
-                    return view != 0 ? view : left.ListId.CompareTo(right.ListId);
-                }),
+            PurchaseViewRelations = purchaseViews.Relations,
+            PurchaseViewRoutes = purchaseViews.Routes,
             PlotNodeActions = plotNodeActions,
             PassiveAbilities = frame.PassiveAbilities.Build(WorldIdentityDeriver<WorldPassiveAbility>.Shared),
             Characters = frame.Characters.Build(WorldIdentityDeriver<WorldCharacter>.Shared),
@@ -348,14 +395,15 @@ internal static class GameWorldFrameDeriver
             PlotNodes = plotNodes,
             PlotActions = plotActions,
             PlotActionInstances = WorldPlotActionInstanceDeriver.Build(frame.PlotActionInstances),
-            ActionQueues = frame.ActionQueues.Build(WorldIdentityDeriver<WorldActionQueue>.Shared),
+            ActionQueues = frame.ActionQueues.Build(new WorldActionQueueDeriver(intVariables)),
             ActionQueueSlots = WorldActionQueueSlotDeriver.Build(frame.ActionQueueSlots),
             SpellSlots = WorldSpellSlotDeriver.Build(frame.SpellSlots),
             SpellCosts = WorldSpellCostDeriver.Build(frame.SpellCosts),
             MasteryExperience = WorldMasteryExperienceDeriver.Build(frame.MasteryExperience),
             ConceptRecipes = WorldAlchemyRowDeriver.Build(frame.ConceptRecipes),
             AlchemyInstances = WorldAlchemyRowDeriver.Build(frame.AlchemyInstances),
-            AlchemyCosts = WorldAlchemyCostDeriver.Build(frame.AlchemyCosts),
+            ConceptDrainBasis = conceptDrainBasis,
+            AlchemyCosts = alchemyCosts,
             PlotAuthoring = WorldPlotAuthoringDeriver.Build(frame.PlotAuthoring),
             PlotPhaseDescriptors =
                 WorldPlotPhaseDescriptorDeriver.Build(frame.PlotPhaseDescriptors),

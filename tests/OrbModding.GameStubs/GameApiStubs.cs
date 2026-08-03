@@ -158,6 +158,7 @@ public class SpellRecipeSO : IdScriptableObject
     }
     public int masteryLevel;
     public BigDouble masteryExperience;
+    public ExperienceContainer masteryXpContainer = new ExperienceContainer();
     public bool discovered;
     public int discRarityLevel;
     public bool readyToLevel;
@@ -167,6 +168,18 @@ public class SpellRecipeSO : IdScriptableObject
     public List<BigDouble> GrantedMasteryExperience { get; } = new List<BigDouble>();
     public Prerequisites.Container levelingPrerequisites = new Prerequisites.Container();
     public ResourceCostList levelCost = new ResourceCostList();
+    public ResourceCostList baseLevelingCost = new ResourceCostList();
+    public ResourceCostList baseResourceCost = new ResourceCostList();
+    public ResourceCostList baseUsageCost = new ResourceCostList();
+    public ResourceCostList holdDrain = new ResourceCostList();
+    public List<SpellTypeSO> spellTypes = new List<SpellTypeSO>();
+    public List<GlyphSO> coreRecipe = new List<GlyphSO>();
+    public RecipeBookList recipeBookList = new RecipeBookList();
+    public Prerequisites.Container usagePrerequisites = new Prerequisites.Container();
+    public SpellCastType castType;
+    public Duration.Entry baseRecharge = new Duration.Entry();
+    public ScalingWeightRef.Value maxChannel = new ScalingWeightRef.Value();
+    public Scaling.Value repeatInstantEffectRate = new Scaling.Value();
     public void GainMasteryExp(BigDouble exp)
     {
         MasteryGrantCalls++;
@@ -201,6 +214,33 @@ public class SpellRecipeSO : IdScriptableObject
     public ValueModifierRecord spellSpecialMod = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord spellXpMod = new ValueModifierRecord(new BigDouble(0.0, 0));
     private bool hasAlertedThisMastery;
+}
+
+public static class Duration
+{
+    public sealed class Entry
+    {
+        public double duration;
+        public double mult;
+        public ProcessorType type;
+    }
+
+    public enum ProcessorType { Fixed }
+}
+
+public enum SpellCastType { Instant }
+
+public static class Scaling
+{
+    public sealed class Value
+    {
+        public double baseValue;
+    }
+}
+
+public sealed class RecipeBookList
+{
+    public List<RecipeBookSO> recipeBooks = new List<RecipeBookSO>();
 }
 
 public class IdScriptableObject : UnityEngine.ScriptableObject
@@ -276,6 +316,8 @@ public sealed class AlchemyTypeSO : IdScriptableObject
     public ModifierRecord timeScalingMod = new ModifierRecord();
     public ModifierRecord freeUsageSlots = new ModifierRecord();
     public ModifierRecord effectLevels = new ModifierRecord();
+    public ValueModifier reqCostPenalty;
+    public ValueModifier reqSpeedPenalty;
 
     public AlchemyTypeSO()
     {
@@ -332,6 +374,11 @@ public sealed class AlchemyRecipeSO : IdScriptableObject
     public BigDouble recipeTime;
     public readonly List<AlchemyTypeSO> alchemyTypes = new List<AlchemyTypeSO>();
     public ConceptCostVector drainCost = new ConceptCostVector();
+    public ConceptCostVector bandwidthCost = new ConceptCostVector();
+    public ModifierListRef completionCostAdvanceMod = new ModifierListRef();
+    public ModifierListRef drainCostLevelMod = new ModifierListRef();
+    public Prerequisites.Container usagePrerequisites = new Prerequisites.Container();
+    public InstanceScalingRef instanceScaling = new InstanceScalingRef();
     public AlchemyTypeSO coreType = new AlchemyTypeSO("scholar-slot");
     public List<BigDouble> GrantedMasteryExperience { get; } = new List<BigDouble>();
 
@@ -1288,6 +1335,42 @@ public class ModifierListRef
     public virtual ValueModifierList GetValue() => variable is null ? EmptyList : variable.GetValue();
 }
 
+public sealed class GlobalValues
+{
+    public static GlobalValues instance = new GlobalValues();
+    public ModifierListVariable spellLevelingStandard = new ModifierListVariable();
+}
+
+public enum ScalingType
+{
+    CostMod = 4,
+    Speed = 6,
+}
+
+public class ScalingMap<T>
+{
+    protected Dictionary<ScalingType, T> values = new Dictionary<ScalingType, T>();
+
+    public void Set(ScalingType kind, T value) => values[kind] = value;
+}
+
+public sealed class ScalingConversion : ScalingMap<ValueModifierList>
+{
+}
+
+public sealed class InstanceScalingSO : IdScriptableObject
+{
+    public static List<InstanceScalingSO> All = new List<InstanceScalingSO>();
+    public ScalingConversion instanceScaling = new ScalingConversion();
+    public bool useRarity;
+    public List<ScalingType> rarityAttributeBlacklist = new List<ScalingType>();
+}
+
+public sealed class InstanceScalingRef
+{
+    public InstanceScalingSO scaling = new InstanceScalingSO();
+}
+
 /// <summary>
 /// The global modifier registry. Entities hold a reference to one of these rather than owning a
 /// modifier, which is why the suite collects the registry and carries identities.
@@ -1540,7 +1623,7 @@ public sealed class AlchemyInstance : AbstractRefInstance<AlchemyRecipeSO>
     public int queuedQuantity;
     public ConceptDrainState resourceDrain = new ConceptDrainState();
 
-    public ConceptDrainMultiplier GetDrainCostMod() => new ConceptDrainMultiplier(this);
+    public BigDouble GetDrainCostMod() => new BigDouble(quantity * 100d);
 }
 
 public sealed class AlchemyInstanceListVariable : IdScriptableObject
@@ -1610,20 +1693,11 @@ public sealed class AlchemyInstanceListVariable : IdScriptableObject
     }
 }
 
-public sealed class ConceptDrainMultiplier
-{
-    private readonly AlchemyInstance instance;
-
-    public ConceptDrainMultiplier(AlchemyInstance instance)
-    {
-        this.instance = instance;
-    }
-
-    public double AsPercent() => instance.quantity;
-}
-
 public sealed class ConceptDrainState
 {
+    public bool isDrainApplied = true;
+    public BigDouble currentRatio = new BigDouble(1.0, 0);
+    public BigDouble usageRatio = new BigDouble(1.0, 0);
     public ConceptCostVector Current { get; set; } = new ConceptCostVector();
     public BigDouble GetRatio() => new BigDouble(1.0, 0);
     public ConceptCostVector GetCurrentDrain() => Current;
@@ -1640,7 +1714,7 @@ public sealed class ConceptCostVector
     public List<ConceptCostEntry> Entries => costs;
     public IList GetEntries() => Entries;
 
-    public ConceptCostVector Multiply(double multiplier) => new ConceptCostVector(
+    public ConceptCostVector Multiply(BigDouble multiplier) => new ConceptCostVector(
         Entries.Select(entry => new ConceptCostEntry(
             entry.resource,
             entry.Value * multiplier)).ToArray());

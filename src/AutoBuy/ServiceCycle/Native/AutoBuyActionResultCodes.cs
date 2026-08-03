@@ -22,4 +22,10 @@ internal static class AutoBuyActionResultCodes
     public static ServiceActionResultCode DestinationCapacityFull => new(2055);
     public static ServiceActionResultCode DestinationCapacityContractUnavailable => new(2056);
     public static ServiceActionResultCode DestinationCapacityIdentityMismatch => new(2057);
+
+    /// <summary>
+    /// Verified spend earlier in this Auto Buy batch invalidated the remaining planned resource
+    /// margin. The action is skipped before native submission and the next publication replans it.
+    /// </summary>
+    public static ServiceActionResultCode BatchSpendDrift => new(2058);
 }

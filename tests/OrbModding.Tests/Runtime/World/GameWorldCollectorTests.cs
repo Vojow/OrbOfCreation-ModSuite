@@ -84,6 +84,22 @@ public sealed class GameWorldCollectorTests : IDisposable
     /// </summary>
     private static GameWorldCollector Collector(params (string TypeName, Type? Type)[] overrides)
     {
+        if (FakeConsumable.All.Count > 0)
+        {
+            var maximumId = Guid.NewGuid();
+            FakeCount.All.Add(new FakeCount
+            {
+                Identity = maximumId,
+                value = new FakeModifierRecord(FakeConsumable.All[0].maximumCarryLoad),
+            });
+            FakeIdRegistry.RuntimeLookup[
+                new Guid("315471ca-0d15-455d-92da-f9d5f95a3c33")] =
+                new FakeConsumableType
+                {
+                    Identity = new Guid("315471ca-0d15-455d-92da-f9d5f95a3c33"),
+                    maximumCarryLoad = new FakeConsumableVariable { Identity = maximumId },
+                };
+        }
         var byName = new Dictionary<string, Type?>(Defaults, StringComparer.Ordinal);
         foreach (var (typeName, type) in overrides) byName[typeName] = type;
         return new GameWorldCollector(name => byName.TryGetValue(name, out var type) ? type : null);
@@ -104,7 +120,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             Identity = mana,
             Quantity = 60d,
             maxQuantity = new FakeModifierRecord(100d),
-            Rate = 2.5d,
+            rate = new FakeModifierRecord(2.5d, activeCount: 1),
             Visible = true,
         });
         FakeStructure.All.Add(new FakeStructure
@@ -135,7 +151,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(WorldLookup.TryFind(world.Resources, mana, out var resource));
         Assert.Equal(60d, resource.Reading.Quantity.ToDouble());
         Assert.Equal(100d, resource.Reading.Capacity.ToDouble());
-        Assert.Equal(2.5d, resource.Reading.Rate.ToDouble());
+        Assert.Equal(2.5d, resource.TrueRate.ToDouble());
         Assert.True(resource.Reading.Visible);
 
         Assert.True(WorldLookup.TryFind(world.Structures, cauldron, out var structure));
@@ -179,7 +195,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Forty-six passes: the four categories
+        // The scope claim, asserted rather than described. Forty-eight passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -191,13 +207,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(46, report.Categories.Length);
+        Assert.Equal(48, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell authored graph", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -246,11 +262,10 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
-    public void ASpellsMasteryReadinessAndAffordabilityAreCollectedFromTheGamesOwnAnswers()
+    public void ASpellsMasteryReadinessIsDerivedFromItsPublishedThresholdWhileAnEmptyAuthoredCostIsAffordable()
     {
-        // The one fact on a spell recipe that is not a field. Its threshold lives in a container the
-        // snapshot does not publish, so MasteryXp has nothing to be compared against and the game's
-        // own predicate is the only readable form of "this level can be bought". See W59.
+        // Readiness is cheap accessor math over the published experience and its container's cached
+        // threshold. Capture must not ask the native predicate for the answer.
         var ready = Guid.NewGuid();
         var banking = Guid.NewGuid();
         FakeSpellRecipe.All.Add(new FakeSpellRecipe
@@ -258,14 +273,16 @@ public sealed class GameWorldCollectorTests : IDisposable
             Identity = ready,
             discovered = true,
             masteryLevel = 4,
-            readyToLevel = true,
+            masteryExperience = new BigDouble(8d),
+            masteryXpContainer = new FakeExperienceContainer { cachedRequiredXp = new BigDouble(8d) },
         });
         FakeSpellRecipe.All.Add(new FakeSpellRecipe
         {
             Identity = banking,
             discovered = true,
             masteryLevel = 4,
-            readyToLevel = false,
+            masteryExperience = new BigDouble(7d),
+            masteryXpContainer = new FakeExperienceContainer { cachedRequiredXp = new BigDouble(8d) },
             levelCost = new FakeSpellLevelCost { affordable = false },
         });
 
@@ -278,7 +295,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(readyRow.MasteryLevelAffordable);
         Assert.True(WorldLookup.TryFind(world.SpellRecipes, banking, out var bankingRow));
         Assert.False(bankingRow.MasteryLevelReady);
-        Assert.False(bankingRow.MasteryLevelAffordable);
+        Assert.True(bankingRow.MasteryLevelAffordable);
 
         // Same mastery level on both: readiness is its own fact, not one the level implies.
         Assert.Equal(readyRow.MasteryLevel, bankingRow.MasteryLevel);
@@ -321,7 +338,8 @@ public sealed class GameWorldCollectorTests : IDisposable
             queuedQuantity = 3,
             resourceDrain = new FakeAlchemyDrain
             {
-                ratio = new BigDouble(0.75d),
+                currentRatio = new BigDouble(0.75d),
+                usageRatio = new BigDouble(0.75d),
                 current = new FakeSpellCostList().With(resource, 11d),
             },
         });
@@ -373,15 +391,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, currentCount);
         Assert.Equal(11d, world.AlchemyCosts[currentStart].Amount.ToDouble());
 
-        Assert.True(WorldAlchemyCostLookup.TryFindProspectiveRange(
+        Assert.False(WorldAlchemyCostLookup.TryFindRange(
             world.AlchemyCosts,
             recipe.Identity,
-            targetQuantity: 4,
-            out var prospectiveStart,
-            out var prospectiveCount));
-        Assert.Equal(1, prospectiveCount);
-        Assert.Equal(resource, world.AlchemyCosts[prospectiveStart].ResourceId);
-        Assert.Equal(28d, world.AlchemyCosts[prospectiveStart].Amount.ToDouble());
+            WorldAlchemyCostKind.Bandwidth,
+            out _,
+            out var bandwidthCount));
+        Assert.Equal(0, bandwidthCount);
     }
 
     [Fact]
@@ -854,7 +870,6 @@ public sealed class GameWorldCollectorTests : IDisposable
         var resources = report.For("resources");
 
         Assert.Equal(WorldCategoryOutcome.Unavailable, resources.Outcome);
-        Assert.Contains("GetTrueRate", resources.FirstFailure, StringComparison.Ordinal);
         Assert.Contains("IsVisible", resources.FirstFailure, StringComparison.Ordinal);
 
         // A member that is present must not be blamed.
@@ -949,7 +964,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
-    public void AnEntityWhoseAccessorThrowsCostsOneRow()
+    public void TheUnusedNativeRateAnswerIsNeverInvoked()
     {
         FakeResource.All.Add(new FakeResource { Identity = Guid.NewGuid(), ThrowOnRate = true });
         FakeResource.All.Add(new FakeResource { Identity = Guid.NewGuid(), Quantity = 7d });
@@ -958,10 +973,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         var report = collector.Collect();
         var world = collector.Build();
 
-        Assert.Equal(1, world.Resources.Count);
-        Assert.Equal(7d, world.Resources[0].Reading.Quantity.ToDouble());
-        Assert.Equal(1, report.For("resources").Skipped);
-        Assert.Contains("rate unavailable", report.For("resources").FirstFailure, StringComparison.Ordinal);
+        Assert.Equal(2, world.Resources.Count);
+        Assert.Equal(0, report.For("resources").Skipped);
     }
 
     [Fact]
@@ -2918,16 +2931,14 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     /// <summary>
-    /// A queue whose own occupancy disagrees with the slots publishes the disagreement.
+    /// Queue occupancy is derived from the slots even when the discarded native answer disagrees.
     /// </summary>
     /// <remarks>
-    /// The action boundary treats this as an invalid reading and refuses it, and it is right to: it
-    /// is about to act. Collection is not acting, and a consumer that cannot see the disagreement
-    /// would act on whichever half it happened to read — so the contradiction travels as a fact
-    /// rather than as an absence.
+    /// The action boundary remains authoritative at admission. Capture publishes its one slot walk
+    /// instead of asking for a second, potentially inconsistent composition.
     /// </remarks>
     [Fact]
-    public void AQueueWhoseOccupancyContradictsItsSlotsSaysSo()
+    public void QueueOccupancyComesFromTheCapturedSlots()
     {
         var queue = new FakeActionQueue { ReportedUsedSpots = 2 };
         queue.value.Add(new FakeQueueSlot { quantity = 1 });
@@ -2940,9 +2951,9 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         Assert.True(report.IsComplete, report.Describe());
         Assert.True(WorldLookup.TryFind(world.ActionQueues, queue.Identity, out var row));
-        Assert.Equal(2, row.UsedSlots);
+        Assert.Equal(1, row.UsedSlots);
         Assert.Equal(1, row.EmptySlots);
-        Assert.False(row.Consistent);
+        Assert.True(row.Consistent);
     }
 
     /// <summary>

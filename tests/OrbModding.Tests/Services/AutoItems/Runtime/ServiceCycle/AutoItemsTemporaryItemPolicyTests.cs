@@ -503,7 +503,6 @@ public sealed class AutoItemsTemporaryItemPolicyTests
             KnownEntities.PotionToxicity.Uuid,
             trueQuantity,
             new BigDouble(100),
-            BigDouble.Zero,
             visible: true,
             lifetimeQuantity: BigDouble.Zero,
             discoveryTime: BigDouble.Zero,

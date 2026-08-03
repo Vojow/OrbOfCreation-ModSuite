@@ -30,13 +30,10 @@ namespace OrbModding.Common.Runtime.World;
 /// <see cref="NativeModifierRecordAccess"/>.
 /// </para>
 /// <para>
-/// <b>Two readings still call the game, and both should stop.</b> <c>GetTrueRate()</c> composes
-/// several rate terms and <c>IsAvailable()</c> walks a prerequisite graph, and each reaches
-/// <c>GetValue()</c> underneath — so these are precisely the calls that can still make the game
-/// recompute on the suite's schedule. They are next in line for the same
-/// port-then-differentially-verify treatment the purchase-cost chain has had. Porting them one at a
-/// time is deliberate: two unverified transcriptions at once leave a differential failure
-/// unattributable to either.
+/// <b>Composed answers stay exceptional.</b> Resource rate is owned and differentially verified;
+/// <c>IsAvailable()</c> still walks a prerequisite graph and reaches <c>GetValue()</c> underneath.
+/// That game-only validator remains explicit rather than allowing other composed answers to drift
+/// back into capture unnoticed.
 /// </para>
 /// <para>
 /// <b>Accessors bind once.</b> Each category compiles its readers at construction, so the warm path
@@ -81,7 +78,9 @@ internal sealed class GameWorldCollector
     private readonly IWorldMasteryExperienceSource _masteryExperience;
     private readonly WorldCategoryReader<WorldAlchemyRecipe, WorldAlchemyRecipe> _alchemyRecipes;
     private readonly WorldCategoryReader<WorldAlchemyType, WorldAlchemyType> _alchemyTypes;
-    private readonly WorldCategoryReader<WorldSpellRecipe, WorldSpellRecipe> _spellRecipes;
+    private readonly WorldCategoryReader<RawSpellRecipeSample, WorldSpellRecipe> _spellRecipes;
+    private readonly WorldMasteryCostReader _spellLevelCosts;
+    private readonly WorldSpellGraphReader _spellGraph;
     private readonly WorldCategoryReader<WorldSpellType, WorldSpellType> _spellTypes;
     private readonly WorldCategoryReader<WorldEquipment, WorldEquipment> _equipment;
     private readonly WorldCategoryReader<WorldEquipmentType, WorldEquipmentType> _equipmentTypes;
@@ -220,6 +219,8 @@ internal sealed class GameWorldCollector
         _alchemyRecipes = Reader(new WorldAlchemyRecipeBinder(), resolveType, static frame => frame.AlchemyRecipes);
         _alchemyTypes = Reader(new WorldAlchemyTypeBinder(), resolveType, static frame => frame.AlchemyTypes);
         _spellRecipes = Reader(new WorldSpellRecipeBinder(), resolveType, static frame => frame.SpellRecipes);
+        _spellLevelCosts = new WorldMasteryCostReader(resolveType);
+        _spellGraph = new WorldSpellGraphReader(resolveType("SpellRecipeSO"));
         _spellTypes = Reader(new WorldSpellTypeBinder(), resolveType, static frame => frame.SpellTypes);
         _equipment = Reader(new WorldEquipmentBinder(), resolveType, static frame => frame.Equipment);
         _equipmentTypes = Reader(new WorldEquipmentTypeBinder(), resolveType, static frame => frame.EquipmentTypes);
@@ -229,7 +230,9 @@ internal sealed class GameWorldCollector
         _harvestResources = Reader(new WorldHarvestResourceBinder(), resolveType, static frame => frame.HarvestResources);
         _timeRunes = Reader(new WorldTimeRuneBinder(), resolveType, static frame => frame.TimeRunes);
         _glyphs = Reader(new WorldGlyphBinder(), resolveType, static frame => frame.Glyphs);
-        _consumables = new WorldConsumableReader(resolveType("ConsumableSO"));
+        _consumables = new WorldConsumableReader(
+            resolveType("ConsumableSO"),
+            resolveType("IdScriptableObject"));
         _scribeRelations = new WorldScribeRelationReader(resolveType);
         _rituals = Reader(new WorldRitualBinder(), resolveType, static frame => frame.Rituals);
         _achievements = Reader(new WorldAchievementBinder(), resolveType, static frame => frame.Achievements);
@@ -264,7 +267,7 @@ internal sealed class GameWorldCollector
         _plotAuthoring = new WorldPlotAuthoringReader(resolveType("PlotNodeSO"));
         _effectBlocks = new WorldEffectBlockReader(resolveType("PlotNodeActionSO"), resolveType);
         _entityRequirements = new WorldEntityRequirementReader(
-            resolveType("UpgradeSO"), resolveType("StructureSO"));
+            resolveType("UpgradeSO"), resolveType("StructureSO"), resolveType("AlchemyRecipeSO"));
         _purchaseViewRelations = new WorldPurchaseViewRelationReader(
             resolveType,
             productionPurchaseTopology);
@@ -273,7 +276,7 @@ internal sealed class GameWorldCollector
         {
             _resources, _structures, _upgrades, _research,
             _doubleVariables, _intVariables, _boolVariables, _modifierVariables,
-            _alchemyRecipes, _alchemyTypes, _spellRecipes, _spellTypes,
+            _alchemyRecipes, _alchemyTypes, _spellRecipes, _spellLevelCosts, _spellGraph, _spellTypes,
             _equipment, _equipmentTypes, _resourceTypes, _craftingRecipeTypes,
             _harvestElements, _harvestResources, _timeRunes, _glyphs, _consumables,
             _scribeRelations,
@@ -292,6 +295,7 @@ internal sealed class GameWorldCollector
             _isStructural[index] =
                 ReferenceEquals(_readers[index], _plotAuthoring) ||
                 ReferenceEquals(_readers[index], _effectBlocks) ||
+                ReferenceEquals(_readers[index], _spellGraph) ||
                 ReferenceEquals(_readers[index], _entityRequirements) ||
                 ReferenceEquals(_readers[index], _purchaseViewRelations);
         }
@@ -351,6 +355,8 @@ internal sealed class GameWorldCollector
         // Two readers append here, so neither may reset it: whichever ran second would discard the
         // other's rows, and which that is depends on traversal order rather than on anything stated.
         frame.PurchaseCosts.Reset();
+        frame.ModifierPrograms.Reset();
+        frame.ModifierProgramEntries.Reset();
 
         // One extra row when the modifier fold had to reconstruct an input. It is reported as an
         // unavailable pseudo-category rather than logged, because it makes every folded number in the

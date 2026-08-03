@@ -1,4 +1,5 @@
 using System;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
 
@@ -35,7 +36,8 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
         BigDouble freeUsageSlots,
         BigDouble maxUsageSlots,
         BigDouble cachedCompletionTime,
-        BigDouble requiredExperience)
+        BigDouble requiredExperience,
+        int currentLevel = 1)
     {
         RecipeId = recipeId;
         CoreTypeId = coreTypeId;
@@ -67,6 +69,7 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
         ResolvedMaxUsageSlots = maxUsageSlots;
         CachedCompletionTime = cachedCompletionTime;
         RequiredExperience = requiredExperience;
+        CurrentLevel = currentLevel;
     }
 
     internal Guid RecipeId { get; }
@@ -93,6 +96,13 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
     internal BigDouble MasteryXp { get; }
 
     internal int MasteryLevel { get; }
+
+    /// <summary>
+    /// The level currently selected for this recipe's core type. This is a worker-side join through
+    /// <see cref="CoreTypeId"/> and the published IntVariable registry; capture makes no additional
+    /// native call for it.
+    /// </summary>
+    internal int CurrentLevel { get; }
 
     /// <summary>Seconds one brew takes at the base rate.</summary>
     internal BigDouble RecipeTime { get; }
@@ -153,6 +163,54 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
     /// orphan <c>AlchemyRecipeSO.cachedRequiredXp</c> field.
     /// </summary>
     internal BigDouble RequiredExperience { get; }
+}
+
+internal static class WorldAlchemyRecipeDeriver
+{
+    internal static PublicationTable<WorldAlchemyRecipe> Build(
+        WorldSampleBuffer<WorldAlchemyRecipe, WorldAlchemyRecipe> buffer,
+        PublicationTable<WorldAlchemyType> types,
+        PublicationTable<WorldNumberVariable> intVariables)
+    {
+        return buffer.Build(new Deriver(types, intVariables));
+    }
+
+    private sealed class Deriver : WorldRowDeriver<WorldAlchemyRecipe, WorldAlchemyRecipe>
+    {
+        private readonly PublicationTable<WorldAlchemyType> _types;
+        private readonly PublicationTable<WorldNumberVariable> _intVariables;
+
+        internal Deriver(
+            PublicationTable<WorldAlchemyType> types,
+            PublicationTable<WorldNumberVariable> intVariables)
+        {
+            _types = types;
+            _intVariables = intVariables;
+        }
+
+        internal override WorldAlchemyRecipe Derive(in WorldAlchemyRecipe sample)
+        {
+            var level = 1;
+            if (WorldLookup.TryFind(_types, sample.CoreTypeId, out var type) &&
+                type.SelectedLevelId != Guid.Empty &&
+                WorldLookup.TryFind(_intVariables, type.SelectedLevelId, out var selected))
+            {
+                level = selected.Value.ToInt();
+            }
+
+            return new WorldAlchemyRecipe(
+                sample.RecipeId, sample.CoreTypeId, sample.Discovered, sample.MaxLevel,
+                sample.AdvancementLevel, sample.DiscoveryRarityLevel, sample.MasteryXp,
+                sample.MasteryLevel, sample.RecipeTime, sample.IsRequiredDiscovery,
+                sample.IsCompletionRecipe, sample.IsAdvancementRecipe, sample.CompletionTime,
+                sample.IsDebugAlchemy, sample.Power, sample.Speed, sample.DrainCostMod,
+                sample.Special, sample.TimeReqMod, sample.TimeScalingMod, sample.MasteryXpRate,
+                sample.EffectLevels, sample.OverdrivePower, sample.OverdriveSpeed,
+                sample.OverdriveDrainCostMod, sample.OverdriveXpRate, sample.FreeUsageSlots,
+                sample.ResolvedMaxUsageSlots, sample.CachedCompletionTime,
+                sample.RequiredExperience, level);
+        }
+    }
 }
 
 internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRecipe>

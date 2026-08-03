@@ -131,6 +131,11 @@ internal sealed class AutomataRequirementVerifier
         {
             return true;
         }
+        if (WorldRequirementEvaluator.Evaluate(world, ownerId, level) !=
+            WorldRequirementVerdict.Unevaluable)
+        {
+            return true;
+        }
 
         var rows = world.EntityRequirements.AsSpan();
         for (var offset = 0; offset < count; offset++)

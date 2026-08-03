@@ -27,6 +27,12 @@ internal static class WorldCategoryFakes
         ["AlchemyTypeSO"] = typeof(FakeAlchemyType),
         ["AlchemyInstanceListVariable"] = typeof(FakeAlchemyInstanceList),
         ["AlchemyRecipeListVariable"] = typeof(FakeAlchemyRecipeList),
+        ["InstanceScalingSO"] = typeof(FakeInstanceScaling),
+        ["ModifierListRef"] = typeof(FakeModifierListRef),
+        ["ModifierListVariable"] = typeof(FakeModifierListVariable),
+        ["ValueModifierList"] = typeof(FakeValueModifierList),
+        ["ValueModifierRecord"] = typeof(FakeModifierRecord),
+        ["GlobalValues"] = typeof(FakeGlobalValues),
         ["SpellRecipeSO"] = typeof(FakeSpellRecipe),
         ["SpellTypeSO"] = typeof(FakeSpellType),
         ["EquipmentSO"] = typeof(FakeEquipment),
@@ -519,6 +525,62 @@ internal sealed class FakeModifierRecord
     }
 }
 
+internal sealed class FakeValueModifierList
+{
+    public List<FakeValueModifier> modifiers = new();
+    public List<FakeValueModifier> exponents = new();
+}
+
+internal sealed class FakeModifierListVariable
+{
+    public Guid Identity = Guid.NewGuid();
+    public FakeValueModifierList value = new();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeModifierListRef
+{
+    public FakeModifierListVariable? variable = new();
+}
+
+internal sealed class FakeGlobalValues
+{
+    public static readonly FakeGlobalValues instance = new();
+    public FakeModifierListVariable spellLevelingStandard = new();
+}
+
+internal sealed class FakePrerequisiteContainer
+{
+    public bool result = true;
+    public List<object> prerequisites = new();
+    public bool Check() => result;
+}
+
+internal sealed class FakeScalingConversion
+{
+    public Dictionary<FakeScalingKind, FakeValueModifierList> values = new();
+}
+
+internal enum FakeScalingKind
+{
+    CostMod = 4,
+    Speed = 6,
+}
+
+internal sealed class FakeInstanceScaling
+{
+    public Guid Identity = Guid.NewGuid();
+    public bool useRarity;
+    public List<FakeScalingKind> rarityAttributeBlacklist = new();
+    public FakeScalingConversion instanceScaling = new();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeInstanceScalingRef
+{
+    public FakeInstanceScaling scaling = new();
+}
+
 internal sealed class FakeAlchemyRecipe
 {
     public static readonly List<FakeAlchemyRecipe> All = new();
@@ -557,6 +619,11 @@ internal sealed class FakeAlchemyRecipe
     public BigDouble cachedRequiredXp;
     public FakeExperienceContainer experienceContainer = new();
     public FakeSpellCostList drainCost = new();
+    public FakeSpellCostList bandwidthCost = new();
+    public FakeModifierListRef completionCostAdvanceMod = new();
+    public FakeModifierListRef drainCostLevelMod = new();
+    public FakePrerequisiteContainer usagePrerequisites = new();
+    public FakeInstanceScalingRef instanceScaling = new();
     public FakeAlchemyType coreType = new();
 
     public FakeAlchemyType GetCoreType() => coreType;
@@ -641,10 +708,11 @@ internal sealed class FakeUnexpectedAlchemyInstance : FakeAlchemyInstance
 
 internal sealed class FakeAlchemyDrain
 {
-    public BigDouble ratio = new(1d);
+    public bool isDrainApplied = true;
+    public BigDouble currentRatio = new(1d);
+    public BigDouble usageRatio = new(1d);
     public FakeSpellCostList current = new();
 
-    public BigDouble GetRatio() => ratio;
     public FakeSpellCostList GetCurrentDrain() => current;
 }
 
@@ -668,6 +736,8 @@ internal sealed class FakeAlchemyType
     public FakeModifierRecord timeScalingMod = new(0d);
     public FakeModifierRecord freeUsageSlots = new(0d);
     public FakeModifierRecord effectLevels = new(0d);
+    public FakeValueModifier reqCostPenalty;
+    public FakeValueModifier reqSpeedPenalty;
     public FakeReferencedEntity? selectedLevel;
 
     public Guid GetGuid() => Identity;
@@ -800,7 +870,19 @@ internal sealed class FakeSpellRecipe
     public BigDouble masteryExperience;
     public int masteryLevel;
     public bool readyToLevel;
+    public FakeExperienceContainer masteryXpContainer = new();
     public FakeSpellLevelCost levelCost = new();
+    public FakeSpellCostList baseLevelingCost = new();
+    public FakeSpellCostList baseResourceCost = new();
+    public FakeSpellCostList baseUsageCost = new();
+    public FakeSpellCostList holdDrain = new();
+    public List<FakeReferencedEntity> spellTypes = new();
+    public List<FakeReferencedEntity> coreRecipe = new();
+    public FakeRecipeBookList recipeBookList = new();
+    public FakeSpellCastType castType;
+    public FakeDurationEntry baseRecharge = new();
+    public FakeScalingValue maxChannel = new();
+    public FakeScalingValue repeatInstantEffectRate = new();
     public bool hiddenDiscovery;
     public bool isRequiredDiscovery;
     public int penaltyUsageCost;
@@ -819,6 +901,26 @@ internal sealed class FakeSpellRecipe
 
     public bool IsReadyToLevelMastery() => readyToLevel;
     public FakeSpellLevelCost GetLevelCost() => levelCost;
+}
+
+internal sealed class FakeRecipeBookList
+{
+    public List<FakeReferencedEntity> recipeBooks = new();
+}
+
+internal sealed class FakeDurationEntry
+{
+    public double duration;
+    public double mult;
+    public FakeDurationProcessorType type;
+}
+
+internal enum FakeSpellCastType { Instant }
+internal enum FakeDurationProcessorType { Fixed }
+
+internal sealed class FakeScalingValue
+{
+    public double baseValue;
 }
 
 internal sealed class FakeSpellLevelCost
@@ -1162,6 +1264,13 @@ internal sealed class FakeConsumable
 }
 
 internal sealed class FakeConsumableType
+{
+    public Guid Identity = Guid.NewGuid();
+    public FakeConsumableVariable maximumCarryLoad = new();
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeConsumableVariable
 {
     public Guid Identity = Guid.NewGuid();
     public Guid GetGuid() => Identity;

@@ -91,6 +91,29 @@ public sealed record GameWorldState
     internal PublicationTable<WorldSpellRecipe> SpellRecipes { get; init; } =
         PublicationTable<WorldSpellRecipe>.Empty;
 
+    /// <summary>Authored cast, recharge, channel, and repeated-effect scalars for every spell.</summary>
+    internal PublicationTable<WorldSpellRecipeAuthoring> SpellRecipeAuthoring { get; init; } =
+        PublicationTable<WorldSpellRecipeAuthoring>.Empty;
+
+    /// <summary>All authored immediate, usage, and held-drain tuples for every spell.</summary>
+    internal PublicationTable<WorldSpellAuthoredCost> SpellAuthoredCosts { get; init; } =
+        PublicationTable<WorldSpellAuthoredCost>.Empty;
+
+    /// <summary>Spell-to-type, core-glyph, and recipe-book edges in authored order.</summary>
+    internal PublicationTable<WorldSpellRelation> SpellRelations { get; init; } =
+        PublicationTable<WorldSpellRelation>.Empty;
+
+    /// <summary>Derived next-mastery-level cost rows, preserved in authored row order.</summary>
+    internal PublicationTable<WorldMasteryCost> MasteryCosts { get; init; } =
+        PublicationTable<WorldMasteryCost>.Empty;
+
+    /// <summary>Narrow raw modifier programs used by the two owned Phase-B formula families.</summary>
+    internal PublicationTable<WorldModifierProgram> ModifierPrograms { get; init; } =
+        PublicationTable<WorldModifierProgram>.Empty;
+
+    internal PublicationTable<WorldModifierProgramEntry> ModifierProgramEntries { get; init; } =
+        PublicationTable<WorldModifierProgramEntry>.Empty;
+
     internal PublicationTable<WorldSpellType> SpellTypes { get; init; } =
         PublicationTable<WorldSpellType>.Empty;
 
@@ -272,9 +295,13 @@ public sealed record GameWorldState
     internal PublicationTable<WorldAlchemyInstance> AlchemyInstances { get; init; } =
         PublicationTable<WorldAlchemyInstance>.Empty;
 
+    /// <summary>Raw/derived scalar basis for arbitrary Concept prospective drain quantities.</summary>
+    internal PublicationTable<WorldConceptDrainBasis> ConceptDrainBasis { get; init; } =
+        PublicationTable<WorldConceptDrainBasis>.Empty;
+
     /// <summary>
     /// Authored and current Concept drains, keyed by recipe and resource. Prospective quantities are
-    /// deliberately absent: the game only answers those from a throwaway native instance.
+    /// deliberately absent as rows: consumers derive arbitrary targets from the published basis.
     /// </summary>
     internal PublicationTable<WorldAlchemyCost> AlchemyCosts { get; init; } =
         PublicationTable<WorldAlchemyCost>.Empty;
