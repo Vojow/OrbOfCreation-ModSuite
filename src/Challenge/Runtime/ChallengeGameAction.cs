@@ -68,7 +68,7 @@ internal sealed class ChallengeGameAction : IDisposable
 
             if (!TryContext(native, out var context, out var contextFailure))
                 return ChallengeSubmission.Reject(ChallengePreflight.ContractUnavailable, contextFailure);
-            var before = CaptureAdmission(native, in context, target);
+            var before = CaptureAdmission(action.Kind, native, in context, target);
             var preflight = Preflight(action.Kind, native, in context, target, in before, out var reason);
             if (preflight != ChallengePreflight.Proceeded)
                 return ChallengeSubmission.Reject(preflight, reason);
@@ -184,7 +184,7 @@ internal sealed class ChallengeGameAction : IDisposable
         return ChallengePreflight.Proceeded;
     }
 
-    private static ChallengeAdmissionState CaptureAdmission(
+    private static ChallengeAdmissionState CaptureAdmission(ChallengeActionKind kind,
         ChallengeNativeBindings native, in NativeContext context, object? target)
     {
         var selected = target is not null && native.Contains(context.Preferred, target);
@@ -192,7 +192,13 @@ internal sealed class ChallengeGameAction : IDisposable
         var prestige = target is not null && native.Contains(context.PrestigeOffers, target);
         return new ChallengeAdmissionState(target is null ? -1 : native.State(target), selected, time, prestige,
             native.GetBool(context.CycleComplete), native.GetBool(context.Fetched),
-            native.AsInt(context.RerollsLeft));
+            native.AsInt(context.RerollsLeft),
+            kind switch
+            {
+                ChallengeActionKind.FetchTime => CaptureOfferIds(native, context.TimeOffers),
+                ChallengeActionKind.FetchPrestige => CaptureOfferIds(native, context.PrestigeOffers),
+                _ => Array.Empty<Guid>(),
+            });
     }
 
     private static bool OutcomeLanded(ChallengeActionKind kind,
@@ -204,12 +210,36 @@ internal sealed class ChallengeGameAction : IDisposable
             ? native.State(target!) == 1
             : before.TargetState == 1 && native.State(target!) == 0,
         ChallengeActionKind.Abandon => native.State(target!) == 4,
-        ChallengeActionKind.FetchTime or ChallengeActionKind.FetchPrestige =>
-            before.ChallengesFetched
-                ? native.AsInt(context.RerollsLeft) < before.RerollsLeft
-                : native.GetBool(context.Fetched),
+        ChallengeActionKind.FetchTime => !SameOffers(
+            before.Offers, CaptureOfferIds(native, context.TimeOffers)),
+        ChallengeActionKind.FetchPrestige => !SameOffers(
+            before.Offers, CaptureOfferIds(native, context.PrestigeOffers)),
         _ => false,
     };
+
+    private static Guid[] CaptureOfferIds(ChallengeNativeBindings native, object list)
+    {
+        var values = native.Values(list) ??
+            throw new InvalidOperationException("The native challenge offer list was unavailable.");
+        var result = new Guid[values.Count];
+        for (var index = 0; index < values.Count; index++)
+        {
+            var value = values[index] ??
+                throw new InvalidOperationException("A native challenge offer was null.");
+            if (value.GetType() != native.ChallengeType)
+                throw new InvalidOperationException("A native challenge offer had the wrong type.");
+            result[index] = native.Identity(value);
+        }
+        return result;
+    }
+
+    private static bool SameOffers(Guid[] before, Guid[] after)
+    {
+        if (before.Length != after.Length) return false;
+        for (var index = 0; index < before.Length; index++)
+            if (before[index] != after[index]) return false;
+        return true;
+    }
 
     private static bool OutcomeLandedBestEffort(ChallengeActionKind kind,
         ChallengeNativeBindings native, in NativeContext context, object? target,

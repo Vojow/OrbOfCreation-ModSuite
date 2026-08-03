@@ -120,6 +120,22 @@ public sealed class ChallengeGameActionTests : IDisposable
     }
 
     [Fact]
+    public void FetchFailsVerificationWhenTheNativeOfferListDoesNotChange()
+    {
+        var target = Register(Challenge());
+        ChallengeManager.instance.NextChallenges.Add(target);
+        ChallengeManager.instance.SuppressFetch = true;
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, ChallengeActionKind.FetchTime);
+
+        Assert.Equal(ChallengePreflight.VerificationFailed, result.Preflight);
+        Assert.True(PersistentResetManager.instance.hasFetchedChallenges.value);
+        Assert.Empty(ChallengeManager.instance.activeChallenges.value);
+        Assert.Equal(1, ChallengeManager.instance.FetchCalls);
+    }
+
+    [Fact]
     public void Fetch_refusals_happen_before_flags_rerolls_or_native_callbacks()
     {
         PersistentResetManager.instance.hasFetchedChallenges.value = true;

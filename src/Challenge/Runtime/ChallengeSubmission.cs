@@ -1,3 +1,4 @@
+using System;
 using OrbModding.Common;
 
 namespace OrbAutomata;
@@ -32,7 +33,7 @@ internal readonly struct ChallengeAdmissionState
 {
     internal ChallengeAdmissionState(int targetState, bool selected,
         bool inTimeOffers, bool inPrestigeOffers, bool worldCycleComplete,
-        bool challengesFetched, int rerollsLeft)
+        bool challengesFetched, int rerollsLeft, Guid[] offers)
     {
         TargetState = targetState;
         Selected = selected;
@@ -41,6 +42,7 @@ internal readonly struct ChallengeAdmissionState
         WorldCycleComplete = worldCycleComplete;
         ChallengesFetched = challengesFetched;
         RerollsLeft = rerollsLeft;
+        Offers = offers;
     }
 
     internal int TargetState { get; }
@@ -50,6 +52,7 @@ internal readonly struct ChallengeAdmissionState
     internal bool WorldCycleComplete { get; }
     internal bool ChallengesFetched { get; }
     internal int RerollsLeft { get; }
+    internal Guid[] Offers { get; }
 }
 
 internal readonly struct ChallengeSubmission

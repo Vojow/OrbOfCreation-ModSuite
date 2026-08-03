@@ -28,6 +28,7 @@ internal sealed class ChallengeNativeBindings
         "challenge.int-as-int-action", "challenge.int-set-action",
         "challenge.bool-get-action", "challenge.bool-set-action",
         "challenge.manager-fetch-action", "challenge.reset-fetch-action",
+        "id-scriptable-object.get-guid-action",
     };
 
     private ChallengeNativeBindings(Type challengeType, Type challengeManagerType,
@@ -40,7 +41,8 @@ internal sealed class ChallengeNativeBindings
         Action<object, object> toggle, Func<object, object, bool> restricted,
         Func<object, int> state, Action<object> toggleQueue, Action<object> abandon,
         Func<object, int> asInt, Action<object, int> setInt, Func<object, bool> getBool,
-        Action<object, bool> setBool, Action<object> fetchTime, Action<object> fetchPrestige)
+        Action<object, bool> setBool, Action<object> fetchTime, Action<object> fetchPrestige,
+        Func<object, Guid> identity)
     {
         ChallengeType = challengeType;
         ChallengeManagerType = challengeManagerType;
@@ -67,6 +69,7 @@ internal sealed class ChallengeNativeBindings
         SetBool = setBool;
         FetchTime = fetchTime;
         FetchPrestige = fetchPrestige;
+        Identity = identity;
     }
 
     internal Type ChallengeType { get; }
@@ -94,6 +97,7 @@ internal sealed class ChallengeNativeBindings
     internal Action<object, bool> SetBool { get; }
     internal Action<object> FetchTime { get; }
     internal Action<object> FetchPrestige { get; }
+    internal Func<object, Guid> Identity { get; }
 
     internal static bool TryCreate(out ChallengeNativeBindings? bindings, out string reason,
         Func<string, Type?>? resolveType = null, Func<string, bool>? includeContract = null)
@@ -114,6 +118,9 @@ internal sealed class ChallengeNativeBindings
             var list = T(3, "ChallengeListVariable");
             var integer = T(4, "IntVariable");
             var boolean = T(5, "BoolVariable");
+            Require(ContractIds[28], includeContract);
+            var identityType = resolveType("IdScriptableObject") ??
+                throw new InvalidOperationException("IdScriptableObject was unavailable");
             var challengeState = challenge.GetNestedType("ChallengeState", BindingFlags.Public | BindingFlags.NonPublic) ??
                 throw new InvalidOperationException("ChallengeSO.ChallengeState was unavailable");
 
@@ -139,7 +146,8 @@ internal sealed class ChallengeNativeBindings
                 Func<bool>(Method(24, boolean, "GetValue", typeof(bool), includeContract)),
                 ActionValue<bool>(Method(25, boolean, "SetValue", typeof(void), includeContract, typeof(bool))),
                 Action1(Method(26, manager, "LoadNewActiveChallenges", typeof(void), includeContract)),
-                Action1(Method(27, reset, "FetchNewChallenges", typeof(void), includeContract)));
+                Action1(Method(27, reset, "FetchNewChallenges", typeof(void), includeContract)),
+                Func<Guid>(Method(28, identityType, "GetGuid", typeof(Guid), includeContract)));
             reason = string.Empty;
             return true;
         }
