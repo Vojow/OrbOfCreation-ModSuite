@@ -41,32 +41,17 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
 
     internal SpellWorkbenchSubmission Submit(in SpellWorkbenchAction action)
     {
-        if (Environment.CurrentManagedThreadId != _mainThreadId)
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.WrongThread,
-                $"Spell workbench actions are bound to Unity thread {_mainThreadId}, not thread {Environment.CurrentManagedThreadId}.");
-        if (_bindings is not { } native)
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.ContractUnavailable,
-                _bindingFailure.Length == 0 ? "The lifecycle-scoped spell workbench binding set is unavailable." : _bindingFailure);
-
-        long currentEpoch;
-        try { currentEpoch = _readLifecycleEpoch(); }
-        catch (Exception ex) when (IsExpected(ex))
-        {
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.LifecycleReplaced,
-                "The current lifecycle epoch could not be read: " + ex.GetBaseException().Message);
-        }
-        if (currentEpoch != action.LifecycleEpoch)
-            return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.LifecycleReplaced,
-                $"Action lifecycle {action.LifecycleEpoch} is stale; the live lifecycle is {currentEpoch}.");
-
+        if (!TryResolveContext(
+                action.LifecycleEpoch,
+                action.SpellRecipeId,
+                out var native,
+                out var manager,
+                out var recipe,
+                out var preflight,
+                out var contextReason))
+            return SpellWorkbenchSubmission.Reject(preflight, contextReason);
         try
         {
-            var manager = native.ReadManager();
-            if (manager is null)
-                return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.ContractUnavailable,
-                    "SpellManager.instance is not available in the current lifecycle.");
-            if (!TryResolveRecipe(native, action.SpellRecipeId, out var recipe, out var reason))
-                return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.IdentityUnavailable, reason);
             return action.Kind switch
             {
                 SpellWorkbenchActionKind.Discover => Discover(in action, native, manager, recipe),
@@ -80,6 +65,68 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         {
             return SpellWorkbenchSubmission.Reject(SpellWorkbenchPreflight.ContractUnavailable,
                 "Spell workbench preflight failed before mutation: " + ex.GetBaseException().Message);
+        }
+    }
+
+    internal SpellWorkbenchPricePreview Preview(in SpellWorkbenchPricePreviewRequest request)
+    {
+        if (!TryResolveContext(
+                request.LifecycleEpoch,
+                request.SpellRecipeId,
+                out var native,
+                out var manager,
+                out var recipe,
+                out var preflight,
+                out var contextReason))
+            return SpellWorkbenchPricePreview.Refused(preflight, contextReason);
+        try
+        {
+            if (!native.IsDiscovered(recipe))
+                return SpellWorkbenchPricePreview.Refused(
+                    SpellWorkbenchPreflight.DiscoveryUnavailable,
+                    "Loadout preview requires an already discovered recipe.");
+            if (!TryResolveGlyphLayout(
+                    request.AugmentGlyphs,
+                    expectAugment: true,
+                    native,
+                    out var augments,
+                    out var augmentReason))
+                return SpellWorkbenchPricePreview.Refused(
+                    SpellWorkbenchPreflight.SelectionUnavailable,
+                    augmentReason);
+            if (!TryReadUsableCore(native, recipe, out var core, out var coreReason))
+                return SpellWorkbenchPricePreview.Refused(
+                    SpellWorkbenchPreflight.RecipeUnavailable,
+                    coreReason);
+            if (!TryPriceCreateLayout(
+                    native,
+                    manager,
+                    recipe,
+                    core,
+                    augments,
+                    out var createCost,
+                    out preflight,
+                    out var priceReason))
+                return SpellWorkbenchPricePreview.Refused(preflight, priceReason);
+
+            var costs = ReadCreationCosts(native, createCost!, out var shortResourceId);
+            var affordable = native.HasEnough(createCost!);
+            if (!affordable && shortResourceId == Guid.Empty)
+                return SpellWorkbenchPricePreview.Refused(
+                    SpellWorkbenchPreflight.ContractUnavailable,
+                    "The game reported this layout as unaffordable without identifying a short resource.");
+            return SpellWorkbenchPricePreview.Priced(
+                request.SpellRecipeId,
+                costs,
+                affordable,
+                affordable ? Guid.Empty : shortResourceId);
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            return SpellWorkbenchPricePreview.Refused(
+                SpellWorkbenchPreflight.ContractUnavailable,
+                "Spell loadout preview failed while reading the live layout price: " +
+                ex.GetBaseException().Message);
         }
     }
 
@@ -391,6 +438,43 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 "The candidate is loadout-unique and this recipe is already equipped.",
                 out refusal, out reason);
 
+        if (!TryPriceCreateLayout(
+                native,
+                manager,
+                recipe,
+                core,
+                augments,
+                out createCost,
+                out refusal,
+                out reason))
+            return false;
+        if (!native.HasEnough(createCost!))
+        {
+            ReadCreationCosts(native, createCost!, out var shortResourceId);
+            return Refuse(
+                SpellWorkbenchPreflight.Unaffordable,
+                shortResourceId == Guid.Empty
+                    ? "The requested spell layout is not affordable with the current resources."
+                    : EntityIdentityFormatter.Format(shortResourceId) +
+                        " is short for this spell layout.",
+                out refusal,
+                out reason);
+        }
+        refusal = SpellWorkbenchPreflight.Proceeded;
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryPriceCreateLayout(
+        SpellWorkbenchNativeBindings native,
+        object manager,
+        object recipe,
+        IList<object> core,
+        IList<object> augments,
+        out object? createCost,
+        out SpellWorkbenchPreflight refusal,
+        out string reason)
+    {
         var combined = new List<object>(core.Count + augments.Count);
         for (var index = 0; index < core.Count; index++) combined.Add(core[index]);
         for (var index = 0; index < augments.Count; index++) combined.Add(augments[index]);
@@ -398,18 +482,21 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         var resolved = native.ResolveRecipe(manager, nativeLayout);
         if (resolved is null || resolved.GetType() != native.RecipeType ||
             native.ReadIdentity(resolved) != native.ReadIdentity(recipe))
-            return Refuse(SpellWorkbenchPreflight.WrongSelection,
-                "The exact live glyph layout no longer resolves to the requested spell.",
-                out refusal, out reason);
+        {
+            createCost = null;
+            return Refuse(
+                SpellWorkbenchPreflight.WrongSelection,
+                "The exact live glyph layout does not resolve to the requested spell.",
+                out refusal,
+                out reason);
+        }
         createCost = native.GetCreationCost(manager, nativeLayout);
         if (createCost is null)
-            return Refuse(SpellWorkbenchPreflight.ContractUnavailable,
+            return Refuse(
+                SpellWorkbenchPreflight.ContractUnavailable,
                 "The game did not provide a creation price for this spell layout.",
-                out refusal, out reason);
-        if (!native.HasEnough(createCost))
-            return Refuse(SpellWorkbenchPreflight.Unaffordable,
-                UnaffordableReason(native, createCost),
-                out refusal, out reason);
+                out refusal,
+                out reason);
         refusal = SpellWorkbenchPreflight.Proceeded;
         reason = string.Empty;
         return true;
@@ -557,27 +644,44 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         return true;
     }
 
-    private static string UnaffordableReason(
+    private static SpellWorkbenchPricePreviewCost[] ReadCreationCosts(
         SpellWorkbenchNativeBindings native,
-        object createCost)
+        object createCost,
+        out Guid shortResourceId)
     {
         var totals = new Dictionary<Guid, (object Resource, BigDouble Cost)>();
+        var order = new List<Guid>();
         var rows = native.ReadCostEntries(createCost);
         for (var index = 0; index < rows.Count; index++)
         {
             var row = rows[index];
-            if (row is null) continue;
+            if (row is null)
+                throw new InvalidOperationException(
+                    "The native creation price contained an empty cost row.");
             var resource = native.ReadCostResource(row);
-            if (resource is null) continue;
+            if (resource is null)
+                throw new InvalidOperationException(
+                    "The native creation price contained a cost without a resource.");
             var id = native.ReadIdentity(resource);
+            if (id == Guid.Empty)
+                throw new InvalidOperationException(
+                    "The native creation price contained a resource without a stable identity.");
+            if (!totals.ContainsKey(id)) order.Add(id);
             totals.TryGetValue(id, out var current);
             totals[id] = (resource, current.Cost + native.ReadCostValue(row));
         }
-        foreach (var pair in totals)
-            if (!native.HasResourceAmount(pair.Value.Resource, pair.Value.Cost))
-                return EntityIdentityFormatter.Format(pair.Key) +
-                    " is short for this spell layout.";
-        return "The requested spell layout is not affordable with the current resources.";
+        var result = new SpellWorkbenchPricePreviewCost[order.Count];
+        shortResourceId = Guid.Empty;
+        for (var index = 0; index < order.Count; index++)
+        {
+            var id = order[index];
+            var value = totals[id];
+            result[index] = new SpellWorkbenchPricePreviewCost(id, value.Cost);
+            if (shortResourceId == Guid.Empty &&
+                !native.HasResourceAmount(value.Resource, value.Cost))
+                shortResourceId = id;
+        }
+        return result;
     }
 
     private static void ApplySelection(
@@ -735,6 +839,69 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             if (!found) return true;
         }
         return false;
+    }
+
+    private bool TryResolveContext(
+        long requestedEpoch,
+        Guid recipeId,
+        out SpellWorkbenchNativeBindings native,
+        out object manager,
+        out object recipe,
+        out SpellWorkbenchPreflight preflight,
+        out string reason)
+    {
+        native = null!;
+        manager = null!;
+        recipe = null!;
+        if (Environment.CurrentManagedThreadId != _mainThreadId)
+        {
+            preflight = SpellWorkbenchPreflight.WrongThread;
+            reason = "Spell workbench reads and actions are bound to Unity thread " +
+                _mainThreadId + ", not thread " + Environment.CurrentManagedThreadId + ".";
+            return false;
+        }
+        if (_bindings is not { } available)
+        {
+            preflight = SpellWorkbenchPreflight.ContractUnavailable;
+            reason = _bindingFailure.Length == 0
+                ? "The lifecycle-scoped spell workbench binding set is unavailable."
+                : _bindingFailure;
+            return false;
+        }
+        native = available;
+        try
+        {
+            var currentEpoch = _readLifecycleEpoch();
+            if (currentEpoch != requestedEpoch)
+            {
+                preflight = SpellWorkbenchPreflight.LifecycleReplaced;
+                reason = "Requested lifecycle " + requestedEpoch +
+                    " is stale; the live lifecycle is " + currentEpoch + ".";
+                return false;
+            }
+            manager = native.ReadManager()!;
+            if (manager is null)
+            {
+                preflight = SpellWorkbenchPreflight.ContractUnavailable;
+                reason = "SpellManager.instance is not available in the current lifecycle.";
+                return false;
+            }
+            if (!TryResolveRecipe(native, recipeId, out recipe, out reason))
+            {
+                preflight = SpellWorkbenchPreflight.IdentityUnavailable;
+                return false;
+            }
+            preflight = SpellWorkbenchPreflight.Proceeded;
+            reason = string.Empty;
+            return true;
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            preflight = SpellWorkbenchPreflight.ContractUnavailable;
+            reason = "Spell workbench context could not be read: " +
+                ex.GetBaseException().Message;
+            return false;
+        }
     }
 
     private static bool TryResolveRecipe(SpellWorkbenchNativeBindings native, Guid id,

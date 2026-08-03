@@ -30,7 +30,6 @@ internal static class WorldCategoryFakes
         ["AlchemyRecipeListVariable"] = typeof(FakeAlchemyRecipeList),
         ["SpellRecipeSO"] = typeof(FakeSpellRecipe),
         ["SpellManager"] = typeof(FakeSpellManager),
-        ["GlyphListVariable"] = typeof(FakeGlyphList),
         ["SpellTypeSO"] = typeof(FakeSpellType),
         ["EquipmentSO"] = typeof(FakeEquipment),
         ["EquipmentTypeSO"] = typeof(FakeEquipmentType),
@@ -1022,21 +1021,11 @@ internal sealed class FakeSpellRecipe : global::IDiscoverable
     Guid global::IHasGuid.GetGuid() => GetGuid();
 }
 
-internal sealed class FakeGlyphList
-{
-    public List<FakeGlyph> value = new();
-}
-
 internal sealed class FakeSpellManager
 {
     public static FakeSpellManager? instance;
 
-    public FakeGlyphList selectedCoreGlyphs = new();
-    public FakeGlyphList selectedAugmentGlyphs = new();
     public FakeSpellLoadout activeSpells = new();
-    public FakeSpellWorkbenchCostList creationCost = new();
-
-    public FakeSpellWorkbenchCostList GetSpellCreateCost(List<FakeGlyph> glyphs) => creationCost;
 }
 
 internal sealed class FakeSpellWorkbenchCostList

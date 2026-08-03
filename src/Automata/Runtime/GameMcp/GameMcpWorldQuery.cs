@@ -2200,16 +2200,10 @@ internal static class GameMcpWorldQuery
         if (recipe.Discovered)
         {
             var coreUsable = SpellCoreUsable(world, in recipe);
-            var canPrice = world.SpellWorkbench.HasEmptySlot && coreUsable;
-            if (canPrice)
-            {
-                var costs = ProjectSpellCosts(world, world.SpellWorkbench.CreationCosts);
-                if (costs.Count > 0) next["costs"] = costs;
-                next["affordable"] = world.SpellWorkbench.CreationAffordable;
-            }
-            next["available"] = canPrice && world.SpellWorkbench.CreationAffordable;
+            var available = world.SpellWorkbench.HasEmptySlot && coreUsable;
+            next["available"] = available;
             next["requiresGlyphLayout"] = true;
-            if (canPrice && world.SpellWorkbench.CreationAffordable)
+            if (available)
             {
                 var options = ProjectOwnedAugmentOptions(world);
                 if (options.Count > 0) next["augmentOptions"] = options;
@@ -2218,7 +2212,6 @@ internal static class GameMcpWorldQuery
                 next["reasonCode"] = "loadout_full";
             else if (!coreUsable)
                 next["reasonCode"] = "core_glyphs_unavailable";
-            else next["reasonCode"] = "unaffordable";
         }
         else
         {
@@ -2898,29 +2891,6 @@ internal static class GameMcpWorldQuery
     private static JArray ProjectSpellCosts(
         GameWorldState world,
         PublicationTable<WorldDiscoverableCost> values)
-    {
-        var result = new JArray();
-        for (var index = 0; index < values.Count; index++)
-        {
-            var value = values[index];
-            result.Add(new JObject
-            {
-                ["resourceId"] = value.ResourceId.ToString("D"),
-                ["cost"] = new GameMcpDomainValue(value.Cost),
-                ["amount"] = new GameMcpDomainValue(
-                    SpendableAmount(world, value.ResourceId, value.AvailableAmount)),
-                ["affordable"] = SpendableAmount(
-                    world,
-                    value.ResourceId,
-                    value.AvailableAmount).CompareTo(value.Cost) >= 0,
-            });
-        }
-        return result;
-    }
-
-    private static JArray ProjectSpellCosts(
-        GameWorldState world,
-        PublicationTable<WorldSpellWorkbenchCost> values)
     {
         var result = new JArray();
         for (var index = 0; index < values.Count; index++)

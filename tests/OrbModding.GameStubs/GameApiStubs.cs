@@ -1980,6 +1980,7 @@ public class SpellManager
     public int RemoveCalls { get; private set; }
     public int TryLevelAllCalls { get; private set; }
     public ResourceCostList? CreateCostOverride { get; set; }
+    public Func<IReadOnlyList<GlyphSO>, ResourceCostList>? CreateCostResolver { get; set; }
 
     public static bool CanCastASpell() => NativeCanCast;
     public static ResourceCostList GetUsageCostOfSpell(Spell spell) =>
@@ -2004,7 +2005,7 @@ public class SpellManager
     {
         var recipe = GetSpellFromRecipe(glyphs);
         if (recipe is null) return new ResourceCostList();
-        return CreateCostOverride ?? GlyphSO.GetCreationCostOfList(
+        return CreateCostResolver?.Invoke(glyphs) ?? CreateCostOverride ?? GlyphSO.GetCreationCostOfList(
             new ResourceCostList(), glyphs.Where(glyph => glyph.IsSpellAugment()));
     }
 

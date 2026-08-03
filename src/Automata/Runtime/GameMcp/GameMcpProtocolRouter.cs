@@ -284,9 +284,9 @@ internal sealed class GameMcpProtocolRouter
                 builder.Amount = RequiredInt(arguments, "value", 1, int.MaxValue);
                 break;
             case "game_spell_loadout":
-                builder.Mode = RequireOneOf(arguments, "mode", "add", "remove", "move");
+                builder.Mode = RequireOneOf(arguments, "mode", "preview", "add", "remove", "move");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
-                if (builder.Mode == "add")
+                if (builder.Mode is "preview" or "add")
                 {
                     builder.Uuid = RequireUuid(arguments, "uuid");
                     builder.UuidCounts = RequireUuidCountArray(arguments, "glyphs", 64);
@@ -448,7 +448,8 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" when
-                !(name == "game_discover" && request.Mode == "preview") =>
+                !(name == "game_discover" && request.Mode == "preview") &&
+                !(name == "game_spell_loadout" && request.Mode == "preview") =>
                 GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
@@ -634,13 +635,13 @@ internal sealed class GameMcpProtocolRouter
                 idempotent: false),
             Tool(
                 "game_spell_loadout",
-                "Add, remove, or move a spell",
-                "Add a discovered recipe with its glyph layout baked in, remove one exact runtime spell, or move it to another loadout slot. Success returns the settled slot change.",
+                "Preview, add, remove, or move a spell",
+                "Preview the exact native price of a submitted recipe and augment layout without changing the staged UI selection; add that layout baked into a new spell; or remove or move an equipped spell. Success returns the settled slot change.",
                 ModeSchema(ActionSchema(
                     new JObject
                     {
-                        ["mode"] = EnumSchema("add", "remove", "move"),
-                        ["uuid"] = StringSchema("A discovered recipe UUID for add; an equipped spell-instance UUID for remove or move."),
+                        ["mode"] = EnumSchema("preview", "add", "remove", "move"),
+                        ["uuid"] = StringSchema("A discovered recipe UUID for preview or add; an equipped spell-instance UUID for remove or move."),
                         ["glyphs"] = ArraySchema(
                             ObjectSchema(new JObject
                             {
@@ -650,6 +651,7 @@ internal sealed class GameMcpProtocolRouter
                         ["destination"] = IntegerSchema(0, 255),
                     },
                     "mode"),
+                    ModeRule("preview", new[] { "uuid", "glyphs" }, new[] { "destination" }),
                     ModeRule("add", new[] { "uuid", "glyphs" }, new[] { "destination" }),
                     ModeRule("remove", new[] { "uuid" }, new[] { "glyphs", "destination" }),
                     ModeRule("move", new[] { "uuid", "destination" }, new[] { "glyphs" })),
@@ -1026,19 +1028,19 @@ internal sealed class GameMcpProtocolRouter
             var subject = arguments.ContainsKey("uuid");
             var glyphs = arguments.ContainsKey("glyphs");
             var destination = arguments.ContainsKey("destination");
-            if (mode == "add")
+            if (mode is "preview" or "add")
             {
                 if (!subject) errors.Add(ValidationError("missing_required", "uuid",
-                    "required field 'uuid' is missing for mode 'add'"));
+                    "required field 'uuid' is missing for mode '" + mode + "'"));
                 if (!glyphs) errors.Add(ValidationError("missing_required", "glyphs",
-                    "required field 'glyphs' is missing for mode 'add'"));
+                    "required field 'glyphs' is missing for mode '" + mode + "'"));
             }
             else
             {
                 if (!subject) errors.Add(ValidationError("missing_required", "uuid",
                     "required field 'uuid' is missing for mode '" + mode + "'"));
                 if (glyphs) errors.Add(ValidationError("unexpected_for_mode", "glyphs",
-                    "field 'glyphs' is accepted only for mode 'add'"));
+                    "field 'glyphs' is accepted only for modes 'preview' and 'add'"));
             }
             if (mode == "move" && !destination)
                 errors.Add(ValidationError("missing_required", "destination",

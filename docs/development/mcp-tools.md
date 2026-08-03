@@ -130,7 +130,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_harvest` | Harvest an audited pair derived from a plot UUID |
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
 | `game_casting_dial` | Set the global Output Level or Reserve Level shown on the Casting screen |
-| `game_spell_loadout` | Add a discovered recipe with its glyph layout baked in, remove one equipped runtime spell, or move it |
+| `game_spell_loadout` | Preview or add a discovered recipe with an explicit glyph layout, remove one equipped runtime spell, or move it |
 | `game_targeting` | Submit one exact eligible target or let the native request choose one |
 | `game_consumable` | Use, cancel, discard, randomize, or reorder one published consumable |
 | `game_craft` | Execute one published direct or queued crafting recipe |
@@ -369,10 +369,11 @@ The MCP-only offer sequence is seven calls when two offers need explanations:
 named row contains the authored ordered `coreGlyphs` with current owned and bonus levels, every
 equipped runtime instance of that recipe, and the shared `loadBudget` of used/maximum slots plus
 `fitsAnotherSpell`. An undiscovered recipe exposes `discover`, including the `surface` and the
-ordered `components` to submit; a discovered recipe exposes `loadoutAdd`. Either object carries its
-named exact costs, spendable amounts, affordability, and a stable false `reasonCode`
-(`unaffordable`, `loadout_full`, `components_unavailable`, `not_visible`, `discovery_unavailable`).
-There is no selection step and no target-first `create`: the game exposes neither.
+ordered `components` to submit; a discovered recipe exposes `loadoutAdd`. Discovery carries its
+named exact costs, spendable amounts, affordability, and stable false reason. Loadout add truthfully
+reports only structural admission (`loadout_full` or `core_glyphs_unavailable`) plus
+`requiresGlyphLayout:true`: its price depends on the explicit augments that have not yet been
+chosen. There is no selection step and no target-first `create`: the game exposes neither.
 
 The MCP-only base-recipe sequence is:
 
@@ -383,8 +384,12 @@ The MCP-only base-recipe sequence is:
    components and check the resolved output, then repeat the call with `mode:"confirm"`. The
    response reports the resolved target and discovery transition.
 3. If an equipped instance is wanted, call
-   `game_spell_loadout(mode="add", uuid=..., glyphs=[...])`. Adding is the only place a
-   glyph layout is chosen; it is baked into the created runtime spell.
+   `game_spell_loadout(mode="preview", uuid=..., glyphs=[...])`. This read resolves and prices the
+   submitted layout through the same native manager methods used by add, without touching the
+   player's staged UI selection. It returns the named resolved recipe, named per-resource costs,
+   overall affordability, and the named short resource when unaffordable.
+4. Call `game_spell_loadout(mode="add", uuid=..., glyphs=[...])` with that same layout. Adding is
+   the only mutation where the layout is chosen; it is baked into the created runtime spell.
 
 Every referenced entity is named inline. No catalog join, world-generation argument, payment
 stanza, receipt poll, or post-mutation `world_get` is required.
@@ -419,16 +424,18 @@ The MCP-only loadout sequence is:
 
 1. Read `world_list(category="spell-slots")` and choose one exact runtime `spellInstance.uuid`, or
    read a discovered `spell-recipes` row's `loadoutAdd` decision to add a new one.
-2. Call `game_spell_loadout(mode="add", uuid=..., glyphs=[{uuid,count}, ...])`; `[]` is
-   a valid intentional empty layout, not "reuse whatever the UI last selected".
-3. Call `game_spell_loadout(mode="move", uuid=..., destination=...)`; success returns the slot
+2. Call `game_spell_loadout(mode="preview", uuid=..., glyphs=[{uuid,count}, ...])` to resolve and
+   price that exact layout without changing the staged UI selection. `[]` is a valid intentional
+   empty augment layout, not "reuse whatever the UI last selected".
+3. Call `game_spell_loadout(mode="add", uuid=..., glyphs=[...])` with the previewed layout.
+4. Call `game_spell_loadout(mode="move", uuid=..., destination=...)`; success returns the slot
    change.
-4. Call `game_spell_loadout(mode="remove", uuid=...)` only when that row's `remove.available` is
+5. Call `game_spell_loadout(mode="remove", uuid=...)` only when that row's `remove.available` is
    true; success returns the removed spell's former slot.
 
-The `uuid` means a recipe for `add` and a runtime spell instance for `remove`/`move`. `glyphs`
-belongs to `add` only; `destination` belongs to `move` only. Anything else is a named `unexpected_for_mode`
-validation failure rather than a silently ignored field.
+The `uuid` means a recipe for `preview`/`add` and a runtime spell instance for `remove`/`move`.
+`glyphs` belongs to `preview`/`add` only; `destination` belongs to `move` only. Anything else is a
+named `unexpected_for_mode` validation failure rather than a silently ignored field.
 
 Add reproduces the library button's own admission order: it creates the native candidate, applies
 the recipe's selected level and the requested glyphs, then requires recipe usage requirements,
@@ -634,6 +641,8 @@ tools/game-mcp-client.py call game_discover --arguments \
 tools/game-mcp-client.py call game_casting_dial --arguments \
   '{"dial":"output","value":4}'
 tools/game-mcp-client.py call game_spell_loadout --arguments \
+  '{"mode":"preview","uuid":"SPELL_RECIPE_UUID","glyphs":[{"uuid":"GLYPH_UUID","count":2}]}'
+tools/game-mcp-client.py call game_spell_loadout --arguments \
   '{"mode":"add","uuid":"SPELL_RECIPE_UUID","glyphs":[{"uuid":"GLYPH_UUID","count":2}]}'
 tools/game-mcp-client.py call game_challenge --arguments \
   '{"mode":"select","uuid":"CHALLENGE_UUID"}'
@@ -658,10 +667,13 @@ variable and its purchased maximum on the Unity main thread, rejects a value out
 range, and verifies that the requested value became observable. Success is the exact requested
 global value; a committed result is the dial's `before` and `after` value plus its maximum.
 
-`game_spell_loadout` requires `mode` and `uuid`. For `add`, `uuid` is a spell-recipe identity and an
-explicit `glyphs` array is required. For `remove` and `move`, `uuid` is a runtime spell-instance
-identity and `glyphs` is rejected; `move` additionally requires a zero-based `destination`, which no
-other mode accepts. Add builds the native candidate, applies the selected level, bakes the glyph layout
+`game_spell_loadout` requires `mode` and `uuid`. For `preview` and `add`, `uuid` is a spell-recipe
+identity and an explicit `glyphs` array is required. Preview combines the recipe's authored core
+with those explicit augments and prices the resulting layout through
+`SpellManager.GetSpellCreateCost` without changing the staged UI
+selection or acquiring mutation ownership. For `remove` and `move`, `uuid` is a runtime
+spell-instance identity and `glyphs` is rejected; `move` additionally requires a zero-based
+`destination`, which no other mode accepts. Add builds the native candidate, applies the selected level, bakes the glyph layout
 with `Spell.SetAugmentGlyphs` before the manager add route, pays last, and verifies the exact
 requested loadout outcome. Remove rechecks the game's live `Spell.CanRemove()` verdict; move
 re-resolves the source slot and invokes the same native swap-plus-notify path as the spellbook.

@@ -1435,6 +1435,29 @@ public sealed class Plugin : BaseUnityPlugin
                     GameMcpWorldQuery.ProjectDiscoveryPreview(
                         context, request.Key, request.UuidCounts));
                 return true;
+            case "game_spell_loadout" when request.Mode == "preview":
+                var glyphs = new SpellWorkbenchGlyphStack[request.UuidCounts.Length];
+                for (var index = 0; index < glyphs.Length; index++)
+                    glyphs[index] = new SpellWorkbenchGlyphStack(
+                        request.UuidCounts[index].Uuid,
+                        request.UuidCounts[index].Count);
+                var previewRequest = new SpellWorkbenchPricePreviewRequest(
+                    request.Uuid,
+                    _lifecycleGeneration,
+                    glyphs);
+                SpellWorkbenchPricePreview preview;
+                if (_serviceCycleActivation is null ||
+                    !_serviceCycleActivation.TryPreviewSpellWorkbench(
+                        in previewRequest,
+                        out preview))
+                {
+                    preview = SpellWorkbenchPricePreview.Refused(
+                        SpellWorkbenchPreflight.ContractUnavailable,
+                        "The ServiceCycle runtime is not active in this scene.");
+                }
+                execution = GameMcpToolExecution.Read(
+                    GameMcpSpellWorkbenchProjection.ProjectPricePreview(in preview));
+                return true;
             case "resource_read":
                 execution = ExecuteGameMcpResource(request.ResourceUri, context);
                 return true;

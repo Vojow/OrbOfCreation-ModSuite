@@ -21,6 +21,8 @@ public sealed class GameMcpSpellWorkbenchTests
         Guid.Parse("0f38b02c-b81a-4fcd-9e07-73e09bd38dee");
     private static readonly Guid ResourceId =
         Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
+    private static readonly Guid AugmentGlyphId =
+        Guid.Parse("95b05e80-e0e8-45d2-b510-5d9d8d7d9b70");
 
     [Fact]
     public void OutputFirstWorkbenchToolIsAbsentFromThePlayerSurface()
@@ -72,7 +74,6 @@ public sealed class GameMcpSpellWorkbenchTests
         var context = GameMcpTestHarness.Context(World(
             discovered: false,
             discoveryAffordable: true,
-            creationAffordable: true,
             hasEmptySlot: true));
 
         var list = GameMcpTestHarness.Json(
@@ -114,7 +115,6 @@ public sealed class GameMcpSpellWorkbenchTests
         var context = GameMcpTestHarness.Context(World(
             discovered: true,
             discoveryAffordable: true,
-            creationAffordable: true,
             hasEmptySlot: true,
             equipped: true));
 
@@ -126,12 +126,10 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Null(row["select"]);
         Assert.True((bool)row["loadoutAdd"]!["available"]!);
         Assert.True((bool)row["loadoutAdd"]!["requiresGlyphLayout"]!);
-        Assert.True((bool)row["loadoutAdd"]!["affordable"]!);
+        Assert.Null(row["loadoutAdd"]!["affordable"]);
         Assert.Null(row["loadoutAdd"]!["reasonCode"]);
-        var cost = Assert.Single(row["loadoutAdd"]!["costs"]!.Values<JObject>())!;
-        Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
-        Assert.Equal("750", (string?)cost["cost"]);
-        Assert.Equal("9e6", (string?)cost["amount"]);
+        Assert.Null(row["loadoutAdd"]!["costs"]);
+        Assert.Single(row["loadoutAdd"]!["augmentOptions"]!.Values<JObject>());
         Assert.Equal(1, (int)row["loadBudget"]!["used"]!);
         Assert.Equal(3, (int)row["loadBudget"]!["maximum"]!);
         Assert.True((bool)row["loadBudget"]!["fitsAnotherSpell"]!);
@@ -140,24 +138,68 @@ public sealed class GameMcpSpellWorkbenchTests
         Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
     }
 
-    [Fact]
-    public void LoadoutAddReadRefusesAnUnaffordableScreenPrice()
+    [Theory]
+    [InlineData(false, 7, "loadout_full")]
+    [InlineData(true, 0, "core_glyphs_unavailable")]
+    public void StructurallyUnavailableLoadoutAddWithholdsLayoutOptionsAndPriceClaims(
+        bool hasEmptySlot,
+        int coreLevel,
+        string reasonCode)
     {
         var context = GameMcpTestHarness.Context(World(
             discovered: true,
             discoveryAffordable: true,
-            creationAffordable: false,
-            hasEmptySlot: true));
+            hasEmptySlot,
+            coreLevel: coreLevel));
 
         var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
             context, "spell-recipes", RecipeId.ToString("D"), "SpellRecipeSO"));
         var decision = response["row"]!["loadoutAdd"]!;
 
         Assert.False((bool)decision["available"]!);
-        Assert.False((bool)decision["affordable"]!);
-        Assert.Equal("unaffordable", (string?)decision["reasonCode"]);
-        Assert.Single(decision["costs"]!.Values<JObject>());
+        Assert.Equal(reasonCode, (string?)decision["reasonCode"]);
         Assert.Null(decision["augmentOptions"]);
+        Assert.Null(decision["affordable"]);
+        Assert.Null(decision["costs"]);
+    }
+
+    [Fact]
+    public void ExplicitLayoutPreviewReturnsNamedNativePriceAndShortResource()
+    {
+        var preview = SpellWorkbenchPricePreview.Priced(
+            RecipeId,
+            new[] { new SpellWorkbenchPricePreviewCost(ResourceId, new BigDouble(4400)) },
+            affordable: false,
+            ResourceId);
+
+        var response = GameMcpTestHarness.Json(
+            GameMcpSpellWorkbenchProjection.ProjectPricePreview(in preview));
+
+        Assert.Equal("available", (string?)response["status"]);
+        Assert.Equal("Gather Knowledge", (string?)response["recipe"]!["name"]);
+        var cost = Assert.Single(response["costs"]!.Values<JObject>());
+        Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
+        Assert.Equal("4.4e3", (string?)cost["cost"]);
+        Assert.False((bool)response["affordable"]!);
+        Assert.Equal("Knowledge", (string?)response["shortResource"]!["name"]);
+    }
+
+    [Fact]
+    public void ExplicitLayoutPreviewRefusalCarriesOnlyTheActionableReason()
+    {
+        var preview = SpellWorkbenchPricePreview.Refused(
+            SpellWorkbenchPreflight.WrongSelection,
+            "The exact live glyph layout does not resolve to the requested spell.");
+
+        var response = GameMcpTestHarness.Json(
+            GameMcpSpellWorkbenchProjection.ProjectPricePreview(in preview));
+
+        Assert.Equal(
+            new[] { "status", "reasonCode", "reason" },
+            response.Properties().Select(property => property.Name));
+        Assert.Equal("unavailable", (string?)response["status"]);
+        Assert.Equal("wrong_selection", (string?)response["reasonCode"]);
+        Assert.Contains("does not resolve", (string?)response["reason"]);
     }
 
     [Fact]
@@ -166,7 +208,6 @@ public sealed class GameMcpSpellWorkbenchTests
         var context = GameMcpTestHarness.Context(World(
             discovered: false,
             discoveryAffordable: true,
-            creationAffordable: true,
             hasEmptySlot: true,
             discoveryVisible: false));
 
@@ -193,12 +234,10 @@ public sealed class GameMcpSpellWorkbenchTests
         var before = World(
             discovered: false,
             discoveryAffordable: true,
-            creationAffordable: true,
             hasEmptySlot: true);
         var after = World(
             discovered: true,
             discoveryAffordable: true,
-            creationAffordable: true,
             hasEmptySlot: true);
         var command = Command("discover", "spellcraft", before);
         var terminal = GameMcpCommandResult.FromAction(
@@ -255,7 +294,6 @@ public sealed class GameMcpSpellWorkbenchTests
         var undiscovered = World(
             discovered: false,
             discoveryAffordable: true,
-            creationAffordable: true,
             hasEmptySlot: true);
         var discoveryCommand = Command("discover", before: undiscovered);
         var terminal = GameMcpCommandResult.Committed(
@@ -273,12 +311,10 @@ public sealed class GameMcpSpellWorkbenchTests
         var beforeAdd = World(
             discovered: true,
             discoveryAffordable: true,
-            creationAffordable: true,
             hasEmptySlot: true);
         var afterAdd = World(
             discovered: true,
             discoveryAffordable: true,
-            creationAffordable: true,
             hasEmptySlot: true,
             equipped: true);
         var addCommand = Command("create", before: beforeAdd);
@@ -298,7 +334,6 @@ public sealed class GameMcpSpellWorkbenchTests
         var world = World(
             discovered: false,
             discoveryAffordable: true,
-            creationAffordable: true,
             hasEmptySlot: true);
 
         Assert.True(GameMcpEntityCapabilityMap.Contains(
@@ -359,11 +394,11 @@ public sealed class GameMcpSpellWorkbenchTests
     private static GameWorldState World(
         bool discovered,
         bool discoveryAffordable,
-        bool creationAffordable,
         bool hasEmptySlot,
         bool equipped = false,
         bool discoveryVisible = true,
-        bool canDiscover = true)
+        bool canDiscover = true,
+        int coreLevel = 7)
     {
         var glyphs = PublicationTable<WorldSpellRecipeGlyph>.Create(new[]
         {
@@ -377,14 +412,6 @@ public sealed class GameMcpSpellWorkbenchTests
                 new BigDouble(4.4d, 3),
                 new BigDouble(9d, 6)),
         });
-        var creationCosts = PublicationTable<WorldSpellWorkbenchCost>.Create(new[]
-        {
-            new WorldSpellWorkbenchCost(
-                ResourceId,
-                new BigDouble(7.5d, 2),
-                new BigDouble(9d, 6)),
-        });
-
         return new GameWorldState
         {
             CollectedAtEpoch = 9,
@@ -430,13 +457,10 @@ public sealed class GameMcpSpellWorkbenchTests
             Glyphs = PublicationTable<WorldGlyph>.Create(new[]
             {
                 Glyph(SecondGlyphId, 3),
-                Glyph(FirstGlyphId, 7),
+                Glyph(FirstGlyphId, coreLevel),
+                Glyph(AugmentGlyphId, 1, augmentsSpells: true),
             }),
             SpellWorkbench = new WorldSpellWorkbench(
-                PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
-                PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
-                creationCosts,
-                creationAffordable,
                 equipped ? 1 : 0,
                 3,
                 hasEmptySlot),
@@ -465,7 +489,7 @@ public sealed class GameMcpSpellWorkbenchTests
         };
     }
 
-    private static WorldGlyph Glyph(Guid id, int level) => new(
+    private static WorldGlyph Glyph(Guid id, int level, bool augmentsSpells = false) => new(
         id,
         level,
         0,
@@ -473,7 +497,7 @@ public sealed class GameMcpSpellWorkbenchTests
         false,
         true,
         false,
-        false,
+        augmentsSpells,
         false,
         false,
         0,

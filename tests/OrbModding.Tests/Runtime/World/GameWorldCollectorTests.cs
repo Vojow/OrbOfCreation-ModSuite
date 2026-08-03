@@ -586,7 +586,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
-    public void SpellDiscoveryAndCreationDecisionsArePublishedFromTheNativeWorkbench()
+    public void SpellDiscoveryAndLoadoutCapacityArePublishedFromTheirOwningNativeSurfaces()
     {
         var first = new FakeGlyph { Identity = Guid.NewGuid(), level = 7, discovered = true };
         var second = new FakeGlyph { Identity = Guid.NewGuid(), level = 3, discovered = true };
@@ -594,11 +594,6 @@ public sealed class GameWorldCollectorTests : IDisposable
         {
             Identity = Guid.NewGuid(),
             amount = new BigDouble(9d, 6),
-        };
-        var creationResource = new FakeSpellWorkbenchResource
-        {
-            Identity = Guid.NewGuid(),
-            amount = new BigDouble(5d, 2),
         };
         var recipe = new FakeSpellRecipe
         {
@@ -622,23 +617,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         FakeGlyph.All.Add(second);
         FakeSpellRecipe.All.Add(recipe);
 
-        var manager = new FakeSpellManager
-        {
-            creationCost = new FakeSpellWorkbenchCostList
-            {
-                affordable = false,
-                costs =
-                {
-                    new FakeSpellWorkbenchCost
-                    {
-                        resource = creationResource,
-                        amount = new BigDouble(7.5d, 2),
-                    },
-                },
-            },
-        };
-        manager.selectedCoreGlyphs.value.Add(first);
-        manager.selectedCoreGlyphs.value.Add(second);
+        var manager = new FakeSpellManager();
         manager.activeSpells.maximum = 3;
         manager.activeSpells.value.Add(new FakeSpell());
         FakeSpellManager.instance = manager;
@@ -657,14 +636,6 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(9e6, discoveryCost.AvailableAmount.ToDouble());
         Assert.True(recipeRow.DiscoveryAffordable);
 
-        Assert.Equal(new[] { first.Identity, second.Identity },
-            world.SpellWorkbench.CoreGlyphs.AsSpan().ToArray().Select(glyph => glyph.GlyphId));
-        Assert.Empty(world.SpellWorkbench.AugmentGlyphs.AsSpan().ToArray());
-        var creationCost = Assert.Single(world.SpellWorkbench.CreationCosts.AsSpan().ToArray());
-        Assert.Equal(creationResource.Identity, creationCost.ResourceId);
-        Assert.Equal(750d, creationCost.Cost.ToDouble());
-        Assert.Equal(500d, creationCost.AvailableAmount.ToDouble());
-        Assert.False(world.SpellWorkbench.CreationAffordable);
         Assert.Equal(1, world.SpellWorkbench.EquippedCount);
         Assert.Equal(3, world.SpellWorkbench.MaximumEquipped);
         Assert.True(world.SpellWorkbench.HasEmptySlot);

@@ -17211,20 +17211,6 @@
       "place": "action"
     },
     {
-      "id": "spell-workbench.glyph-list-type-capture",
-      "assembly": "assembly-csharp",
-      "type": "GlyphListVariable",
-      "typeVisibility": "public",
-      "kind": "type",
-      "owners": [
-        "Automata spell workbench world publication"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
       "id": "spell-workbench.spell-list-type-action",
       "assembly": "assembly-csharp",
       "type": "SpellListVariable",
@@ -17257,24 +17243,6 @@
       "place": "capture"
     },
     {
-      "id": "spell-workbench.manager-selected-core-capture",
-      "assembly": "assembly-csharp",
-      "type": "SpellManager",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "selectedCoreGlyphs",
-      "visibility": "public",
-      "static": false,
-      "valueType": "GlyphListVariable",
-      "owners": [
-        "Automata spell workbench world publication"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
       "id": "spell-workbench.manager-selected-core-action",
       "assembly": "assembly-csharp",
       "type": "SpellManager",
@@ -17291,24 +17259,6 @@
         "reflection"
       ],
       "place": "action"
-    },
-    {
-      "id": "spell-workbench.manager-selected-augments-capture",
-      "assembly": "assembly-csharp",
-      "type": "SpellManager",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "selectedAugmentGlyphs",
-      "visibility": "public",
-      "static": false,
-      "valueType": "GlyphListVariable",
-      "owners": [
-        "Automata spell workbench world publication"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
     },
     {
       "id": "spell-workbench.manager-selected-augments-action",
@@ -17338,27 +17288,6 @@
       "visibility": "public",
       "static": false,
       "valueType": "SpellListVariable",
-      "owners": [
-        "Automata spell workbench world publication"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "spell-workbench.manager-get-create-cost-capture",
-      "assembly": "assembly-csharp",
-      "type": "SpellManager",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetSpellCreateCost",
-      "visibility": "public",
-      "static": false,
-      "returnType": "ResourceCostList",
-      "parameters": [
-        "System.Collections.Generic.List`1<GlyphSO>"
-      ],
       "owners": [
         "Automata spell workbench world publication"
       ],
@@ -17719,24 +17648,6 @@
         "reflection"
       ],
       "place": "action"
-    },
-    {
-      "id": "spell-workbench.list-value-capture",
-      "assembly": "assembly-csharp",
-      "type": "AbstractListVariable`1",
-      "typeVisibility": "public",
-      "kind": "field",
-      "member": "value",
-      "visibility": "public",
-      "static": false,
-      "valueType": "System.Collections.Generic.List`1<!0>",
-      "owners": [
-        "Automata spell workbench world publication"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
     },
     {
       "id": "spell-workbench.list-value-action",

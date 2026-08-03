@@ -283,10 +283,6 @@ public sealed class GameMcpSpellCompositionTests
                 CoreGlyph(SecondCoreGlyphId),
             }.OrderBy(glyph => glyph.EntityId).ToArray()),
             SpellWorkbench = new WorldSpellWorkbench(
-                PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
-                PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
-                PublicationTable<WorldSpellWorkbenchCost>.Empty,
-                true,
                 1,
                 3,
                 true,

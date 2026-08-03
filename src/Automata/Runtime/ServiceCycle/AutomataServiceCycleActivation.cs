@@ -23,6 +23,8 @@ internal interface IAutomataServiceCycleRuntime : IDisposable
 #if SERVICE_CYCLE_PROFILE
     AutomataRuntimeFrameFacts CaptureFrameFacts(bool includeServices);
     GameMcpCommandResult ExecuteGameMcp(GameMcpCommand command);
+    SpellWorkbenchPricePreview PreviewSpellWorkbench(
+        in SpellWorkbenchPricePreviewRequest request);
 #endif
 }
 
@@ -135,6 +137,21 @@ internal sealed class AutomataServiceCycleActivation : IDisposable
             return false;
         }
         result = _runtime.ExecuteGameMcp(command);
+        return true;
+    }
+
+    internal bool TryPreviewSpellWorkbench(
+        in SpellWorkbenchPricePreviewRequest request,
+        out SpellWorkbenchPricePreview preview)
+    {
+        if (_disposed || _runtime is null)
+        {
+            preview = SpellWorkbenchPricePreview.Refused(
+                SpellWorkbenchPreflight.ContractUnavailable,
+                "The ServiceCycle runtime is not active in this scene.");
+            return false;
+        }
+        preview = _runtime.PreviewSpellWorkbench(in request);
         return true;
     }
 #endif

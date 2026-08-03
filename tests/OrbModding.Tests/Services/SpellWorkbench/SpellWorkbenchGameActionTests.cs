@@ -332,6 +332,89 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     }
 
     [Fact]
+    public void PricePreviewUsesTheSubmittedLayoutWithoutChangingStagedSelection()
+    {
+        var (recipe, stagedCore, _) = Recipe(discovered: true);
+        var knowledge = new ResourceSO { name = "Knowledge", quantity = new BigDouble(100) };
+        var first = Augment();
+        var second = Augment();
+        SpellManager.instance!.selectedCoreGlyphs.value.Add(stagedCore);
+        SpellManager.instance.selectedAugmentGlyphs.value.Add(first);
+        SpellManager.instance.CreateCostResolver = glyphs =>
+        {
+            var price = new ResourceCostList();
+            price.costs.Add(new ResourceTuple(
+                knowledge,
+                glyphs.Contains(second) ? new BigDouble(7) : new BigDouble(3)));
+            return price;
+        };
+        using var action = Action(permit: false);
+
+        var firstPreview = action.Preview(new SpellWorkbenchPricePreviewRequest(
+            recipe.GetGuid(), Epoch,
+            new[] { new SpellWorkbenchGlyphStack(first.GetGuid(), 1) }));
+        var secondPreview = action.Preview(new SpellWorkbenchPricePreviewRequest(
+            recipe.GetGuid(), Epoch,
+            new[] { new SpellWorkbenchGlyphStack(second.GetGuid(), 1) }));
+
+        Assert.True(firstPreview.Available, firstPreview.Reason);
+        Assert.True(secondPreview.Available, secondPreview.Reason);
+        Assert.Equal(new BigDouble(3), Assert.Single(firstPreview.Costs).Cost);
+        Assert.Equal(new BigDouble(7), Assert.Single(secondPreview.Costs).Cost);
+        Assert.Equal(new[] { stagedCore }, SpellManager.instance.selectedCoreGlyphs.value);
+        Assert.Equal(new[] { first }, SpellManager.instance.selectedAugmentGlyphs.value);
+        Assert.Empty(SpellManager.instance.activeSpells.value);
+    }
+
+    [Fact]
+    public void PricePreviewNamesTheShortResourceAndRefusesASelectionThatDoesNotResolve()
+    {
+        var (recipe, _, _) = Recipe(discovered: true);
+        var knowledge = new ResourceSO { name = "Knowledge", quantity = new BigDouble(2) };
+        var augment = Augment();
+        var price = new ResourceCostList();
+        price.costs.Add(new ResourceTuple(knowledge, new BigDouble(3)));
+        SpellManager.instance!.CreateCostResolver = _ => price;
+        using var action = Action(permit: false);
+
+        var unaffordable = action.Preview(new SpellWorkbenchPricePreviewRequest(
+            recipe.GetGuid(), Epoch,
+            new[] { new SpellWorkbenchGlyphStack(augment.GetGuid(), 1) }));
+        SpellManager.instance.SuppressSelectionResolution = true;
+        var unresolved = action.Preview(new SpellWorkbenchPricePreviewRequest(
+            recipe.GetGuid(), Epoch,
+            new[] { new SpellWorkbenchGlyphStack(augment.GetGuid(), 1) }));
+
+        Assert.True(unaffordable.Available, unaffordable.Reason);
+        Assert.False(unaffordable.Affordable);
+        Assert.Equal(knowledge.GetGuid(), unaffordable.ShortResourceId);
+        Assert.Equal(SpellWorkbenchPreflight.WrongSelection, unresolved.Preflight);
+        Assert.Contains("does not resolve", unresolved.Reason);
+        Assert.Equal(0, price.PerformCalls);
+    }
+
+    [Fact]
+    public void LoadoutAddRevalidatesThatTheExactSubmittedLayoutStillResolves()
+    {
+        var (recipe, _, _) = Recipe(discovered: true);
+        var payment = new ResourceCostList();
+        SpellManager.instance!.CreateCostOverride = payment;
+        SpellManager.instance.SuppressSelectionResolution = true;
+        using var action = Action();
+
+        var result = action.Submit(new SpellWorkbenchAction(
+            SpellWorkbenchActionKind.CreateWithLayout,
+            recipe.GetGuid(),
+            Epoch,
+            Array.Empty<SpellWorkbenchGlyphStack>(),
+            Array.Empty<SpellWorkbenchGlyphStack>()));
+
+        Assert.Equal(SpellWorkbenchPreflight.WrongSelection, result.Preflight);
+        Assert.Equal(0, payment.PerformCalls);
+        Assert.Empty(SpellManager.instance.activeSpells.value);
+    }
+
+    [Fact]
     public void PortableCreationCostCombinerDependsOnTheSubmittedGlyphs()
     {
         var resource = new ResourceSO();

@@ -23,7 +23,7 @@ public sealed class GameMcpSpellLoadoutTests
         Guid.Parse("f40dfa54-2b96-4aee-97ec-5a8e8392a771");
 
     [Fact]
-    public void ToolUsesOneAddRemoveMoveShapeAndBakesGlyphsOnlyOnAdd()
+    public void ToolUsesOnePreviewAddRemoveMoveShapeAndBakesGlyphsOnlyOnAdd()
     {
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),
@@ -35,7 +35,7 @@ public sealed class GameMcpSpellLoadoutTests
             new[] { "mode" },
             schema["required"]!.Values<string>().ToArray());
         Assert.Equal(
-            new[] { "add", "remove", "move" },
+            new[] { "preview", "add", "remove", "move" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
         Assert.NotNull(schema["properties"]!["uuid"]);
         Assert.NotNull(schema["properties"]!["glyphs"]);
@@ -99,6 +99,23 @@ public sealed class GameMcpSpellLoadoutTests
             .Select(error => (string?)error["field"])
             .ToArray();
         Assert.Equal(new[] { "uuid", "glyphs" }, fields);
+    }
+
+    [Fact]
+    public void PreviewRequiresTheExplicitLayoutAndIsClassifiedAsReadOnly()
+    {
+        var operation = GameMcpProtocolRouter.BuildOperation(
+            "game_spell_loadout",
+            new JObject
+            {
+                ["mode"] = "preview",
+                ["uuid"] = FirstRecipeId.ToString("D"),
+                ["glyphs"] = new JArray(),
+            });
+
+        Assert.Equal(GameMcpOperationClass.ReadOnly, operation.Classification);
+        Assert.Equal(FirstRecipeId, operation.Uuid);
+        Assert.Empty(operation.UuidCounts);
     }
 
     [Fact]
@@ -258,10 +275,6 @@ public sealed class GameMcpSpellLoadoutTests
                     "spell workbench", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
             }),
             SpellWorkbench = new WorldSpellWorkbench(
-                PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
-                PublicationTable<WorldSpellWorkbenchGlyph>.Empty,
-                PublicationTable<WorldSpellWorkbenchCost>.Empty,
-                true,
                 2,
                 3,
                 true,
