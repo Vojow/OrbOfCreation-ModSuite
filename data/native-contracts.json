@@ -12071,6 +12071,25 @@
       "place": "capture"
     },
     {
+      "id": "auto-cast.spell-is-casting-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsCasting",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata player cast toggle-off"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
       "id": "spell.is-channeled",
       "assembly": "assembly-csharp",
       "type": "Spell",
@@ -12169,6 +12188,44 @@
         "reflection"
       ],
       "place": "capture"
+    },
+    {
+      "id": "auto-cast.spell-is-toggled-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsToggledSpell",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata player cast toggle-off"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-cast.spell-can-fire-action",
+      "assembly": "assembly-csharp",
+      "type": "Spell",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanFire",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata player cast toggle-off"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
     },
     {
       "id": "spell.max-charges",
@@ -20415,6 +20472,44 @@
         "reflection"
       ],
       "place": "action"
+    },
+    {
+      "id": "auto-cast.settings-can-cancel-action",
+      "assembly": "assembly-csharp",
+      "type": "SettingsManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanCancelSpells",
+      "visibility": "public",
+      "static": true,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata player cast toggle-off"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "auto-cast.settings-can-cancel-capture",
+      "assembly": "assembly-csharp",
+      "type": "SettingsManager",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "CanCancelSpells",
+      "visibility": "public",
+      "static": true,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Common spell-slot world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
     },
     {
       "id": "research-action.globals.type-action",

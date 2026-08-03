@@ -81,20 +81,25 @@ internal sealed class AutoCastCycleActionAdapter : IAutoCastCycleActionPort
 
         _manualPause.Refresh(context.AttemptedAt, config);
 
-        // A release is never held back by the pause. The player casting by hand is a reason to stop
-        // starting casts, not a reason to keep a charge input pressed down on their behalf.
+        // A release or toggle-off is never held back by the pause. The player casting by hand is a
+        // reason to stop starting casts, not a reason to retain a held input or active toggle.
         if (action.Kind == AutoCastActionKind.Fire && _manualPause.IsPaused(context.AttemptedAt))
             return ServiceActionResult.Rejected(AutoCastActionResultCodes.ManualPause);
 
         AutoCastSubmission submission;
         try
         {
-            submission = action.Kind == AutoCastActionKind.ReleaseCharge
-                ? _casts.ReleaseCharge(action.SlotIndex, action.SpellRecipeId)
-                : _casts.Fire(
+            submission = action.Kind switch
+            {
+                AutoCastActionKind.ReleaseCharge =>
+                    _casts.ReleaseCharge(action.SlotIndex, action.SpellRecipeId),
+                AutoCastActionKind.ToggleOff =>
+                    _casts.ToggleOff(action.SlotIndex, action.SpellRecipeId),
+                _ => _casts.Fire(
                     action.SlotIndex,
                     action.SpellRecipeId,
-                    AutoCastConfigurationPolicy.HoldsFullCharge(config) && action.Belief.Chargeable);
+                    AutoCastConfigurationPolicy.HoldsFullCharge(config) && action.Belief.Chargeable),
+            };
         }
         catch (Exception ex) when (
             ex is TargetInvocationException || ex is ArgumentException ||
@@ -120,9 +125,14 @@ internal sealed class AutoCastCycleActionAdapter : IAutoCastCycleActionPort
         in AutoCastCycleAction action,
         in AutoCastSubmission submission)
     {
-        var what = action.Kind == AutoCastActionKind.ReleaseCharge
-            ? $"release the charged spell in slot {action.SlotIndex + 1}"
-            : $"cast the spell in slot {action.SlotIndex + 1}";
+        var what = action.Kind switch
+        {
+            AutoCastActionKind.ReleaseCharge =>
+                $"release the charged spell in slot {action.SlotIndex + 1}",
+            AutoCastActionKind.ToggleOff =>
+                $"turn off the toggled spell in slot {action.SlotIndex + 1}",
+            _ => $"cast the spell in slot {action.SlotIndex + 1}",
+        };
         if (submission.Verified) return;
 
         var message =
@@ -180,6 +190,12 @@ internal sealed class AutoCastCycleActionAdapter : IAutoCastCycleActionPort
                 return ServiceActionResult.Rejected(AutoCastActionResultCodes.NoValidTarget);
             case AutoCastPreflight.ChargeHoldRefused:
                 return ServiceActionResult.Rejected(AutoCastActionResultCodes.ChargeHoldRefused);
+            case AutoCastPreflight.NotToggleable:
+                return ServiceActionResult.Rejected(AutoCastActionResultCodes.SpellNotToggleable);
+            case AutoCastPreflight.AlreadyInactive:
+                return ServiceActionResult.Rejected(AutoCastActionResultCodes.SpellAlreadyInactive);
+            case AutoCastPreflight.CancellationDisabled:
+                return ServiceActionResult.Rejected(AutoCastActionResultCodes.CancellationDisabled);
         }
 
         var evidence = ServiceNativeMutationEvidence.Observed(submission.Outcome, submission.CallOutcome);

@@ -63,6 +63,7 @@ internal readonly struct WorldSpellSlot
             chargeable,
             castReady,
             chargeAvailable,
+            chargeAvailable && !casting,
             resourcesCovered,
             currentCharges,
             maximumCharges,
@@ -107,6 +108,7 @@ internal readonly struct WorldSpellSlot
             chargeable,
             castReady,
             chargeAvailable,
+            chargeAvailable && !casting,
             resourcesCovered,
             currentCharges,
             maximumCharges,
@@ -197,7 +199,8 @@ internal readonly struct WorldSpellSlot
         int recipeMasteryLevel,
         bool durationSpell,
         bool usageRequirementsMet,
-        PublicationTable<WorldSpellSlotGlyph> augmentGlyphs)
+        PublicationTable<WorldSpellSlotGlyph> augmentGlyphs,
+        bool cancellationEnabled = false)
     {
         SlotIndex = slotIndex;
         SpellInstanceId = spellInstanceId;
@@ -222,6 +225,7 @@ internal readonly struct WorldSpellSlot
         RecipeMasteryLevel = recipeMasteryLevel;
         DurationSpell = durationSpell;
         UsageRequirementsMet = usageRequirementsMet;
+        CancellationEnabled = cancellationEnabled;
         AugmentGlyphs = augmentGlyphs ??
             throw new ArgumentNullException(nameof(augmentGlyphs));
     }
@@ -294,6 +298,9 @@ internal readonly struct WorldSpellSlot
     internal int RecipeMasteryLevel { get; }
     internal bool DurationSpell { get; }
     internal bool UsageRequirementsMet { get; }
+
+    /// <summary>Whether the native Cancellable Spells setting permits an active toggle to stop.</summary>
+    internal bool CancellationEnabled { get; }
     internal PublicationTable<WorldSpellSlotGlyph> AugmentGlyphs { get; }
 }
 
@@ -454,6 +461,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
     private readonly MethodInfo? _getAugmentGlyphs;
     private readonly MethodInfo? _getGlyphQuantity;
     private readonly Func<object, Guid>? _glyphId;
+    private readonly MethodInfo? _canCancelSpells;
 
     private readonly MethodInfo? _getCost;
     private readonly MethodInfo? _getDrainCost;
@@ -517,6 +525,13 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
             : _spellType?.GetMethod(
                 "GetQuantityOfGlyph", Instance, null, new[] { glyphType }, null);
         _glyphId = NativeAccessorBinder.Call<Guid>(glyphType, "GetGuid");
+        var settingsType = resolveType("SettingsManager");
+        _canCancelSpells = settingsType?.GetMethod(
+            "CanCancelSpells",
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            Type.EmptyTypes,
+            null);
         if (_getAugmentGlyphs?.ReturnType != glyphListType ||
             _getGlyphQuantity?.ReturnType != typeof(int))
         {
@@ -541,7 +556,8 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
             return;
         }
 
-        _unavailable = IsCostBound() && IsCompositionBound()
+        _unavailable = IsCostBound() && IsCompositionBound() && _canCancelSpells is not null &&
+            _canCancelSpells.ReturnType == typeof(bool)
             ? string.Empty
             : "Spell did not expose its complete cast, level, and augment state on this build";
     }
@@ -578,9 +594,11 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
         var firstFailure = string.Empty;
 
         IList? values;
+        bool cancellationEnabled;
         try
         {
             values = _slots!(loadout);
+            cancellationEnabled = _canCancelSpells!.Invoke(null, Array.Empty<object>()) is true;
         }
         catch (Exception ex)
         {
@@ -604,7 +622,7 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
 
             try
             {
-                Read(entry, index, slots, costs);
+                Read(entry, index, cancellationEnabled, slots, costs);
                 sampled++;
             }
             catch (Exception ex)
@@ -620,7 +638,12 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
             Category, WorldCategoryOutcome.Collected, sampled, skipped, firstFailure);
     }
 
-    private void Read(object spell, int index, WorldSpellSlotBuffer slots, WorldSpellCostBuffer costs)
+    private void Read(
+        object spell,
+        int index,
+        bool cancellationEnabled,
+        WorldSpellSlotBuffer slots,
+        WorldSpellCostBuffer costs)
     {
         var occupied = !_isEmpty!(spell);
         if (!occupied)
@@ -656,7 +679,8 @@ internal sealed class WorldSpellSlotReader : IWorldCategoryReader
             _recipeMasteryLevel!(spell),
             _durationSpell!(spell),
             _usageRequirementsMet!(spell),
-            glyphs));
+            glyphs,
+            cancellationEnabled));
 
         Append(spell, index, WorldSpellCostKind.Immediate, _getCost!, costs);
         Append(spell, index, WorldSpellCostKind.Drain, _getDrainCost!, costs);

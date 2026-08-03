@@ -553,7 +553,7 @@ internal static class GameMcpWorldQuery
                 "all",
                 StringComparison.Ordinal) => ProjectSpellLevelAllPostState(state, command),
             GameMcpCommandKind.Purchase => ProjectPurchaseDelta(state, command),
-            GameMcpCommandKind.Cast => ProjectCastDelta(command),
+            GameMcpCommandKind.Cast => ProjectCastDelta(state, command),
             GameMcpCommandKind.Concept => ProjectConceptDelta(state, command),
             GameMcpCommandKind.Harvest => ProjectHarvestDelta(state, command),
             GameMcpCommandKind.SpellLevel => ProjectSpellLevelDelta(state, command),
@@ -567,13 +567,46 @@ internal static class GameMcpWorldQuery
     private static GameWorldState? Before(GameMcpCommand command) =>
         command.FrameContext?.World?.Snapshot;
 
-    private static GameMcpValue ProjectCastDelta(GameMcpCommand command) =>
-        new JObject
+    private static GameMcpValue ProjectCastDelta(
+        GameMcpFrameContext state,
+        GameMcpCommand command)
+    {
+        var slotIndex = command.Amount - 1;
+        if (!string.Equals(command.Mode, "toggle_off", StringComparison.Ordinal))
+        {
+            return new JObject
+            {
+                ["uuid"] = command.TargetId.ToString("D"),
+                ["slot"] = slotIndex,
+                ["cast"] = command.Mode == "fire" ? "fired" : "released",
+            }.Freeze();
+        }
+        if (state.World is null ||
+            !WorldSpellSlotLookup.TryFind(
+                state.World.Snapshot.SpellSlots,
+                slotIndex,
+                out var after) ||
+            !after.Occupied ||
+            after.SpellRecipeId != command.TargetId)
+        {
+            return PostStateUnavailable(
+                "post_state_not_published",
+                "the settled loadout no longer contains that spell in the requested slot");
+        }
+        var beforeCasting = Before(command) is { } before &&
+            WorldSpellSlotLookup.TryFind(before.SpellSlots, slotIndex, out var prior) &&
+            prior.Occupied && prior.SpellRecipeId == command.TargetId && prior.Casting;
+        return new JObject
         {
             ["uuid"] = command.TargetId.ToString("D"),
-            ["slot"] = command.Amount - 1,
-            ["cast"] = command.Mode == "fire" ? "fired" : "released",
+            ["slot"] = slotIndex,
+            ["active"] = new JObject
+            {
+                ["before"] = beforeCasting,
+                ["after"] = after.Casting,
+            },
         }.Freeze();
+    }
 
     private static GameMcpValue ProjectCastingDialDelta(
         GameMcpFrameContext state,
@@ -2804,6 +2837,16 @@ internal static class GameMcpWorldQuery
         if (slot.Casting) result["casting"] = true;
         if (slot.ReadyingCast) result["readyingCast"] = true;
         if (slot.Attuning) result["attuning"] = true;
+        if (slot.Toggled && slot.Casting)
+        {
+            result["toggleOff"] = slot.CancellationEnabled
+                ? new JObject { ["available"] = true }
+                : new JObject
+                {
+                    ["available"] = false,
+                    ["reasonCode"] = "cancellable_spells_disabled",
+                };
+        }
         result["remove"] = slot.CanRemove
             ? new JObject { ["available"] = true }
             : new JObject

@@ -49,6 +49,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         FakeChallengeManager.instance = new FakeChallengeManager();
         FakePersistentResetManager.instance = new FakePersistentResetManager();
         FakeSettingsManager.QueueMode = false;
+        FakeSettingsManager.CancellableSpells = true;
         FakeGlobalVariables.SetMultiBuy(1);
         WorldCategoryFakes.Clear();
     }
@@ -1767,7 +1768,9 @@ public sealed class GameWorldCollectorTests : IDisposable
     private static class FakeSettingsManager
     {
         public static bool QueueMode;
+        public static bool CancellableSpells = true;
         public static bool IsResearchQueueMode() => QueueMode;
+        public static bool CanCancelSpells() => CancellableSpells;
     }
 
     private sealed class FakeResearchType
@@ -3711,6 +3714,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(5, first.RecipeMasteryLevel);
         Assert.True(first.DurationSpell);
         Assert.False(first.UsageRequirementsMet);
+        Assert.True(first.CancellationEnabled);
         var applied = Assert.Single(first.AugmentGlyphs.AsSpan().ToArray());
         Assert.Equal(echo.Identity, applied.GlyphId);
         Assert.Equal(2, applied.Quantity);
@@ -3751,6 +3755,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EachSlotCarriesTheGamesOwnAnswerForEveryStateItDistinguishes()
     {
+        FakeSettingsManager.CancellableSpells = false;
         var loadout = new FakeSpellLoadout();
         loadout.value.Add(new FakeSpell
         {
@@ -3785,6 +3790,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.False(busy.ChargeAvailable);
         Assert.False(busy.CanRemove);
         Assert.False(busy.ResourcesCovered);
+        Assert.False(busy.CancellationEnabled);
 
         // An occupant with no recipe behind it still publishes a row: the slot is filled, and a
         // consumer that cannot name what is in it should see that rather than see nothing.
@@ -3800,6 +3806,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.False(idle.Toggled);
         Assert.True(idle.CastReady);
         Assert.True(idle.CanRemove);
+        Assert.False(idle.CancellationEnabled);
         Assert.Equal(1, loadout.value[0]!.CanRemoveCalls);
         Assert.Equal(1, loadout.value[1]!.CanRemoveCalls);
     }

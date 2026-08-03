@@ -42,4 +42,13 @@ internal static class AutoCastActionResultCodes
 
     /// <summary>A full-charge hold could not be established, so the cast was not submitted.</summary>
     public static ServiceActionResultCode ChargeHoldRefused => new(3079);
+
+    /// <summary>The requested equipped spell does not use the toggle lifecycle.</summary>
+    public static ServiceActionResultCode SpellNotToggleable => new(3080);
+
+    /// <summary>The requested toggle spell is already inactive.</summary>
+    public static ServiceActionResultCode SpellAlreadyInactive => new(3081);
+
+    /// <summary>The native Cancellable Spells setting disables turning active toggles off.</summary>
+    public static ServiceActionResultCode CancellationDisabled => new(3082);
 }

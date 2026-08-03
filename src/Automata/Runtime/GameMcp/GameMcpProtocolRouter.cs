@@ -257,7 +257,8 @@ internal sealed class GameMcpProtocolRouter
             case "game_cast":
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
-                builder.Mode = RequireOneOf(arguments, "mode", "fire", "release");
+                builder.Mode = RequireOneOf(
+                    arguments, "mode", "fire", "release", "toggle_off");
                 builder.SlotIndex = RequiredInt(arguments, "slotIndex", 0, 255);
                 break;
             case "game_concept":
@@ -576,11 +577,11 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_cast",
                 "Cast an equipped spell",
-                "Live-revalidate an equipped slot and apply the native cast or charge release inline.",
+                "Live-revalidate an equipped slot and fire it, release a charge hold, or press an active toggle spell's native cast button again to turn it off.",
                 ActionSchema(
                     new JObject
                     {
-                        ["mode"] = EnumSchema("fire", "release"),
+                        ["mode"] = EnumSchema("fire", "release", "toggle_off"),
                         ["slotIndex"] = IntegerSchema(0, 255),
                         ["uuid"] = StringSchema("Spell recipe UUID currently occupying the slot."),
                     },

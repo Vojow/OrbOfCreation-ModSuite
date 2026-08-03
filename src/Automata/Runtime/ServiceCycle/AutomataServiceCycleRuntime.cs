@@ -724,9 +724,12 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             case GameMcpCommandKind.Cast:
             {
                 GameMcpNativeActionAdmission.AssertNativeType(command, "SpellRecipeSO");
-                var kind = command.Mode == "release"
-                    ? AutoCastActionKind.ReleaseCharge
-                    : AutoCastActionKind.Fire;
+                var kind = command.Mode switch
+                {
+                    "release" => AutoCastActionKind.ReleaseCharge,
+                    "toggle_off" => AutoCastActionKind.ToggleOff,
+                    _ => AutoCastActionKind.Fire,
+                };
                 var action = new AutoCastCycleAction(
                     kind,
                     checked(command.Amount - 1),

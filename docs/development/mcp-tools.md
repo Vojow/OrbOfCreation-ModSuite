@@ -125,7 +125,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `suite_configuration` | Read the single committed configuration and writable setting catalog |
 | `trace_health` | Read trace-writer health, segment, record, and byte counters |
 | `game_purchase` | Buy a structure or upgrade derived from its UUID |
-| `game_cast` | Fire or release one equipped spell |
+| `game_cast` | Fire, release charge, or turn off one equipped toggle spell |
 | `game_concept` | Add or remove one owned concept assignment |
 | `game_harvest` | Harvest an audited pair derived from a plot UUID |
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
@@ -637,6 +637,8 @@ tools/game-mcp-client.py call game_harvest --arguments \
   '{"uuid":"PLOT_UUID"}'
 tools/game-mcp-client.py call game_cast --arguments \
   '{"mode":"fire","slotIndex":0,"uuid":"SPELL_UUID"}'
+tools/game-mcp-client.py call game_cast --arguments \
+  '{"mode":"toggle_off","slotIndex":0,"uuid":"SPELL_UUID"}'
 tools/game-mcp-client.py call game_discover --arguments \
   '{"mode":"preview","surface":"spellcraft","components":[{"uuid":"GLYPH_UUID","count":2}]}'
 tools/game-mcp-client.py call game_discover --arguments \
@@ -663,6 +665,16 @@ performed. On success, payment is presumed and completely omitted. Initiate/rero
 ordinary collector to publish the resulting Choice state and return its named ordered offers;
 select returns the selected state; confirm returns Idle plus the next initiate costs. Failures
 name only the failed admission or missing transition and the fact that explains it.
+
+`game_cast` uses the visible spell button's native route. `fire` starts a ready spell, `release`
+lets go of the suite's charge hold, and `toggle_off` presses an already-active toggle spell again.
+The last mode requires the slot still to contain the exact recipe UUID and native `Spell`, the spell
+still to be a currently casting toggle, the visible cast button to remain available, and the
+player's Cancellable Spells setting to allow the press. Its one outcome sentinel is the native
+casting state changing from active to inactive. The settled response is only the named recipe,
+slot, and observed `active` before/after change; a refusal names the binding setting or live spell
+state. Detailed `spell-slots` rows expose `toggleOff.available` so the setting never has to be
+learned by attempting the action.
 
 `game_casting_dial` requires `dial` plus a positive `value` and takes no UUID at all, because both
 Output Level and Reserve Level are single global variables. The boundary reads the exact global

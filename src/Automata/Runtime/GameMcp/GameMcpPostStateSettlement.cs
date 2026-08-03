@@ -1,4 +1,6 @@
 #if SERVICE_CYCLE_PROFILE
+using OrbModding.Common.Runtime.World;
+
 namespace OrbAutomata.GameMcp;
 
 /// <summary>One bounded freshness rule shared by every MCP mutation projection.</summary>
@@ -40,6 +42,18 @@ internal static class GameMcpPostStateSettlement
         GameMcpFrameContext state,
         GameMcpCommand command)
     {
+        if (command.Kind == GameMcpCommandKind.Cast &&
+            string.Equals(command.Mode, "toggle_off", System.StringComparison.Ordinal))
+        {
+            return WorldSpellSlotLookup.TryFind(
+                    state.World!.Snapshot.SpellSlots,
+                    command.Amount - 1,
+                    out var slot) &&
+                slot.Occupied &&
+                slot.SpellRecipeId == command.TargetId &&
+                slot.Toggled &&
+                !slot.Casting;
+        }
         if (command.Kind != GameMcpCommandKind.SpellComposition) return true;
         var workbench = state.World!.Snapshot.SpellWorkbench;
         return command.Mode switch
@@ -64,6 +78,13 @@ internal static class GameMcpPostStateSettlement
                 "requested_state_not_reached",
                 "the settled " + command.PayloadKey + " dial is " + observed +
                 ", not the requested " + command.Amount);
+        }
+        if (command.Kind == GameMcpCommandKind.Cast &&
+            string.Equals(command.Mode, "toggle_off", System.StringComparison.Ordinal))
+        {
+            return GameMcpWorldQuery.PostStateUnavailable(
+                "requested_state_not_reached",
+                "the settled spell slot did not show the requested toggle as off");
         }
         return GameMcpWorldQuery.PostStateUnavailable(
             "post_state_timeout",

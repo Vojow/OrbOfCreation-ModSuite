@@ -408,6 +408,12 @@ internal static class GameMcpActionResultCodeNames
             return "the spell slot is under the player's manual-pause authority";
         if (code == AutoCastActionResultCodes.TargetingInProgress)
             return "the spell slot is already in a native targeting interaction";
+        if (code == AutoCastActionResultCodes.SpellNotToggleable)
+            return "This equipped spell is not a toggle spell.";
+        if (code == AutoCastActionResultCodes.SpellAlreadyInactive)
+            return "This toggle spell is already off.";
+        if (code == AutoCastActionResultCodes.CancellationDisabled)
+            return "Enable Cancellable Spells in the game settings before turning this spell off.";
         if (code == SpellLevelActionResultCodes.ProgressionLocked)
             return "native spell-level progression is not unlocked";
         if (code == SpellLevelActionResultCodes.LevelNotAffordable)
@@ -499,6 +505,12 @@ internal static class GameMcpActionResultCodeNames
             return "slot_identity_changed";
         if (code == AutoCastActionResultCodes.SpellNotReady) return "spell_not_ready";
         if (code == AutoCastActionResultCodes.NoValidTarget) return "no_valid_target";
+        if (code == AutoCastActionResultCodes.SpellNotToggleable)
+            return "spell_not_toggleable";
+        if (code == AutoCastActionResultCodes.SpellAlreadyInactive)
+            return "spell_already_inactive";
+        if (code == AutoCastActionResultCodes.CancellationDisabled)
+            return "cancellable_spells_disabled";
         if (commandKind == GameMcpCommandKind.DiscoveryTreeOffer)
         {
             if (code == DiscoveryTreeOfferActionResultCodes.ContractUnavailable) return "contract_unavailable";

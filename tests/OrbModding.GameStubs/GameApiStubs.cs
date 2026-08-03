@@ -100,8 +100,10 @@ public static class GlobalVariables
 public static class SettingsManager
 {
     public static bool ResearchQueueMode { get; set; }
+    public static bool CancellableSpells { get; set; } = true;
 
     public static bool IsResearchQueueMode() => ResearchQueueMode;
+    public static bool CanCancelSpells() => CancellableSpells;
 }
 
 public static class KnownVariableIds
@@ -1059,6 +1061,7 @@ public class Spell
     public bool NativeCasting { get; set; }
     public bool NativeReadyingCast { get; set; }
     public bool NativeChargeAvailable { get; set; } = true;
+    public bool SuppressToggleOff { get; set; }
     public bool SuppressAugmentMutation { get; set; }
     public bool ThrowBeforeAugmentMutation { get; set; }
     public bool ThrowAfterAugmentMutation { get; set; }
@@ -1091,6 +1094,7 @@ public class Spell
     public bool NativeCanCast { get; set; } = true;
 
     public bool CanCast() => NativeCanCast;
+    public bool CanFire() => NativeCasting || NativeCanCast;
     public bool IsAttuning() => false;
     public bool IsChargeAvailable() => NativeChargeAvailable;
     public bool CanRemove() => IsChargeAvailable() && !IsCasting();
@@ -1138,6 +1142,12 @@ public class Spell
     {
         if (EmitFireSignal) FireSignal?.Invoke();
         FireCalls++;
+        if (NativeCasting)
+        {
+            if (SettingsManager.CanCancelSpells() && !SuppressToggleOff)
+                NativeCasting = false;
+            return;
+        }
         TargetingManager.OpenRequests += RequestsOnFire;
     }
 }

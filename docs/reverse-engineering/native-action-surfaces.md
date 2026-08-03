@@ -11,6 +11,28 @@ The costs these paths charge are in [resources-and-bigdouble.md](resources-and-b
 
 ---
 
+## Active toggle-spell deactivation
+
+`UISpellList.OnSpellFire(Spell)` is the visible spell-row button path. It checks the row's
+interaction state, calls `Spell.CanFire()`, and then calls `Spell.Fire()`. The indexed
+`SpellManager.FireSpellIndex(int)` route performs the same `CanFire()` then `Fire()` pair for the
+spell occupying that loadout position, so the action can retain stable slot addressing without
+inventing another deactivation path.
+
+`Spell.Fire()` branches on `Spell.IsCasting()`. The inactive branch casts; the active branch calls
+the static `SettingsManager.CanCancelSpells()` setting. When cancellation is allowed it calls
+`Spell.EndCasting()` and `Spell.CancelDoubleCast()`; otherwise it only shows the game's settings
+message and does not end the spell. `Spell.IsToggledSpell()` classifies the visible toggle/charm
+cast types. Therefore an honest toggle-off action revalidates exact slot and recipe identity,
+`IsToggledSpell`, current `IsCasting`, `CanCancelSpells`, and `CanFire`, invokes
+`FireSpellIndex`, and accepts only `IsCasting` changing from true to false. No resource or cast
+counter participates in that outcome.
+
+Installed contracts pin the UI and indexed-wrapper calls to `CanFire`/`Fire`, and pin the native
+`Fire` body references to `IsCasting`, `CanCancelSpells`, and `EndCasting`.
+
+---
+
 ## Two routers sit above several families
 
 `UICostButton.OnClick` (`0x06002204`) is the paid-action router. It checks
