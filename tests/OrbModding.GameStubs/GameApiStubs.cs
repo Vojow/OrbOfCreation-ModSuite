@@ -158,6 +158,7 @@ public class SpellRecipeSO : IdScriptableObject
     }
     public int masteryLevel;
     public BigDouble masteryExperience;
+    public ExperienceContainer masteryXpContainer = new ExperienceContainer();
     public bool discovered;
     public int discRarityLevel;
     public bool readyToLevel;
@@ -168,6 +169,17 @@ public class SpellRecipeSO : IdScriptableObject
     public Prerequisites.Container levelingPrerequisites = new Prerequisites.Container();
     public ResourceCostList levelCost = new ResourceCostList();
     public ResourceCostList baseLevelingCost = new ResourceCostList();
+    public ResourceCostList baseResourceCost = new ResourceCostList();
+    public ResourceCostList baseUsageCost = new ResourceCostList();
+    public ResourceCostList holdDrain = new ResourceCostList();
+    public List<SpellTypeSO> spellTypes = new List<SpellTypeSO>();
+    public List<GlyphSO> coreRecipe = new List<GlyphSO>();
+    public RecipeBookList recipeBookList = new RecipeBookList();
+    public Prerequisites.Container usagePrerequisites = new Prerequisites.Container();
+    public SpellCastType castType;
+    public Duration.Entry baseRecharge = new Duration.Entry();
+    public ScalingWeightRef.Value maxChannel = new ScalingWeightRef.Value();
+    public Scaling.Value repeatInstantEffectRate = new Scaling.Value();
     public void GainMasteryExp(BigDouble exp)
     {
         MasteryGrantCalls++;
@@ -202,6 +214,33 @@ public class SpellRecipeSO : IdScriptableObject
     public ValueModifierRecord spellSpecialMod = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ValueModifierRecord spellXpMod = new ValueModifierRecord(new BigDouble(0.0, 0));
     private bool hasAlertedThisMastery;
+}
+
+public static class Duration
+{
+    public sealed class Entry
+    {
+        public double duration;
+        public double mult;
+        public ProcessorType type;
+    }
+
+    public enum ProcessorType { Fixed }
+}
+
+public enum SpellCastType { Instant }
+
+public static class Scaling
+{
+    public sealed class Value
+    {
+        public double baseValue;
+    }
+}
+
+public sealed class RecipeBookList
+{
+    public List<RecipeBookSO> recipeBooks = new List<RecipeBookSO>();
 }
 
 public class IdScriptableObject : UnityEngine.ScriptableObject

@@ -90,6 +90,9 @@ internal sealed class GameWorldCycleFrame
     internal WorldModifierProgramEntryBuffer ModifierProgramEntries { get; } = new();
     internal RawMasteryCostBuffer MasteryCosts { get; } = new();
     internal Guid MasteryCostStandardId { get; set; }
+    internal WorldRelationBuffer<WorldSpellRecipeAuthoring> SpellRecipeAuthoring { get; } = new();
+    internal WorldRelationBuffer<WorldSpellAuthoredCost> SpellAuthoredCosts { get; } = new();
+    internal WorldRelationBuffer<WorldSpellRelation> SpellRelations { get; } = new();
 
     /// <summary>
     /// What each plot's author decided, and the phases it authors. Keyed by the plot rather than
@@ -283,9 +286,31 @@ internal static class GameWorldFrameDeriver
             IntVariables = intVariables,
             BoolVariables = frame.BoolVariables.Build(WorldIdentityDeriver<WorldBoolVariable>.Shared),
             ModifierVariables = modifierVariables,
-            AlchemyRecipes = frame.AlchemyRecipes.Build(WorldIdentityDeriver<WorldAlchemyRecipe>.Shared),
+            AlchemyRecipes = WorldAlchemyRecipeDeriver.Build(
+                frame.AlchemyRecipes, alchemyTypes, intVariables),
             AlchemyTypes = alchemyTypes,
             SpellRecipes = frame.SpellRecipes.Build(new WorldSpellRecipeDeriver(spellLevelCosts)),
+            SpellRecipeAuthoring = WorldSpellGraphDeriver.Build(
+                frame.SpellRecipeAuthoring,
+                static (left, right) => left.RecipeId.CompareTo(right.RecipeId)),
+            SpellAuthoredCosts = WorldSpellGraphDeriver.Build(
+                frame.SpellAuthoredCosts,
+                static (left, right) =>
+                {
+                    var recipe = left.RecipeId.CompareTo(right.RecipeId);
+                    if (recipe != 0) return recipe;
+                    var kind = ((int)left.Kind).CompareTo((int)right.Kind);
+                    return kind != 0 ? kind : left.Ordinal.CompareTo(right.Ordinal);
+                }),
+            SpellRelations = WorldSpellGraphDeriver.Build(
+                frame.SpellRelations,
+                static (left, right) =>
+                {
+                    var recipe = left.RecipeId.CompareTo(right.RecipeId);
+                    if (recipe != 0) return recipe;
+                    var kind = ((int)left.Kind).CompareTo((int)right.Kind);
+                    return kind != 0 ? kind : left.Ordinal.CompareTo(right.Ordinal);
+                }),
             MasteryCosts = spellLevelCosts,
             ModifierPrograms = modifierPrograms,
             ModifierProgramEntries = modifierProgramEntries,

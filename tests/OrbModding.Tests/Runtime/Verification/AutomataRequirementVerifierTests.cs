@@ -101,6 +101,39 @@ public sealed class AutomataRequirementVerifierTests : IDisposable
         Assert.Equal(0, run.Compared);
     }
 
+    [Fact]
+    public void AnEmptyUsageProgramAgreesWithTheNativeOracle()
+    {
+        var recipe = new global::AlchemyRecipeSO();
+        recipe.usagePrerequisites.available = true;
+        global::AlchemyRecipeSO.All.Add(recipe);
+
+        var verifier = new AutomataUsagePrerequisiteVerifier(typeof(global::AlchemyRecipeSO));
+        var run = new DifferentialRun("Concept usage prerequisite");
+
+        Assert.True(verifier.IsAvailable);
+        Assert.True(verifier.TryVerify(recipe, Collect(), run, out var failure));
+        Assert.Empty(failure);
+        Assert.Equal(1, run.Compared);
+        Assert.True(run.Passed);
+        Assert.Equal(1, recipe.usagePrerequisites.CheckCalls);
+    }
+
+    [Fact]
+    public void AUsageOracleDisagreementIsNamedAsADivergence()
+    {
+        var recipe = new global::AlchemyRecipeSO();
+        global::AlchemyRecipeSO.All.Add(recipe);
+        var verifier = new AutomataUsagePrerequisiteVerifier(typeof(global::AlchemyRecipeSO));
+        var run = new DifferentialRun("Concept usage prerequisite");
+
+        Assert.True(verifier.TryVerify(recipe, Collect(), run, out var failure));
+
+        Assert.Empty(failure);
+        Assert.False(run.Passed);
+        Assert.Contains("usage-prerequisites", run.Summarize(), StringComparison.Ordinal);
+    }
+
     private static GameWorldState Collect()
     {
         var collector = new GameWorldCollector();
@@ -112,6 +145,7 @@ public sealed class AutomataRequirementVerifierTests : IDisposable
     {
         global::UpgradeSO.All.Clear();
         global::StructureSO.All.Clear();
+        global::AlchemyRecipeSO.All.Clear();
     }
 
     /// <summary>A build whose container exposes only the overload that writes.</summary>

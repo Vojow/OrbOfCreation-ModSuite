@@ -13,7 +13,6 @@ internal sealed class WorldMasteryCostReader : IWorldCategoryReader
 
     private readonly Type? _spellType;
     private readonly FieldInfo? _globalsInstance;
-    private readonly Func<object, Guid>? _spellId;
     private readonly Func<object, object?>? _baseCost;
     private readonly Func<object, IList?>? _costs;
     private readonly Func<object, Guid>? _resourceId;
@@ -32,7 +31,6 @@ internal sealed class WorldMasteryCostReader : IWorldCategoryReader
         var listType = resolveType("ValueModifierList");
         var recordType = resolveType("ValueModifierRecord");
 
-        _spellId = NativeAccessorBinder.Call<Guid>(_spellType, "GetGuid");
         _baseCost = NativeAccessorBinder.Reference(_spellType, "baseLevelingCost");
         var costType = _spellType?.GetField(
             "baseLevelingCost",
@@ -91,7 +89,14 @@ internal sealed class WorldMasteryCostReader : IWorldCategoryReader
             if (spell is null) { skipped++; continue; }
             try
             {
-                var id = _spellId!(spell);
+                if (index >= frame.SpellRecipes.Count)
+                {
+                    skipped++;
+                    if (firstFailure.Length == 0)
+                        firstFailure = "spell registry identity snapshot was incomplete";
+                    continue;
+                }
+                var id = frame.SpellRecipes[index].EntityId;
                 var costs = _costs!(_baseCost!(spell)!);
                 if (id == Guid.Empty || costs is null) { skipped++; continue; }
                 for (var position = 0; position < costs.Count; position++)
@@ -116,7 +121,7 @@ internal sealed class WorldMasteryCostReader : IWorldCategoryReader
     }
 
     private bool IsFullyBound() =>
-        _spellType is not null && _globalsInstance is not null && _spellId is not null &&
+        _spellType is not null && _globalsInstance is not null &&
         _baseCost is not null && _costs is not null && _resourceId is not null && _amount is not null &&
         _standard is not null && _standardId is not null && _standardValue is not null &&
         _programReader?.IsAvailable == true;

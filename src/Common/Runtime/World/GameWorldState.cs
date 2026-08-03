@@ -91,6 +91,18 @@ public sealed record GameWorldState
     internal PublicationTable<WorldSpellRecipe> SpellRecipes { get; init; } =
         PublicationTable<WorldSpellRecipe>.Empty;
 
+    /// <summary>Authored cast, recharge, channel, and repeated-effect scalars for every spell.</summary>
+    internal PublicationTable<WorldSpellRecipeAuthoring> SpellRecipeAuthoring { get; init; } =
+        PublicationTable<WorldSpellRecipeAuthoring>.Empty;
+
+    /// <summary>All authored immediate, usage, and held-drain tuples for every spell.</summary>
+    internal PublicationTable<WorldSpellAuthoredCost> SpellAuthoredCosts { get; init; } =
+        PublicationTable<WorldSpellAuthoredCost>.Empty;
+
+    /// <summary>Spell-to-type, core-glyph, and recipe-book edges in authored order.</summary>
+    internal PublicationTable<WorldSpellRelation> SpellRelations { get; init; } =
+        PublicationTable<WorldSpellRelation>.Empty;
+
     /// <summary>Derived next-mastery-level cost rows, preserved in authored row order.</summary>
     internal PublicationTable<WorldMasteryCost> MasteryCosts { get; init; } =
         PublicationTable<WorldMasteryCost>.Empty;

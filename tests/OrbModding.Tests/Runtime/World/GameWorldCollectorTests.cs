@@ -195,7 +195,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Forty-seven passes: the four categories
+        // The scope claim, asserted rather than described. Forty-eight passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -207,13 +207,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(47, report.Categories.Length);
+        Assert.Equal(48, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell authored graph", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -262,11 +262,10 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
-    public void ASpellsMasteryReadinessRemainsNativeWhileAnEmptyAuthoredCostIsAffordable()
+    public void ASpellsMasteryReadinessIsDerivedFromItsPublishedThresholdWhileAnEmptyAuthoredCostIsAffordable()
     {
-        // The one fact on a spell recipe that is not a field. Its threshold lives in a container the
-        // snapshot does not publish, so MasteryXp has nothing to be compared against and the game's
-        // own predicate is the only readable form of "this level can be bought". See W59.
+        // Readiness is cheap accessor math over the published experience and its container's cached
+        // threshold. Capture must not ask the native predicate for the answer.
         var ready = Guid.NewGuid();
         var banking = Guid.NewGuid();
         FakeSpellRecipe.All.Add(new FakeSpellRecipe
@@ -274,14 +273,16 @@ public sealed class GameWorldCollectorTests : IDisposable
             Identity = ready,
             discovered = true,
             masteryLevel = 4,
-            readyToLevel = true,
+            masteryExperience = new BigDouble(8d),
+            masteryXpContainer = new FakeExperienceContainer { cachedRequiredXp = new BigDouble(8d) },
         });
         FakeSpellRecipe.All.Add(new FakeSpellRecipe
         {
             Identity = banking,
             discovered = true,
             masteryLevel = 4,
-            readyToLevel = false,
+            masteryExperience = new BigDouble(7d),
+            masteryXpContainer = new FakeExperienceContainer { cachedRequiredXp = new BigDouble(8d) },
             levelCost = new FakeSpellLevelCost { affordable = false },
         });
 

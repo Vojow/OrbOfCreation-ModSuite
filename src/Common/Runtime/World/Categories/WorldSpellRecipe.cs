@@ -24,7 +24,9 @@ internal readonly struct RawSpellRecipeSample : IWorldEntity
         BigDouble spellDurationMod,
         BigDouble spellSpecialMod,
         BigDouble spellXpMod,
-        bool hasAlertedThisMastery)
+        bool hasAlertedThisMastery,
+        BigDouble requiredMasteryXp = default,
+        bool requiredMasteryXpCaptured = false)
     {
         SpellRecipeId = spellRecipeId;
         Discovered = discovered;
@@ -45,6 +47,8 @@ internal readonly struct RawSpellRecipeSample : IWorldEntity
         SpellSpecialMod = spellSpecialMod;
         SpellXpMod = spellXpMod;
         HasAlertedThisMastery = hasAlertedThisMastery;
+        RequiredMasteryXp = requiredMasteryXp;
+        RequiredMasteryXpCaptured = requiredMasteryXpCaptured;
     }
 
     public Guid EntityId => SpellRecipeId;
@@ -52,8 +56,11 @@ internal readonly struct RawSpellRecipeSample : IWorldEntity
     internal bool Discovered { get; }
     internal int DiscRarityLevel { get; }
     internal BigDouble MasteryXp { get; }
+
     internal int MasteryLevel { get; }
     internal bool MasteryLevelReady { get; }
+    internal BigDouble RequiredMasteryXp { get; }
+    internal bool RequiredMasteryXpCaptured { get; }
     internal bool HiddenDiscovery { get; }
     internal bool IsRequiredDiscovery { get; }
     internal int PenaltyUsageCost { get; }
@@ -92,13 +99,14 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         BigDouble spellDurationMod,
         BigDouble spellSpecialMod,
         BigDouble spellXpMod,
-        bool hasAlertedThisMastery)
+        bool hasAlertedThisMastery,
+        BigDouble requiredMasteryXp = default)
         : this(
             spellRecipeId, discovered, discRarityLevel, masteryXp, masteryLevel,
             masteryLevelReady, masteryLevelAffordable, 0, Guid.Empty, hiddenDiscovery,
             isRequiredDiscovery, penaltyUsageCost, castSpeed, baseCharges, repeatInstantEffects,
             spellPowerMod, spellCostMod, spellCdSpeedMod, spellDurationMod, spellSpecialMod,
-            spellXpMod, hasAlertedThisMastery)
+            spellXpMod, hasAlertedThisMastery, requiredMasteryXp)
     {
     }
 
@@ -124,7 +132,8 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         BigDouble spellDurationMod,
         BigDouble spellSpecialMod,
         BigDouble spellXpMod,
-        bool hasAlertedThisMastery)
+        bool hasAlertedThisMastery,
+        BigDouble requiredMasteryXp = default)
     {
         SpellRecipeId = spellRecipeId;
         Discovered = discovered;
@@ -148,6 +157,7 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         SpellSpecialMod = spellSpecialMod;
         SpellXpMod = spellXpMod;
         HasAlertedThisMastery = hasAlertedThisMastery;
+        RequiredMasteryXp = requiredMasteryXp;
     }
 
     internal Guid SpellRecipeId { get; }
@@ -160,16 +170,18 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
 
     internal BigDouble MasteryXp { get; }
 
+    /// <summary>The cached threshold the native readiness check compares mastery XP against.</summary>
+    internal BigDouble RequiredMasteryXp { get; }
+
     internal int MasteryLevel { get; }
 
     /// <summary>
     /// Whether the mastery track has banked enough experience for the next level to be bought.
     /// </summary>
     /// <remarks>
-    /// The game's own answer, <c>IsReadyToLevelMastery()</c>, rather than a comparison this suite
-    /// makes: the experience threshold lives inside a container the snapshot does not publish, so
-    /// there is nothing to compare <see cref="MasteryXp"/> against. W58 named the shortfall and W59
-    /// closes it. The call reads and writes nothing, which is what lets capture make it.
+    /// Derived off-thread by comparing <see cref="MasteryXp"/> with
+    /// <see cref="RequiredMasteryXp"/>; normal capture does not call
+    /// <c>IsReadyToLevelMastery()</c>.
     /// </remarks>
     internal bool MasteryLevelReady { get; }
 
@@ -222,7 +234,7 @@ internal sealed class WorldSpellRecipeBinder : WorldRowBinder<RawSpellRecipeSamp
     private Func<object, int>? _discRarityLevel;
     private Func<object, BigDouble>? _masteryXp;
     private Func<object, int>? _masteryLevel;
-    private Func<object, bool>? _masteryLevelReady;
+    private Func<object, BigDouble>? _requiredMasteryXp;
     private Func<object, bool>? _hiddenDiscovery;
     private Func<object, bool>? _isRequiredDiscovery;
     private Func<object, int>? _penaltyUsageCost;
@@ -249,7 +261,7 @@ internal sealed class WorldSpellRecipeBinder : WorldRowBinder<RawSpellRecipeSamp
         _discRarityLevel = bind.Field<int>("discRarityLevel");
         _masteryXp = bind.Field<BigDouble>("masteryExperience");
         _masteryLevel = bind.Field<int>("masteryLevel");
-        _masteryLevelReady = bind.Call<bool>("IsReadyToLevelMastery");
+        _requiredMasteryXp = bind.NestedField<BigDouble>("masteryXpContainer", "cachedRequiredXp");
         _hiddenDiscovery = bind.Field<bool>("hiddenDiscovery");
         _isRequiredDiscovery = bind.Field<bool>("isRequiredDiscovery");
         _penaltyUsageCost = bind.Field<int>("penaltyUsageCost");
@@ -273,7 +285,7 @@ internal sealed class WorldSpellRecipeBinder : WorldRowBinder<RawSpellRecipeSamp
             _discRarityLevel!(entity),
             _masteryXp!(entity),
             _masteryLevel!(entity),
-            _masteryLevelReady!(entity),
+            false,
             _hiddenDiscovery!(entity),
             _isRequiredDiscovery!(entity),
             _penaltyUsageCost!(entity),
@@ -286,7 +298,9 @@ internal sealed class WorldSpellRecipeBinder : WorldRowBinder<RawSpellRecipeSamp
             _spellDurationMod!(entity),
             _spellSpecialMod!(entity),
             _spellXpMod!(entity),
-            _hasAlertedThisMastery!(entity));
+            _hasAlertedThisMastery!(entity),
+            _requiredMasteryXp!(entity),
+            requiredMasteryXpCaptured: true);
 }
 
 internal sealed class WorldSpellRecipeDeriver : WorldRowDeriver<RawSpellRecipeSample, WorldSpellRecipe>
@@ -318,7 +332,9 @@ internal sealed class WorldSpellRecipeDeriver : WorldRowDeriver<RawSpellRecipeSa
             sample.DiscRarityLevel,
             sample.MasteryXp,
             sample.MasteryLevel,
-            sample.MasteryLevelReady,
+            sample.RequiredMasteryXpCaptured
+                ? sample.MasteryXp >= sample.RequiredMasteryXp
+                : sample.MasteryLevelReady,
             affordable,
             count,
             binding,
@@ -334,6 +350,7 @@ internal sealed class WorldSpellRecipeDeriver : WorldRowDeriver<RawSpellRecipeSa
             sample.SpellDurationMod,
             sample.SpellSpecialMod,
             sample.SpellXpMod,
-            sample.HasAlertedThisMastery);
+            sample.HasAlertedThisMastery,
+            sample.RequiredMasteryXp);
     }
 }

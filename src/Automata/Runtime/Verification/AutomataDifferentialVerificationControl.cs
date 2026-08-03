@@ -95,6 +95,7 @@ internal sealed class AutomataDifferentialVerificationControl : IDifferentialVer
         RunPass(new RatePass());
         RunPass(new RequirementPass("Upgrade requirement", "UpgradeSO", isUpgrade: true));
         RunPass(new RequirementPass("Structure requirement", "StructureSO", isUpgrade: false));
+        RunPass(new UsagePrerequisitePass());
 
         whole.Stop();
         _report($"Verification finished in {whole.Elapsed.TotalMilliseconds:0.###} ms.");
@@ -461,6 +462,62 @@ internal sealed class AutomataDifferentialVerificationControl : IDifferentialVer
             if (_verifier is null || _world is null)
             {
                 failure = "the requirement verifier was not started.";
+                return false;
+            }
+
+            return _verifier.TryVerify(entity, _world, run, out failure);
+        }
+    }
+
+    /// <summary>Checks every captured Concept usage-prerequisite program against its native answer.</summary>
+    private sealed class UsagePrerequisitePass : IVerificationPass
+    {
+        private AutomataUsagePrerequisiteVerifier? _verifier;
+        private GameWorldState? _world;
+
+        public string Subject => "Concept usage prerequisite";
+
+        public bool TryBegin(out IList entities, out string failure)
+        {
+            entities = Array.Empty<object>();
+            var ownerType = FindType("AlchemyRecipeSO");
+            if (ownerType is null)
+            {
+                failure = "the AlchemyRecipeSO type could not be resolved.";
+                return false;
+            }
+
+            _verifier = new AutomataUsagePrerequisiteVerifier(ownerType);
+            if (!_verifier.IsAvailable)
+            {
+                failure = "this build does not expose the expected usage-prerequisite oracle.";
+                return false;
+            }
+
+            var all = ReadStaticList(ownerType, "All");
+            if (all is null || all.Count == 0)
+            {
+                failure = "no AlchemyRecipeSO entities were available. Load a save first.";
+                return false;
+            }
+
+            var collector = new GameWorldCollector();
+            collector.Collect();
+            _world = collector.Build();
+            entities = all;
+            failure = string.Empty;
+            return true;
+        }
+
+        public bool TryVerify(
+            object entity,
+            DifferentialRun run,
+            DifferentialVerificationSession session,
+            out string failure)
+        {
+            if (_verifier is null || _world is null)
+            {
+                failure = "the usage-prerequisite verifier was not started.";
                 return false;
             }
 

@@ -119,6 +119,8 @@ public sealed class WorldIdentityWalkTests
         "PlotPhaseDescriptors",
         "EffectBlocks",
         "EntityRequirements",
+        "SpellAuthoredCosts",
+        "SpellRelations",
     };
 
     /// <summary>

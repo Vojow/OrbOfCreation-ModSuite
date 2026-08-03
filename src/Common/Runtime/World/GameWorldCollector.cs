@@ -80,6 +80,7 @@ internal sealed class GameWorldCollector
     private readonly WorldCategoryReader<WorldAlchemyType, WorldAlchemyType> _alchemyTypes;
     private readonly WorldCategoryReader<RawSpellRecipeSample, WorldSpellRecipe> _spellRecipes;
     private readonly WorldMasteryCostReader _spellLevelCosts;
+    private readonly WorldSpellGraphReader _spellGraph;
     private readonly WorldCategoryReader<WorldSpellType, WorldSpellType> _spellTypes;
     private readonly WorldCategoryReader<WorldEquipment, WorldEquipment> _equipment;
     private readonly WorldCategoryReader<WorldEquipmentType, WorldEquipmentType> _equipmentTypes;
@@ -219,6 +220,7 @@ internal sealed class GameWorldCollector
         _alchemyTypes = Reader(new WorldAlchemyTypeBinder(), resolveType, static frame => frame.AlchemyTypes);
         _spellRecipes = Reader(new WorldSpellRecipeBinder(), resolveType, static frame => frame.SpellRecipes);
         _spellLevelCosts = new WorldMasteryCostReader(resolveType);
+        _spellGraph = new WorldSpellGraphReader(resolveType("SpellRecipeSO"));
         _spellTypes = Reader(new WorldSpellTypeBinder(), resolveType, static frame => frame.SpellTypes);
         _equipment = Reader(new WorldEquipmentBinder(), resolveType, static frame => frame.Equipment);
         _equipmentTypes = Reader(new WorldEquipmentTypeBinder(), resolveType, static frame => frame.EquipmentTypes);
@@ -265,7 +267,7 @@ internal sealed class GameWorldCollector
         _plotAuthoring = new WorldPlotAuthoringReader(resolveType("PlotNodeSO"));
         _effectBlocks = new WorldEffectBlockReader(resolveType("PlotNodeActionSO"), resolveType);
         _entityRequirements = new WorldEntityRequirementReader(
-            resolveType("UpgradeSO"), resolveType("StructureSO"));
+            resolveType("UpgradeSO"), resolveType("StructureSO"), resolveType("AlchemyRecipeSO"));
         _purchaseViewRelations = new WorldPurchaseViewRelationReader(
             resolveType,
             productionPurchaseTopology);
@@ -274,7 +276,7 @@ internal sealed class GameWorldCollector
         {
             _resources, _structures, _upgrades, _research,
             _doubleVariables, _intVariables, _boolVariables, _modifierVariables,
-            _alchemyRecipes, _alchemyTypes, _spellRecipes, _spellLevelCosts, _spellTypes,
+            _alchemyRecipes, _alchemyTypes, _spellRecipes, _spellLevelCosts, _spellGraph, _spellTypes,
             _equipment, _equipmentTypes, _resourceTypes, _craftingRecipeTypes,
             _harvestElements, _harvestResources, _timeRunes, _glyphs, _consumables,
             _scribeRelations,
@@ -293,6 +295,7 @@ internal sealed class GameWorldCollector
             _isStructural[index] =
                 ReferenceEquals(_readers[index], _plotAuthoring) ||
                 ReferenceEquals(_readers[index], _effectBlocks) ||
+                ReferenceEquals(_readers[index], _spellGraph) ||
                 ReferenceEquals(_readers[index], _entityRequirements) ||
                 ReferenceEquals(_readers[index], _purchaseViewRelations);
         }

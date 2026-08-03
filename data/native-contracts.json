@@ -7373,31 +7373,13 @@
       "parameters": [],
       "owners": [
         "Automata spell leveling",
-        "Automata Auto Harvest action-boundary prerequisite validation"
+        "Automata Auto Harvest action-boundary prerequisite validation",
+        "Automata usage-prerequisite verification"
       ],
       "usages": [
         "reflection"
       ],
       "place": "action"
-    },
-    {
-      "id": "prerequisites.check-capture",
-      "assembly": "assembly-csharp",
-      "type": "Prerequisites+Container",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "Check",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Boolean",
-      "parameters": [],
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
     },
     {
       "id": "prerequisites.check-at-level",
@@ -11172,6 +11154,258 @@
       "place": "capture"
     },
     {
+      "id": "spell-recipe.base-resource-cost",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "baseResourceCost",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.base-usage-cost",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "baseUsageCost",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.hold-drain",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "holdDrain",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.cast-type",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "castType",
+      "visibility": "public",
+      "static": false,
+      "valueType": "SpellRecipeSO+CastType",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.base-recharge",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "baseRecharge",
+      "visibility": "public",
+      "static": false,
+      "valueType": "Duration+Entry",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.maximum-channel",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "maxChannel",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ScalingWeightRef+Value",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.repeat-instant-effect-rate",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "repeatInstantEffectRate",
+      "visibility": "public",
+      "static": false,
+      "valueType": "Scaling.Value",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.spell-types",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "spellTypes",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<SpellTypeSO>",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.core-recipe",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "coreRecipe",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<GlyphSO>",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.recipe-book-list",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "recipeBookList",
+      "visibility": "public",
+      "static": false,
+      "valueType": "RecipeBookList",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.mastery-xp-container",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "masteryXpContainer",
+      "visibility": "private",
+      "static": false,
+      "valueType": "ExperienceContainer",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "experience-container.cached-required-xp",
+      "assembly": "assembly-csharp",
+      "type": "ExperienceContainer",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "cachedRequiredXp",
+      "visibility": "private",
+      "static": false,
+      "valueType": "BigDouble",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "duration-entry.duration",
+      "assembly": "assembly-csharp",
+      "type": "Duration+Entry",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "duration",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Double",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "duration-entry.multiplier",
+      "assembly": "assembly-csharp",
+      "type": "Duration+Entry",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "mult",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Double",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "duration-entry.processor-type",
+      "assembly": "assembly-csharp",
+      "type": "Duration+Entry",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "type",
+      "visibility": "public",
+      "static": false,
+      "valueType": "Duration+ProcessorType",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "scaling-weight-ref-value.base-value",
+      "assembly": "assembly-csharp",
+      "type": "ScalingWeightRef+Value",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "baseValue",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Double",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "scaling-value.base-value",
+      "assembly": "assembly-csharp",
+      "type": "Scaling.Value",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "baseValue",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Double",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
+      "id": "recipe-book-list.recipe-books",
+      "assembly": "assembly-csharp",
+      "type": "RecipeBookList",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "recipeBooks",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<RecipeBookSO>",
+      "owners": ["Automata world collection"],
+      "usages": ["reflection"],
+      "place": "capture"
+    },
+    {
       "id": "spell-recipe.cast-speed",
       "assembly": "assembly-csharp",
       "type": "SpellRecipeSO",
@@ -11334,13 +11568,12 @@
       "parameters": [],
       "owners": [
         "Automata spell leveling",
-        "Mentor spells",
-        "Automata world collection"
+        "Mentor spells"
       ],
       "usages": [
         "reflection"
       ],
-      "place": "capture"
+      "place": "action"
     },
     {
       "id": "spell-recipe.is-required-discovery",

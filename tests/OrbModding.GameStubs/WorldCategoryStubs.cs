@@ -725,6 +725,11 @@ public sealed class ScalingWeightSO : IdScriptableObject
 public sealed class ScalingWeightRef
 {
     public ScalingWeightSO? scalingWeight;
+
+    public sealed class Value
+    {
+        public double baseValue;
+    }
 }
 
 /// <summary>An effect modifier that scales what it modifies by an authored weight.</summary>

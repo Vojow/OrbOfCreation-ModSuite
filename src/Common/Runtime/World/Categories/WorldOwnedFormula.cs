@@ -203,10 +203,17 @@ internal static class OwnedConceptDrainMath
                 new BigDouble(basis.SelectedLevel - 1), BigDouble.One, out var level))
             return false;
 
-        var requirementSpeed = basis.UsageRequirementsMet
+        var usageRequirementsMet = basis.UsageRequirementsMet;
+        if (HasUsageProgram(world.EntityRequirements, recipeId))
+        {
+            usageRequirementsMet = WorldRequirementEvaluator.Evaluate(
+                world, recipeId, level: 0, WorldRequirementProgramKind.Usage) ==
+                WorldRequirementVerdict.Met;
+        }
+        var requirementSpeed = usageRequirementsMet
             ? BigDouble.One
             : basis.RequirementSpeedPenalty.Adjust(BigDouble.One);
-        var requirementCost = basis.UsageRequirementsMet
+        var requirementCost = usageRequirementsMet
             ? BigDouble.One
             : basis.RequirementCostPenalty.Adjust(BigDouble.One);
         var baseModifier = drain * OrbGameMath.AsPercent(completion) *
@@ -237,6 +244,17 @@ internal static class OwnedConceptDrainMath
 
         modifier = baseModifier * costPercent * speedPercent * overdriveSpeed * overdriveDrain;
         return true;
+    }
+
+    private static bool HasUsageProgram(
+        PublicationTable<WorldEntityRequirement> requirements,
+        Guid recipeId)
+    {
+        if (!WorldEntityRequirementLookup.TryFindRange(requirements, recipeId, out var start, out var count))
+            return false;
+        for (var offset = 0; offset < count; offset++)
+            if (requirements[start + offset].Program == WorldRequirementProgramKind.Usage) return true;
+        return false;
     }
 
     internal static bool TryComputeCost(

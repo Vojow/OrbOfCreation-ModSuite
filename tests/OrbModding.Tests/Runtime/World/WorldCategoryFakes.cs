@@ -552,6 +552,7 @@ internal sealed class FakeGlobalValues
 internal sealed class FakePrerequisiteContainer
 {
     public bool result = true;
+    public List<object> prerequisites = new();
     public bool Check() => result;
 }
 
@@ -869,8 +870,19 @@ internal sealed class FakeSpellRecipe
     public BigDouble masteryExperience;
     public int masteryLevel;
     public bool readyToLevel;
+    public FakeExperienceContainer masteryXpContainer = new();
     public FakeSpellLevelCost levelCost = new();
     public FakeSpellCostList baseLevelingCost = new();
+    public FakeSpellCostList baseResourceCost = new();
+    public FakeSpellCostList baseUsageCost = new();
+    public FakeSpellCostList holdDrain = new();
+    public List<FakeReferencedEntity> spellTypes = new();
+    public List<FakeReferencedEntity> coreRecipe = new();
+    public FakeRecipeBookList recipeBookList = new();
+    public FakeSpellCastType castType;
+    public FakeDurationEntry baseRecharge = new();
+    public FakeScalingValue maxChannel = new();
+    public FakeScalingValue repeatInstantEffectRate = new();
     public bool hiddenDiscovery;
     public bool isRequiredDiscovery;
     public int penaltyUsageCost;
@@ -889,6 +901,26 @@ internal sealed class FakeSpellRecipe
 
     public bool IsReadyToLevelMastery() => readyToLevel;
     public FakeSpellLevelCost GetLevelCost() => levelCost;
+}
+
+internal sealed class FakeRecipeBookList
+{
+    public List<FakeReferencedEntity> recipeBooks = new();
+}
+
+internal sealed class FakeDurationEntry
+{
+    public double duration;
+    public double mult;
+    public FakeDurationProcessorType type;
+}
+
+internal enum FakeSpellCastType { Instant }
+internal enum FakeDurationProcessorType { Fixed }
+
+internal sealed class FakeScalingValue
+{
+    public double baseValue;
 }
 
 internal sealed class FakeSpellLevelCost

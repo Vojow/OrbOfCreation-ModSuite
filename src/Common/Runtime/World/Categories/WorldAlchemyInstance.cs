@@ -360,8 +360,6 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
     private readonly Func<object, object?>? _recipeDrain;
     private readonly Func<object, object?>? _bandwidthCost;
     private readonly Func<object, int>? _advancementLevel;
-    private readonly Func<object, object?>? _usagePrerequisites;
-    private readonly MethodInfo? _checkUsagePrerequisites;
     private readonly Func<object, object?>? _instanceScalingRef;
     private readonly Func<object, object?>? _instanceScaling;
     private readonly Func<object, Guid>? _instanceScalingId;
@@ -428,11 +426,6 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         _recipeDrain = NativeAccessorBinder.Reference(_recipeType, "drainCost");
         _bandwidthCost = NativeAccessorBinder.Reference(_recipeType, "bandwidthCost");
         _advancementLevel = NativeAccessorBinder.Field<int>(_recipeType, "advancementLevel");
-        _usagePrerequisites = NativeAccessorBinder.Reference(_recipeType, "usagePrerequisites");
-        var prerequisiteType = _recipeType.GetField("usagePrerequisites", Instance)?.FieldType;
-        _checkUsagePrerequisites = prerequisiteType?.GetMethod(
-            "Check", Instance, null, Type.EmptyTypes, null);
-        if (_checkUsagePrerequisites?.ReturnType != typeof(bool)) _checkUsagePrerequisites = null;
 
         _instanceScalingRef = NativeAccessorBinder.Reference(_recipeType, "instanceScaling");
         var scalingRefType = _recipeType.GetField("instanceScaling", Instance)?.FieldType;
@@ -623,12 +616,6 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         HashSet<Guid> capturedScalings,
         GameWorldCycleFrame frame)
     {
-        var prerequisites = _usagePrerequisites!(recipe) ??
-            throw new InvalidOperationException("usagePrerequisites was null");
-        var requirementResult = _checkUsagePrerequisites!.Invoke(prerequisites, null);
-        if (requirementResult is not bool requirementsMet)
-            throw new InvalidOperationException("usagePrerequisites.Check returned no Boolean value");
-
         var scalingReference = _instanceScalingRef!(recipe) ??
             throw new InvalidOperationException("instanceScaling was null");
         var scaling = _instanceScaling!(scalingReference) ??
@@ -649,7 +636,7 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
             coreId,
             scalingId,
             _advancementLevel!(recipe),
-            requirementsMet,
+            true,
             in reqCost,
             in reqSpeed,
             costUsesRarity,
@@ -750,7 +737,6 @@ internal sealed class WorldAlchemyInstanceReader : IWorldCategoryReader
         _instanceType is not null &&
         _recipeId is not null && _coreType is not null && _coreTypeId is not null &&
         _recipeDrain is not null && _bandwidthCost is not null && _advancementLevel is not null &&
-        _usagePrerequisites is not null && _checkUsagePrerequisites is not null &&
         _instanceScalingRef is not null && _instanceScaling is not null &&
         _instanceScalingId is not null && _useRarity is not null && _rarityBlacklist is not null &&
         _scalingConversion is not null && _scalingValues is not null &&

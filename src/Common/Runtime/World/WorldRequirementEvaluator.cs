@@ -97,7 +97,11 @@ internal static class WorldRequirementEvaluator
     /// while unevaluable is this suite's gap and should be named as such wherever it surfaces.
     /// </para>
     /// </remarks>
-    internal static WorldRequirementVerdict Evaluate(GameWorldState world, Guid ownerId, long level)
+    internal static WorldRequirementVerdict Evaluate(
+        GameWorldState world,
+        Guid ownerId,
+        long level,
+        WorldRequirementProgramKind program = WorldRequirementProgramKind.NextLevel)
     {
         if (world is null) throw new ArgumentNullException(nameof(world));
 
@@ -111,6 +115,7 @@ internal static class WorldRequirementEvaluator
         var verdict = WorldRequirementVerdict.Met;
         for (var offset = 0; offset < count; offset++)
         {
+            if (rows[start + offset].Program != program) continue;
             var one = Evaluate(world, in rows[start + offset], level);
             if (one == WorldRequirementVerdict.Unevaluable) return WorldRequirementVerdict.Unevaluable;
             if (one == WorldRequirementVerdict.Unmet) verdict = WorldRequirementVerdict.Unmet;
