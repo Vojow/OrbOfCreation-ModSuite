@@ -526,7 +526,6 @@ public sealed class InstalledGameContractTests
             "CraftingRecipeSO",
             "BigDouble");
         AssertMethod(assembly, "CraftingInstance", "GetQuantity", false, "BigDouble");
-        AssertMethod(assembly, "CraftingInstance", "IsAuto", false, "System.Boolean");
         AssertMethod(assembly, "CraftingInstance", "IsExpired", false, "System.Boolean");
         AssertMethod(assembly, "CraftingInstance", "Initiate", false, "System.Void");
         AssertMethod(

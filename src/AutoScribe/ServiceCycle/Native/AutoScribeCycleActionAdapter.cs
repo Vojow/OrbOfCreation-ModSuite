@@ -55,7 +55,7 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
 
         var submission = _gameAction.Submit(in action);
         _health.Observe(in submission);
-        if (!submission.Verified)
+        if (AutoScribeActionHealth.IsFailure(in submission))
             Plugin.Log?.LogAutomataWarning(
                 $"Auto Scribe {submission.Stage}/{submission.Preflight}: {submission.Reason}");
         return Map(in submission);
@@ -86,6 +86,9 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
                 AutoScribeActionResultCodes.PostPaymentFault,
             AutoScribePreflight.VerificationFailed =>
                 AutoScribeActionResultCodes.VerificationFailed,
+            AutoScribePreflight.LifecycleReplaced =>
+                CommonActionResultCodes.LifecycleReplaced,
+            AutoScribePreflight.WrongThread => AutoScribeActionResultCodes.WrongThread,
             AutoScribePreflight.Proceeded => CommonActionResultCodes.Committed,
             _ => CommonActionResultCodes.AdapterFault,
         };
@@ -112,7 +115,8 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
             AutoScribePreflight.CompetingSupply or
             AutoScribePreflight.Unaffordable or
             AutoScribePreflight.MutationPermitUnavailable or
-            AutoScribePreflight.Quarantined;
+            AutoScribePreflight.Quarantined or
+            AutoScribePreflight.LifecycleReplaced;
 
     private bool Owns()
     {

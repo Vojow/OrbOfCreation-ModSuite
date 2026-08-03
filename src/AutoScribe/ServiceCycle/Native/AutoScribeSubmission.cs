@@ -18,6 +18,8 @@ internal enum AutoScribePreflight
     MutationPermitUnavailable = 10,
     PostPaymentFault = 11,
     VerificationFailed = 12,
+    LifecycleReplaced = 13,
+    WrongThread = 14,
 }
 
 internal enum AutoScribeNativeStage

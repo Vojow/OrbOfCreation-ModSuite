@@ -40,6 +40,25 @@ public sealed class CraftingPlayerContractTests
             isStatic: true,
             "UnityEngine.Object[]",
             "System.Type");
+        AssertMethod(
+            assembly,
+            "CraftingRecipeSO",
+            "GetEffectChannel",
+            false,
+            "PassiveObservable+Channel");
+        AssertMethod(
+            assembly,
+            "PassiveObservable+Channel",
+            "Observe",
+            false,
+            "IPassiveObservable",
+            "System.String");
+        AssertMethod(
+            assembly,
+            "IPassiveObservable",
+            "GetObservableId",
+            false,
+            "System.Int32");
     }
 
     [GameAssemblyFact]

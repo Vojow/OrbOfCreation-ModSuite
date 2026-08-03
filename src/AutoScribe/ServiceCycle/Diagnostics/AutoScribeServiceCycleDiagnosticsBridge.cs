@@ -118,7 +118,7 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
                 string.IsNullOrWhiteSpace(_gameAction.BindingFailure)
                     ? "The lifecycle-scoped Auto Scribe binding set is unavailable."
                     : _gameAction.BindingFailure);
-        if (_health.HasFailure && IsQuarantiningFailure(_health.Preflight))
+        if (_health.HasFailure)
             return FromActionHealth();
         if (!_cycleObserved)
             return new AutoScribeFeatureStatus(
@@ -136,8 +136,10 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
                 $"Auto Scribe blocked an unknown role ordinal {_blockedRole} for " +
                 $"evidence reason {_blockedReason}.");
         }
-        if (_health.HasFailure)
-            return FromActionHealth();
+        if (_decisionKind == AutoScribeDecisionKind.QueueBusy)
+            return Blocked(
+                FeatureStatusReasonCode.QueueFull,
+                "Active Scribe work already fills the native queue; Auto Scribe is waiting for the next world publication.");
         return new AutoScribeFeatureStatus(
             FeatureStatusState.Operational,
             FeatureStatusReasonCode.None,
@@ -182,6 +184,11 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
                     summary),
             AutoScribePreflight.MutationPermitUnavailable =>
                 Blocked(FeatureStatusReasonCode.ActionFamilyConflict, summary),
+            AutoScribePreflight.WrongThread =>
+                new AutoScribeFeatureStatus(
+                    FeatureStatusState.Faulted,
+                    FeatureStatusReasonCode.ContractUnavailable,
+                    summary),
             _ => Blocked(FeatureStatusReasonCode.TemporarySafetyBlock, summary),
         };
     }
@@ -212,11 +219,6 @@ internal sealed class AutoScribeServiceCycleDiagnosticsBridge
             return false;
         }
     }
-
-    private static bool IsQuarantiningFailure(AutoScribePreflight preflight) =>
-        preflight is AutoScribePreflight.PostPaymentFault or
-            AutoScribePreflight.VerificationFailed or
-            AutoScribePreflight.Quarantined;
 
     private bool TryReadProjection(
         SuiteFramePump pump,

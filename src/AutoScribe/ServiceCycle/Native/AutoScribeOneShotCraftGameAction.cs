@@ -49,6 +49,26 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
 
     internal AutoScribeSubmission Submit(in AutoScribeCycleAction action)
     {
+        if (Environment.CurrentManagedThreadId != _mainThreadId)
+            return AutoScribeSubmission.Reject(
+                AutoScribePreflight.WrongThread,
+                "Auto Scribe actions are bound to Unity thread " + _mainThreadId + ".");
+        long liveLifecycle;
+        try
+        {
+            liveLifecycle = _readLifecycleEpoch();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            return AutoScribeSubmission.Reject(
+                AutoScribePreflight.ContractUnavailable,
+                "The live lifecycle could not be read: " + ex.GetBaseException().Message);
+        }
+        if (liveLifecycle != action.CollectedAtEpoch)
+            return AutoScribeSubmission.Reject(
+                AutoScribePreflight.LifecycleReplaced,
+                "Action lifecycle " + action.CollectedAtEpoch +
+                " is stale; live lifecycle is " + liveLifecycle + ".");
         if (_quarantineReason.Length != 0)
             return AutoScribeSubmission.Reject(
                 AutoScribePreflight.Quarantined,
@@ -112,7 +132,6 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
                     AutoScribePreflight.Unaffordable,
                     $"GetTotalCost(0,{craftLevel}).HasEnough() refused recipe {EntityIdentityFormatter.Format(action.RecipeId)}.");
 
-            var stockBefore = StockAt(native, scroll, craftLevel);
             if (!TryCaptureMutationPermit(out reason))
                 return AutoScribeSubmission.Reject(
                     AutoScribePreflight.MutationPermitUnavailable,
@@ -125,10 +144,8 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
                 native,
                 recipe,
                 activeQueue,
-                scroll,
                 craftLevel,
-                level,
-                stockBefore);
+                level);
         }
         catch (Exception ex) when (IsExpected(ex))
         {
@@ -163,20 +180,21 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
         AutoScribeNativeBindings native,
         object recipe,
         object activeQueue,
-        object scroll,
         int craftLevel,
-        BigDouble level,
-        int stockBefore)
+        BigDouble level)
     {
         var stage = AutoScribeNativeStage.Payment;
         var nativeCalls = 1;
+        object? instance = null;
+        var instant = false;
+        var admissionKnown = false;
         try
         {
             native.RecipePurchase.Invoke(recipe, new object[] { level, BigDouble.Zero });
 
             stage = AutoScribeNativeStage.Construction;
             nativeCalls = 2;
-            var instance = native.ConstructInstance.Invoke(new object[] { recipe, level }) ??
+            instance = native.ConstructInstance.Invoke(new object[] { recipe, level }) ??
                 throw new InvalidOperationException("CraftingInstance construction returned null.");
             if (instance.GetType() != native.InstanceType)
                 throw new InvalidOperationException(
@@ -187,7 +205,8 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
             native.InstanceInitiate.Invoke(instance, Array.Empty<object>());
 
             stage = AutoScribeNativeStage.Admission;
-            var instant = Invoke<bool>(native.InstanceInstantCheck, instance);
+            instant = Invoke<bool>(native.InstanceInstantCheck, instance);
+            admissionKnown = true;
             nativeCalls = 4;
             if (instant)
                 native.InstanceInstant.Invoke(instance, Array.Empty<object>());
@@ -196,10 +215,10 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
 
             stage = AutoScribeNativeStage.Verification;
             var verified = instant
-                ? StockAt(native, scroll, craftLevel) == stockBefore + 1
-                : ContainsWork(native, RequireList(
+                ? Invoke<bool>(native.InstanceExpired, instance)
+                : ContainsExactInstance(native, RequireList(
                     native.InstanceListValue.GetValue(activeQueue),
-                    "ActiveScribeInstances.value"), action.RecipeId, craftLevel);
+                    "ActiveScribeInstances.value"), instance, action.RecipeId, craftLevel);
             if (!verified)
                 return Quarantine(
                     in action,
@@ -218,7 +237,13 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
         catch (Exception ex) when (IsExpected(ex))
         {
             var landed = WorkObservedBestEffort(
-                native, activeQueue, scroll, action.RecipeId, craftLevel, stockBefore);
+                native,
+                activeQueue,
+                instance,
+                admissionKnown,
+                instant,
+                action.RecipeId,
+                craftLevel);
             if (landed)
                 return new AutoScribeSubmission(
                     AutoScribePreflight.Proceeded,
@@ -686,56 +711,40 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
             recipe,
             new BigDouble(level, 0));
 
-    private static bool ContainsWork(
+    private static bool ContainsExactInstance(
         AutoScribeNativeBindings native,
         IList work,
+        object instance,
         Guid recipeId,
         int level)
     {
         foreach (var value in work)
         {
-            if (value is null || value.GetType() != native.InstanceType) continue;
-            if (Invoke<Guid>(native.InstanceRecipe, value) == recipeId &&
-                Level(InvokeObject(native.InstanceQuantity, value)) == level &&
-                !Invoke<bool>(native.InstanceExpired, value))
+            if (ReferenceEquals(value, instance) &&
+                Invoke<Guid>(native.InstanceRecipe, instance) == recipeId &&
+                Level(InvokeObject(native.InstanceQuantity, instance)) == level &&
+                !Invoke<bool>(native.InstanceExpired, instance))
                 return true;
         }
         return false;
     }
 
-    private static int StockAt(
-        AutoScribeNativeBindings native,
-        object scroll,
-        int level)
-    {
-        var total = 0;
-        foreach (var value in RequireEnumerable(
-                     native.ConsumableCounts.GetValue(scroll),
-                     "ConsumableSO.consumableCounts"))
-        {
-            if (value is null || value.GetType() != native.ConsumableCountType)
-                throw new InvalidOperationException(
-                    "ConsumableSO.consumableCounts contained the wrong native type.");
-            if (Invoke<int>(native.CountLevel, value) == level)
-                total = checked(total + Invoke<int>(native.CountQuantity, value));
-        }
-        return total;
-    }
-
     private static bool WorkObservedBestEffort(
         AutoScribeNativeBindings native,
         object activeQueue,
-        object scroll,
+        object? instance,
+        bool admissionKnown,
+        bool instant,
         Guid recipeId,
-        int level,
-        int stockBefore)
+        int level)
     {
         try
         {
-            if (StockAt(native, scroll, level) == stockBefore + 1) return true;
-            return ContainsWork(native, RequireList(
+            if (instance is null || !admissionKnown) return false;
+            if (instant) return Invoke<bool>(native.InstanceExpired, instance);
+            return ContainsExactInstance(native, RequireList(
                 native.InstanceListValue.GetValue(activeQueue),
-                "ActiveScribeInstances.value"), recipeId, level);
+                "ActiveScribeInstances.value"), instance, recipeId, level);
         }
         catch (Exception ex) when (IsExpected(ex))
         {
@@ -795,14 +804,6 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
         for (var index = 0; index < resolutions.Length; index++)
             if (!resolutions[index].IsResolved) return resolutions[index].Format();
         return "An Auto Scribe live identity was unavailable.";
-    }
-
-    private static int CountNonNull(IList values)
-    {
-        var count = 0;
-        foreach (var value in values)
-            if (value is not null) count++;
-        return count;
     }
 
     private static IList RequireList(object? value, string contract) =>

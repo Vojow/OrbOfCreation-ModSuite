@@ -26,6 +26,9 @@ internal sealed class CraftingPlayerNativeBindings
         "crafting-player.recipe-can-buy-action",
         "crafting-player.recipe-get-purchase-quantity-action",
         "crafting-player.recipe-execute-action",
+        "crafting-player.recipe-effect-channel-action",
+        "crafting-player.effect-channel-observe-action",
+        "crafting-player.passive-observable-id-action",
         "crafting-player.recipe-time-action",
         "crafting-player.queue-get-quantity-action",
         "crafting-player.instance-add-quantity-action",
@@ -42,6 +45,7 @@ internal sealed class CraftingPlayerNativeBindings
         "auto-scribe.instance.initiate",
         "auto-scribe.instance.check-instant",
         "auto-scribe.instance.instant",
+        "crafting-player.instance-expired-action",
         "auto-scribe.crafting-instance.type",
         "abstract-list.value",
         "resource-cost-list.has-enough",
@@ -65,6 +69,9 @@ internal sealed class CraftingPlayerNativeBindings
     private readonly MethodInfo _recipeMainType;
     private readonly MethodInfo _recipePurchase;
     private readonly MethodInfo _recipeExecute;
+    private readonly MethodInfo _recipeEffectChannel;
+    private readonly MethodInfo _effectChannelObserve;
+    private readonly MethodInfo _passiveObservableId;
     private readonly MethodInfo _costHasEnough;
     private readonly MethodInfo _intAsInt;
     private readonly MethodInfo _queueGetQuantity;
@@ -76,6 +83,7 @@ internal sealed class CraftingPlayerNativeBindings
     private readonly MethodInfo _instanceInitiate;
     private readonly MethodInfo _instanceInstantCheck;
     private readonly MethodInfo _instanceInstant;
+    private readonly MethodInfo _instanceExpired;
     private readonly ConstructorInfo _constructInstance;
 
     private CraftingPlayerNativeBindings(
@@ -88,6 +96,8 @@ internal sealed class CraftingPlayerNativeBindings
         Type resourceCostType,
         Type intVariableType,
         Type bigDoubleType,
+        Type passiveChannelType,
+        Type passiveObservableType,
         MethodInfo findObjects,
         FieldInfo pageRecipes,
         FieldInfo pageQueue,
@@ -105,6 +115,9 @@ internal sealed class CraftingPlayerNativeBindings
         MethodInfo recipeMainType,
         MethodInfo recipePurchase,
         MethodInfo recipeExecute,
+        MethodInfo recipeEffectChannel,
+        MethodInfo effectChannelObserve,
+        MethodInfo passiveObservableId,
         MethodInfo costHasEnough,
         MethodInfo intAsInt,
         MethodInfo queueGetQuantity,
@@ -116,6 +129,7 @@ internal sealed class CraftingPlayerNativeBindings
         MethodInfo instanceInitiate,
         MethodInfo instanceInstantCheck,
         MethodInfo instanceInstant,
+        MethodInfo instanceExpired,
         ConstructorInfo constructInstance)
     {
         PageType = pageType;
@@ -127,6 +141,8 @@ internal sealed class CraftingPlayerNativeBindings
         ResourceCostType = resourceCostType;
         IntVariableType = intVariableType;
         BigDoubleType = bigDoubleType;
+        PassiveChannelType = passiveChannelType;
+        PassiveObservableType = passiveObservableType;
         _findObjects = findObjects;
         _pageRecipes = pageRecipes;
         _pageQueue = pageQueue;
@@ -144,6 +160,9 @@ internal sealed class CraftingPlayerNativeBindings
         _recipeMainType = recipeMainType;
         _recipePurchase = recipePurchase;
         _recipeExecute = recipeExecute;
+        _recipeEffectChannel = recipeEffectChannel;
+        _effectChannelObserve = effectChannelObserve;
+        _passiveObservableId = passiveObservableId;
         _costHasEnough = costHasEnough;
         _intAsInt = intAsInt;
         _queueGetQuantity = queueGetQuantity;
@@ -155,6 +174,7 @@ internal sealed class CraftingPlayerNativeBindings
         _instanceInitiate = instanceInitiate;
         _instanceInstantCheck = instanceInstantCheck;
         _instanceInstant = instanceInstant;
+        _instanceExpired = instanceExpired;
         _constructInstance = constructInstance;
     }
 
@@ -167,6 +187,8 @@ internal sealed class CraftingPlayerNativeBindings
     internal Type ResourceCostType { get; }
     internal Type IntVariableType { get; }
     internal Type BigDoubleType { get; }
+    internal Type PassiveChannelType { get; }
+    internal Type PassiveObservableType { get; }
 
     internal Array Pages() =>
         (Array)(_findObjects.Invoke(null, new object[] { PageType }) ?? Array.Empty<object>());
@@ -197,6 +219,16 @@ internal sealed class CraftingPlayerNativeBindings
     internal void RecipePurchase(object recipe, BigDouble purchase, BigDouble previous) =>
         _recipePurchase.Invoke(recipe, new object[] { purchase, previous });
     internal void RecipeExecute(object recipe) => _recipeExecute.Invoke(recipe, Array.Empty<object>());
+    internal int RecipeEffectRevision(object recipe)
+    {
+        var channel = Require(
+            _recipeEffectChannel.Invoke(recipe, Array.Empty<object>()),
+            PassiveChannelType);
+        var observable = RequireAssignable(
+            _effectChannelObserve.Invoke(channel, new object[] { "craft" }),
+            PassiveObservableType);
+        return Invoke<int>(_passiveObservableId, observable);
+    }
     internal bool CostHasEnough(object cost) => Invoke<bool>(_costHasEnough, cost);
     internal BigDouble QueueQuantity(object queue, object recipe) =>
         Invoke<BigDouble>(_queueGetQuantity, queue, recipe);
@@ -218,6 +250,7 @@ internal sealed class CraftingPlayerNativeBindings
         Invoke<bool>(_instanceInstantCheck, instance);
     internal void InstanceInstant(object instance) =>
         _instanceInstant.Invoke(instance, Array.Empty<object>());
+    internal bool InstanceExpired(object instance) => Invoke<bool>(_instanceExpired, instance);
 
     internal static bool TryCreate(out CraftingPlayerNativeBindings? bindings, out string reason)
     {
@@ -233,6 +266,8 @@ internal sealed class CraftingPlayerNativeBindings
             var cost = Type("ResourceCostList");
             var intVariable = Type("IntVariable");
             var big = Type("BigDouble");
+            var passiveChannel = Type("PassiveObservable+Channel");
+            var passiveObservable = Type("IPassiveObservable");
             var resources = Type("UnityEngine.Resources");
             var unityObject = Type("UnityEngine.Object");
 
@@ -246,6 +281,8 @@ internal sealed class CraftingPlayerNativeBindings
                 cost,
                 intVariable,
                 big,
+                passiveChannel,
+                passiveObservable,
                 StaticMethod(resources, "FindObjectsOfTypeAll", unityObject.MakeArrayType(), typeof(Type)),
                 Field(page, "availableRecipes", recipeList),
                 Field(page, "craftingQueueInstances", instanceList),
@@ -263,6 +300,9 @@ internal sealed class CraftingPlayerNativeBindings
                 Method(recipe, "GetMainType", recipeType),
                 Method(recipe, "PurchaseQuantity", typeof(void), big, big),
                 Method(recipe, "Execute", typeof(void)),
+                Method(recipe, "GetEffectChannel", passiveChannel),
+                Method(passiveChannel, "Observe", passiveObservable, typeof(string)),
+                Method(passiveObservable, "GetObservableId", typeof(int)),
                 Method(cost, "HasEnough", typeof(bool)),
                 Method(intVariable, "AsInt", typeof(int)),
                 Method(instanceList, "GetQuantity", big, recipe),
@@ -274,6 +314,7 @@ internal sealed class CraftingPlayerNativeBindings
                 Method(instance, "Initiate", typeof(void)),
                 Method(instance, "CheckInstantCraft", typeof(bool)),
                 Method(instance, "InstantCraft", typeof(void)),
+                Method(instance, "IsExpired", typeof(bool)),
                 Constructor(instance, recipe, big));
             reason = string.Empty;
             return true;
@@ -288,6 +329,13 @@ internal sealed class CraftingPlayerNativeBindings
     private static object Require(object? value, Type type)
     {
         if (value is null || value.GetType() != type)
+            throw new InvalidOperationException(type.Name + " value was null or wrong-typed.");
+        return value;
+    }
+
+    private static object RequireAssignable(object? value, Type type)
+    {
+        if (value is null || !type.IsInstanceOfType(value))
             throw new InvalidOperationException(type.Name + " value was null or wrong-typed.");
         return value;
     }

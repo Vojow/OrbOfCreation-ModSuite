@@ -522,6 +522,32 @@ public class AbstractListVariable<T> : AbstractListVariable
     public void UpdateObservable() => UpdateObservableCalls++;
 }
 
+public interface IPassiveObservable
+{
+    int GetObservableId();
+}
+
+public sealed class PassiveObservable : IPassiveObservable
+{
+    private int _observedId;
+
+    public int GetObservableId() => _observedId;
+    public void UpdateObservable() => _observedId++;
+
+    public sealed class Channel
+    {
+        private readonly Dictionary<string, PassiveObservable> _values = new();
+
+        public Channel(params string[] names)
+        {
+            foreach (var name in names) _values[name] = new PassiveObservable();
+        }
+
+        public IPassiveObservable Observe(string name) => _values[name];
+        public void Update(string name) => _values[name].UpdateObservable();
+    }
+}
+
 public class GenericListVariable<T> : AbstractListVariable<T>
 {
     public bool SuppressAdd;

@@ -41,6 +41,20 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
     }
 
     [Fact]
+    public void DirectRecipeWithoutCraftPublicationCannotReportVerified()
+    {
+        var recipe = Register(Recipe());
+        recipe.SuppressEffectPublication = true;
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, recipe);
+
+        Assert.Equal(CraftingPlayerPreflight.VerificationFailed, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
+        Assert.Equal(1, recipe.ExecuteCalls);
+    }
+
+    [Fact]
     public void TimedRecipeWithoutAuthoredPageRefusesBeforePayment()
     {
         var recipe = Register(Recipe());
@@ -104,6 +118,22 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
         Assert.Empty(page.craftingQueueInstances.value);
         Assert.Equal(1, Assert.Single(recipe.InstantOutput.consumableCounts).Quantity);
         Assert.Equal(new NativeMutationCallOutcome(4, 1, 1), result.CallOutcome);
+    }
+
+    [Fact]
+    public void InstantPageRecipeWithoutNativeCompletionCannotReportVerified()
+    {
+        var recipe = Register(Recipe());
+        recipe.InstantCraftEnabled = true;
+        recipe.InstantOutput = new ConsumableSO();
+        recipe.SuppressInstantAdmission = true;
+        Page(recipe, mode: 1, maximum: 2);
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, recipe);
+
+        Assert.Equal(CraftingPlayerPreflight.VerificationFailed, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
     }
 
     [Fact]

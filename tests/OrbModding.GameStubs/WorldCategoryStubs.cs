@@ -159,11 +159,14 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     public bool ThrowAfterInitiation;
     public bool ThrowAfterInstantAdmission;
     public bool ThrowAfterExecute;
+    public bool SuppressEffectPublication;
+    public bool SuppressInstantAdmission;
     public int PurchaseCalls;
     public int VisibilityCalls;
     public int StartingQuantityCalls;
     public int CanBuyCalls;
     public int ExecuteCalls;
+    private readonly PassiveObservable.Channel effectChannel = new("craft");
 
     public bool IsVisible()
     {
@@ -195,6 +198,7 @@ public sealed class CraftingRecipeSO : IdScriptableObject
         ExecuteCalls++;
         if (!CanBuy()) return;
         recipeCost.Multiply(GetPurchaseQuantity(BigDouble.One)).PerformCost();
+        if (!SuppressEffectPublication) effectChannel.Update("craft");
         if (ThrowAfterExecute)
             throw new InvalidOperationException("injected failure after direct execution");
     }
@@ -203,6 +207,7 @@ public sealed class CraftingRecipeSO : IdScriptableObject
     {
         PurchaseCalls++;
         TotalCost.PerformCost();
+        effectChannel.Update("craft");
         if (MainType.isLevelType)
             MainType.maxStartingLevel = Math.Max(
                 MainType.maxStartingLevel,
@@ -210,6 +215,8 @@ public sealed class CraftingRecipeSO : IdScriptableObject
         if (ThrowAfterPurchase)
             throw new InvalidOperationException("injected failure after purchase");
     }
+
+    public PassiveObservable.Channel GetEffectChannel() => effectChannel;
 }
 
 public sealed class CraftingInstanceListVariable : GenericListVariable<CraftingInstance>
@@ -272,7 +279,7 @@ public sealed class CraftingInstance : AbstractRefInstance<CraftingRecipeSO>
 
     public void InstantCraft()
     {
-        if (reference.InstantOutput is not null)
+        if (!reference.SuppressInstantAdmission && reference.InstantOutput is not null)
         {
             var level = Quantity.ToInt();
             var count = reference.InstantOutput.consumableCounts.Find(row => row.Level == level);
@@ -283,6 +290,7 @@ public sealed class CraftingInstance : AbstractRefInstance<CraftingRecipeSO>
             }
             count.Quantity++;
         }
+        if (!reference.SuppressInstantAdmission) Expired = true;
         if (reference.ThrowAfterInstantAdmission)
             throw new InvalidOperationException("injected failure after instant admission");
     }

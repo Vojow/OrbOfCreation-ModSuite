@@ -44,7 +44,7 @@ internal static class AutoScribeServiceProjection
             {
                 case DecisionKindKey
                     when entry.Value.Integer is >= (int)AutoScribeDecisionKind.Disabled
-                        and <= (int)AutoScribeDecisionKind.ExternallyProducing:
+                        and <= (int)AutoScribeDecisionKind.QueueBusy:
                     kind = (AutoScribeDecisionKind)entry.Value.Integer;
                     foundKind = true;
                     break;

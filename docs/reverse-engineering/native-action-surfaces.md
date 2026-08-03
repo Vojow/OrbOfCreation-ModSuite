@@ -358,6 +358,10 @@ CraftingRecipeSO.Execute()
   → PassiveObservable.Channel.Update()
 ```
 
+`GetEffectChannel().Observe("craft").GetObservableId()` is the direct route's directional outcome
+sentinel: the audited composite increments it only after cost admission, so a strictly larger id
+proves the synchronous native action completed without reconstructing a resource ledger.
+
 The page route has no equivalent. `UICraftingPage.UIStart` installs `ContextRecipeClick` and
 `ContextRecipeInteraction` and owns the authored recipe-list, queue, mode and main-type relations;
 `ContextRecipeClick` reads the recipe's current queue quantity, obtains
@@ -411,6 +415,11 @@ Two `CraftingInstanceListVariable`s hold the live work: `ActiveScribeInstances`
 (`f6cb65a8-a959-477c-9293-ff66f646c95d`). The game's own automation creates or updates one
 repeating instance per recipe in the second; neither list retains caller ownership, so those
 instances are observable but not editable by anyone else.
+
+New queued work is proved by reference membership of the exact newly constructed instance, not by
+finding any instance with the same recipe and quantity. Instant work has no queue destination;
+`CraftingInstance.InstantCraft()` reaches `CompleteCraft`, whose monotonic sentinel for a one-shot
+instance is `IsExpired()` changing to true.
 
 Every `StructureSO` owns an `EnchantmentSO.EnchantTable`. A native enchantment upgrade keeps a
 stronger existing instance and replaces an equal-or-lower one only when the proposed scaling is

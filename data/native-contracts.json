@@ -15185,25 +15185,6 @@
       "place": "capture"
     },
     {
-      "id": "auto-scribe.instance.auto",
-      "assembly": "assembly-csharp",
-      "type": "CraftingInstance",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "IsAuto",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Boolean",
-      "parameters": [],
-      "owners": [
-        "Automata Auto Scribe world publication"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
       "id": "auto-scribe.instance.check-instant",
       "assembly": "assembly-csharp",
       "type": "CraftingInstance",
@@ -19741,6 +19722,51 @@
       "place": "action"
     },
     {
+      "id": "crafting-player.recipe-effect-channel-action",
+      "assembly": "assembly-csharp",
+      "type": "CraftingRecipeSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetEffectChannel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "PassiveObservable+Channel",
+      "parameters": [],
+      "owners": ["Automata one-shot crafting action boundary"],
+      "usages": ["reflection"],
+      "place": "action"
+    },
+    {
+      "id": "crafting-player.effect-channel-observe-action",
+      "assembly": "assembly-csharp",
+      "type": "PassiveObservable+Channel",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Observe",
+      "visibility": "public",
+      "static": false,
+      "returnType": "IPassiveObservable",
+      "parameters": ["System.String"],
+      "owners": ["Automata one-shot crafting action boundary"],
+      "usages": ["reflection"],
+      "place": "action"
+    },
+    {
+      "id": "crafting-player.passive-observable-id-action",
+      "assembly": "assembly-csharp",
+      "type": "IPassiveObservable",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "GetObservableId",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Int32",
+      "parameters": [],
+      "owners": ["Automata one-shot crafting action boundary"],
+      "usages": ["reflection"],
+      "place": "action"
+    },
+    {
       "id": "crafting-player.recipe-time-action",
       "assembly": "assembly-csharp",
       "type": "CraftingRecipeSO",
@@ -19809,6 +19835,21 @@
       "visibility": "public",
       "static": false,
       "returnType": "System.Guid",
+      "parameters": [],
+      "owners": ["Automata one-shot crafting action boundary"],
+      "usages": ["reflection"],
+      "place": "action"
+    },
+    {
+      "id": "crafting-player.instance-expired-action",
+      "assembly": "assembly-csharp",
+      "type": "CraftingInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsExpired",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
       "parameters": [],
       "owners": ["Automata one-shot crafting action boundary"],
       "usages": ["reflection"],

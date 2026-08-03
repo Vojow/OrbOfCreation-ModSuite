@@ -15,6 +15,7 @@ internal sealed class AutoScribeActionHealth
             Clear();
             return;
         }
+        if (!IsFailure(in submission)) return;
         HasFailure = true;
         Preflight = submission.Preflight;
         Stage = submission.Stage;
@@ -33,4 +34,16 @@ internal sealed class AutoScribeActionHealth
     }
 
     internal void InvalidateLifecycle() => Clear();
+
+    internal static bool IsFailure(in AutoScribeSubmission submission) =>
+        !submission.Verified &&
+        (submission.CallOutcome.MutationAttempts > 0 ||
+            submission.Preflight is AutoScribePreflight.ContractUnavailable or
+                AutoScribePreflight.IdentityUnavailable or
+                AutoScribePreflight.RelationshipMismatch or
+                AutoScribePreflight.MutationPermitUnavailable or
+                AutoScribePreflight.PostPaymentFault or
+                AutoScribePreflight.VerificationFailed or
+                AutoScribePreflight.Quarantined or
+                AutoScribePreflight.WrongThread);
 }

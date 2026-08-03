@@ -426,6 +426,51 @@ public sealed class ScrollCoveragePlannerTests
         Assert.Equal(0, idle);
     }
 
+    [Fact]
+    public void FullActiveQueueIsPublishedBackpressureAndNeverBecomesAnActionFault()
+    {
+        var world = World() with
+        {
+            ScribeQueues = Table(
+                new WorldScribeQueue(
+                    _profile.ActiveInstances.Uuid,
+                    isAutomatic: false,
+                    used: 1,
+                    maximum: 1),
+                new WorldScribeQueue(
+                    _profile.AutomaticInstances.Uuid,
+                    isAutomatic: true,
+                    used: 0,
+                    maximum: 1)),
+        };
+        var active = new SuiteRuntimeConfiguration
+        {
+            General = new SuiteGeneralConfiguration { Enabled = true },
+            AutoItems = new AutoItemsConfiguration
+            {
+                Mode = AutoItemsOperationMode.Active,
+                UseScrolls = true,
+            },
+            AutoScribe = new AutoScribeConfiguration { Mode = AutoScribeOperationMode.Active },
+        };
+        var store = new ReusableActionStore<AutoScribeCycleAction>();
+        store.BeginWrite();
+
+        AutoScribeCycleEvaluator.Evaluate(
+            world,
+            in active,
+            _profile,
+            enabledRoles: null,
+            afterCraftCostOrder: -1,
+            new ServiceActionWriter<AutoScribeCycleAction>(store),
+            out var metrics);
+
+        Assert.Equal(AutoScribeDecisionKind.QueueBusy, metrics.Kind);
+        Assert.Equal(6, metrics.DeficientRoles);
+        Assert.Equal(0, metrics.PlannedActions);
+        Assert.Equal(0, store.Count);
+    }
+
     private WakePolicy Evaluate(
         GameWorldState world,
         SuiteRuntimeConfiguration configuration,
@@ -492,6 +537,17 @@ public sealed class ScrollCoveragePlannerTests
                 skipped: 0,
                 firstFailure: string.Empty)),
             ScribeRecipes = Table(recipes.ToArray()),
+            ScribeQueues = Table(
+                new WorldScribeQueue(
+                    _profile.ActiveInstances.Uuid,
+                    isAutomatic: false,
+                    used: 0,
+                    maximum: 1),
+                new WorldScribeQueue(
+                    _profile.AutomaticInstances.Uuid,
+                    isAutomatic: true,
+                    used: 0,
+                    maximum: 1)),
             Consumables = Table(consumables.ToArray()),
             ScrollTargets = Table(targets.ToArray()),
             ScrollTargetEvidence = Table(evidence.ToArray()),

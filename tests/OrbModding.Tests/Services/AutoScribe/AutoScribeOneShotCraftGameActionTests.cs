@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using OrbAutomata;
 using OrbModding.Common;
 using Xunit;
@@ -11,6 +12,8 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
 {
     private readonly Dictionary<Guid, object> _registry = new();
     private readonly AutoScribeIdentityProfile _profile = AutoScribeIdentityCatalog.Audited;
+    private long _lifecycle = 1;
+    private bool _permit = true;
 
     public AutoScribeOneShotCraftGameActionTests()
     {
@@ -56,6 +59,7 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         Assert.Equal(24d, Assert.Single(fixture.Active.value).Quantity.ToDouble());
         Assert.Equal(67, fixture.RecipeType.maxStartingLevel);
         Assert.Equal(1, fixture.Recipe.PurchaseCalls);
+        Assert.False(AutoScribeActionHealth.IsFailure(in result));
     }
 
     [Fact]
@@ -82,7 +86,7 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
     }
 
     [Fact]
-    public void VerifiedInstantAdmissionCommitsTheExactStockOutcome()
+    public void VerifiedInstantAdmissionCommitsTheNativeCompletionOutcome()
     {
         var fixture = Fixture();
         fixture.Recipe.InstantCraftEnabled = true;
@@ -94,6 +98,22 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         Assert.Empty(fixture.Active.value);
         Assert.Single(fixture.Scroll.consumableCounts);
         Assert.Equal(new NativeMutationCallOutcome(4, 1, 1), result.CallOutcome);
+        Assert.False(AutoScribeActionHealth.IsFailure(in result));
+    }
+
+    [Fact]
+    public void MissingInstantCompletionCannotBeReportedAsVerified()
+    {
+        var fixture = Fixture();
+        fixture.Recipe.InstantCraftEnabled = true;
+        fixture.Recipe.SuppressInstantAdmission = true;
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.VerificationFailed, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
+        Assert.True(actionBoundary.IsQuarantined);
     }
 
     [Fact]
@@ -193,6 +213,37 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
         Assert.Equal(0, fixture.Recipe.PurchaseCalls);
         Assert.Equal(new BigDouble(100, 0), fixture.Resource.GetTrueQuantity());
         Assert.Equal(0, result.CallOutcome.NativeCallsAttempted);
+        Assert.False(Observe(result).HasFailure);
+    }
+
+    [Fact]
+    public void MissingExactQueueAdmissionCannotBeReportedAsVerified()
+    {
+        var fixture = Fixture();
+        fixture.Active.SuppressAdd = true;
+        using var actionBoundary = GameAction();
+
+        var result = Submit(actionBoundary, fixture.Action);
+
+        Assert.Equal(AutoScribePreflight.VerificationFailed, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
+        Assert.True(actionBoundary.IsQuarantined);
+    }
+
+    [Fact]
+    public async Task LifecycleAndUnityThreadAreRevalidatedInsideTheGameAction()
+    {
+        var fixture = Fixture();
+        using var actionBoundary = GameAction();
+
+        _lifecycle = 2;
+        var stale = Submit(actionBoundary, fixture.Action);
+        _lifecycle = 1;
+        var wrongThread = await Task.Run(() => Submit(actionBoundary, fixture.Action));
+
+        Assert.Equal(AutoScribePreflight.LifecycleReplaced, stale.Preflight);
+        Assert.Equal(AutoScribePreflight.WrongThread, wrongThread.Preflight);
+        Assert.Equal(0, fixture.Recipe.PurchaseCalls);
     }
 
     [Fact]
@@ -249,14 +300,14 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
     {
         IDictionary dictionary = _registry;
         var resolver = new TypedRegistryResolver(
-            static () => 1,
+            () => _lifecycle,
             () => TypedRegistrySourceSnapshot.Ready(dictionary),
             value => value is IdScriptableObject item ? item.GetGuid() : null);
         return new AutoScribeOneShotCraftGameAction(
             resolver,
             _profile,
-            static () => 1,
-            static () => true,
+            () => _lifecycle,
+            () => _permit,
             static () => string.Empty);
     }
 
