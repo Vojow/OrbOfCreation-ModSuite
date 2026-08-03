@@ -9,6 +9,8 @@ strict: true
 
 theme:
   name: material
+  logo: assets/orb-logo.svg
+  favicon: assets/orb-logo.svg
   palette:
     scheme: slate
   features:

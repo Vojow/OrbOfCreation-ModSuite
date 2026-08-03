@@ -44,6 +44,14 @@
   --md-footer-bg-color--dark: #08050e;
 }
 
+html[data-md-color-scheme="slate"] {
+  --md-accent-fg-color: var(--orange);
+  --md-default-bg-color: var(--void);
+  --md-default-fg-color: var(--ink);
+  --md-primary-fg-color: var(--panel);
+  --md-typeset-a-color: var(--collect);
+}
+
 html {
   background: var(--void);
 }
@@ -53,18 +61,60 @@ body {
   font-family: var(--orb-sans);
   background-color: #09050f;
   background-image:
-    linear-gradient(30deg, rgba(74, 24, 92, 0.14) 12%, transparent 12.5%, transparent 87%, rgba(74, 24, 92, 0.14) 87.5%),
-    linear-gradient(150deg, rgba(74, 24, 92, 0.14) 12%, transparent 12.5%, transparent 87%, rgba(74, 24, 92, 0.14) 87.5%),
-    linear-gradient(30deg, rgba(53, 12, 74, 0.15) 12%, transparent 12.5%, transparent 87%, rgba(53, 12, 74, 0.15) 87.5%);
+    linear-gradient(30deg, rgba(74, 24, 92, 0.17) 12%, transparent 12.5%, transparent 87%, rgba(74, 24, 92, 0.17) 87.5%),
+    linear-gradient(150deg, rgba(74, 24, 92, 0.17) 12%, transparent 12.5%, transparent 87%, rgba(74, 24, 92, 0.17) 87.5%),
+    linear-gradient(30deg, rgba(53, 12, 74, 0.18) 12%, transparent 12.5%, transparent 87%, rgba(53, 12, 74, 0.18) 87.5%);
   background-attachment: fixed;
   background-position: 0 0, 0 0, 29px 51px;
   background-size: 58px 102px;
 }
 
+body::before {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background: radial-gradient(circle at 50% 0, rgba(91, 20, 112, 0.18), transparent 50%);
+  content: "";
+  pointer-events: none;
+}
+
 .md-header {
-  border-bottom: 2px solid #090909;
-  background: linear-gradient(#542064, #260d32);
-  box-shadow: inset 0 -2px #120519, 0 2px 0 rgba(91, 200, 225, 0.34);
+  height: 164px;
+  padding: 18px 18px 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.md-header__inner {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr;
+  grid-template-columns: minmax(260px, 1fr) minmax(280px, 420px) 112px;
+  column-gap: 18px;
+  align-items: center;
+  max-width: 1600px;
+  height: 146px;
+  padding: 30px 20px 14px;
+  border: 2px solid #777;
+  border-radius: 2px;
+  background: #303030;
+  box-shadow: inset 2px 2px #8b8b8b, inset -3px -3px #111, 0 0 0 2px #090909;
+}
+
+.md-header__inner::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 23px;
+  padding-top: 2px;
+  border-bottom: 2px solid #111;
+  background: linear-gradient(#555, #292929);
+  color: #fff;
+  content: "MODSUITE DOCUMENTATION";
+  font: 12px/1.45 var(--orb-mono);
+  text-align: center;
+  text-shadow: 2px 2px #000;
 }
 
 .md-header__title,
@@ -76,8 +126,57 @@ body {
 }
 
 .md-header__title {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  height: auto;
+  margin: 0;
   color: #fff;
-  text-shadow: 2px 2px #080808;
+  font-size: clamp(1.2rem, 2.8vw, 1.8rem);
+  line-height: 1.08;
+  text-shadow: 3px 3px #080808;
+}
+
+.md-header__title::before {
+  display: block;
+  margin-bottom: 5px;
+  color: #75cfe4;
+  content: "AUTOMATA / DOCUMENTATION CONSOLE";
+  font: 700 0.55rem/1.2 var(--orb-mono);
+  letter-spacing: 0.08em;
+  text-shadow: none;
+}
+
+.md-header__topic + .md-header__topic {
+  display: none;
+}
+
+.md-header__button.md-logo {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  width: 106px;
+  height: 98px;
+  margin: 0;
+  padding: 0;
+  filter: drop-shadow(0 0 7px rgba(91, 204, 244, 0.34));
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.md-header__source {
+  display: none;
+}
+
+.md-search {
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
 }
 
 .md-search__form {
@@ -109,17 +208,48 @@ body {
   background: rgba(214, 90, 34, 0.13);
 }
 
+.md-grid {
+  max-width: 1600px;
+}
+
+.md-main__inner {
+  gap: 9px;
+  margin-top: 12px;
+  padding: 0 18px 18px;
+}
+
+.md-sidebar {
+  top: 176px;
+  height: calc(100vh - 184px);
+  padding: 0;
+}
+
 .md-sidebar__scrollwrap {
+  margin: 0;
+  border: 2px solid #555;
+  border-radius: 1px;
+  background: rgba(31, 31, 31, 0.96);
+  box-shadow: var(--orb-bevel);
   scrollbar-color: var(--other) transparent;
 }
 
 .md-nav__title {
+  margin: 0;
+  padding: 7px 10px;
+  border-bottom: 2px solid #111;
   color: var(--gold);
+  background: linear-gradient(#454545, #292929);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  text-shadow: 1px 1px #000;
+}
+
+.md-nav__list {
+  padding: 0 7px 10px;
 }
 
 .md-nav__link {
+  margin-top: 0.42em;
   color: var(--muted);
 }
 
@@ -134,13 +264,18 @@ body {
 }
 
 .md-sidebar--primary .md-nav__item .md-nav__link--active {
-  border-left: 3px solid var(--orange);
-  padding-left: 0.55rem;
-  background: linear-gradient(90deg, rgba(105, 41, 29, 0.64), transparent 85%);
+  margin-right: -2px;
+  margin-left: -2px;
+  padding: 5px 8px;
+  border: 2px solid #ed7a2b;
+  border-radius: 1px;
+  color: #fff;
+  background: #69291d;
+  box-shadow: inset 2px 2px #9f4930, inset -2px -2px #260b08, 0 0 0 1px #5e1d10;
 }
 
-.md-main__inner {
-  margin-top: 0.9rem;
+.md-content {
+  min-width: 0;
 }
 
 .md-content__inner {
@@ -171,7 +306,7 @@ body {
 .md-typeset h1 {
   border-bottom: 2px solid var(--other);
   padding-bottom: 0.35rem;
-  color: var(--gold);
+  color: #fff;
 }
 
 .md-typeset h2 {
@@ -184,6 +319,7 @@ body {
 }
 
 .md-typeset a {
+  color: var(--collect);
   text-decoration-color: rgba(91, 200, 225, 0.48);
   text-underline-offset: 0.16em;
 }
@@ -271,13 +407,61 @@ body {
 }
 
 @media screen and (max-width: 76.234375em) {
+  .md-header {
+    height: 96px;
+    padding: 8px 8px 0;
+  }
+
+  .md-header__inner {
+    display: flex;
+    gap: 8px;
+    height: 80px;
+    padding: 25px 8px 4px;
+  }
+
+  .md-header__title {
+    margin-left: 0;
+    font-size: 1rem;
+  }
+
+  .md-header__title::before {
+    display: none;
+  }
+
+  .md-header__button.md-logo {
+    order: 5;
+    width: 52px;
+    height: 48px;
+    margin-left: auto;
+  }
+
+  .md-sidebar {
+    top: 0;
+    height: auto;
+  }
+
+  .md-sidebar__scrollwrap {
+    border: 0;
+    background: var(--panel);
+    box-shadow: none;
+  }
+
   .md-nav--primary .md-nav__title[for="__drawer"] {
     color: #fff;
-    background: linear-gradient(#542064, #260d32);
+    background: linear-gradient(#555, #292929);
   }
 }
 
 @media screen and (max-width: 44.984375em) {
+  .md-header__inner::before {
+    content: "MODSUITE DOCS";
+  }
+
+  .md-main__inner {
+    padding-right: 0;
+    padding-left: 0;
+  }
+
   .md-content__inner {
     border-right: 0;
     border-left: 0;
