@@ -81,8 +81,10 @@ public sealed class GameMcpSpellLoadoutTests
         Assert.Equal("unexpected_for_mode", (string?)unexpected.Body["error"]!["data"]!["validationErrors"]![0]!["code"]);
     }
 
-    [Fact]
-    public void AddRequiresARecipeAndExplicitPossiblyEmptyGlyphLayout()
+    [Theory]
+    [InlineData("add")]
+    [InlineData("preview")]
+    public void AddAndPreviewRequireARecipeAndExplicitPossiblyEmptyGlyphLayout(string mode)
     {
         var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
         var missing = router.Handle(GameMcpAcceptanceFixture.Request(
@@ -91,7 +93,7 @@ public sealed class GameMcpSpellLoadoutTests
             new JObject
             {
                 ["name"] = "game_spell_loadout",
-                ["arguments"] = new JObject { ["mode"] = "add" },
+                ["arguments"] = new JObject { ["mode"] = mode },
             }));
 
         var fields = missing.Body!["error"]!["data"]!["validationErrors"]!
@@ -116,6 +118,26 @@ public sealed class GameMcpSpellLoadoutTests
         Assert.Equal(GameMcpOperationClass.ReadOnly, operation.Classification);
         Assert.Equal(FirstRecipeId, operation.Uuid);
         Assert.Empty(operation.UuidCounts);
+    }
+
+    [Fact]
+    public void PreviewEnforcesTheSameExpectedRecipeTypeAsAdd()
+    {
+        var preview = SpellWorkbenchPricePreview.Priced(
+            FirstRecipeId,
+            Array.Empty<SpellWorkbenchPricePreviewCost>(),
+            affordable: true,
+            Guid.Empty);
+
+        var response = GameMcpTestHarness.Json(
+            GameMcpSpellWorkbenchProjection.ProjectPricePreview(
+                in preview,
+                "GlyphSO"));
+
+        Assert.Equal("unavailable", (string?)response["status"]);
+        Assert.Equal("native_type_mismatch", (string?)response["reasonCode"]);
+        Assert.Contains("SpellRecipeSO", (string?)response["reason"]);
+        Assert.Contains("GlyphSO", (string?)response["reason"]);
     }
 
     [Fact]

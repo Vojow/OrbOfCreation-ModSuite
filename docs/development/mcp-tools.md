@@ -436,6 +436,9 @@ The MCP-only loadout sequence is:
 The `uuid` means a recipe for `preview`/`add` and a runtime spell instance for `remove`/`move`.
 `glyphs` belongs to `preview`/`add` only; `destination` belongs to `move` only. Anything else is a
 named `unexpected_for_mode` validation failure rather than a silently ignored field.
+When supplied, `expectedNativeType` is asserted against the resolved recipe/output on both preview
+and mutation paths; preview never accepts a type assertion that the identical add or confirm would
+refuse.
 
 Add reproduces the library button's own admission order: it creates the native candidate, applies
 the recipe's selected level and the requested glyphs, then requires recipe usage requirements,

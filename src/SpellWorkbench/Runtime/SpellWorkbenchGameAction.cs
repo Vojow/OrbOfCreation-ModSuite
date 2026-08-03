@@ -450,7 +450,7 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             return false;
         if (!native.HasEnough(createCost!))
         {
-            ReadCreationCosts(native, createCost!, out var shortResourceId);
+            var shortResourceId = ReadShortResourceId(native, createCost!);
             return Refuse(
                 SpellWorkbenchPreflight.Unaffordable,
                 shortResourceId == Guid.Empty
@@ -649,6 +649,38 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         object createCost,
         out Guid shortResourceId)
     {
+        var totals = ReadCreationCostTotals(native, createCost);
+        var result = new SpellWorkbenchPricePreviewCost[totals.Count];
+        shortResourceId = Guid.Empty;
+        for (var index = 0; index < totals.Count; index++)
+        {
+            var value = totals[index];
+            result[index] = new SpellWorkbenchPricePreviewCost(value.Id, value.Cost);
+            if (shortResourceId == Guid.Empty &&
+                !native.HasResourceAmount(value.Resource, value.Cost))
+                shortResourceId = value.Id;
+        }
+        return result;
+    }
+
+    private static Guid ReadShortResourceId(
+        SpellWorkbenchNativeBindings native,
+        object createCost)
+    {
+        var totals = ReadCreationCostTotals(native, createCost);
+        for (var index = 0; index < totals.Count; index++)
+        {
+            var value = totals[index];
+            if (!native.HasResourceAmount(value.Resource, value.Cost))
+                return value.Id;
+        }
+        return Guid.Empty;
+    }
+
+    private static List<(Guid Id, object Resource, BigDouble Cost)> ReadCreationCostTotals(
+        SpellWorkbenchNativeBindings native,
+        object createCost)
+    {
         var totals = new Dictionary<Guid, (object Resource, BigDouble Cost)>();
         var order = new List<Guid>();
         var rows = native.ReadCostEntries(createCost);
@@ -670,16 +702,12 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
             totals.TryGetValue(id, out var current);
             totals[id] = (resource, current.Cost + native.ReadCostValue(row));
         }
-        var result = new SpellWorkbenchPricePreviewCost[order.Count];
-        shortResourceId = Guid.Empty;
+        var result = new List<(Guid Id, object Resource, BigDouble Cost)>(order.Count);
         for (var index = 0; index < order.Count; index++)
         {
             var id = order[index];
             var value = totals[id];
-            result[index] = new SpellWorkbenchPricePreviewCost(id, value.Cost);
-            if (shortResourceId == Guid.Empty &&
-                !native.HasResourceAmount(value.Resource, value.Cost))
-                shortResourceId = id;
+            result.Add((id, value.Resource, value.Cost));
         }
         return result;
     }

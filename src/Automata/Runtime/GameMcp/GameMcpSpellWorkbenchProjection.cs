@@ -6,8 +6,13 @@ namespace OrbAutomata.GameMcp;
 
 internal static class GameMcpSpellWorkbenchProjection
 {
-    internal static GameMcpValue ProjectPricePreview(in SpellWorkbenchPricePreview preview)
+    internal static GameMcpValue ProjectPricePreview(
+        in SpellWorkbenchPricePreview preview,
+        string expectedNativeType = "")
     {
+        if (!GameMcpWorldQuery.TryAssertPreviewNativeType(
+                "spell-recipes", expectedNativeType, out var typeMismatch))
+            return typeMismatch;
         if (!preview.Available)
         {
             return new JObject

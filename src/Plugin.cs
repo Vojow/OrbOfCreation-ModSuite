@@ -1433,7 +1433,10 @@ public sealed class Plugin : BaseUnityPlugin
             case "game_discover" when request.Mode == "preview":
                 execution = GameMcpToolExecution.Read(
                     GameMcpWorldQuery.ProjectDiscoveryPreview(
-                        context, request.Key, request.UuidCounts));
+                        context,
+                        request.Key,
+                        request.UuidCounts,
+                        request.ExpectedNativeType));
                 return true;
             case "game_spell_loadout" when request.Mode == "preview":
                 var glyphs = new SpellWorkbenchGlyphStack[request.UuidCounts.Length];
@@ -1456,7 +1459,9 @@ public sealed class Plugin : BaseUnityPlugin
                         "The ServiceCycle runtime is not active in this scene.");
                 }
                 execution = GameMcpToolExecution.Read(
-                    GameMcpSpellWorkbenchProjection.ProjectPricePreview(in preview));
+                    GameMcpSpellWorkbenchProjection.ProjectPricePreview(
+                        in preview,
+                        request.ExpectedNativeType));
                 return true;
             case "resource_read":
                 execution = ExecuteGameMcpResource(request.ResourceUri, context);

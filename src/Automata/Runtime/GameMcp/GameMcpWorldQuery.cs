@@ -2242,13 +2242,15 @@ internal static class GameMcpWorldQuery
     internal static GameMcpValue ProjectDiscoveryPreview(
         GameMcpFrameContext state,
         string surface,
-        GameMcpUuidCount[] components)
+        GameMcpUuidCount[] components,
+        string expectedNativeType)
     {
         if (state.World is null)
             return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
         var world = state.World.Snapshot;
         if (surface.Length == 0)
-            return ProjectSurfaceLessDiscoveryPreview(state, components);
+            return ProjectSurfaceLessDiscoveryPreview(
+                state, components, expectedNativeType);
 
         Guid outputId;
         string category;
@@ -2282,6 +2284,9 @@ internal static class GameMcpWorldQuery
                 ["reasonCode"] = reasonCode,
                 ["reason"] = reason,
             }.Freeze();
+        if (!TryAssertPreviewNativeType(
+                category, expectedNativeType, out var typeMismatch))
+            return typeMismatch;
         return new JObject
         {
             ["status"] = "available",
@@ -2292,7 +2297,8 @@ internal static class GameMcpWorldQuery
 
     private static GameMcpValue ProjectSurfaceLessDiscoveryPreview(
         GameMcpFrameContext state,
-        GameMcpUuidCount[] components)
+        GameMcpUuidCount[] components,
+        string expectedNativeType)
     {
         if (state.World is null)
             return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
@@ -2339,12 +2345,17 @@ internal static class GameMcpWorldQuery
             matchingSurfaces.Add(candidateSurface);
         }
         if (matchCount == 1)
+        {
+            if (!TryAssertPreviewNativeType(
+                    matchedCategory, expectedNativeType, out var typeMismatch))
+                return typeMismatch;
             return new JObject
             {
                 ["status"] = "available",
                 ["surface"] = matchedSurface,
                 ["output"] = ProjectPostState(state, matchedCategory, matchedId),
             }.Freeze();
+        }
         return new JObject
         {
             ["status"] = "unavailable",
@@ -2356,6 +2367,38 @@ internal static class GameMcpWorldQuery
                 : "The composition resolves on more than one discovery screen; specify surface.",
             ["matchingSurfaces"] = matchingSurfaces,
         }.Freeze();
+    }
+
+    internal static bool TryAssertPreviewNativeType(
+        string categoryName,
+        string expectedNativeType,
+        out GameMcpValue failure)
+    {
+        failure = null!;
+        if (expectedNativeType.Length == 0) return true;
+        if (!TryCategory(categoryName, out var category, out var categoryReason))
+        {
+            failure = new JObject
+            {
+                ["status"] = "unavailable",
+                ["reasonCode"] = "contract_unavailable",
+                ["reason"] = categoryReason,
+            }.Freeze();
+            return false;
+        }
+        if (string.Equals(
+                expectedNativeType,
+                category.ExpectedNativeType,
+                StringComparison.Ordinal))
+            return true;
+        failure = new JObject
+        {
+            ["status"] = "unavailable",
+            ["reasonCode"] = "native_type_mismatch",
+            ["reason"] = "The frame derived " + category.ExpectedNativeType +
+                " but expectedNativeType asserted " + expectedNativeType + ".",
+        }.Freeze();
+        return false;
     }
 
     internal static bool TryResolveGenericDiscovery(

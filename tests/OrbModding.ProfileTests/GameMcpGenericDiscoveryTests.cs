@@ -156,7 +156,8 @@ public sealed class GameMcpGenericDiscoveryTests
             {
                 new GameMcpUuidCount(ComponentId, 1),
                 new GameMcpUuidCount(ResourceId, 1),
-            }));
+            },
+            string.Empty));
 
         Assert.Equal("available", (string?)preview["status"]);
         Assert.Equal("glyphcraft", (string?)preview["surface"]);
@@ -178,12 +179,32 @@ public sealed class GameMcpGenericDiscoveryTests
             {
                 new GameMcpUuidCount(ComponentId, 1),
                 new GameMcpUuidCount(ResourceId, 1),
-            }));
+            },
+            string.Empty));
 
         Assert.Equal("unavailable", (string?)preview["status"]);
         Assert.Equal("discovery_recipe_ambiguous", (string?)preview["reasonCode"]);
         Assert.Contains("2 published glyphs", (string?)preview["reason"]);
         Assert.Null(preview["output"]);
+    }
+
+    [Fact]
+    public void PreviewEnforcesTheResolvedOutputNativeType()
+    {
+        var preview = Json(GameMcpWorldQuery.ProjectDiscoveryPreview(
+            Context(),
+            "glyphcraft",
+            new[]
+            {
+                new GameMcpUuidCount(ComponentId, 1),
+                new GameMcpUuidCount(ResourceId, 1),
+            },
+            "SpellRecipeSO"));
+
+        Assert.Equal("unavailable", (string?)preview["status"]);
+        Assert.Equal("native_type_mismatch", (string?)preview["reasonCode"]);
+        Assert.Contains("GlyphSO", (string?)preview["reason"]);
+        Assert.Contains("SpellRecipeSO", (string?)preview["reason"]);
     }
 
     [Fact]
