@@ -101,7 +101,7 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
     }
 
     [Fact]
-    public void AffordabilityRefusalWritesOnceAndLeavesConfigurationUntouched()
+    public void AffordabilityRefusalStaysLoudWithoutWritingABundle()
     {
         var config = new EditableConfig(AutoBuyOperationMode.Active);
         var responder = Responder(config, out var bundles, out var logged);
@@ -109,10 +109,11 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
         responder.ObserveRefusal(Report(RefusedOnAffordability()));
 
         Assert.Equal(AutoBuyOperationMode.Active, config.Current.AutoBuy.Mode);
-        Assert.Single(Directory.EnumerateFiles(bundles));
+        Assert.False(Directory.Exists(bundles));
         var message = Assert.Single(logged);
         Assert.Contains("skipped a purchase whose live resources had moved", message);
         Assert.Contains("Auto Buy remains enabled", message);
+        Assert.DoesNotContain("Diagnostic bundle", message);
     }
 
     [Fact]
@@ -306,6 +307,41 @@ public sealed class AutoBuyRefusalResponseTests : IDisposable
         Assert.Equal(8, bundles.Length);
         Assert.Contains(Path.GetFileName(path), bundles);
         Assert.True(File.Exists(Path.Combine(_directory, "someone-elses-file.txt")));
+    }
+
+    [Fact]
+    public void TheWriterKeepsOwnedBundlesWithinOneMiB()
+    {
+        Directory.CreateDirectory(_directory);
+        var oldContents = new string('x', 300 * 1024);
+        for (var index = 1; index <= 4; index++)
+            File.WriteAllText(
+                Path.Combine(_directory, $"autobuy-refusal-2026010{index}-000000000.txt"),
+                oldContents);
+
+        var writer = new AutoBuyRefusalBundleWriter(() => _directory);
+        Assert.True(writer.TryWrite("newest", WrittenAt, out var path));
+
+        var bundles = Directory.EnumerateFiles(_directory, "autobuy-refusal-*.txt").ToArray();
+        Assert.True(bundles.Sum(file => new FileInfo(file).Length) <= AutoBuyRefusalBundleWriter.RetainedBytes);
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public void AnOversizedBundleIsRefusedWithoutTouchingExistingEvidence()
+    {
+        Directory.CreateDirectory(_directory);
+        var existing = Path.Combine(_directory, "autobuy-refusal-20260101-000000000.txt");
+        File.WriteAllText(existing, "existing");
+        var writer = new AutoBuyRefusalBundleWriter(() => _directory);
+
+        Assert.False(writer.TryWrite(
+            new string('x', checked((int)AutoBuyRefusalBundleWriter.RetainedBytes + 1)),
+            WrittenAt,
+            out var path));
+
+        Assert.Equal(string.Empty, path);
+        Assert.Equal("existing", File.ReadAllText(existing));
     }
 
     private AutoBuyRefusalResponder Responder(

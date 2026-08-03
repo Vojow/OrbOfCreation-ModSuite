@@ -171,6 +171,15 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         Log = Logger;
 
+        var legacyObservability = AutomataLegacyObservabilityCleanup.Run(Paths.ConfigPath);
+        if (legacyObservability.ShouldLog)
+        {
+            if (legacyObservability.HasWarnings)
+                Logger.LogWarning(legacyObservability.Describe());
+            else
+                Logger.LogInfo(legacyObservability.Describe());
+        }
+
         RunAutomaticSaveBackup();
 
         // The read-only save backup above is the first startup gate. The assembly audit is next,
@@ -452,8 +461,8 @@ public sealed class Plugin : BaseUnityPlugin
                                         _configurationStore!.Current.AutoBuy),
                                 runtimeDiagnostics: RuntimeDiagnosticsRegistry.Shared,
                                 featureStatus: featureStatuses.AutoBuy,
-                                // Every refusal writes both halves. Affordability-only drift skips
-                                // and re-plans; structural contradictions stand the feature down.
+                                // Affordability drift skips and re-plans without a synchronous
+                                // bundle; structural contradictions capture once and stand down.
                                 refusalResponse: new AutoBuyRefusalResponder(
                                     () => _configurationStore!.Current.AutoBuy.Mode ==
                                         AutoBuyOperationMode.Active,
@@ -1324,6 +1333,16 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommand command,
         out GameMcpCommandResult result)
     {
+        if (command.SaveCapture)
+        {
+            var admission = GameMcpScreenshotBudget.BeforeCapture(
+                AutomataTraceRunRoot.Child("mcp-screenshots"));
+            if (!admission.IsAvailable)
+            {
+                result = SavedScreenshotBudgetResult(in admission);
+                return true;
+            }
+        }
         if (command.Kind == GameMcpCommandKind.Screenshot)
         {
             StartCoroutine(CaptureGameMcpAtEndOfFrame(
@@ -1430,6 +1449,12 @@ public sealed class Plugin : BaseUnityPlugin
             if (command.SaveCapture)
             {
                 var directory = AutomataTraceRunRoot.Child("mcp-screenshots");
+                var admission = GameMcpScreenshotBudget.BeforeCommit(directory, png.LongLength);
+                if (!admission.IsAvailable)
+                {
+                    CompleteGameMcpCommand(command, SavedScreenshotBudgetResult(in admission));
+                    yield break;
+                }
                 System.IO.Directory.CreateDirectory(directory);
                 var name = "mcp-" +
                     DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffffffZ") +
@@ -1467,6 +1492,24 @@ public sealed class Plugin : BaseUnityPlugin
         {
             if (texture is not null) Destroy(texture);
         }
+    }
+
+    private GameMcpCommandResult SavedScreenshotBudgetResult(
+        in GameMcpScreenshotBudgetAdmission admission)
+    {
+        var lifecycle = _lifecycleGeneration;
+        var configuration = _configurationStore?.CurrentGeneration.Value ?? 0;
+        return admission.Status == GameMcpScreenshotBudgetStatus.StorageUnavailable
+            ? GameMcpCommandResult.Faulted(
+                "screenshot_budget_unavailable",
+                "server defect: " + admission.Reason,
+                observedLifecycleGeneration: lifecycle,
+                observedConfigurationGeneration: configuration)
+            : GameMcpCommandResult.Rejected(
+                "screenshot_budget_reached",
+                admission.Reason,
+                observedLifecycleGeneration: lifecycle,
+                observedConfigurationGeneration: configuration);
     }
 
     private GameMcpCommandResult CaptureScreenCatalogGameMcp()

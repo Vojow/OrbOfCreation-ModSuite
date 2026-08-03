@@ -50,7 +50,9 @@ Do not commit the referenced BepInEx, Unity, Harmony, or game DLLs.
 - Candidates rank by cost ratio and stable UUID; there is no UUID-list filter or structure-effect priority tier.
 - Absolute and relative reserves default to zero; affordability modes provide the default spending margin.
 - Startup, warning, and error records remain enabled; explicit Runtime actions own deeper trace and journal evidence.
-- Suite automation logging emits the first info, warning, or error state immediately. Further
+- Routine per-action successes and ordinary no-ops do not enter the BepInEx log; the compact action
+  journal and Runtime outcome projection own them. Lifecycle, startup, shutdown, refusal, warning,
+  and error records remain. Suite automation logging emits the first retained state immediately. Further
   byte-identical occurrences collapse independently per severity: a changed message first emits the
   held count and span, then the new state, while an unchanged state emits a count-and-span heartbeat
   on the first occurrence at or beyond 60 seconds. Summaries repeat the exact original content for
@@ -130,15 +132,15 @@ Profiler-enabled debug builds start both this full trace and the ServiceCycle pe
 when the shared runtime is created. Closing the game stops both with the runtime-shutdown reason
 and flushes their accepted prefixes; release builds retain manual, opt-in recording.
 
-The compact decision journal starts once with the lifecycle-bound ServiceCycle runtime and records coalesced
-numeric service decisions under the stable `BepInEx/config/OrbOfCreation-ModSuite/trace/journal/` directory,
-which is deliberately not per-launch so its size cap governs one directory. It owns ten reusable
-blocks, checkpoints the current span once per minute, and initially retains 10,080 rolling segments. Those are
-live-validation settings, not a stable disk quota: the Runtime page reports accepted and written records,
-bytes, retained and evicted segments, buffer pressure, and terminal faults so the quota can follow measured
-rates. Journal initialization or writer failure detaches only observation; it does not stop Auto Harvest,
-start a replacement writer, or switch formats. Shutdown seals the accepted prefix and returns without waiting
-for disk I/O on Unity's main thread.
+The compact decision journal starts once with the lifecycle-bound ServiceCycle runtime under the stable
+`BepInEx/config/OrbOfCreation-ModSuite/trace/journal/` directory, which is deliberately not per-launch so
+one 64 MiB envelope governs the retained store. Schema 3 writes one fixed 80-byte sentinel per attempted
+action with candidate UUID, exact native type, list/view route, and one outcome; zero-action decisions
+coalesce. It owns ten reusable blocks, checkpoints once per minute, and derives a 6,476-segment retained
+limit that leaves room for one maximum atomic-commit temporary. An older schema is discarded with a loud
+count and recording starts fresh; there is no migration or dual reader. Journal initialization or writer
+failure detaches only observation; it does not stop automation, start a replacement writer, or switch
+formats. Shutdown seals the accepted prefix and returns without waiting for disk I/O on Unity's main thread.
 
 Portable tests measure the warmed journal control tick, pump, and always-on diagnostics across 64 successful
 cycles and keep every owner and worker sample within its reviewed 64-byte ceiling. Installed-game frame cost
@@ -162,7 +164,7 @@ A value that could not be read is not evidence. A candidate whose every cost row
 
 Every active native mutation now uses a capture, execute, capture, verify boundary. Auto Buy requires an exact queued-level delta, Auto Concept requires the exact queued assignment delta, spell leveling verifies native mastery advancement, Auto Cast verifies the audited `Spell.Fire` hook, and Auto Harvest requires one exact new native plot action. A no-op, partial, unexpectedly large, throwing, or unobservable result records structured before/after evidence and blocks that candidate or feature for the current lifecycle. Recovery is deliberately limited to scene, save-load, reset, or NG+ lifecycle invalidation; ordinary evaluation and configuration polling cannot silently retry an ambiguous mutation.
 
-When the game refuses a purchase Auto Buy planned, the boundary first asks *which fact moved*. It reads `IsAvailable()`, `IsMaxLevel()`, `IsMaxQueuedLevel()`, the game's verdict on the price, every live cost row and its spendable amount, plus elapsed collection time, world-generation drift, and earlier same-batch purchases touching those resources. A price-only refusal is expected snapshot staleness: that candidate is skipped, Auto Buy stays enabled, and a newer world collection is required before it plans again. A structural contradiction or a refusal with every readable term passing remains an invariant violation; those still terminate the batch, write the same full bundle, and turn Auto Buy's own setting off through the central configuration path. One prior structural mismatch otherwise repeated 1,988 times.
+When the game refuses a purchase Auto Buy planned, the boundary first asks *which fact moved*. It reads `IsAvailable()`, `IsMaxLevel()`, `IsMaxQueuedLevel()`, the game's verdict on the price, every live cost row and its spendable amount, plus elapsed collection time, world-generation drift, and earlier same-batch purchases touching those resources. A price-only refusal is expected snapshot staleness: that candidate is skipped, Auto Buy stays enabled, a newer world collection is required before it plans again, and no synchronous bundle is written. A structural contradiction or a refusal with every readable term passing remains an invariant violation; those terminate the batch, write one full bundle within the fixed eight-file/1 MiB diagnostic envelope, and turn Auto Buy's own setting off through the central configuration path. A refusal writes one actionable log line; bundle-capture failure stays in that line. One prior structural mismatch otherwise repeated 1,988 times.
 
 Feature health publishes Auto Buy, Auto Cast, Auto Concept, Spell Leveling, Auto Harvest, and Auto
 Items independently through Common. Controls and tooltips now separate saved configuration from

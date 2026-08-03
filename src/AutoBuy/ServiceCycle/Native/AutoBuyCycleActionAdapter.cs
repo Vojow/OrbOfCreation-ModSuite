@@ -179,14 +179,12 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         if (!queueRoomReadable)
         {
             Plugin.Log?.LogAutomataWarning(
-                AutoBuyPurchaseNarration.QueueRoomUnavailable(action.Kind, action.Uuid).Message);
+                AutoBuyPurchaseNarration.QueueRoomUnavailable(action.Kind, action.Uuid));
             return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
         }
 
         if (remainingRoom <= reservedSlots)
         {
-            Plugin.Log?.LogAutomataInfo(
-                AutoBuyPurchaseNarration.QueueReserveReached(action.Kind, action.Uuid, remainingRoom, reservedSlots).Message);
             return ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected);
         }
 
@@ -219,7 +217,8 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
             return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
         }
 
-        Narrate(action.Kind, action.Uuid, submission, action.Belief);
+        if (!submission.Verified)
+            Narrate(action.Kind, action.Uuid, submission);
         if (submission.Preflight == AutoBuyPurchasePreflight.NotAdmissible)
             ReportRefusal(in action, levels, in submission, in context);
         var result = Map(submission);
@@ -316,26 +315,15 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         return false;
     }
 
-    // Always-on human-readable decision line ("purchased X of Y" / "failed to purchase") so buying
-    // behaviour — including the accepted Pillar-A cascade where a later candidate becomes
-    // unaffordable — can be analysed from the log. The structured trace carries only the generic
-    // native call-outcome today; surfacing the level counts there is a tracked follow-up.
+    // One actionable warning for an actual refusal or failure. Successful actions are carried by the
+    // compact journal sentinel and must not turn the general BepInEx log into an action ledger.
     private static void Narrate(
         AutoBuyCandidateKind kind,
         Guid uuid,
-        in AutoBuyPurchaseSubmission submission,
-        in AutoBuyPlanBelief belief)
+        in AutoBuyPurchaseSubmission submission)
     {
-        var narration = AutoBuyPurchaseNarration.Describe(kind, uuid, in submission, in belief);
-        switch (narration.Level)
-        {
-            case AutoBuyPurchaseNarrationLevel.Warning:
-                Plugin.Log?.LogAutomataWarning(narration.Message);
-                break;
-            default:
-                Plugin.Log?.LogAutomataInfo(narration.Message);
-                break;
-        }
+        var warning = AutoBuyPurchaseNarration.DescribeWarning(kind, uuid, in submission);
+        if (warning is not null) Plugin.Log?.LogAutomataWarning(warning);
     }
 
     private bool Owns(AutoBuyCandidateKind kind)
