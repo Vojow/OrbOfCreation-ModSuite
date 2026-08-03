@@ -51,8 +51,10 @@ given game action.
 - **Auto Items** starts Disabled. Scrolls and Relics are selected by default behind the feature
   switch. Temporary Fruits, Potions, and Threads remain unused until you explicitly approve
   individual items in the picker.
-- **Auto Scribe** starts Disabled. An empty Roles value selects all supported producible roles;
-  `none` selects no roles. Use the listed role keys to narrow production.
+- **Auto Scribe** starts Disabled. An empty Roles value selects all supported producible roles and
+  `none` selects none. To narrow production, set Roles to a comma-separated selection of
+  `scribe.advancement`, `scribe.development`, `scribe.echo`, `scribe.excellence`,
+  `scribe.learning`, and `scribe.power`.
 - **Mentor** starts Disabled and uses `Left Alt + M` by default. Choose which mastery domains may
   receive shared XP, the source policy, sharing percentages, and whether the percentage is divided
   across recipients or granted to each recipient.
