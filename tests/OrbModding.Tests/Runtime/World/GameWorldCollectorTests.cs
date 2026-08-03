@@ -246,7 +246,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
-    public void ASpellsMasteryReadinessIsCollectedFromTheGamesOwnAnswer()
+    public void ASpellsMasteryReadinessAndAffordabilityAreCollectedFromTheGamesOwnAnswers()
     {
         // The one fact on a spell recipe that is not a field. Its threshold lives in a container the
         // snapshot does not publish, so MasteryXp has nothing to be compared against and the game's
@@ -266,6 +266,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             discovered = true,
             masteryLevel = 4,
             readyToLevel = false,
+            levelCost = new FakeSpellLevelCost { affordable = false },
         });
 
         var collector = Collector();
@@ -274,8 +275,10 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         Assert.True(WorldLookup.TryFind(world.SpellRecipes, ready, out var readyRow));
         Assert.True(readyRow.MasteryLevelReady);
+        Assert.True(readyRow.MasteryLevelAffordable);
         Assert.True(WorldLookup.TryFind(world.SpellRecipes, banking, out var bankingRow));
         Assert.False(bankingRow.MasteryLevelReady);
+        Assert.False(bankingRow.MasteryLevelAffordable);
 
         // Same mastery level on both: readiness is its own fact, not one the level implies.
         Assert.Equal(readyRow.MasteryLevel, bankingRow.MasteryLevel);

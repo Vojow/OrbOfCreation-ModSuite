@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 
 namespace OrbModding.Common.Runtime.World;
 
@@ -12,6 +13,7 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         BigDouble masteryXp,
         int masteryLevel,
         bool masteryLevelReady,
+        bool masteryLevelAffordable,
         bool hiddenDiscovery,
         bool isRequiredDiscovery,
         int penaltyUsageCost,
@@ -32,6 +34,7 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         MasteryXp = masteryXp;
         MasteryLevel = masteryLevel;
         MasteryLevelReady = masteryLevelReady;
+        MasteryLevelAffordable = masteryLevelAffordable;
         HiddenDiscovery = hiddenDiscovery;
         IsRequiredDiscovery = isRequiredDiscovery;
         PenaltyUsageCost = penaltyUsageCost;
@@ -70,6 +73,15 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
     /// </remarks>
     internal bool MasteryLevelReady { get; }
 
+    /// <summary>
+    /// Whether the game's current level-cost list says the next mastery level is affordable.
+    /// </summary>
+    /// <remarks>
+    /// This is planning evidence, not mutation authority. The action boundary asks the same native
+    /// cost again immediately before spending because resources may move after publication.
+    /// </remarks>
+    internal bool MasteryLevelAffordable { get; }
+
     internal bool HiddenDiscovery { get; }
 
     internal bool IsRequiredDiscovery { get; }
@@ -105,6 +117,8 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
     private Func<object, BigDouble>? _masteryXp;
     private Func<object, int>? _masteryLevel;
     private Func<object, bool>? _masteryLevelReady;
+    private MethodInfo? _getLevelCost;
+    private Func<object, bool>? _levelCostHasEnough;
     private Func<object, bool>? _hiddenDiscovery;
     private Func<object, bool>? _isRequiredDiscovery;
     private Func<object, int>? _penaltyUsageCost;
@@ -132,6 +146,14 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
         _masteryXp = bind.Field<BigDouble>("masteryExperience");
         _masteryLevel = bind.Field<int>("masteryLevel");
         _masteryLevelReady = bind.Call<bool>("IsReadyToLevelMastery");
+        _getLevelCost = type.GetMethod(
+            "GetLevelCost",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            types: Type.EmptyTypes,
+            modifiers: null);
+        var levelCost = bind.Elements(_getLevelCost?.ReturnType, "SpellRecipeSO.GetLevelCost()");
+        _levelCostHasEnough = levelCost.Call<bool>("HasEnough");
         _hiddenDiscovery = bind.Field<bool>("hiddenDiscovery");
         _isRequiredDiscovery = bind.Field<bool>("isRequiredDiscovery");
         _penaltyUsageCost = bind.Field<int>("penaltyUsageCost");
@@ -148,14 +170,18 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
         return bind.Failure;
     }
 
-    internal override WorldSpellRecipe Read(object entity) =>
-        new(
+    internal override WorldSpellRecipe Read(object entity)
+    {
+        var levelCost = _getLevelCost!.Invoke(entity, null);
+        var affordable = levelCost is not null && _levelCostHasEnough!(levelCost);
+        return new(
             _id!(entity),
             _discovered!(entity),
             _discRarityLevel!(entity),
             _masteryXp!(entity),
             _masteryLevel!(entity),
             _masteryLevelReady!(entity),
+            affordable,
             _hiddenDiscovery!(entity),
             _isRequiredDiscovery!(entity),
             _penaltyUsageCost!(entity),
@@ -169,4 +195,5 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
             _spellSpecialMod!(entity),
             _spellXpMod!(entity),
             _hasAlertedThisMastery!(entity));
+    }
 }

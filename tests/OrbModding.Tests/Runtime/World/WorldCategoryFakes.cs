@@ -768,6 +768,7 @@ internal sealed class FakeSpellRecipe
     public BigDouble masteryExperience;
     public int masteryLevel;
     public bool readyToLevel;
+    public FakeSpellLevelCost levelCost = new();
     public bool hiddenDiscovery;
     public bool isRequiredDiscovery;
     public int penaltyUsageCost;
@@ -785,6 +786,13 @@ internal sealed class FakeSpellRecipe
     public Guid GetGuid() => Identity;
 
     public bool IsReadyToLevelMastery() => readyToLevel;
+    public FakeSpellLevelCost GetLevelCost() => levelCost;
+}
+
+internal sealed class FakeSpellLevelCost
+{
+    public bool affordable = true;
+    public bool HasEnough() => affordable;
 }
 
 internal sealed class FakeSpellType

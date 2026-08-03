@@ -5,9 +5,8 @@ namespace OrbAutomata;
 
 /// <summary>
 /// The native execution boundary for Spell Leveling. The worker plans at most one mastery-level
-/// purchase per cycle; the adapter re-resolves the spell, re-reads the two facts the snapshot does not
-/// publish — the leveling prerequisite and the level's affordability — and submits the verified
-/// mutation.
+/// purchase per cycle; the adapter re-resolves the spell, checks the unpublished leveling prerequisite,
+/// revalidates readiness and affordability, and submits the verified mutation.
 /// </summary>
 internal interface ISpellLevelCycleActionPort
 {

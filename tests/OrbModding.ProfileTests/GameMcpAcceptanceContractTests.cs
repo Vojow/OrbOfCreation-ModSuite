@@ -554,6 +554,7 @@ internal static class GameMcpAcceptanceFixture
                     masteryXp: new BigDouble(12),
                     masteryLevel,
                     masteryLevelReady: true,
+                    masteryLevelAffordable: true,
                     hiddenDiscovery: false,
                     isRequiredDiscovery: true,
                     penaltyUsageCost: 1,

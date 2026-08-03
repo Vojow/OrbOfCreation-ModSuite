@@ -14,12 +14,12 @@ namespace OrbModding.Tests.Services.SpellLeveling.Runtime.ServiceCycle;
 
 /// <summary>
 /// Policy tests for the stateless Spell Leveling worker. Worlds are built directly so each term the
-/// evaluator tests — the configuration gate, discovery, mastery readiness, the ranking rule and the
+/// evaluator tests — the configuration gate, discovery, mastery readiness, affordability, the ranking rule and the
 /// capability the level-all upgrade grants — can be exercised on its own.
 /// </summary>
 /// <remarks>
-/// The worker deliberately cannot see the two facts the boundary re-reads, so nothing here asserts
-/// about prerequisites or affordability. That split is the subject of the action-adapter tests.
+/// Leveling prerequisites remain boundary-only. Affordability is published planning evidence and is
+/// re-read by the action boundary immediately before spending.
 /// </remarks>
 public sealed class SpellLevelCycleEvaluatorTests
 {
@@ -68,6 +68,34 @@ public sealed class SpellLevelCycleEvaluatorTests
         Assert.Empty(Plan(world, Config(), out _, out var metrics));
         Assert.Equal(1, metrics.Exclusions.NotReady);
         Assert.Equal(0, metrics.ReadySpells);
+    }
+
+    [Fact]
+    public void AReadySpellWhosePublishedCostIsUnaffordableIsQuietPlanningBackpressure()
+    {
+        var world = World(Spell(Ember, discovered: true, ready: true, affordable: false));
+
+        Assert.Empty(Plan(world, Config(), out _, out var metrics));
+        Assert.Equal(1, metrics.Exclusions.Unaffordable);
+        Assert.Equal(1, metrics.ReadySpells);
+        Assert.Equal(0, metrics.PlannedActions);
+    }
+
+    [Fact]
+    public void LevelAllPlansWhenAnyReadySpellIsPublishedAffordable()
+    {
+        var world = World(
+            new[]
+            {
+                Spell(Ember, discovered: true, ready: true, affordable: false, masteryLevel: 1),
+                Spell(Frost, discovered: true, ready: true, affordable: true, masteryLevel: 2),
+            },
+            LevelAllUpgrade(level: 1, queuedLevels: 0));
+
+        var action = Assert.Single(Plan(world, Config(), out _, out var metrics));
+        Assert.Equal(SpellLevelActionKind.All, action.Kind);
+        Assert.Equal(Frost, action.Uuid);
+        Assert.Equal(1, metrics.Exclusions.Unaffordable);
     }
 
     [Fact]
@@ -169,6 +197,7 @@ public sealed class SpellLevelCycleEvaluatorTests
         Guid id,
         bool discovered,
         bool ready,
+        bool affordable = true,
         int masteryLevel = 0) =>
         new(
             id,
@@ -177,6 +206,7 @@ public sealed class SpellLevelCycleEvaluatorTests
             masteryXp: default,
             masteryLevel,
             ready,
+            affordable,
             hiddenDiscovery: false,
             isRequiredDiscovery: false,
             penaltyUsageCost: 0,

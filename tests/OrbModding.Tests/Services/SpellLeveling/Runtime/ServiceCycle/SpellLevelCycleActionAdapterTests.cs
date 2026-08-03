@@ -10,8 +10,8 @@ namespace OrbModding.Tests.Services.SpellLeveling.Runtime.ServiceCycle;
 
 /// <summary>
 /// End-to-end tests for the Spell Leveling boundary: the real action adapter over the real native
-/// adapter over the game stubs. What the worker cannot see — the leveling prerequisite and the level's
-/// affordability — is decided here, so this is where those rules are pinned.
+/// adapter over the game stubs. The boundary decides the unpublished leveling prerequisite and
+/// revalidates the published readiness and affordability facts immediately before spending.
 /// </summary>
 public sealed class SpellLevelCycleActionAdapterTests : IDisposable
 {

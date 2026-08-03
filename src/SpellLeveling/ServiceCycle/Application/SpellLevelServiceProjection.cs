@@ -20,6 +20,7 @@ internal static class SpellLevelServiceProjection
     internal const int ExcludedUndiscoveredKey = 14;
     internal const int ExcludedNotReadyKey = 15;
     internal const int ExcludedOutrankedKey = 16;
+    internal const int ExcludedUnaffordableKey = 17;
 
     public static void Write(
         in SpellLevelCycleState state,
@@ -34,6 +35,7 @@ internal static class SpellLevelServiceProjection
         var exclusions = decision.Exclusions;
         output.Add(Key(ExcludedUndiscoveredKey), Integer(exclusions.Undiscovered));
         output.Add(Key(ExcludedNotReadyKey), Integer(exclusions.NotReady));
+        output.Add(Key(ExcludedUnaffordableKey), Integer(exclusions.Unaffordable));
         output.Add(Key(ExcludedOutrankedKey), Integer(exclusions.Outranked));
     }
 
