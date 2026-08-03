@@ -109,7 +109,7 @@ does not refresh it by hidden navigation.
 
 ## Tool surface
 
-The registry is exactly 38 tools. It is built once per lifecycle and never changes mid-session, so
+The registry is exactly 39 tools. It is built once per lifecycle and never changes mid-session, so
 there is no `tools/list_changed` notification. The rows below are in `tools/list` order.
 
 | Tool | Purpose |
@@ -140,6 +140,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_ritual` | Select a Ritual, set its starting level, activate it, or cancel its duration reward |
 | `game_level` | Buy one paid or bonus level from an ordinary level-list control |
 | `game_brewing_station` | Select Brewing Station ingredients/output, set level, or start/stop brewing |
+| `game_loadout` | Switch or edit the active player loadout, or save/load/clear an Equipment or Alchemy snapshot slot |
 | `game_challenge` | Select, activate, abandon, or fetch the Time/prestige challenge offers |
 | `game_prestige` | Confirm and perform the irreversible persistent reset |
 | `game_research` | Develop/queue, pause, resume, cancel, or apply a free research bonus level |
@@ -387,6 +388,32 @@ level range, recipe-loaded, and active-state admission on Unity's main thread. S
 observed selected value, level, or active transition and the full settled next-decision station
 state, because native selector changes can rebuild the other selections and stop brewing. Drain
 rows are planning facts, never accounting postconditions.
+
+### Player loadouts and snapshots
+
+`player-loadouts` lists the named, stable player loadout UUIDs. A detail row reports whether the
+loadout is selected, whether its Equipment and Alchemy sections are enabled, the current icon and
+color indexes, whether the native manager can switch now, and the named saved spell, Equipment,
+and Alchemy entries. `game_loadout(mode="select", uuid=...)` invokes the manager's whole
+save/deactivate/load/reactivate transaction after revalidating every stored reference through the
+owning spell, Equipment, or ordinary-Alchemy action admission. Success returns the observed
+selection change and the settled selected loadout.
+
+The selected player row also owns the three controls visible in the editor:
+`set_section` requires `section:"equipment"|"alchemy"` plus `enabled`; `rename` requires a name
+of at most 24 characters; `next_icon` and `next_color` advance one step through the same native
+lists as the UI. Arbitrary icon/color indexes and a free-standing save verb are absent because the
+screen exposes neither. Optional `expectedNativeType`, when supplied for these modes, must be
+`PlayerLoadout`.
+
+`snapshot-loadouts` identifies both the Alchemy and Equipment snapshot-list owners; each detail
+row exposes its kind, visible zero-based slots, populated state, and named saved entries.
+Snapshot rows themselves have no UUID, so `snapshot_save`, `snapshot_load`, and `snapshot_clear`
+take the owning list `uuid` plus `slot`. Save accepts only an empty slot, load/clear only a
+populated slot, and no overwrite mode exists. Optional native type must match the owning
+`AlchemySnapshotListVariable` or `EquipmentSnapshotListVariable`. Success returns the observed
+slot or active-section change from the settled world; usage capacity is admission only and no
+resource ledger is returned.
 
 ### Challenge decision loop
 

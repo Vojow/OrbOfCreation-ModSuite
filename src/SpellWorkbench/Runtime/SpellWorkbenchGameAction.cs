@@ -39,6 +39,124 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
 
+    internal bool TryValidateStoredSpell(
+        object spell,
+        out Guid spellId,
+        out Guid recipeId,
+        out object? usageCost,
+        out bool unique,
+        out string reason)
+    {
+        spellId = Guid.Empty;
+        recipeId = Guid.Empty;
+        usageCost = null;
+        unique = false;
+        reason = string.Empty;
+        if (Environment.CurrentManagedThreadId != _mainThreadId)
+        {
+            reason = "Spell loadout validation must run on the Unity main thread.";
+            return false;
+        }
+        if (_bindings is not { } native)
+        {
+            reason = _bindingFailure;
+            return false;
+        }
+        if (spell is null || spell.GetType() != native.SpellType)
+        {
+            reason = "A saved spell has the wrong native type.";
+            return false;
+        }
+        var guid = native.ReadSpellGuid(spell);
+        if (guid is null || (spellId = native.ReadGuidValue(guid)) == Guid.Empty)
+        {
+            reason = "A saved spell has no stable instance identity.";
+            return false;
+        }
+        var recipe = native.ReadSpellReference(spell);
+        if (recipe is null || recipe.GetType() != native.RecipeType ||
+            (recipeId = native.ReadIdentity(recipe)) == Guid.Empty)
+        {
+            reason = "A saved spell has no valid recipe identity.";
+            return false;
+        }
+        var resolution = _registry.Resolve(recipeId, native.RecipeType);
+        if (!resolution.IsResolved || !_registry.IsCurrent(resolution) ||
+            !ReferenceEquals(resolution.Value, recipe))
+        {
+            reason = EntityIdentityFormatter.Format(recipeId) +
+                " is not the current spell recipe instance.";
+            return false;
+        }
+        if (!native.IsDiscovered(recipe))
+        {
+            reason = EntityIdentityFormatter.Format(recipeId) + " has not been discovered.";
+            return false;
+        }
+
+        var glyphCounts = new Dictionary<Guid, int>();
+        var core = native.ReadRecipeGlyphs(recipe);
+        for (var index = 0; index < core.Count; index++)
+        {
+            var glyph = core[index];
+            if (glyph is null)
+            {
+                reason = "A saved spell has a missing core glyph.";
+                return false;
+            }
+            if (!TryValidateGlyph(native, glyph, native.ReadIdentity(glyph), false, out reason) ||
+                !IncrementGlyph(native, glyph, glyphCounts, out reason))
+                return false;
+        }
+        var augments = native.ReadSpellAugments(spell);
+        for (var index = 0; index < augments.Count; index++)
+        {
+            var glyph = augments[index];
+            if (glyph is null)
+            {
+                reason = "A saved spell has a missing augment glyph.";
+                return false;
+            }
+            if (!TryValidateGlyph(native, glyph, native.ReadIdentity(glyph), true, out reason) ||
+                !IncrementGlyph(native, glyph, glyphCounts, out reason))
+                return false;
+        }
+        if (!native.MeetsNonLevelRequirements(augments, spell))
+        {
+            reason = "The saved spell's glyph layout no longer meets its duration/toggle requirements.";
+            return false;
+        }
+        if (!native.HasMetUsageRequirements(recipe) && augments.Count == 0)
+        {
+            reason = "The saved spell no longer meets its usage requirements.";
+            return false;
+        }
+        usageCost = native.GetUsageCost(spell);
+        unique = native.IsUniqueSpell(spell);
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool IncrementGlyph(
+        SpellWorkbenchNativeBindings native,
+        object glyph,
+        Dictionary<Guid, int> counts,
+        out string reason)
+    {
+        var id = native.ReadIdentity(glyph);
+        counts.TryGetValue(id, out var count);
+        count++;
+        if (count > native.GetGlyphMaximumUsages(glyph))
+        {
+            reason = EntityIdentityFormatter.Format(id) +
+                " exceeds its live usable count in the saved spell.";
+            return false;
+        }
+        counts[id] = count;
+        reason = string.Empty;
+        return true;
+    }
+
     internal SpellWorkbenchSubmission Submit(in SpellWorkbenchAction action)
     {
         if (!TryResolveContext(

@@ -34,6 +34,7 @@ assets, or a live registry read belongs here.
 - [Native action surfaces](native-action-surfaces.md) — the purchase, consumable and crafting paths, already decompiled.
 - [Unified level controls](unified-level-native-pipeline.md) — the complete levelable type matrix, visible list callbacks, and usage-cost admission.
 - [Brewing Station lifecycle](crafting-station-native-pipeline.md) — the runtime station selectors, level dial, activation callback, and drain read.
+- [Loadout and snapshot pipeline](loadout-snapshot-native-pipeline.md) — player-loadout switching, section toggles, metadata controls, and positional snapshot lifecycle.
 
 The product-version-pinned authored model, progression graph, and census live under
 [`data/`](../../data/README.md).

@@ -36,6 +36,70 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
 
+    internal bool TryValidateStoredEntry(
+        object candidate,
+        int quantity,
+        out object? equipmentType,
+        out int typeMaximum,
+        out object? usageCost,
+        out string reason)
+    {
+        equipmentType = null;
+        typeMaximum = 0;
+        usageCost = null;
+        if (Environment.CurrentManagedThreadId != _mainThreadId)
+        {
+            reason = "Equipment loadout validation must run on the Unity main thread.";
+            return false;
+        }
+        if (_bindings is not { } native)
+        {
+            reason = _bindingFailure;
+            return false;
+        }
+        if (candidate is null || candidate.GetType() != native.EquipmentType)
+        {
+            reason = "A saved artifact has the wrong native type.";
+            return false;
+        }
+        var id = RuntimeIdentityRegistryBinding.Shared.ReadStableUuid(candidate);
+        if (id is null || id == Guid.Empty)
+        {
+            reason = "A saved artifact has no stable identity.";
+            return false;
+        }
+        var resolution = _registry.Resolve(id.Value, native.EquipmentType);
+        if (!resolution.IsResolved || !_registry.IsCurrent(resolution) ||
+            !ReferenceEquals(resolution.Value, candidate))
+        {
+            reason = EntityIdentityFormatter.Format(id.Value) +
+                " is not the current artifact instance.";
+            return false;
+        }
+        if (!native.IsCreated(candidate))
+        {
+            reason = EntityIdentityFormatter.Format(id.Value) + " has not been created.";
+            return false;
+        }
+        var maximum = Math.Max(native.MaximumStacks(candidate), 0);
+        if (quantity <= 0 || quantity > maximum)
+        {
+            reason = EntityIdentityFormatter.Format(id.Value) + " stores " + quantity +
+                " stacks, but the live maximum is " + maximum + ".";
+            return false;
+        }
+        equipmentType = native.ReadEquipmentType(candidate);
+        usageCost = native.UsageCost(candidate);
+        if (equipmentType is null || usageCost is null)
+        {
+            reason = "The saved artifact's type or usage cost is unavailable.";
+            return false;
+        }
+        typeMaximum = Math.Max(native.TypeMaximum(equipmentType), 0);
+        reason = string.Empty;
+        return true;
+    }
+
     internal EquipmentLoadoutSubmission Submit(in EquipmentLoadoutAction action)
     {
         if (Environment.CurrentManagedThreadId != _mainThreadId)

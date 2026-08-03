@@ -130,6 +130,8 @@ internal static class GameMcpEntityCapabilityMap
                 TryResolveGenericLevelType(world, target, out _, out reason),
             GameMcpCommandKind.CraftingStation =>
                 CraftingStationTarget(world, target, out reason),
+            GameMcpCommandKind.Loadout =>
+                TryResolveLoadoutType(world, target, out _, out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -147,6 +149,34 @@ internal static class GameMcpEntityCapabilityMap
             return true;
         }
         reason = "Brewing Station " + target + " is not present in the published world.";
+        return false;
+    }
+
+    internal static bool TryResolveLoadoutType(
+        GameWorldState world,
+        Guid target,
+        out string nativeType,
+        out string reason)
+    {
+        if (world is null) throw new ArgumentNullException(nameof(world));
+        if (Supports("player-loadouts", GameMcpCommandKind.Loadout) &&
+            WorldLoadoutLookup.TryFindPlayer(world.PlayerLoadouts, target, out _))
+        {
+            nativeType = "PlayerLoadout";
+            reason = string.Empty;
+            return true;
+        }
+        if (Supports("snapshot-loadouts", GameMcpCommandKind.Loadout) &&
+            WorldLoadoutLookup.TryFindSnapshot(world.SnapshotLoadouts, target, out var snapshot))
+        {
+            nativeType = snapshot.Kind == WorldSnapshotLoadoutKind.Alchemy
+                ? "AlchemySnapshotListVariable"
+                : "EquipmentSnapshotListVariable";
+            reason = string.Empty;
+            return true;
+        }
+        nativeType = string.Empty;
+        reason = "That player loadout or snapshot list is not present in the published world.";
         return false;
     }
 
@@ -476,6 +506,12 @@ internal static class GameMcpEntityCapabilityMap
         D("crafting-stations", "CraftingStructure", GameMcpCommandKind.CraftingStation),
         D("crafting-station-options", "CraftingStructureSO+TypeElement"),
         D("crafting-station-drains", "ResourceCostList"),
+        D("player-loadouts", "PlayerLoadout", GameMcpCommandKind.Loadout),
+        D("snapshot-loadouts", "AlchemySnapshotListVariable|EquipmentSnapshotListVariable",
+            GameMcpCommandKind.Loadout),
+        D("player-loadout-entries", "Spell|EquipmentSO|AlchemyRecipeSO"),
+        D("snapshot-slots", "AlchemySnapshot|EquipmentSnapshot"),
+        D("snapshot-entries", "EquipmentSO|AlchemyRecipeSO"),
         D("harvest-elements", "HarvestElementSO"),
         D("harvest-resources", "HarvestElementSO"),
         D("time-runes", "TimeRuneSO", GameMcpCommandKind.GenericDiscovery,

@@ -222,6 +222,27 @@ internal static class GameMcpWorldQuery
                 ["active"] = station.Active,
             }.Freeze();
         }
+        if (row is WorldPlayerLoadout playerLoadout)
+            return new JObject
+            {
+                ["uuid"] = playerLoadout.EntityId.ToString("D"),
+                ["name"] = playerLoadout.Name,
+                ["selected"] = playerLoadout.Selected,
+            }.Freeze();
+        if (row is WorldSnapshotLoadout snapshotLoadout)
+        {
+            var identity = EntityIdentityFormatter.Describe(
+                snapshotLoadout.EntityId, world.EntityIdentities);
+            return new JObject
+            {
+                ["uuid"] = snapshotLoadout.EntityId.ToString("D"),
+                ["name"] = identity.HasName
+                    ? identity.Name
+                    : SnapshotKind(snapshotLoadout.Kind) + " snapshots",
+                ["kind"] = SnapshotKind(snapshotLoadout.Kind),
+                ["slots"] = snapshotLoadout.Slots,
+            }.Freeze();
+        }
         return new GameMcpProjectedDomainValue(
             row,
             ListFields(category),
@@ -575,6 +596,7 @@ internal static class GameMcpWorldQuery
             GameMcpCommandKind.RitualLifecycle => ProjectRitualLifecycleDelta(state, command),
             GameMcpCommandKind.GenericLevel => ProjectGenericLevelDelta(state, command),
             GameMcpCommandKind.CraftingStation => ProjectCraftingStationDelta(state, command),
+            GameMcpCommandKind.Loadout => ProjectLoadoutDelta(state, command),
             GameMcpCommandKind.Research => ProjectResearchDelta(state, command),
             GameMcpCommandKind.GenericDiscovery => ProjectDiscoveryDelta(state, command),
             _ => ProjectPostState(state, PostStateCategory(command), command.TargetId),
@@ -883,6 +905,264 @@ internal static class GameMcpWorldQuery
         result["next"] = next;
         return result.Freeze();
     }
+
+    private static GameMcpValue ProjectLoadoutDelta(
+        GameMcpFrameContext state,
+        GameMcpCommand command)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        var before = Before(command);
+        if (command.DerivedNativeType == "PlayerLoadout")
+        {
+            if (!WorldLoadoutLookup.TryFindPlayer(world.PlayerLoadouts,
+                    command.TargetId, out var current))
+                return PostStateUnavailable("post_state_not_published",
+                    "the settled world has no player loadout with that UUID");
+            WorldPlayerLoadout previous = default;
+            var hadBefore = before is not null && WorldLoadoutLookup.TryFindPlayer(
+                before.PlayerLoadouts, command.TargetId, out previous);
+            var result = new JObject
+            {
+                ["uuid"] = current.EntityId.ToString("D"),
+                ["name"] = current.Name,
+            };
+            switch (command.Mode)
+            {
+                case "select":
+                    result["selected"] = new JObject
+                    {
+                        ["before"] = hadBefore && previous.Selected,
+                        ["after"] = current.Selected,
+                    };
+                    result["loadout"] = ProjectPlayerLoadout(world, in current);
+                    break;
+                case "set_equipment":
+                    result["equipment"] = new JObject
+                    {
+                        ["before"] = hadBefore && previous.SavesEquipment,
+                        ["after"] = current.SavesEquipment,
+                    };
+                    break;
+                case "set_alchemy":
+                    result["alchemy"] = new JObject
+                    {
+                        ["before"] = hadBefore && previous.SavesAlchemy,
+                        ["after"] = current.SavesAlchemy,
+                    };
+                    break;
+                case "rename":
+                    result["label"] = new JObject
+                    {
+                        ["before"] = hadBefore ? previous.Name : null,
+                        ["after"] = current.Name,
+                    };
+                    break;
+                case "next_icon":
+                    result["icon"] = new JObject
+                    {
+                        ["before"] = hadBefore ? previous.Icon : (int?)null,
+                        ["after"] = current.Icon,
+                    };
+                    break;
+                case "next_color":
+                    result["color"] = new JObject
+                    {
+                        ["before"] = hadBefore ? previous.Color : (int?)null,
+                        ["after"] = current.Color,
+                    };
+                    break;
+            }
+            return result.Freeze();
+        }
+
+        if (!WorldLoadoutLookup.TryFindSnapshot(world.SnapshotLoadouts,
+                command.TargetId, out var owner))
+            return PostStateUnavailable("post_state_not_published",
+                "the settled world has no Equipment or Alchemy snapshot list with that UUID");
+        var slot = command.Amount - 1;
+        var snapshot = ProjectSnapshotSlot(world, in owner, slot);
+        if (snapshot is null)
+            return PostStateUnavailable("post_state_not_published",
+                "the settled snapshot list has no requested slot");
+        var response = new JObject
+        {
+            ["uuid"] = owner.EntityId.ToString("D"),
+            ["name"] = SnapshotOwnerName(world, in owner),
+            ["kind"] = SnapshotKind(owner.Kind),
+            ["snapshot"] = snapshot,
+        };
+        if (command.Mode == "snapshot_load")
+            response["active"] = ProjectActiveLoadoutSection(world, owner.Kind);
+        return response.Freeze();
+    }
+
+    private static GameMcpValue ProjectPlayerLoadout(
+        GameWorldState world,
+        in WorldPlayerLoadout loadout)
+    {
+        var spells = new JArray();
+        var equipment = new JArray();
+        var alchemy = new JArray();
+        for (var index = 0; index < world.PlayerLoadoutEntries.Count; index++)
+        {
+            var entry = world.PlayerLoadoutEntries[index];
+            if (entry.OwnerId != loadout.EntityId) continue;
+            if (entry.Kind == WorldLoadoutEntryKind.Spell)
+            {
+                var row = new JObject
+                {
+                    ["instanceUuid"] = entry.EntryId.ToString("D"),
+                    ["spell"] = EntityReference(world, entry.ReferenceId),
+                };
+                spells.Add(row);
+            }
+            else
+            {
+                var row = EntityReference(world, entry.EntryId, entry.Quantity);
+                (entry.Kind == WorldLoadoutEntryKind.Equipment ? equipment : alchemy).Add(row);
+            }
+        }
+        var sections = new JObject();
+        if (spells.Count > 0) sections["spells"] = spells;
+        var equipmentSection = new JObject { ["saved"] = loadout.SavesEquipment };
+        if (equipment.Count > 0) equipmentSection["entries"] = equipment;
+        sections["equipment"] = equipmentSection;
+        var alchemySection = new JObject { ["saved"] = loadout.SavesAlchemy };
+        if (alchemy.Count > 0) alchemySection["entries"] = alchemy;
+        sections["alchemy"] = alchemySection;
+        var result = new JObject
+        {
+            ["uuid"] = loadout.EntityId.ToString("D"),
+            ["name"] = loadout.Name,
+            ["category"] = "player-loadouts",
+            ["nativeType"] = "PlayerLoadout",
+            ["selected"] = loadout.Selected,
+            ["sections"] = sections,
+            ["label"] = new JObject
+            {
+                ["icon"] = loadout.Icon,
+                ["color"] = loadout.Color,
+            },
+        };
+        if (!loadout.Selected) result["canSelect"] = loadout.CanSwitchNow;
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectSnapshotLoadout(
+        GameWorldState world,
+        in WorldSnapshotLoadout owner)
+    {
+        var slots = new JArray();
+        for (var slot = 0; slot < owner.Slots; slot++)
+        {
+            var row = ProjectSnapshotSlot(world, in owner, slot);
+            if (row is not null) slots.Add(row);
+        }
+        return new JObject
+        {
+            ["uuid"] = owner.EntityId.ToString("D"),
+            ["name"] = SnapshotOwnerName(world, in owner),
+            ["category"] = "snapshot-loadouts",
+            ["nativeType"] = owner.Kind == WorldSnapshotLoadoutKind.Alchemy
+                ? "AlchemySnapshotListVariable"
+                : "EquipmentSnapshotListVariable",
+            ["kind"] = SnapshotKind(owner.Kind),
+            ["slots"] = slots,
+        }.Freeze();
+    }
+
+    private static GameMcpValue? ProjectSnapshotSlot(
+        GameWorldState world,
+        in WorldSnapshotLoadout owner,
+        int slot)
+    {
+        WorldSnapshotSlot value = default;
+        var found = false;
+        for (var index = 0; index < world.SnapshotSlots.Count; index++)
+        {
+            var candidate = world.SnapshotSlots[index];
+            if (candidate.OwnerId != owner.EntityId || candidate.Slot != slot) continue;
+            value = candidate;
+            found = true;
+            break;
+        }
+        if (!found) return null;
+        var result = new JObject
+        {
+            ["slot"] = slot,
+            ["populated"] = value.Populated,
+        };
+        if (value.Populated)
+        {
+            var entries = new JArray();
+            for (var index = 0; index < world.SnapshotEntries.Count; index++)
+            {
+                var entry = world.SnapshotEntries[index];
+                if (entry.OwnerId == owner.EntityId && entry.Slot == slot)
+                    entries.Add(EntityReference(world, entry.EntryId, entry.Quantity));
+            }
+            result["entries"] = entries;
+        }
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectActiveLoadoutSection(
+        GameWorldState world,
+        WorldSnapshotLoadoutKind kind)
+    {
+        var entries = new JArray();
+        if (kind == WorldSnapshotLoadoutKind.Equipment)
+        {
+            for (var index = 0; index < world.Equipment.Count; index++)
+            {
+                var equipment = world.Equipment[index];
+                if (equipment.EquippedLevel > 0)
+                    entries.Add(EntityReference(world, equipment.EntityId,
+                        equipment.EquippedLevel));
+            }
+        }
+        else
+        {
+            for (var index = 0; index < world.AlchemyLoadout.Count; index++)
+            {
+                var alchemy = world.AlchemyLoadout[index];
+                if (alchemy.IsActive && alchemy.Amount > 0)
+                    entries.Add(EntityReference(world, alchemy.RecipeId, alchemy.Amount));
+            }
+        }
+        return entries.Freeze();
+    }
+
+    private static GameMcpValue EntityReference(
+        GameWorldState world,
+        Guid id,
+        int quantity = 0)
+    {
+        var identity = EntityIdentityFormatter.Describe(id, world.EntityIdentities);
+        var result = new JObject
+        {
+            ["uuid"] = id.ToString("D"),
+            ["name"] = identity.HasName ? identity.Name : id.ToString("D"),
+        };
+        if (identity.AssetName.Length > 0 &&
+            !string.Equals(identity.AssetName, identity.Name, StringComparison.Ordinal))
+            result["internalName"] = identity.AssetName;
+        if (quantity > 0) result["amount"] = quantity;
+        return result.Freeze();
+    }
+
+    private static string SnapshotOwnerName(
+        GameWorldState world,
+        in WorldSnapshotLoadout owner)
+    {
+        var identity = EntityIdentityFormatter.Describe(owner.EntityId, world.EntityIdentities);
+        return identity.HasName ? identity.Name : SnapshotKind(owner.Kind) + " snapshots";
+    }
+
+    private static string SnapshotKind(WorldSnapshotLoadoutKind kind) =>
+        kind == WorldSnapshotLoadoutKind.Alchemy ? "alchemy" : "equipment";
 
     private static bool TryFindLevelDecision(
         GameWorldState world,
@@ -1344,6 +1624,9 @@ internal static class GameMcpWorldQuery
             _ => string.Empty,
         },
         GameMcpCommandKind.CraftingStation => "crafting-stations",
+        GameMcpCommandKind.Loadout => command.DerivedNativeType == "PlayerLoadout"
+            ? "player-loadouts"
+            : "snapshot-loadouts",
         GameMcpCommandKind.Research => "research",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
@@ -1912,6 +2195,10 @@ internal static class GameMcpWorldQuery
             ? ProjectConceptRecipe(world, in conceptRecipe)
             : row is WorldCraftingStation station
             ? ProjectCraftingStation(world, in station)
+            : row is WorldPlayerLoadout playerLoadout
+            ? ProjectPlayerLoadout(world, in playerLoadout)
+            : row is WorldSnapshotLoadout snapshotLoadout
+            ? ProjectSnapshotLoadout(world, in snapshotLoadout)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -4404,6 +4691,10 @@ internal static class GameMcpWorldQuery
             ? ProjectConceptRecipe(world, in conceptRecipe)
             : row is WorldCraftingStation station
             ? ProjectCraftingStation(world, in station)
+            : row is WorldPlayerLoadout playerLoadout
+            ? ProjectPlayerLoadout(world, in playerLoadout)
+            : row is WorldSnapshotLoadout snapshotLoadout
+            ? ProjectSnapshotLoadout(world, in snapshotLoadout)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -4500,6 +4791,11 @@ internal static class GameMcpWorldQuery
             Entity(nameof(GameWorldState.CraftingStations), world => world.CraftingStations),
             Composite(nameof(GameWorldState.CraftingStationOptions), world => world.CraftingStationOptions),
             Composite(nameof(GameWorldState.CraftingStationDrains), world => world.CraftingStationDrains),
+            Entity(nameof(GameWorldState.PlayerLoadouts), world => world.PlayerLoadouts),
+            Composite(nameof(GameWorldState.PlayerLoadoutEntries), world => world.PlayerLoadoutEntries),
+            Entity(nameof(GameWorldState.SnapshotLoadouts), world => world.SnapshotLoadouts),
+            Composite(nameof(GameWorldState.SnapshotSlots), world => world.SnapshotSlots),
+            Composite(nameof(GameWorldState.SnapshotEntries), world => world.SnapshotEntries),
             Entity(nameof(GameWorldState.HarvestElements), world => world.HarvestElements),
             Entity(nameof(GameWorldState.HarvestResources), world => world.HarvestResources),
             Entity(nameof(GameWorldState.TimeRunes), world => world.TimeRunes),
@@ -4613,6 +4909,8 @@ internal static class GameMcpWorldQuery
         },
         "crafting-station-options" or "crafting-station-drains" =>
             new[] { "crafting-stations" },
+        "player-loadouts" or "player-loadout-entries" or "snapshot-loadouts" or
+            "snapshot-slots" or "snapshot-entries" => new[] { "loadouts" },
         "requirement-native-verdicts" => new[] { "requirement-native-verdicts" },
         "consumables" => new[] { "consumables", "consumable-inventory" },
         _ => new[] { category },
@@ -4734,6 +5032,16 @@ internal static class GameMcpWorldQuery
             new[] { "stationId", "kind", "optionId", "available" },
         "crafting-station-drains" =>
             new[] { "stationId", "resourceId", "amount" },
+        "player-loadouts" => new[]
+        {
+            "entityId", "name", "selected", "savesEquipment", "savesAlchemy",
+            "icon", "color", "canSwitchNow",
+        },
+        "player-loadout-entries" =>
+            new[] { "ownerId", "kind", "entryId", "referenceId", "quantity" },
+        "snapshot-loadouts" => new[] { "entityId", "kind", "slots" },
+        "snapshot-slots" => new[] { "ownerId", "slot", "populated" },
+        "snapshot-entries" => new[] { "ownerId", "slot", "entryId", "quantity" },
         "harvest-elements" => new[]
         {
             "entityId", "masteryLevel", "masteryXp", "instances", "harvestTime",

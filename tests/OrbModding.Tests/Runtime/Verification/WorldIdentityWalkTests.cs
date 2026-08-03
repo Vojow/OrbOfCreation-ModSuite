@@ -88,6 +88,9 @@ public sealed class WorldIdentityWalkTests
     /// candidate, list, and view whose identities belong to their primary tables.
     /// <c>CraftingStationOptions</c> and <c>CraftingStationDrains</c> describe selectors and costs
     /// keyed by a runtime station whose own row owns the identity. <c>CollectionCategories</c> is
+    /// <c>PlayerLoadoutEntries</c>, <c>SnapshotSlots</c>, and <c>SnapshotEntries</c> are saved-entry
+    /// and owner/slot relations keyed by the player or snapshot-list rows that own their UUIDs.
+    /// <c>CollectionCategories</c> is
     /// availability evidence about one collector pass, not a native
     /// row and not a second identity namespace. <c>ScribeWork</c>,
     /// <c>StructureEnchantments</c>, <c>ScrollTargets</c>, and
@@ -134,6 +137,9 @@ public sealed class WorldIdentityWalkTests
         "PrerequisiteLinkTiers",
         "CraftingStationOptions",
         "CraftingStationDrains",
+        "PlayerLoadoutEntries",
+        "SnapshotSlots",
+        "SnapshotEntries",
     };
 
     /// <summary>

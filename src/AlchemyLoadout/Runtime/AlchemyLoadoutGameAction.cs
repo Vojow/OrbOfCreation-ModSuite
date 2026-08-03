@@ -39,6 +39,76 @@ internal sealed class AlchemyLoadoutGameAction : IDisposable
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
 
+    internal bool TryValidateStoredEntry(
+        object candidate,
+        int quantity,
+        out int freeUses,
+        out object? usageCost,
+        out string reason)
+    {
+        freeUses = 0;
+        usageCost = null;
+        if (Environment.CurrentManagedThreadId != _mainThreadId)
+        {
+            reason = "Alchemy loadout validation must run on the Unity main thread.";
+            return false;
+        }
+        if (_bindings is not { } native)
+        {
+            reason = _bindingFailure;
+            return false;
+        }
+        if (candidate is null || candidate.GetType() != native.RecipeType)
+        {
+            reason = "A saved Alchemy entry has the wrong native type.";
+            return false;
+        }
+        var id = RuntimeIdentityRegistryBinding.Shared.ReadStableUuid(candidate);
+        if (id is null || id == Guid.Empty)
+        {
+            reason = "A saved Alchemy entry has no stable identity.";
+            return false;
+        }
+        var resolution = _registry.Resolve(id.Value, native.RecipeType);
+        if (!resolution.IsResolved || !_registry.IsCurrent(resolution) ||
+            !ReferenceEquals(resolution.Value, candidate))
+        {
+            reason = EntityIdentityFormatter.Format(id.Value) +
+                " is not the current Alchemy recipe instance.";
+            return false;
+        }
+        if (!_classifier.TryInitialize(out reason)) return false;
+        var classification = _classifier.ClassifyRecipe(candidate);
+        if (!classification.IsMutationGrade ||
+            classification.Domain != AlchemyGameplayDomain.OrdinaryAlchemy)
+        {
+            reason = EntityIdentityFormatter.Format(id.Value) +
+                " is not an ordinary Alchemy loadout recipe.";
+            return false;
+        }
+        if (!native.Discovered(candidate))
+        {
+            reason = EntityIdentityFormatter.Format(id.Value) + " has not been discovered.";
+            return false;
+        }
+        var maximum = Math.Max(native.MaximumUses(candidate), 0);
+        if (quantity <= 0 || quantity > maximum)
+        {
+            reason = EntityIdentityFormatter.Format(id.Value) + " stores " + quantity +
+                " uses, but the live maximum is " + maximum + ".";
+            return false;
+        }
+        freeUses = Math.Max(native.FreeUses(candidate), 0);
+        usageCost = native.UsageCost(candidate);
+        if (usageCost is null)
+        {
+            reason = "The saved Alchemy recipe's usage cost is unavailable.";
+            return false;
+        }
+        reason = string.Empty;
+        return true;
+    }
+
     internal AlchemyLoadoutSubmission Submit(in AlchemyLoadoutAction action)
     {
         if (Environment.CurrentManagedThreadId != _mainThreadId)

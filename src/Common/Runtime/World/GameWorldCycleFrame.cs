@@ -139,6 +139,11 @@ internal sealed class GameWorldCycleFrame
     internal WorldSampleBuffer<WorldCraftingStation, WorldCraftingStation> CraftingStations { get; } = new();
     internal WorldRelationBuffer<WorldCraftingStationOption> CraftingStationOptions { get; } = new();
     internal WorldRelationBuffer<WorldCraftingStationDrain> CraftingStationDrains { get; } = new();
+    internal WorldSampleBuffer<WorldPlayerLoadout, WorldPlayerLoadout> PlayerLoadouts { get; } = new();
+    internal WorldRelationBuffer<WorldLoadoutEntry> PlayerLoadoutEntries { get; } = new();
+    internal WorldSampleBuffer<WorldSnapshotLoadout, WorldSnapshotLoadout> SnapshotLoadouts { get; } = new();
+    internal WorldRelationBuffer<WorldSnapshotSlot> SnapshotSlots { get; } = new();
+    internal WorldRelationBuffer<WorldSnapshotEntry> SnapshotEntries { get; } = new();
     internal WorldSampleBuffer<WorldHarvestElement, WorldHarvestElement> HarvestElements { get; } = new();
     internal WorldSampleBuffer<RawHarvestResourceSample, WorldHarvestResource> HarvestResources { get; } = new();
     internal WorldSampleBuffer<WorldTimeRune, WorldTimeRune> TimeRunes { get; } = new();
@@ -326,6 +331,13 @@ internal static class GameWorldFrameDeriver
                 frame.CraftingStationOptions),
             CraftingStationDrains = WorldCraftingStationDeriver.BuildDrains(
                 frame.CraftingStationDrains),
+            PlayerLoadouts = frame.PlayerLoadouts.Build(
+                WorldIdentityDeriver<WorldPlayerLoadout>.Shared),
+            PlayerLoadoutEntries = WorldLoadoutDeriver.BuildEntries(frame.PlayerLoadoutEntries),
+            SnapshotLoadouts = frame.SnapshotLoadouts.Build(
+                WorldIdentityDeriver<WorldSnapshotLoadout>.Shared),
+            SnapshotSlots = WorldLoadoutDeriver.BuildSlots(frame.SnapshotSlots),
+            SnapshotEntries = WorldLoadoutDeriver.BuildSnapshotEntries(frame.SnapshotEntries),
             HarvestElements = frame.HarvestElements.Build(WorldIdentityDeriver<WorldHarvestElement>.Shared),
             HarvestResources = frame.HarvestResources.Build(new WorldHarvestResourceDeriver(frame.FrameGlobals)),
             TimeRunes = frame.TimeRunes.Build(WorldIdentityDeriver<WorldTimeRune>.Shared),

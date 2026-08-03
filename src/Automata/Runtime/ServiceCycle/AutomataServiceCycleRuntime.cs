@@ -36,6 +36,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly GenericLevelGameAction? _genericLevel;
     private readonly CraftingStationGameAction? _craftingStations;
     private readonly CraftingInstanceLifecycleGameAction? _craftingInstances;
+    private readonly LoadoutGameAction? _loadouts;
     private readonly ChallengeGameAction? _challenges;
     private readonly PrestigeGameAction? _prestige;
     private readonly ResearchGameAction? _research;
@@ -62,6 +63,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         GenericLevelGameAction? genericLevel = null,
         CraftingStationGameAction? craftingStations = null,
         CraftingInstanceLifecycleGameAction? craftingInstances = null,
+        LoadoutGameAction? loadouts = null,
         ChallengeGameAction? challenges = null,
         PrestigeGameAction? prestige = null,
         ResearchGameAction? research = null)
@@ -84,6 +86,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _genericLevel = genericLevel;
         _craftingStations = craftingStations;
         _craftingInstances = craftingInstances;
+        _loadouts = loadouts;
         _challenges = challenges;
         _prestige = prestige;
         _research = research;
@@ -156,6 +159,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _genericLevel?.InvalidateLifecycle();
         _craftingStations?.InvalidateLifecycle();
         _craftingInstances?.InvalidateLifecycle();
+        _loadouts?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
         _prestige?.InvalidateLifecycle();
         _research?.InvalidateLifecycle();
@@ -225,6 +229,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteGenericLevel(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.CraftingStation)
                 return ExecuteCraftingStation(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.Loadout)
+                return ExecuteLoadout(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Challenge)
                 return ExecuteChallenge(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Prestige)
@@ -695,6 +701,39 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             GameMcpCraftingStationProjection.Project(in submission));
     }
 
+    private GameMcpCommandResult ExecuteLoadout(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_loadouts is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared player-loadout GameAction was not composed", lifecycle,
+                configurationGeneration);
+        GameMcpNativeActionAdmission.AssertNativeType(command, command.DerivedNativeType);
+        var kind = command.Mode switch
+        {
+            "select" => LoadoutActionKind.Select,
+            "set_equipment" => LoadoutActionKind.SetEquipmentSection,
+            "set_alchemy" => LoadoutActionKind.SetAlchemySection,
+            "rename" => LoadoutActionKind.Rename,
+            "next_icon" => LoadoutActionKind.NextIcon,
+            "next_color" => LoadoutActionKind.NextColor,
+            "snapshot_save" => LoadoutActionKind.SnapshotSave,
+            "snapshot_load" => LoadoutActionKind.SnapshotLoad,
+            "snapshot_clear" => LoadoutActionKind.SnapshotClear,
+            _ => throw new ArgumentException("unsupported loadout mode " + command.Mode),
+        };
+        var enabled = string.Equals(command.PayloadValue, "true", StringComparison.Ordinal);
+        var action = new LoadoutAction(kind, command.TargetId, command.Amount - 1,
+            enabled, command.PayloadValue, command.ExpectedLifecycleGeneration);
+        var submission = _loadouts.Submit(in action);
+        var result = LoadoutActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason,
+            GameMcpLoadoutProjection.Project(in submission));
+    }
+
     private GameMcpCommandResult ExecuteResearch(
         GameMcpCommand command,
         long lifecycle,
@@ -1074,6 +1113,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _genericLevel?.Dispose();
             _craftingStations?.Dispose();
             _craftingInstances?.Dispose();
+            _loadouts?.Dispose();
             _challenges?.Dispose();
             _prestige?.Dispose();
             _research?.Dispose();

@@ -1049,6 +1049,7 @@ public sealed class GameMcpWorldEnvelopeTests
                 "crafting-decisions",
                 "concept-instances",
                 "consumable-inventory",
+                "loadouts",
             })
             .Distinct(StringComparer.Ordinal)
             .Select(category => string.Equals(
@@ -1168,6 +1169,7 @@ public sealed class GameMcpWorldEnvelopeTests
                 "crafting-decisions",
                 "concept-instances",
                 "consumable-inventory",
+                "loadouts",
             })
             .Distinct(StringComparer.Ordinal)
             .Select(Clean)
@@ -1219,6 +1221,7 @@ public sealed class GameMcpWorldEnvelopeTests
                 "crafting-decisions",
                 "concept-instances",
                 "consumable-inventory",
+                "loadouts",
             })
             .Distinct(StringComparer.Ordinal)
             .Select(category => string.Equals(

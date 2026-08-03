@@ -387,6 +387,24 @@ internal sealed class GameMcpProtocolRouter
                 if (builder.Mode == "set_level")
                     builder.Amount = RequiredInt(arguments, "level", 1, int.MaxValue);
                 break;
+            case "game_loadout":
+                builder.Mode = RequireOneOf(arguments, "mode", "select", "set_section",
+                    "rename", "next_icon", "next_color", "snapshot_save",
+                    "snapshot_load", "snapshot_clear");
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                if (builder.Mode == "set_section")
+                {
+                    builder.Key = RequireOneOf(arguments, "section", "equipment", "alchemy");
+                    builder.SerializedValue = OptionalBool(arguments, "enabled", false)
+                        ? "true"
+                        : "false";
+                }
+                if (builder.Mode == "rename")
+                    builder.SerializedValue = RequireString(arguments, "name");
+                if (builder.Mode.StartsWith("snapshot_", StringComparison.Ordinal))
+                    builder.SlotIndex = RequiredInt(arguments, "slot", 0, int.MaxValue);
+                break;
             case "game_challenge":
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "select", "activate", "abandon", "fetch_time", "fetch_prestige");
@@ -484,7 +502,7 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
-            "game_ritual" or "game_level" or "game_brewing_station" when
+            "game_ritual" or "game_level" or "game_brewing_station" or "game_loadout" when
                 !(name == "game_discover" && request.Mode == "preview") &&
                 !(name == "game_spell_loadout" && request.Mode == "preview") =>
                 GameMcpOperationClass.Gameplay,
@@ -514,7 +532,7 @@ internal sealed class GameMcpProtocolRouter
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
-            "game_ritual" or "game_level" or "game_brewing_station" =>
+            "game_ritual" or "game_level" or "game_brewing_station" or "game_loadout" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_navigate" or "game_continue" =>
@@ -863,6 +881,32 @@ internal sealed class GameMcpProtocolRouter
                 readOnly: false,
                 idempotent: false),
             Tool(
+                "game_loadout",
+                "Manage player loadouts and snapshots",
+                "Select or edit the active player loadout, or save, load, and clear visible Equipment or Alchemy snapshot slots.",
+                ModeSchema(ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema("select", "set_section", "rename", "next_icon", "next_color",
+                            "snapshot_save", "snapshot_load", "snapshot_clear"),
+                        ["uuid"] = StringSchema("Published player-loadout or snapshot-list UUID."),
+                        ["section"] = EnumSchema("equipment", "alchemy"),
+                        ["enabled"] = BooleanSchema("Whether the selected loadout saves that section."),
+                        ["name"] = StringSchema("Player-visible loadout label, at most 24 characters."),
+                        ["slot"] = IntegerSchema(0, int.MaxValue),
+                    },
+                    "mode", "uuid"),
+                    ModeRule("select", forbidden: new[] { "section", "enabled", "name", "slot" }),
+                    ModeRule("set_section", new[] { "section", "enabled" }, new[] { "name", "slot" }),
+                    ModeRule("rename", new[] { "name" }, new[] { "section", "enabled", "slot" }),
+                    ModeRule("next_icon", forbidden: new[] { "section", "enabled", "name", "slot" }),
+                    ModeRule("next_color", forbidden: new[] { "section", "enabled", "name", "slot" }),
+                    ModeRule("snapshot_save", new[] { "slot" }, new[] { "section", "enabled", "name" }),
+                    ModeRule("snapshot_load", new[] { "slot" }, new[] { "section", "enabled", "name" }),
+                    ModeRule("snapshot_clear", new[] { "slot" }, new[] { "section", "enabled", "name" })),
+                readOnly: false,
+                idempotent: false),
+            Tool(
                 "game_challenge",
                 "Select, queue, abandon, or fetch challenges",
                 "Drive one exact native challenge decision. Target modes return the changed state; fetch modes return the named offers needed for the next decision.",
@@ -1174,6 +1218,41 @@ internal sealed class GameMcpProtocolRouter
             if (mode != "set_level" && level)
                 errors.Add(ValidationError("unexpected_for_mode", "level",
                     "field 'level' is accepted only for mode 'set_level'"));
+        }
+
+        if (string.Equals(name, "game_loadout", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var section = arguments.ContainsKey("section");
+            var enabled = arguments.ContainsKey("enabled");
+            var label = arguments.ContainsKey("name");
+            var slot = arguments.ContainsKey("slot");
+            if (mode == "set_section" && !section)
+                errors.Add(ValidationError("missing_required", "section",
+                    "required field 'section' is missing for mode 'set_section'"));
+            if (mode == "set_section" && !enabled)
+                errors.Add(ValidationError("missing_required", "enabled",
+                    "required field 'enabled' is missing for mode 'set_section'"));
+            if (mode != "set_section" && section)
+                errors.Add(ValidationError("unexpected_for_mode", "section",
+                    "field 'section' is accepted only for mode 'set_section'"));
+            if (mode != "set_section" && enabled)
+                errors.Add(ValidationError("unexpected_for_mode", "enabled",
+                    "field 'enabled' is accepted only for mode 'set_section'"));
+            if (mode == "rename" && !label)
+                errors.Add(ValidationError("missing_required", "name",
+                    "required field 'name' is missing for mode 'rename'"));
+            if (mode != "rename" && label)
+                errors.Add(ValidationError("unexpected_for_mode", "name",
+                    "field 'name' is accepted only for mode 'rename'"));
+            var snapshot = mode is "snapshot_save" or "snapshot_load" or "snapshot_clear";
+            if (snapshot && !slot)
+                errors.Add(ValidationError("missing_required", "slot",
+                    "required field 'slot' is missing for mode '" + mode + "'"));
+            if (!snapshot && slot)
+                errors.Add(ValidationError("unexpected_for_mode", "slot",
+                    "field 'slot' is accepted only for snapshot modes"));
         }
 
         if (string.Equals(name, "game_spell_level", StringComparison.Ordinal) &&

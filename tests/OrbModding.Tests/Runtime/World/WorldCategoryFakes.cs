@@ -31,6 +31,7 @@ internal static class WorldCategoryFakes
         ["AlchemyInstance"] = typeof(FakeAlchemyInstance),
         ["AlchemyRecipeListVariable"] = typeof(FakeAlchemyRecipeList),
         ["SpellRecipeSO"] = typeof(FakeSpellRecipe),
+        ["Spell"] = typeof(FakeSpell),
         ["SpellManager"] = typeof(FakeSpellManager),
         ["SpellTypeSO"] = typeof(FakeSpellType),
         ["EquipmentSO"] = typeof(FakeEquipment),
@@ -98,6 +99,15 @@ internal static class WorldCategoryFakes
         // Nor is the equipped loadout: Spell belongs to no per-type registry either, so the list
         // holding it is reached by uuid the same way and the slots are read out of that list.
         ["SpellListVariable"] = typeof(FakeSpellLoadout),
+        ["LoadoutManager"] = typeof(FakeLoadoutManager),
+        ["PlayerLoadoutListVariable"] = typeof(FakePlayerLoadoutListVariable),
+        ["PlayerLoadout"] = typeof(FakePlayerLoadout),
+        ["PlayerLoadout+LoadoutLabel"] = typeof(FakePlayerLoadout.LoadoutLabel),
+        ["AlchemySnapshotListVariable"] = typeof(FakeAlchemySnapshotListVariable),
+        ["EquipmentSnapshotListVariable"] = typeof(FakeEquipmentSnapshotListVariable),
+        ["AlchemySnapshot"] = typeof(FakeAlchemySnapshot),
+        ["EquipmentSnapshot"] = typeof(FakeEquipmentSnapshot),
+        ["Stacked.StackedIdRecord`1"] = typeof(FakeLoadoutRecord<>),
 
         // Not categories either: an effect block's one modifier and one script are read past their
         // counts, and the lists holding them are typed as interfaces, so the two kinds the suite
@@ -114,6 +124,7 @@ internal static class WorldCategoryFakes
         FakeAlchemyManager.instance = new FakeAlchemyManager();
         FakeSpellRecipe.All.Clear();
         FakeSpellManager.instance = null;
+        FakeLoadoutManager.instance = new FakeLoadoutManager();
         FakeSpellType.All.Clear();
         FakeEquipment.All.Clear();
         FakeEquipmentManager.instance = new FakeEquipmentManager();
@@ -297,6 +308,29 @@ internal sealed class FakeCraftingResourceCostList
                 costs[existing].valueBig += incoming.valueBig;
         }
         return this;
+    }
+
+    public FakeCraftingResourceCostList Subtract(FakeCraftingResourceCostList other)
+    {
+        var result = new FakeCraftingResourceCostList
+        {
+            withinCapacity = withinCapacity,
+            affordable = affordable,
+            affordabilityUsesResourceAmounts = affordabilityUsesResourceAmounts,
+        };
+        foreach (var entry in costs)
+            result.costs.Add(new FakeCraftingResourceTuple
+                { resource = entry.resource, valueBig = entry.valueBig });
+        foreach (var entry in other.costs)
+        {
+            var existing = result.costs.FindIndex(row => ReferenceEquals(row.resource, entry.resource));
+            if (existing < 0)
+                result.costs.Add(new FakeCraftingResourceTuple
+                    { resource = entry.resource, valueBig = -entry.valueBig });
+            else
+                result.costs[existing].valueBig -= entry.valueBig;
+        }
+        return result;
     }
 
     internal FakeCraftingResourceCostList With(FakeResource resource, BigDouble amount)
@@ -783,11 +817,10 @@ internal sealed class FakeModifierRecord
     }
 }
 
-internal sealed class FakeAlchemyRecipe : global::IDiscoverable
+internal sealed class FakeAlchemyRecipe : FakeIdRegistry, global::IDiscoverable
 {
     public static readonly List<FakeAlchemyRecipe> All = new();
 
-    public Guid Identity = Guid.NewGuid();
     public bool discovered;
     public int maxLevel;
     public int advancementLevel;
@@ -796,7 +829,6 @@ internal sealed class FakeAlchemyRecipe : global::IDiscoverable
     public int masteryLevel;
     public BigDouble recipeTime;
 
-    public Guid GetGuid() => Identity;
     public bool isRequiredDiscovery;
     public bool isCompletionRecipe;
     public bool isAdvancementRecipe;
@@ -877,8 +909,26 @@ internal sealed class FakeAlchemyRecipeList
 internal sealed class FakeAlchemyInstanceList
 {
     public List<FakeAlchemyInstance> value = new();
+    public int maximum = 8;
 
     public bool CanAddInstance(FakeAlchemyRecipe recipe) => true;
+    public int GetMax() => maximum;
+
+    public FakeLoadoutRecord<FakeAlchemyRecipe> CreateStackedRecord()
+    {
+        var result = new FakeLoadoutRecord<FakeAlchemyRecipe>();
+        foreach (var instance in value)
+            if (instance.reference is not null && instance.quantity > 0)
+                result.Set(instance.reference, instance.quantity);
+        return result;
+    }
+
+    public void FromStackedRecord(FakeLoadoutRecord<FakeAlchemyRecipe> record)
+    {
+        value.Clear();
+        foreach (var entry in record.GetEntries())
+            value.Add(new FakeAlchemyInstance(entry.Item1) { quantity = entry.Item2 });
+    }
 }
 
 internal sealed class FakeAlchemyManager
@@ -998,6 +1048,7 @@ internal sealed class FakeSpellLoadout
     public int maximum = 8;
 
     public Guid GetGuid() => Identity;
+    public List<FakeSpell?> GetAll() => value;
     public int GetUsedSpots() => value.Count(spell => spell is not null);
     public int GetMax() => maximum;
     public bool HasEmptySpot() => GetUsedSpots() < maximum;
@@ -1032,6 +1083,7 @@ internal sealed class FakeSpell
     public List<FakeGlyph> augmentGlyphs = new();
 
     public FakeSpellRecipe? get_reference() => spellReference;
+    public Guid GetId() => guidContainer.Identity;
 
     public bool IsEmpty() => empty;
     public bool IsCasting() => casting;
@@ -1091,11 +1143,10 @@ internal struct FakeSpellCostEntry
     }
 }
 
-internal sealed class FakeSpellRecipe : global::IDiscoverable
+internal sealed class FakeSpellRecipe : FakeIdRegistry, global::IDiscoverable
 {
     public static readonly List<FakeSpellRecipe> All = new();
 
-    public Guid Identity = Guid.NewGuid();
     public bool discovered;
     public int discRarityLevel;
     public BigDouble masteryExperience;
@@ -1121,7 +1172,6 @@ internal sealed class FakeSpellRecipe : global::IDiscoverable
     public bool NativeDiscoverVisible = true;
     public bool NativeCanDiscover = true;
 
-    public Guid GetGuid() => Identity;
 
     public bool IsReadyToLevelMastery() => readyToLevel;
     public List<FakeGlyph> GetGlyphRecipe() => new(coreRecipe);
@@ -1235,11 +1285,10 @@ internal sealed class FakeSpellType
     public Guid GetGuid() => Identity;
 }
 
-internal sealed class FakeEquipment : global::IDiscoverable
+internal sealed class FakeEquipment : FakeIdRegistry, global::IDiscoverable
 {
     public static readonly List<FakeEquipment> All = new();
 
-    public Guid Identity = Guid.NewGuid();
     public bool isCreated;
     public int discRarityLevel;
     public FakeEquipmentType equipmentType = new();
@@ -1261,7 +1310,6 @@ internal sealed class FakeEquipment : global::IDiscoverable
     public bool NativeDiscoverVisible = true;
     public bool NativeCanDiscover = true;
 
-    public Guid GetGuid() => Identity;
     public int GetMaxLevel() => maximumStacks;
     public FakeCraftingResourceCostList GetUsageCost() => usageCost;
     global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
@@ -1326,6 +1374,20 @@ internal sealed class FakeEquipmentList
         }
         stacks[equipment] = quantity;
         if (!value.Contains(equipment)) value.Add(equipment);
+    }
+
+    public FakeLoadoutRecord<FakeEquipment> GetStackedRecord()
+    {
+        var result = new FakeLoadoutRecord<FakeEquipment>();
+        foreach (var pair in stacks) result.Set(pair.Key, pair.Value);
+        return result;
+    }
+
+    public void SetStack(FakeLoadoutRecord<FakeEquipment> record)
+    {
+        stacks.Clear();
+        value.Clear();
+        foreach (var entry in record.GetEntries()) SetStacks(entry.Item1, entry.Item2);
     }
 }
 

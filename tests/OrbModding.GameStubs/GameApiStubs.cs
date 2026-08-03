@@ -95,6 +95,18 @@ public static class GlobalVariables
     public static AttributeSO GetCastingSpeedAttr() => CastingSpeedAttribute;
     public static AttributeSO GetHarvestSpeedAttr() => HarvestSpeedAttribute;
     public static AttributeSO GetMasteryExpAttr() => MasteryExperienceAttribute;
+    public static List<UnityEngine.Sprite> CustomSprites { get; } = new List<UnityEngine.Sprite>
+    {
+        new UnityEngine.Sprite(),
+        new UnityEngine.Sprite(),
+    };
+    public static List<UnityEngine.Color> CustomColors { get; } = new List<UnityEngine.Color>
+    {
+        new UnityEngine.Color(),
+        new UnityEngine.Color(),
+    };
+    public static List<UnityEngine.Sprite> GetCustomSprites() => CustomSprites;
+    public static List<UnityEngine.Color> GetCustomColors() => CustomColors;
 }
 
 public static class SettingsManager
@@ -1079,6 +1091,7 @@ public class Spell
     }
 
     public SpellRecipeSO? get_reference() => reference;
+    public Guid GetId() => guidContainer.guid;
 
     public string GetName() => DisplayName;
     public UnityEngine.Sprite GetIcon() => Icon;
@@ -1342,6 +1355,21 @@ public class ResourceCostList
         }
         affordable &= other.affordable;
         return this;
+    }
+    public ResourceCostList Subtract(ResourceCostList other)
+    {
+        var result = new ResourceCostList();
+        foreach (var row in costs)
+        {
+            var previous = other.costs.FirstOrDefault(
+                candidate => ReferenceEquals(candidate.resource, row.resource));
+            result.costs.Add(new ResourceTuple(
+                row.resource,
+                row.GetValue() - (previous.resource is null
+                    ? BigDouble.Zero
+                    : previous.GetValue())));
+        }
+        return result;
     }
     public ResourceCostList Apply(ValueModifier modifier)
     {
@@ -2127,6 +2155,156 @@ public sealed class SpellListVariable : GenericListVariable<Spell>, IEnumerable
     }
 
     public IEnumerator GetEnumerator() => value.GetEnumerator();
+
+    public List<Spell> GetAll() => new List<Spell>(value);
+}
+
+public sealed class PlayerLoadout
+{
+    public sealed class LoadoutLabel
+    {
+        private string labelName;
+        private int iconIndex;
+        private int colorIndex;
+
+        public LoadoutLabel(string name = "Loadout") => labelName = name;
+        public string GetName() => labelName;
+        public int GetIconIndex() => iconIndex;
+        public int GetColorIndex() => colorIndex;
+        public void SetName(string value) => labelName = value ?? string.Empty;
+        public void SetIconIndex(int value) => iconIndex = value;
+        public void SetColorIndex(int value) => colorIndex = value;
+    }
+
+    public GuidContainer guidContainer;
+    public LoadoutLabel label;
+    public bool isSelected;
+    public bool saveEquipment;
+    public bool saveAlchemy;
+    public List<Spell> spells = new List<Spell>();
+    public Stacked.StackedIdRecord<EquipmentSO> equipment =
+        new Stacked.StackedIdRecord<EquipmentSO>();
+    public Stacked.StackedIdRecord<AlchemyRecipeSO> alchemy =
+        new Stacked.StackedIdRecord<AlchemyRecipeSO>();
+    public bool SuppressSectionMutation { get; set; }
+    public bool SuppressLabelMutation { get; set; }
+
+    public PlayerLoadout() : this(Guid.NewGuid(), "Loadout")
+    {
+    }
+
+    public PlayerLoadout(Guid id, string name)
+    {
+        guidContainer = new GuidContainer(id);
+        label = new LoadoutLabel(name);
+    }
+
+    public Guid GetGuid() => guidContainer.guid;
+    public string GetName() => label.GetName();
+    public bool IsSelected() => isSelected;
+    public bool HasEquipment() => saveEquipment;
+    public bool HasAlchemy() => saveAlchemy;
+    public List<Spell> GetSpells() => new List<Spell>(spells);
+    public LoadoutLabel GetLabel() => label;
+    public void SetSaveEquipment(bool value)
+    {
+        if (!SuppressSectionMutation) saveEquipment = value;
+    }
+    public void SetSaveAlchemy(bool value)
+    {
+        if (!SuppressSectionMutation) saveAlchemy = value;
+    }
+}
+
+public sealed class PlayerLoadoutListVariable : IdScriptableObject
+{
+    public List<PlayerLoadout> value = new List<PlayerLoadout>();
+    public List<PlayerLoadout> GetAll() => new List<PlayerLoadout>(value);
+    public PlayerLoadout? GetActiveLoadout() => value.FirstOrDefault(loadout => loadout.isSelected);
+}
+
+public class SnapshotLoadout<T>
+{
+    protected Stacked.StackedIdRecord<T> record = new Stacked.StackedIdRecord<T>();
+    public bool SuppressSave { get; set; }
+    public bool SuppressClear { get; set; }
+    public bool IsEmpty() => record.GetTotalStacks() == 0;
+    public void Clear()
+    {
+        if (!SuppressClear) record = new Stacked.StackedIdRecord<T>();
+    }
+    public Stacked.StackedIdRecord<T> GetRecord() =>
+        new Stacked.StackedIdRecord<T>(record);
+    public void SaveSnapshot(Stacked.StackedIdRecord<T> value)
+    {
+        if (!SuppressSave) record = new Stacked.StackedIdRecord<T>(value);
+    }
+}
+
+public sealed class AlchemySnapshot : SnapshotLoadout<AlchemyRecipeSO>
+{
+}
+
+public sealed class EquipmentSnapshot : SnapshotLoadout<EquipmentSO>
+{
+}
+
+public sealed class AlchemySnapshotListVariable : IdScriptableObject
+{
+    public List<AlchemySnapshot> value = new List<AlchemySnapshot>();
+    public List<AlchemySnapshot> GetAll() => new List<AlchemySnapshot>(value);
+}
+
+public sealed class EquipmentSnapshotListVariable : IdScriptableObject
+{
+    public List<EquipmentSnapshot> value = new List<EquipmentSnapshot>();
+    public List<EquipmentSnapshot> GetAll() => new List<EquipmentSnapshot>(value);
+}
+
+public sealed class LoadoutManager
+{
+    public static LoadoutManager instance = new LoadoutManager();
+    public PlayerLoadoutListVariable playerLoadouts = new PlayerLoadoutListVariable();
+    public AlchemySnapshotListVariable alchemyLoadouts = new AlchemySnapshotListVariable();
+    public EquipmentSnapshotListVariable equipmentLoadouts = new EquipmentSnapshotListVariable();
+    public AlchemyInstanceListVariable activeAlchemy = new AlchemyInstanceListVariable();
+    public EquipmentListVariable activeEquipment = new EquipmentListVariable();
+    public SpellListVariable activeSpells = new SpellListVariable();
+    public bool SuppressSetLoadout { get; set; }
+    public bool ThrowAfterSetLoadout { get; set; }
+    public int SetLoadoutCalls { get; private set; }
+    public int SaveActiveCalls { get; private set; }
+
+    private bool CanSwapLoadouts() =>
+        activeSpells.value.All(spell => spell is null ||
+            !spell.IsCasting() && !spell.IsReadyingCast());
+
+    public void SetLoadout(PlayerLoadout target)
+    {
+        SetLoadoutCalls++;
+        if (!CanSwapLoadouts()) return;
+        if (!SuppressSetLoadout)
+        {
+            SaveActiveLoadout();
+            foreach (var loadout in playerLoadouts.value) loadout.isSelected = false;
+            target.isSelected = true;
+            activeSpells.value = new List<Spell>(target.spells);
+            if (target.saveEquipment) activeEquipment.SetStack(target.equipment);
+            if (target.saveAlchemy) activeAlchemy.FromStackedRecord(target.alchemy);
+        }
+        if (ThrowAfterSetLoadout)
+            throw new InvalidOperationException("injected failure after loadout switch");
+    }
+
+    public void SaveActiveLoadout()
+    {
+        SaveActiveCalls++;
+        var active = playerLoadouts.GetActiveLoadout();
+        if (active is null) return;
+        active.spells = new List<Spell>(activeSpells.value);
+        if (active.saveEquipment) active.equipment = activeEquipment.GetStackedRecord();
+        if (active.saveAlchemy) active.alchemy = activeAlchemy.CreateStackedRecord();
+    }
 }
 
 namespace Stacked
@@ -2171,7 +2349,8 @@ namespace Stacked
             return result;
         }
 
-        public List<TEntry> GetEntries() => new List<TEntry>(entries);
+        public List<(T, int)> GetEntries() =>
+            entries.Select(static entry => (entry.item, entry.quantity)).ToList();
     }
 
     public sealed class StackedIdRecord<T> : AbstractStackedRecord<T, StackedIdEntry<T>>
@@ -2182,7 +2361,7 @@ namespace Stacked
 
         public StackedIdRecord(StackedIdRecord<T> source)
         {
-            foreach (var entry in source.GetEntries()) Set(entry.item, entry.quantity);
+            foreach (var entry in source.GetEntries()) Set(entry.Item1, entry.Item2);
         }
 
         public StackedIdRecord(List<T> values)
@@ -2291,6 +2470,17 @@ public sealed class EquipmentListVariable : StackableListVariable<EquipmentSO>
 {
     public int GetTypesEquipped(EquipmentTypeSO equipmentType) =>
         value.Count(item => ReferenceEquals(item.equipmentType, equipmentType));
+
+    public Stacked.StackedIdRecord<EquipmentSO> GetStackedRecord() =>
+        new Stacked.StackedIdRecord<EquipmentSO>(itemStack);
+
+    public void SetStack(Stacked.StackedIdRecord<EquipmentSO> record)
+    {
+        itemStack = new Stacked.StackedIdRecord<EquipmentSO>(record);
+        value = record.GetItemList().Distinct().ToList();
+        foreach (var item in EquipmentSO.All)
+            item.Equip(itemStack.GetQuantity(item));
+    }
 }
 
 public sealed class EquipmentManager
@@ -2514,6 +2704,28 @@ public sealed class AlchemyInstanceListVariable : AbstractListVariable<AlchemyIn
 
     public void SetupMaxSlotsValue()
     {
+    }
+
+    public Stacked.StackedIdRecord<AlchemyRecipeSO> CreateStackedRecord()
+    {
+        var result = new Stacked.StackedIdRecord<AlchemyRecipeSO>();
+        foreach (var instance in value)
+            if (instance.reference is not null && instance.quantity > 0)
+                result.Set(instance.reference, instance.quantity);
+        return result;
+    }
+
+    public void FromStackedRecord(Stacked.StackedIdRecord<AlchemyRecipeSO> record)
+    {
+        value.Clear();
+        foreach (var entry in record.GetEntries())
+        {
+            value.Add(new AlchemyInstance(entry.Item1)
+            {
+                quantity = entry.Item2,
+                queuedQuantity = entry.Item2,
+            });
+        }
     }
 }
 

@@ -33,6 +33,8 @@ internal static class AutomataServiceCycleComposition
         Func<GenericLevelGameAction>? createGenericLevel = null,
         Func<CraftingStationGameAction>? createCraftingStations = null,
         Func<CraftingInstanceLifecycleGameAction>? createCraftingInstances = null,
+        Func<SpellWorkbenchGameAction, EquipmentLoadoutGameAction,
+            AlchemyLoadoutGameAction, LoadoutGameAction>? createLoadouts = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
         Func<ResearchGameAction>? createResearch = null)
@@ -57,6 +59,7 @@ internal static class AutomataServiceCycleComposition
                 createGenericLevel,
                 createCraftingStations,
                 createCraftingInstances,
+                createLoadouts,
                 createChallenges,
                 createPrestige,
                 createResearch);
@@ -95,6 +98,8 @@ internal static class AutomataServiceCycleComposition
         Func<GenericLevelGameAction>? createGenericLevel = null,
         Func<CraftingStationGameAction>? createCraftingStations = null,
         Func<CraftingInstanceLifecycleGameAction>? createCraftingInstances = null,
+        Func<SpellWorkbenchGameAction, EquipmentLoadoutGameAction,
+            AlchemyLoadoutGameAction, LoadoutGameAction>? createLoadouts = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
         Func<ResearchGameAction>? createResearch = null)
@@ -122,6 +127,7 @@ internal static class AutomataServiceCycleComposition
         GenericLevelGameAction? genericLevel = null;
         CraftingStationGameAction? craftingStations = null;
         CraftingInstanceLifecycleGameAction? craftingInstances = null;
+        LoadoutGameAction? loadouts = null;
         ChallengeGameAction? challenges = null;
         PrestigeGameAction? prestige = null;
         ResearchGameAction? research = null;
@@ -187,6 +193,13 @@ internal static class AutomataServiceCycleComposition
             genericLevel = createGenericLevel?.Invoke();
             craftingStations = createCraftingStations?.Invoke();
             craftingInstances = createCraftingInstances?.Invoke();
+            if (createLoadouts is not null)
+            {
+                if (spellWorkbench is null || equipmentLoadout is null || alchemyLoadout is null)
+                    throw new InvalidOperationException(
+                        "The player-loadout action requires spell, Equipment, and Alchemy actions.");
+                loadouts = createLoadouts(spellWorkbench, equipmentLoadout, alchemyLoadout);
+            }
             challenges = createChallenges?.Invoke();
             prestige = createPrestige?.Invoke();
             research = createResearch?.Invoke();
@@ -208,6 +221,7 @@ internal static class AutomataServiceCycleComposition
                 genericLevel,
                 craftingStations,
                 craftingInstances,
+                loadouts,
                 challenges,
                 prestige,
                 research);
@@ -226,6 +240,7 @@ internal static class AutomataServiceCycleComposition
             genericLevel?.Dispose();
             craftingStations?.Dispose();
             craftingInstances?.Dispose();
+            loadouts?.Dispose();
             challenges?.Dispose();
             prestige?.Dispose();
             research?.Dispose();

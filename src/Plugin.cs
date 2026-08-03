@@ -609,6 +609,17 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .ScribeOwnershipFailure)
+                    , createLoadouts: (spells, equipment, alchemy) => new LoadoutGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCapturePlayerLoadoutMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .PlayerLoadoutOwnershipFailure,
+                        spells,
+                        equipment,
+                        alchemy)
                     , createChallenges: () => new ChallengeGameAction(
                         readAutoHarvestLifecycleEpoch,
                         tryCaptureMutationPermit: () =>
@@ -1978,6 +1989,24 @@ public sealed class Plugin : BaseUnityPlugin
             nativeType = "CraftingStructure";
             if (request.Mode == "set_ingredient") amount = checked(request.SlotIndex + 1);
             else if (request.Mode == "set_level") amount = request.Amount;
+        }
+        else if (kind == GameMcpCommandKind.Loadout)
+        {
+            if (context.World is null)
+                preparationFailure = GameMcpCommandResult.Rejected(
+                    "world_not_published", context.RuntimeNotAvailableReason);
+            else if (!GameMcpEntityCapabilityMap.TryResolveLoadoutType(
+                         context.World.Snapshot, request.Uuid,
+                         out nativeType, out var loadoutReason))
+                preparationFailure = GameMcpCommandResult.Rejected(
+                    "loadout_unavailable", loadoutReason);
+            mode = request.Mode == "set_section"
+                ? request.Key == "equipment" ? "set_equipment" : "set_alchemy"
+                : request.Mode;
+            payloadKey = request.Key;
+            payloadValue = request.SerializedValue;
+            if (request.Mode.StartsWith("snapshot_", StringComparison.Ordinal))
+                amount = checked(request.SlotIndex + 1);
         }
         else if (kind == GameMcpCommandKind.Challenge)
             nativeType = "ChallengeSO";

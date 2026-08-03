@@ -58,7 +58,7 @@ internal sealed class SpellWorkbenchNativeBindings
         "discovery-tree-offer.guid-container-value",
     };
 
-    private SpellWorkbenchNativeBindings(Type recipeType, Type glyphType,
+    private SpellWorkbenchNativeBindings(Type recipeType, Type glyphType, Type spellType,
         Func<object?> manager, Func<IList> recipes,
         Func<object, object> core, Func<object, object> augments, Func<object, object> active,
         Func<object, IList> glyphValues, Func<object, IList> activeValues, Func<object, Guid> identity,
@@ -87,6 +87,7 @@ internal sealed class SpellWorkbenchNativeBindings
     {
         RecipeType = recipeType;
         GlyphType = glyphType;
+        SpellType = spellType;
         ReadManager = manager;
         ReadRecipes = recipes;
         ReadCore = core;
@@ -136,6 +137,7 @@ internal sealed class SpellWorkbenchNativeBindings
 
     internal Type RecipeType { get; }
     internal Type GlyphType { get; }
+    internal Type SpellType { get; }
     internal Func<object?> ReadManager { get; }
     internal Func<IList> ReadRecipes { get; }
     internal Func<object, object> ReadCore { get; }
@@ -266,7 +268,7 @@ internal sealed class SpellWorkbenchNativeBindings
             var guidValue = Method(guidType, "get_guid", typeof(Guid));
 
             bindings = new SpellWorkbenchNativeBindings(
-                recipeType, glyphType, StaticObject(managerInstance), StaticList(allRecipes),
+                recipeType, glyphType, spellType, StaticObject(managerInstance), StaticList(allRecipes),
                 ObjectField(selectedCore), ObjectField(selectedAugments), ObjectField(active),
                 ListField(listValue), ListField(activeValue), InstanceFunc<Guid>(identity),
                 InstanceList(recipeGlyphs), InstanceFunc<bool>(discovered),

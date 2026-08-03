@@ -96,6 +96,7 @@ internal sealed class GameWorldCollector
     private readonly WorldCraftingRecipeReader _craftingRecipes;
     private readonly WorldCraftingDecisionReader _craftingDecisions;
     private readonly WorldCraftingStationReader _craftingStations;
+    private readonly WorldLoadoutReader _loadouts;
     private readonly WorldCategoryReader<WorldHarvestElement, WorldHarvestElement> _harvestElements;
     private readonly WorldCategoryReader<RawHarvestResourceSample, WorldHarvestResource> _harvestResources;
     private readonly WorldCategoryReader<WorldTimeRune, WorldTimeRune> _timeRunes;
@@ -239,6 +240,7 @@ internal sealed class GameWorldCollector
         _craftingRecipes = new WorldCraftingRecipeReader(resolveType);
         _craftingDecisions = new WorldCraftingDecisionReader(resolveType);
         _craftingStations = new WorldCraftingStationReader(resolveType);
+        _loadouts = new WorldLoadoutReader(resolveType);
         _craftingRecipeAuthoring = new WorldCraftingRecipeAuthoringReader(_craftingRecipes);
         _harvestElements = Reader(new WorldHarvestElementBinder(), resolveType, static frame => frame.HarvestElements);
         _harvestResources = Reader(new WorldHarvestResourceBinder(), resolveType, static frame => frame.HarvestResources);
@@ -306,6 +308,7 @@ internal sealed class GameWorldCollector
             _craftingRecipeAuthoring, _craftingRecipes,
             _craftingDecisions,
             _craftingStations,
+            _loadouts,
             _harvestElements, _harvestResources, _timeRunes, _glyphs, _consumables,
             _consumableInventory,
             _scribeRelations,

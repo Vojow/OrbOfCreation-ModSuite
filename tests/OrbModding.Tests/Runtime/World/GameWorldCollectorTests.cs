@@ -157,8 +157,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(report.IsComplete, report.Describe());
         // Five primary entities, two purchase-view relations, three live prerequisite-verdict
         // rows, two Scribe queues, eight complete zero-candidate Scroll-target evidence rows,
-        // and one frame-local challenge-decision context row.
-        Assert.Equal(21, report.TotalSampled);
+        // one frame-local challenge-decision context row, and the two empty snapshot-list owners.
+        Assert.Equal(23, report.TotalSampled);
 
         Assert.True(WorldLookup.TryFind(world.Resources, mana, out var resource));
         Assert.Equal(60d, resource.Reading.Quantity.ToDouble());
@@ -557,13 +557,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(57, report.Categories.Length);
+        Assert.Equal(58, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "challenge decisions", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "ordinary alchemy loadout", "concept instances", "crafting stations", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
+                 new[] { "resources", "harvest resources", "time runes", "challenges", "challenge decisions", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "ordinary alchemy loadout", "concept instances", "crafting stations", "loadouts", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
@@ -627,6 +627,59 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, drainCount);
         Assert.Equal(resource.Identity, world.CraftingStationDrains[drainStart].ResourceId);
         Assert.Equal(3d, world.CraftingStationDrains[drainStart].Amount.ToDouble());
+    }
+
+    [Fact]
+    public void Player_loadouts_and_snapshot_slots_are_collected_with_named_entry_identities()
+    {
+        var spellRecipe = new FakeSpellRecipe { discovered = true };
+        var equipment = new FakeEquipment { isCreated = true };
+        var alchemy = new FakeAlchemyRecipe { discovered = true };
+        FakeSpellRecipe.All.Add(spellRecipe);
+        FakeEquipment.All.Add(equipment);
+        FakeAlchemyRecipe.All.Add(alchemy);
+
+        var player = new FakePlayerLoadout
+        {
+            isSelected = true,
+            saveEquipment = true,
+            saveAlchemy = true,
+        };
+        player.GetLabel().SetName("Boss setup");
+        player.spells.Add(new FakeSpell
+        {
+            guidContainer = new FakeReferencedEntity { Identity = Guid.NewGuid() },
+            spellReference = spellRecipe,
+        });
+        player.equipment.Set(equipment, 2);
+        player.alchemy.Set(alchemy, 3);
+        FakeLoadoutManager.instance.playerLoadouts.value.Add(player);
+
+        var equipmentSnapshot = new FakeEquipmentSnapshot();
+        var equipmentRecord = new FakeLoadoutRecord<FakeEquipment>();
+        equipmentRecord.Set(equipment, 2);
+        equipmentSnapshot.SaveSnapshot(equipmentRecord);
+        FakeLoadoutManager.instance.equipmentLoadouts.value.Add(equipmentSnapshot);
+        FakeLoadoutManager.instance.alchemyLoadouts.value.Add(new FakeAlchemySnapshot());
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLoadoutLookup.TryFindPlayer(world.PlayerLoadouts,
+            player.Identity, out var published));
+        Assert.Equal("Boss setup", published.Name);
+        Assert.True(published.Selected);
+        Assert.Equal(3, world.PlayerLoadoutEntries.Count);
+        Assert.Contains(world.PlayerLoadoutEntries.AsSpan().ToArray(),
+            row => row.Kind == WorldLoadoutEntryKind.Spell &&
+                   row.ReferenceId == spellRecipe.Identity);
+        Assert.Contains(world.SnapshotSlots.AsSpan().ToArray(),
+            row => row.OwnerId == FakeLoadoutManager.instance.equipmentLoadouts.Identity &&
+                   row.Slot == 0 && row.Populated);
+        Assert.Contains(world.SnapshotEntries.AsSpan().ToArray(),
+            row => row.EntryId == equipment.Identity && row.Quantity == 2);
     }
 
     [Fact]
@@ -2014,8 +2067,12 @@ public sealed class GameWorldCollectorTests : IDisposable
     private static class FakeGlobalVariables
     {
         private static readonly FakeCount MultiBuy = new(1);
+        private static readonly List<object> LoadoutIcons = new() { new object(), new object() };
+        private static readonly List<object> LoadoutColors = new() { new object(), new object() };
 
         public static FakeCount GetMultiBuy() => MultiBuy;
+        public static List<object> GetCustomSprites() => LoadoutIcons;
+        public static List<object> GetCustomColors() => LoadoutColors;
 
         public static void SetMultiBuy(int amount) => MultiBuy.SetValue(amount);
     }

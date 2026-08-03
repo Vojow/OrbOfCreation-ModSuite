@@ -39,6 +39,7 @@ internal enum GameMcpCommandKind
     RitualLifecycle = 28,
     GenericLevel = 29,
     CraftingStation = 30,
+    Loadout = 31,
 }
 
 internal static class GameMcpCommandKinds
@@ -52,7 +53,8 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.EquipmentLoadout or GameMcpCommandKind.Challenge or
             GameMcpCommandKind.Prestige or GameMcpCommandKind.Research or
             GameMcpCommandKind.AlchemyLoadout or GameMcpCommandKind.RitualLifecycle or
-            GameMcpCommandKind.GenericLevel or GameMcpCommandKind.CraftingStation;
+            GameMcpCommandKind.GenericLevel or GameMcpCommandKind.CraftingStation or
+            GameMcpCommandKind.Loadout;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -75,6 +77,7 @@ internal static class GameMcpCommandKinds
         "game_ritual" => GameMcpCommandKind.RitualLifecycle,
         "game_level" => GameMcpCommandKind.GenericLevel,
         "game_brewing_station" => GameMcpCommandKind.CraftingStation,
+        "game_loadout" => GameMcpCommandKind.Loadout,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -128,6 +131,7 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.RitualLifecycle => "game_ritual",
         GameMcpCommandKind.GenericLevel => "game_level",
         GameMcpCommandKind.CraftingStation => "game_brewing_station",
+        GameMcpCommandKind.Loadout => "game_loadout",
         _ => string.Empty,
     };
 }
@@ -761,6 +765,23 @@ internal static class GameMcpActionResultCodeNames
             if (code == CraftingStationActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == CraftingStationActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == CraftingStationActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.Loadout)
+        {
+            if (code == LoadoutActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == LoadoutActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == LoadoutActionResultCodes.IdentityUnavailable) return "identity_unavailable";
+            if (code == LoadoutActionResultCodes.WrongTargetType) return "wrong_loadout_surface";
+            if (code == LoadoutActionResultCodes.AlreadyInRequestedState) return "already_in_requested_state";
+            if (code == LoadoutActionResultCodes.SwitchBlocked) return "switch_blocked";
+            if (code == LoadoutActionResultCodes.EntryUnavailable) return "saved_entry_unavailable";
+            if (code == LoadoutActionResultCodes.SlotOutOfRange) return "slot_out_of_range";
+            if (code == LoadoutActionResultCodes.SlotEmpty) return "slot_empty";
+            if (code == LoadoutActionResultCodes.SlotOccupied) return "slot_occupied";
+            if (code == LoadoutActionResultCodes.NameOutOfRange) return "name_out_of_range";
+            if (code == LoadoutActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == LoadoutActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == LoadoutActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";

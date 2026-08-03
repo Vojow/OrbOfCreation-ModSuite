@@ -332,6 +332,7 @@ public sealed class GameMcpWorldQueryTests
             {
                 "plot-node-actions", "concept-instances", "plot-authoring",
                 "crafting-recipe-state", "crafting-decisions", "consumable-inventory",
+                "loadouts",
             })
             .Distinct(StringComparer.Ordinal)
             .Select(name => new WorldCollectionCategoryStatus(
@@ -508,7 +509,7 @@ public sealed class GameMcpProtocolSurfaceTests
             "game_purchase", "game_cast", "game_concept", "game_harvest",
             "game_spell_level", "game_casting_dial", "game_spell_loadout", "game_discover",
             "game_equipment", "game_alchemy", "game_ritual", "suite_config_set",
-            "game_brewing_station",
+            "game_brewing_station", "game_loadout",
             "suite_emergency_stop", "game_screenshot", "game_continue",
             "game_navigate", "game_tooltip",
             "game_targeting",

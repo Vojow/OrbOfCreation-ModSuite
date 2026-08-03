@@ -57,6 +57,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         { AutomationActionFamily.RitualLifecycle };
     private static readonly AutomationActionFamily[] GenericLevelFamilies =
         { AutomationActionFamily.GenericLevel };
+    private static readonly AutomationActionFamily[] PlayerLoadoutFamilies =
+        { AutomationActionFamily.PlayerLoadout };
     private static readonly AutomationActionFamily[] KnownExternalFamilies =
         { AutomationActionFamily.StructurePurchase, AutomationActionFamily.NativeMultiBuyOverride };
 
@@ -175,6 +177,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.RitualLifecycle);
     public bool TryCaptureGenericLevelMutationPermit() =>
         TryCaptureGameMcpOperationPermit(AutomationActionFamily.GenericLevel);
+    public bool TryCapturePlayerLoadoutMutationPermit() =>
+        TryCaptureGameMcpOperationPermit(AutomationActionFamily.PlayerLoadout);
     public string ItemsOwnershipFailure =>
         _itemsClaimFailure.Length != 0
             ? _itemsClaimFailure
@@ -211,6 +215,8 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         "The current MCP operation does not hold RitualLifecycle.";
     public string GenericLevelOwnershipFailure =>
         "The current MCP operation does not hold GenericLevel.";
+    public string PlayerLoadoutOwnershipFailure =>
+        "The current MCP operation does not hold PlayerLoadout.";
 
     public void RefreshLoadedPluginInventory(int pluginCount, Func<string, bool> isLoaded)
     {
@@ -507,6 +513,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.AlchemyLoadout => AlchemyLoadoutFamilies,
         GameMcpCommandKind.RitualLifecycle => RitualLifecycleFamilies,
         GameMcpCommandKind.GenericLevel => GenericLevelFamilies,
+        GameMcpCommandKind.Loadout => PlayerLoadoutFamilies,
         _ => Array.Empty<AutomationActionFamily>(),
     };
 
@@ -552,6 +559,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         AutomationActionFamily.AlchemyLoadout => false,
         AutomationActionFamily.RitualLifecycle => false,
         AutomationActionFamily.GenericLevel => false,
+        AutomationActionFamily.PlayerLoadout => false,
         _ => false,
     };
 

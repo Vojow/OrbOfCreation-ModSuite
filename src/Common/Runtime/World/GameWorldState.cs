@@ -151,6 +151,17 @@ public sealed record GameWorldState
     internal PublicationTable<WorldCraftingStationDrain> CraftingStationDrains { get; init; } =
         PublicationTable<WorldCraftingStationDrain>.Empty;
 
+    internal PublicationTable<WorldPlayerLoadout> PlayerLoadouts { get; init; } =
+        PublicationTable<WorldPlayerLoadout>.Empty;
+    internal PublicationTable<WorldLoadoutEntry> PlayerLoadoutEntries { get; init; } =
+        PublicationTable<WorldLoadoutEntry>.Empty;
+    internal PublicationTable<WorldSnapshotLoadout> SnapshotLoadouts { get; init; } =
+        PublicationTable<WorldSnapshotLoadout>.Empty;
+    internal PublicationTable<WorldSnapshotSlot> SnapshotSlots { get; init; } =
+        PublicationTable<WorldSnapshotSlot>.Empty;
+    internal PublicationTable<WorldSnapshotEntry> SnapshotEntries { get; init; } =
+        PublicationTable<WorldSnapshotEntry>.Empty;
+
     internal PublicationTable<WorldHarvestElement> HarvestElements { get; init; } =
         PublicationTable<WorldHarvestElement>.Empty;
 
