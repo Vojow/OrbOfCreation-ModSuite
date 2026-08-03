@@ -9,6 +9,8 @@ strict: true
 
 theme:
   name: material
+  palette:
+    scheme: slate
   features:
     - navigation.indexes
     - navigation.sections
@@ -17,6 +19,9 @@ theme:
 
 plugins:
   - search
+
+extra_css:
+  - assets/orb-theme.css
 
 markdown_extensions:
   - toc:
