@@ -60,12 +60,8 @@ internal static partial class ServiceCycleSemanticPayloadValidation
                     payload.Code == CommonActionResultCodes.Committed.Value &&
                     payload.ActionCount >= 0 && payload.CommittedCount <= payload.ActionCount &&
                     payload.ActionIndex == -1 && payload.UntouchedSuffixCount == 0 &&
-                    (payload.CommittedCount - payload.PublishedCount == 0 &&
-                        payload.MutationAttempts == 0 ? NativeTotalsAreZero(in payload) :
-                        payload.MutationAttempts >= payload.CommittedCount - payload.PublishedCount &&
-                        payload.MutationsCommitted >= payload.CommittedCount - payload.PublishedCount &&
-                        (payload.CommittedCount - payload.PublishedCount != 0 ||
-                            payload.MutationsCommitted == 0)),
+                    NativeTotalsAreCoherent(in payload) &&
+                    (payload.ActionCount != 0 || NativeTotalsAreZero(in payload)),
                     nameof(payload));
                 break;
             case ServiceCycleSemanticEventKind.BatchAborted:
@@ -76,9 +72,7 @@ internal static partial class ServiceCycleSemanticPayloadValidation
                     payload.ActionCount > 0 && payload.ActionIndex >= 0 &&
                     payload.CommittedCount <= payload.ActionIndex &&
                     payload.UntouchedSuffixCount == payload.ActionCount - payload.ActionIndex - 1 &&
-                    NativeTotalsAreCoherent(in payload) &&
-                    payload.MutationsCommitted >= payload.CommittedCount - payload.PublishedCount &&
-                    (payload.CommittedCount - payload.PublishedCount != 0 || payload.MutationsCommitted == 0),
+                    NativeTotalsAreCoherent(in payload),
                     nameof(payload));
                 break;
             case ServiceCycleSemanticEventKind.BatchOrphaned:
@@ -87,13 +81,7 @@ internal static partial class ServiceCycleSemanticPayloadValidation
                     payload.ActionCount >= 0 && payload.CommittedCount >= 0 &&
                     payload.CommittedCount <= payload.ActionCount && payload.ActionIndex == -1 &&
                     payload.UntouchedSuffixCount <= payload.ActionCount - payload.CommittedCount &&
-                    NativeTotalsAreCoherent(in payload) &&
-                    (payload.CommittedCount - payload.PublishedCount == 0 &&
-                        payload.MutationAttempts == 0 ? NativeTotalsAreZero(in payload) :
-                        payload.MutationAttempts >= payload.CommittedCount - payload.PublishedCount &&
-                        payload.MutationsCommitted >= payload.CommittedCount - payload.PublishedCount &&
-                        (payload.CommittedCount - payload.PublishedCount != 0 ||
-                            payload.MutationsCommitted == 0)), nameof(payload));
+                    NativeTotalsAreCoherent(in payload), nameof(payload));
                 break;
         }
     }

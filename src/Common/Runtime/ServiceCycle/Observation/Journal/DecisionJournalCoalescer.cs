@@ -8,6 +8,7 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
     private readonly IDecisionJournalRecordSink _sink;
     private readonly DecisionJournalRecord[] _open;
     private readonly bool[] _hasOpen;
+    private readonly ulong[] _actionCycles;
     private readonly MonotonicDuration _checkpointInterval;
     private MonotonicTimestamp _nextCheckpoint;
     private MonotonicTimestamp _lastObservedAt;
@@ -24,6 +25,7 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
         _open = new DecisionJournalRecord[serviceCapacity];
         _hasOpen = new bool[serviceCapacity];
+        _actionCycles = new ulong[serviceCapacity];
         _checkpointInterval = checkpointInterval;
         _nextCheckpoint = AddSaturated(startedAt, checkpointInterval);
         _lastObservedAt = startedAt;
@@ -32,11 +34,31 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
     public bool IsFaulted { get; private set; }
     internal bool IsStopped => _stopped;
 
+    public void ObserveAction(in DecisionJournalActionObservation observation)
+    {
+        if (IsFaulted) return;
+        EnsureRunning(observation.Fact.CompletedAt);
+        var index = ServiceIndex(observation.Service);
+        if (!AppendOpen(index)) return;
+        var record = DecisionJournalRecord.Action(in observation);
+        if (!_sink.TryAppend(in record))
+        {
+            IsFaulted = true;
+            return;
+        }
+        _actionCycles[index] = observation.Fact.Context.Cycle.Cycle.Value;
+    }
+
     public void Observe(in DecisionJournalObservation observation)
     {
         if (IsFaulted) return;
         EnsureRunning(observation.LastObservedAt);
         var index = ServiceIndex(observation.Service);
+        if (observation.Terminal.IsPresent && _actionCycles[index] == observation.Cycle)
+        {
+            _actionCycles[index] = 0;
+            return;
+        }
         var next = DecisionJournalRecord.Decision(in observation);
         if (!_hasOpen[index])
         {

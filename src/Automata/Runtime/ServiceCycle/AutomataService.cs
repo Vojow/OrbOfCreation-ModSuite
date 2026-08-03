@@ -30,6 +30,9 @@ internal delegate ServiceActionResult AutomataExecute<TAction>(
     in SuiteRuntimeConfiguration configuration,
     in ServiceActionContext context);
 
+internal delegate ServiceActionJournalAttribution AutomataDescribeAction<TAction>(
+    in TAction action);
+
 internal readonly struct AutomataServiceMetadata
 {
     internal AutomataServiceMetadata(
@@ -60,11 +63,13 @@ internal static class AutomataService
         in AutomataServiceMetadata metadata,
         AutomataWorkerFactory<TState, TAction> createWorker,
         AutomataStartPolicy shouldStart,
+        AutomataDescribeAction<TAction> describeAction,
         AutomataExecute<TAction> execute) =>
         new ComposedAutomataServiceDefinition<TState, TAction>(
             in metadata,
             createWorker,
             shouldStart,
+            describeAction,
             execute);
 
     /// <summary>
@@ -75,11 +80,13 @@ internal static class AutomataService
         AutomataSourceWorkerFactory<TState, TAction> createWorker,
         AutomataStartPolicy shouldStart,
         AutomataSourceCapture capture,
+        AutomataDescribeAction<TAction> describeAction,
         AutomataExecute<TAction> execute) =>
         new ComposedAutomataSourceDefinition<TState, TAction>(
             in metadata,
             createWorker,
             shouldStart,
             capture,
+            describeAction,
             execute);
 }

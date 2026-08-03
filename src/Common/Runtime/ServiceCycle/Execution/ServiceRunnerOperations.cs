@@ -66,6 +66,7 @@ internal readonly struct ServiceActionDispatch
 {
     internal ServiceActionDispatch(
         ServiceActionFact actionFact,
+        ServiceActionJournalAttribution attribution,
         bool batchTerminal,
         BatchReceipt receipt,
         ServiceFault fault = default,
@@ -73,6 +74,7 @@ internal readonly struct ServiceActionDispatch
         ServiceFaultRecoveryFact recoveredFault = default)
     {
         ActionFact = actionFact;
+        Attribution = attribution;
         BatchTerminal = batchTerminal;
         Receipt = receipt;
         Fault = fault;
@@ -81,6 +83,7 @@ internal readonly struct ServiceActionDispatch
     }
 
     internal ServiceActionFact ActionFact { get; }
+    internal ServiceActionJournalAttribution Attribution { get; }
     internal bool Attempted => ActionFact.IsPresent;
     internal ServiceActionResult Result => ActionFact.Result;
     internal bool BatchTerminal { get; }

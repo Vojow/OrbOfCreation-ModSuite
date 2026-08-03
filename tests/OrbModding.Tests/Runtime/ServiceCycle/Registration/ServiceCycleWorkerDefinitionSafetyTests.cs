@@ -79,6 +79,8 @@ public sealed class ServiceCycleWorkerDefinitionSafetyTests
             CreateWorkerDefinition() => new SafeWorker();
         public ServiceStartDecision ShouldStart(in SuiteRuntimeConfiguration config, in ServiceCycleStartContext context) =>
             ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
+        public ServiceActionJournalAttribution DescribeAction(in SafetyAction action) =>
+            ServiceActionJournalAttribution.Publication;
         public ServiceActionResult TryExecute(in SafetyAction action, in SuiteRuntimeConfiguration config, in ServiceActionContext context) =>
             ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected);
     }

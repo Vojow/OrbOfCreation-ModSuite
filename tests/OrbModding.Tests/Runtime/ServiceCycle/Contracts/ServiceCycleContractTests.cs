@@ -189,27 +189,12 @@ public sealed class ServiceCycleContractTests
         Assert.Throws<ArgumentException>(() => BatchReceipt.Terminated(
             cycle, new BatchId(12), actionCount: 1, committedCount: 0, terminalIndex: 0,
             skippedAction, new NativeMutationCallOutcome(1, 1, 0), new MonotonicTimestamp(45)));
-        Assert.Throws<ArgumentException>(() => BatchReceipt.Terminated(
-            cycle, new BatchId(5), actionCount: 3, committedCount: 1, terminalIndex: 1,
-            rejected, default, new MonotonicTimestamp(50)));
-        Assert.Throws<ArgumentException>(() => BatchReceipt.Completed(
-            cycle, new BatchId(6), actionCount: 2,
-            new NativeMutationCallOutcome(1, 1, 1), new MonotonicTimestamp(60)));
         Assert.Throws<ArgumentException>(() => BatchReceipt.Completed(
             cycle, new BatchId(7), actionCount: 0,
             new NativeMutationCallOutcome(1, 0, 0), new MonotonicTimestamp(70)));
         Assert.Throws<ArgumentException>(() => BatchReceipt.Orphaned(
             cycle, new BatchId(8), actionCount: 5, committedCount: 0,
             new NativeMutationCallOutcome(1, 0, 0), new MonotonicTimestamp(80)));
-
-        var terminalFault = ServiceActionResult.Faulted(
-            CommonActionResultCodes.AdapterFault,
-            ServiceNativeMutationEvidence.Observed(
-                NativeMutationOutcome.PostconditionFailed,
-                new NativeMutationCallOutcome(1, 1, 0)));
-        Assert.Throws<ArgumentException>(() => BatchReceipt.Terminated(
-            cycle, new BatchId(9), actionCount: 3, committedCount: 1, terminalIndex: 1,
-            terminalFault, new NativeMutationCallOutcome(1, 1, 1), new MonotonicTimestamp(90)));
 
         var emergencyAction = ServiceActionResult.Rejected(CommonActionResultCodes.EmergencyStop);
         var emergency = new EmergencyStopContext(

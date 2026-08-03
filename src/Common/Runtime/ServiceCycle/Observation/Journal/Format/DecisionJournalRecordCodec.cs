@@ -7,14 +7,7 @@ namespace OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Format;
 
 internal static class DecisionJournalRecordCodec
 {
-    internal const int RecordBytes = 512;
-    private const ushort HasWakeFlag = 1;
-    private const ushort HasProjectionFlag = 2;
-    private const int ProjectionOffset = 184;
-    private const int ProjectionEntryBytes = 16;
-    private const int PublishedActionsOffset = ProjectionOffset +
-        ServiceStateProjectionSnapshot.MaximumEntryCount * ProjectionEntryBytes;
-    private const int ReservedOffset = PublishedActionsOffset + 8;
+    internal const int RecordBytes = 80;
 
     internal static void Write(Span<byte> destination, in DecisionJournalRecord record)
     {
@@ -22,47 +15,18 @@ internal static class DecisionJournalRecordCodec
             throw new ArgumentException("A journal record requires its exact fixed-size destination.", nameof(destination));
         DecisionJournalRecordValidation.Validate(in record);
         destination.Clear();
-
-        WriteU16(destination, 0, (ushort)record.Kind);
-        var flags = (ushort)((record.HasWake ? HasWakeFlag : 0) |
-            (record.HasProjection ? HasProjectionFlag : 0));
-        WriteU16(destination, 2, flags);
-        WriteI32(destination, 4, record.TransitionCode);
-        WriteU64(destination, 8, record.Service.Value);
-        WriteU64(destination, 16, record.Lifecycle);
-        WriteU64(destination, 24, record.Configuration);
-        WriteU64(destination, 32, record.Strategy);
-        WriteU64(destination, 56, record.FirstCycle);
-        WriteU64(destination, 64, record.LastCycle);
-        WriteI64(destination, 72, record.FirstTimestampTicks);
-        WriteI64(destination, 80, record.LastTimestampTicks);
-        WriteI64(destination, 88, record.RepeatCount);
-        WriteI32(destination, 96, record.StartDecisionCode);
-        WriteI32(destination, 100, record.CaptureDecisionCode);
-        WriteI32(destination, 104, record.HasWake ? (int)record.Wake.Kind : 0);
-        WriteI32(destination, 108, (int)record.FaultCategory);
-        WriteI64(destination, 112, record.HasWake ? WakeValue(record.Wake) : 0);
-        WriteI32(destination, 120, record.FaultCode);
-        WriteI32(destination, 124, record.FirstFaultOccurrence);
-        WriteI32(destination, 128, record.LastFaultOccurrence);
-        WriteI32(destination, 132, (int)record.TerminalDisposition);
-        WriteI32(destination, 136, record.TerminalResultCode);
-        WriteI32(destination, 140, record.ActionCount);
-        WriteI64(destination, 144, record.CommittedActions);
-        WriteI64(destination, 152, record.NativeCallsAttempted);
-        WriteI64(destination, 160, record.MutationAttempts);
-        WriteI64(destination, 168, record.MutationsCommitted);
-        WriteI32(destination, 176, record.HasProjection ? record.Projection.Count : 0);
-        WriteI64(destination, PublishedActionsOffset, record.PublishedActions);
-
-        if (!record.HasProjection) return;
-        for (var index = 0; index < record.Projection.Count; index++)
+        destination[0] = (byte)record.Kind;
+        switch (record.Kind)
         {
-            var entry = record.Projection.GetEntry(index);
-            var offset = ProjectionOffset + index * ProjectionEntryBytes;
-            WriteI32(destination, offset, entry.Key.Value);
-            WriteI32(destination, offset + 4, (int)entry.Value.Kind);
-            WriteI64(destination, offset + 8, ProjectionValue(entry.Value));
+            case DecisionJournalRecordKind.DecisionSpan:
+                WriteDecision(destination, in record);
+                break;
+            case DecisionJournalRecordKind.Action:
+                WriteAction(destination, in record);
+                break;
+            default:
+                WriteTransition(destination, in record);
+                break;
         }
     }
 
@@ -70,152 +34,133 @@ internal static class DecisionJournalRecordCodec
     {
         try
         {
-            return ReadCore(source);
+            if (source.Length != RecordBytes) throw Invalid();
+            var kind = (DecisionJournalRecordKind)source[0];
+            var record = kind switch
+            {
+                DecisionJournalRecordKind.DecisionSpan => ReadDecision(source),
+                DecisionJournalRecordKind.Action => ReadAction(source),
+                _ => ReadTransition(source, kind),
+            };
+            DecisionJournalRecordValidation.Validate(in record);
+            return record;
         }
-        catch (FormatException)
-        {
-            throw;
-        }
-        catch (ArgumentException)
-        {
-            throw Invalid();
-        }
-        catch (OverflowException)
+        catch (FormatException) { throw; }
+        catch (Exception exception) when (exception is ArgumentException or OverflowException)
         {
             throw Invalid();
         }
     }
 
-    private static DecisionJournalRecord ReadCore(ReadOnlySpan<byte> source)
+    private static void WriteDecision(Span<byte> bytes, in DecisionJournalRecord record)
     {
-        // 40..56 held the capture-sequence range, which was a second counter in lockstep with the
-        // cycle range. Retired and burned rather than reused, so an older artifact fails closed here
-        // instead of decoding as whatever moved in.
-        if (source.Length != RecordBytes || ReadI32(source, 180) != 0 ||
-            !IsZero(source.Slice(40, 16)) || !IsZero(source.Slice(ReservedOffset)))
-            throw Invalid();
-        var flags = ReadU16(source, 2);
-        if ((flags & ~(HasWakeFlag | HasProjectionFlag)) != 0) throw Invalid();
-        var hasWake = (flags & HasWakeFlag) != 0;
-        var hasProjection = (flags & HasProjectionFlag) != 0;
-        var projection = ReadProjection(source, hasProjection);
-        var record = new DecisionJournalRecord(
-            (DecisionJournalRecordKind)ReadU16(source, 0),
-            TraceService(ReadU64(source, 8)),
-            ReadU64(source, 16),
-            ReadU64(source, 24),
-            ReadU64(source, 32),
-            ReadU64(source, 56),
-            ReadU64(source, 64),
-            ReadI64(source, 72),
-            ReadI64(source, 80),
-            ReadI64(source, 88),
-            ReadI32(source, 96),
-            ReadI32(source, 100),
-            hasWake,
-            ReadWake(ReadI32(source, 104), ReadI64(source, 112), hasWake),
-            hasProjection,
-            in projection,
-            (ServiceFaultCategory)ReadI32(source, 108),
-            ReadI32(source, 120),
-            ReadI32(source, 124),
-            ReadI32(source, 128),
-            (BatchTerminalDisposition)ReadI32(source, 132),
-            ReadI32(source, 136),
-            ReadI32(source, 140),
-            ReadI64(source, 144),
-            ReadI64(source, PublishedActionsOffset),
-            ReadI64(source, 152),
-            ReadI64(source, 160),
-            ReadI64(source, 168),
-            ReadI32(source, 4));
-        DecisionJournalRecordValidation.Validate(in record);
-        return record;
+        bytes[1] = (byte)record.DecisionOutcomeKind;
+        WriteU16(bytes, 2, Service(record.Service));
+        WriteI32(bytes, 4, record.DecisionOutcomeCode);
+        WriteU64(bytes, 8, record.Lifecycle);
+        WriteU64(bytes, 16, record.FirstCycle);
+        WriteU64(bytes, 24, record.LastCycle);
+        WriteI64(bytes, 32, record.FirstTimestampTicks);
+        WriteI64(bytes, 40, record.LastTimestampTicks);
+        WriteI64(bytes, 48, record.RepeatCount);
+        WriteI32(bytes, 56, record.FaultCode);
+        WriteU16(bytes, 60, (ushort)record.FaultCategory);
+        WriteI32(bytes, 64, record.FirstFaultOccurrence);
+        WriteI32(bytes, 68, record.LastFaultOccurrence);
     }
 
-    private static ServiceStateProjectionSnapshot ReadProjection(
-        ReadOnlySpan<byte> source,
-        bool hasProjection)
+    private static DecisionJournalRecord ReadDecision(ReadOnlySpan<byte> bytes)
     {
-        var count = ReadI32(source, 176);
-        if (count < 0 || count > ServiceStateProjectionSnapshot.MaximumEntryCount ||
-            !hasProjection && count != 0)
-            throw Invalid();
-
-        var buffer = new ServiceStateProjectionWriteBuffer(ServiceStateProjectionSnapshot.MaximumEntryCount);
-        var builder = new ServiceStateProjectionBuilder(buffer);
-        for (var index = 0; index < count; index++)
-        {
-            var offset = ProjectionOffset + index * ProjectionEntryBytes;
-            var key = new ServiceProjectionKey(ReadI32(source, offset));
-            var kind = (ServiceProjectionValueKind)ReadI32(source, offset + 4);
-            var raw = ReadI64(source, offset + 8);
-            builder.Add(key, ProjectionValue(kind, raw));
-        }
-        var unused = source.Slice(
-            ProjectionOffset + count * ProjectionEntryBytes,
-            (ServiceStateProjectionSnapshot.MaximumEntryCount - count) * ProjectionEntryBytes);
-        if (!IsZero(unused)) throw Invalid();
-        return builder.CaptureSnapshot();
+        if (!IsZero(bytes.Slice(62, 2)) || !IsZero(bytes.Slice(72, 8))) throw Invalid();
+        return DecisionJournalRecord.ReadDecision(
+            TraceService(ReadU16(bytes, 2)),
+            ReadU64(bytes, 8),
+            ReadU64(bytes, 16),
+            ReadU64(bytes, 24),
+            ReadI64(bytes, 32),
+            ReadI64(bytes, 40),
+            ReadI64(bytes, 48),
+            (DecisionJournalDecisionOutcomeKind)bytes[1],
+            ReadI32(bytes, 4),
+            (ServiceFaultCategory)ReadU16(bytes, 60),
+            ReadI32(bytes, 56),
+            ReadI32(bytes, 64),
+            ReadI32(bytes, 68));
     }
 
-    private static ServiceProjectionValue ProjectionValue(ServiceProjectionValueKind kind, long raw) => kind switch
+    private static void WriteAction(Span<byte> bytes, in DecisionJournalRecord record)
     {
-        ServiceProjectionValueKind.Boolean when raw is 0 or 1 => ServiceProjectionValue.FromBoolean(raw != 0),
-        ServiceProjectionValueKind.Integer => ServiceProjectionValue.FromInteger(raw),
-        ServiceProjectionValueKind.FloatingPoint =>
-            ServiceProjectionValue.FromFloatingPoint(BitConverter.Int64BitsToDouble(raw)),
-        _ => throw Invalid(),
-    };
-
-    private static long ProjectionValue(ServiceProjectionValue value) => value.Kind switch
-    {
-        ServiceProjectionValueKind.Boolean or ServiceProjectionValueKind.Integer => value.Integer,
-        ServiceProjectionValueKind.FloatingPoint => BitConverter.DoubleToInt64Bits(value.FloatingPoint),
-        _ => throw new ArgumentException("The projection value is invalid.", nameof(value)),
-    };
-
-    private static WakePolicy ReadWake(int kind, long value, bool present)
-    {
-        if (!present)
-        {
-            if (kind != 0 || value != 0) throw Invalid();
-            return default;
-        }
-        if (value < 0) throw Invalid();
-        return (WakePolicyKind)kind switch
-        {
-            WakePolicyKind.Default when value == 0 => WakePolicy.Default,
-            WakePolicyKind.Immediate when value == 0 => WakePolicy.Immediate,
-            WakePolicyKind.AfterDecision => WakePolicy.AfterDecision(new MonotonicDuration(value)),
-            WakePolicyKind.AfterBatch => WakePolicy.AfterBatch(new MonotonicDuration(value)),
-            WakePolicyKind.At => WakePolicy.At(new MonotonicTimestamp(value)),
-            WakePolicyKind.OnPublication when value == 0 => WakePolicy.OnPublication,
-            _ => throw Invalid(),
-        };
+        bytes[1] = (byte)record.Attribution.RouteStatus;
+        WriteU16(bytes, 2, (ushort)record.Attribution.NativeType);
+        WriteU32(bytes, 4, record.ActionOutcome.Value);
+        WriteU16(bytes, 8, Service(record.Service));
+        WriteU16(bytes, 10, record.ActionOrdinal);
+        WriteU64(bytes, 16, record.FirstCycle);
+        WriteI64(bytes, 24, record.FirstTimestampTicks);
+        record.Attribution.CandidateId.TryWriteBytes(bytes.Slice(32, 16));
+        record.Attribution.ListId.TryWriteBytes(bytes.Slice(48, 16));
+        record.Attribution.ViewId.TryWriteBytes(bytes.Slice(64, 16));
     }
 
-    private static long WakeValue(WakePolicy wake) => wake.Kind switch
+    private static DecisionJournalRecord ReadAction(ReadOnlySpan<byte> bytes)
     {
-        WakePolicyKind.Default or WakePolicyKind.Immediate or WakePolicyKind.OnPublication => 0,
-        WakePolicyKind.AfterDecision or WakePolicyKind.AfterBatch => wake.Delay.Ticks,
-        WakePolicyKind.At => wake.DueTime.Ticks,
-        _ => throw new ArgumentException("The journal wake is invalid.", nameof(wake)),
-    };
+        if (!IsZero(bytes.Slice(12, 4))) throw Invalid();
+        var attribution = new ServiceActionJournalAttribution(
+            new Guid(bytes.Slice(32, 16)),
+            (ServiceActionNativeTypeId)ReadU16(bytes, 2),
+            new Guid(bytes.Slice(48, 16)),
+            new Guid(bytes.Slice(64, 16)),
+            (ServiceActionRouteStatus)bytes[1]);
+        return DecisionJournalRecord.ReadAction(
+            TraceService(ReadU16(bytes, 8)),
+            ReadU64(bytes, 16),
+            ReadI64(bytes, 24),
+            ReadU16(bytes, 10),
+            in attribution,
+            DecisionJournalActionOutcome.Read(ReadU32(bytes, 4)));
+    }
 
-    private static ServiceCycleTraceServiceId TraceService(ulong value) =>
+    private static void WriteTransition(Span<byte> bytes, in DecisionJournalRecord record)
+    {
+        WriteU16(bytes, 2, Service(record.Service));
+        WriteI32(bytes, 4, record.TransitionCode);
+        WriteU64(bytes, 8, record.Lifecycle);
+        WriteU64(bytes, 16, record.Generation);
+        WriteI64(bytes, 32, record.FirstTimestampTicks);
+    }
+
+    private static DecisionJournalRecord ReadTransition(ReadOnlySpan<byte> bytes, DecisionJournalRecordKind kind)
+    {
+        if (bytes[1] != 0 || !IsZero(bytes.Slice(24, 8)) || !IsZero(bytes.Slice(40, 40))) throw Invalid();
+        return DecisionJournalRecord.ReadTransition(
+            kind,
+            TraceService(ReadU16(bytes, 2)),
+            ReadU64(bytes, 8),
+            ReadU64(bytes, 16),
+            ReadI64(bytes, 32),
+            ReadI32(bytes, 4));
+    }
+
+    private static ushort Service(ServiceCycleTraceServiceId service)
+    {
+        if (service.Value > ushort.MaxValue) throw new ArgumentOutOfRangeException(nameof(service));
+        return checked((ushort)service.Value);
+    }
+
+    private static ServiceCycleTraceServiceId TraceService(ushort value) =>
         value == 0 ? default : new ServiceCycleTraceServiceId(value);
 
     private static bool IsZero(ReadOnlySpan<byte> bytes)
     {
-        for (var index = 0; index < bytes.Length; index++)
-            if (bytes[index] != 0) return false;
+        for (var index = 0; index < bytes.Length; index++) if (bytes[index] != 0) return false;
         return true;
     }
 
     private static FormatException Invalid() => new("Invalid decision-journal record.");
     private static ushort ReadU16(ReadOnlySpan<byte> bytes, int offset) =>
         BinaryPrimitives.ReadUInt16LittleEndian(bytes.Slice(offset, 2));
+    private static uint ReadU32(ReadOnlySpan<byte> bytes, int offset) =>
+        BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(offset, 4));
     private static int ReadI32(ReadOnlySpan<byte> bytes, int offset) =>
         BinaryPrimitives.ReadInt32LittleEndian(bytes.Slice(offset, 4));
     private static ulong ReadU64(ReadOnlySpan<byte> bytes, int offset) =>
@@ -224,6 +169,8 @@ internal static class DecisionJournalRecordCodec
         BinaryPrimitives.ReadInt64LittleEndian(bytes.Slice(offset, 8));
     private static void WriteU16(Span<byte> bytes, int offset, ushort value) =>
         BinaryPrimitives.WriteUInt16LittleEndian(bytes.Slice(offset, 2), value);
+    private static void WriteU32(Span<byte> bytes, int offset, uint value) =>
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.Slice(offset, 4), value);
     private static void WriteI32(Span<byte> bytes, int offset, int value) =>
         BinaryPrimitives.WriteInt32LittleEndian(bytes.Slice(offset, 4), value);
     private static void WriteU64(Span<byte> bytes, int offset, ulong value) =>

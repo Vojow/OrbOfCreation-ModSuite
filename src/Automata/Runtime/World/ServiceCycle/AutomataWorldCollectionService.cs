@@ -81,6 +81,8 @@ internal static class AutomataWorldCollectionService
                 createWorker: static () => new AutomataWorldCollectionWorker(),
                 shouldStart: ShouldStart,
                 capture: Capture,
+                describeAction: static (in AutomataWorldCollectionAction action) =>
+                    ServiceActionJournalAttribution.Publication,
                 execute: Execute);
 
         ServiceCaptureResult Capture(

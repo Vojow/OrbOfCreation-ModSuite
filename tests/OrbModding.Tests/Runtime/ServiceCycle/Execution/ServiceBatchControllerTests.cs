@@ -140,7 +140,6 @@ public sealed class ServiceBatchControllerTests
         Assert.Equal(2, receipt.CommittedCount);
         Assert.Equal(1, receipt.SkippedCount);
         Assert.Equal(beforeNative ? 1 : 0, receipt.PreNativeSkippedCount);
-        Assert.Equal(beforeNative ? 2 : 3, receipt.NativeActionCount);
         Assert.Equal(3, definition.ActionExecutionCount);
         Assert.Equal(expectedMutationAttempts, receipt.NativeCallOutcome.MutationAttempts);
         Assert.Equal(2, receipt.NativeCallOutcome.MutationsCommitted);

@@ -100,7 +100,10 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
         var snapshot = configuration.Snapshot;
         observer?.ActionAttempted(ordinal, in context);
         var executionStartedAt = _runtime.Clock.Now;
-        var result = ExecuteAction(in action, in snapshot, in context);
+        var attribution = DescribeAction(in action, out var attributionValid);
+        var result = attributionValid
+            ? ExecuteAction(in action, in snapshot, in context)
+            : ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
 
         var observedAt = _runtime.Clock.Now;
         var actionFact = new ServiceActionFact(
@@ -119,9 +122,6 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
         _runtime.State.NativeOutcome = ServiceActionResult.AddNativeOutcomes(
             in _runtime.State.NativeOutcome,
             in native);
-        if (result.Disposition == ServiceActionDisposition.Committed &&
-            result.Effect == ServiceActionEffect.Publication)
-            _runtime.State.PublishedCount++;
         if (result.Disposition == ServiceActionDisposition.Skipped &&
             result.Effect == ServiceActionEffect.None)
             _runtime.State.PreNativeSkippedCount++;
@@ -129,12 +129,14 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
         return advances
             ? _outcomes.Advance(
                 in actionFact,
+                in attribution,
                 in pendingRecovery,
                 observedAt,
                 result.Disposition == ServiceActionDisposition.Committed,
                 nonBlockingHandoff)
             : _outcomes.Terminate(
                 in actionFact,
+                in attribution,
                 in result,
                 in pendingRecovery,
                 index,
@@ -160,6 +162,23 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
         catch
         {
             return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
+        }
+    }
+
+    private ServiceActionJournalAttribution DescribeAction(
+        in TAction action,
+        out bool valid)
+    {
+        try
+        {
+            var attribution = _runtime.Definition.DescribeAction(in action);
+            valid = attribution.IsValid;
+            return valid ? attribution : ServiceActionJournalAttribution.Failed;
+        }
+        catch
+        {
+            valid = false;
+            return ServiceActionJournalAttribution.Failed;
         }
     }
 

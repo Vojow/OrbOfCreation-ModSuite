@@ -270,14 +270,11 @@ public sealed class AutomataDecisionJournalControllerTests
         Assert.Throws<ArgumentException>(() =>
             AutomataDecisionJournalPathPolicy.FormatRelativeArtifactPath("private/journal"));
         Assert.Equal(10, AutomataDecisionJournalPathPolicy.LiveCandidateBlockCount);
-        Assert.Equal(1_520, AutomataDecisionJournalPathPolicy.LiveCandidateMaximumCommittedSegments);
+        Assert.Equal(6_476, AutomataDecisionJournalPathPolicy.LiveCandidateMaximumCommittedSegments);
     }
 
     /// <summary>
-    /// The retained journal fits inside the ~100 MB the north star gives the whole suite, rather than
-    /// inside some budget of its own. It is the journal's share that is pinned here: the run folders are
-    /// bounded by count and not by size, and BepInEx's own log is unconstrained, so the suite-wide claim
-    /// is not this test's to make.
+    /// The retained journal fits inside its fixed 64 MiB envelope.
     /// </summary>
     /// <remarks>
     /// Asserted against the codec's own segment size rather than a copied number, so a format change
@@ -289,12 +286,16 @@ public sealed class AutomataDecisionJournalControllerTests
         var segmentBytes = DecisionJournalSegmentCodec.GetEncodedLength(
             DecisionJournalSegmentCodec.MaximumRecords);
 
-        var budget = (long)segmentBytes *
+        var retainedBytes = (long)segmentBytes *
             AutomataDecisionJournalPathPolicy.LiveCandidateMaximumCommittedSegments;
+        var maximumTransitionBytes = retainedBytes + segmentBytes;
 
-        Assert.Equal(65_656, segmentBytes);
-        Assert.Equal(99_797_120L, budget);
-        Assert.True(budget <= 100_000_000L, "The retained journal must fit the suite's ~100 MB budget.");
+        Assert.Equal(10_360, segmentBytes);
+        Assert.Equal(67_091_360L, retainedBytes);
+        Assert.Equal(67_101_720L, maximumTransitionBytes);
+        Assert.True(
+            maximumTransitionBytes <= AutomataDecisionJournalPathPolicy.LiveCandidateMaximumBytes,
+            "The retained journal plus one atomic-commit temporary must fit its 64 MiB envelope.");
     }
 
     [Fact]
@@ -307,7 +308,7 @@ public sealed class AutomataDecisionJournalControllerTests
         Assert.IsType<OrbModding.Common.Runtime.Tracing.FileTraceSegmentStorage>(spec.Storage);
         Assert.True(spec.Run.IsValid);
         Assert.Equal(10, spec.BlockCount);
-        Assert.Equal(1_520, spec.MaximumCommittedSegments);
+        Assert.Equal(6_476, spec.MaximumCommittedSegments);
         Assert.Equal(
             MonotonicDuration.FromTimeSpan(TimeSpan.FromMinutes(1)),
             spec.CheckpointInterval);

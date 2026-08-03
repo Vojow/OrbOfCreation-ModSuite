@@ -19,6 +19,10 @@ internal static class AutoConceptService
             in metadata,
             static () => new AutoConceptWorkerDefinition(),
             ShouldStart,
+            static (in AutoConceptCycleAction action) =>
+                ServiceActionJournalAttribution.Native(
+                    action.RecipeId,
+                    ServiceActionNativeTypeId.AlchemyRecipeSO),
             actions.TryExecute);
     }
 

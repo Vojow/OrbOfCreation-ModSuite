@@ -81,6 +81,9 @@ internal sealed class SourceServiceDefinition :
         return CaptureResult;
     }
 
+    public ServiceActionJournalAttribution DescribeAction(in SourceAction action) =>
+        ServiceActionJournalAttribution.Publication;
+
     public ServiceActionResult TryExecute(
         in SourceAction action,
         in SuiteRuntimeConfiguration config,

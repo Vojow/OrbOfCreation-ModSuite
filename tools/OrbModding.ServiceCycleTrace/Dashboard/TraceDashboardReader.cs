@@ -1,6 +1,5 @@
 #if SERVICE_CYCLE_PROFILE
 using System.Globalization;
-using OrbAutomata;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
@@ -11,7 +10,6 @@ using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 using OrbModding.ServiceCycleTrace.Journal;
 using OrbModding.ServiceCycleTrace.ManualTrace;
 using OrbModding.ServiceCycleTrace.Performance;
-using OrbMentor;
 
 namespace OrbModding.ServiceCycleTrace.Dashboard;
 
@@ -57,11 +55,9 @@ internal static class TraceDashboardReader
         }
 
         var roster = full.Roster();
-        var serviceMachineIds = RosteredMachineIds(roster);
         var decisions = Decisions(
             journal?.Records ?? Array.Empty<DecisionJournalRecord>(),
             events,
-            serviceMachineIds,
             firstTicks,
             lastTicks);
         var aggregates = new List<TraceDashboardStageAggregate>();
@@ -144,8 +140,7 @@ internal static class TraceDashboardReader
         if (path is null)
         {
             notes.Add(
-                "No decision journal beside this capture: decision spans, wake policies, and service " +
-                "projections are unavailable.");
+                "No decision journal beside this capture: decision and attributed action spans are unavailable.");
             return null;
         }
         var run = ReadLatestJournalRun(path);
@@ -365,22 +360,6 @@ internal static class TraceDashboardReader
     }
 
     /// <summary>
-    /// The registered identity is the schema key. Display names are presentation and ordinals are local
-    /// to one capture, so neither can safely decide what a projection field means.
-    /// </summary>
-    private static Dictionary<ulong, string> RosteredMachineIds(ServiceCycleTraceRoster roster)
-    {
-        var output = new Dictionary<ulong, string>();
-        foreach (var entry in roster.Entries)
-        {
-            if (!string.Equals(entry.Kind, ServiceCycleTraceRoster.ServiceKind, StringComparison.Ordinal))
-                continue;
-            output[entry.Identity] = entry.MachineId;
-        }
-        return output;
-    }
-
-    /// <summary>
     /// A service's name from the profile span block it owns. Suite spans are shared by every ordinal
     /// and name none of them, so only a feature block answers.
     /// </summary>
@@ -519,40 +498,49 @@ internal static class TraceDashboardReader
     private static TraceDashboardDecision[] Decisions(
         DecisionJournalRecord[] records,
         List<TraceDashboardEvent> events,
-        IReadOnlyDictionary<ulong, string> serviceMachineIds,
         long firstTicks,
         long lastTicks)
     {
         var output = new List<TraceDashboardDecision>();
         foreach (var record in records)
         {
-            if (record.Kind != DecisionJournalRecordKind.DecisionSpan ||
+            if (record.Kind is not (DecisionJournalRecordKind.DecisionSpan or DecisionJournalRecordKind.Action) ||
                 record.LastTimestampTicks < firstTicks || record.FirstTimestampTicks > lastTicks)
                 continue;
             var worker = WorkerDecision(in record, events);
+            var action = record.Kind == DecisionJournalRecordKind.Action;
             output.Add(new TraceDashboardDecision(
+                record.Kind.ToString(),
                 Offset(Math.Max(record.FirstTimestampTicks, firstTicks), firstTicks),
                 Offset(Math.Min(record.LastTimestampTicks, lastTicks), firstTicks),
                 record.Service.Value,
                 record.FirstCycle,
                 record.LastCycle,
                 record.RepeatCount,
-                DecisionJournalValueNames.Decision(record.StartDecisionCode),
-                DecisionJournalValueNames.Decision(record.CaptureDecisionCode),
-                Wake(in record),
-                record.TerminalDisposition == 0
-                    ? "Unavailable"
-                    : record.TerminalDisposition + "/" + DecisionJournalValueNames.Action(record.TerminalResultCode),
-                record.ActionCount,
-                record.CommittedActions,
-                record.NativeCallsAttempted,
-                record.MutationAttempts,
-                record.MutationsCommitted,
+                action ? "Unavailable" : record.DecisionOutcomeKind.ToString(),
+                action ? "Unavailable" : DecisionJournalValueNames.Decision(record.DecisionOutcomeCode),
+                "Unavailable",
+                action
+                    ? record.ActionOutcome.Disposition + "/" + DecisionJournalValueNames.Action(record.ActionOutcome.Code)
+                    : record.DecisionOutcomeKind + "/" + DecisionJournalValueNames.Decision(record.DecisionOutcomeCode),
+                action ? 1 : 0,
+                action && record.ActionOutcome.Disposition == ServiceActionDisposition.Committed ? 1 : 0,
+                0,
+                0,
+                0,
                 worker.Samples,
                 worker.AverageMilliseconds,
                 worker.MicrosecondsPerCapturedCandidate,
                 worker.MicrosecondsPerPlannedAction,
-                Projection(in record, serviceMachineIds)));
+                action ? record.ActionOrdinal : 0,
+                action ? record.Attribution.CandidateId.ToString("D") : string.Empty,
+                action ? record.Attribution.NativeType.ToString() : string.Empty,
+                action ? record.Attribution.ListId.ToString("D") : string.Empty,
+                action ? record.Attribution.ViewId.ToString("D") : string.Empty,
+                action ? record.Attribution.RouteStatus.ToString() : string.Empty,
+                action
+                    ? DecisionJournalValueNames.Action(record.ActionOutcome.Code)
+                    : DecisionJournalValueNames.Decision(record.DecisionOutcomeCode)));
         }
         return output.ToArray();
     }
@@ -578,215 +566,11 @@ internal static class TraceDashboardReader
         if (samples == 0)
             return default;
         var average = totalMilliseconds / samples;
-        var captured = ProjectionInteger(in record, AutoBuyServiceProjection.CapturedCandidatesKey);
-        var planned = ProjectionInteger(in record, AutoBuyServiceProjection.PlannedActionsKey);
         return new WorkerDecisionMetrics(
             samples,
             average,
-            captured > 0 ? totalMilliseconds * 1_000d / (samples * captured) : null,
-            planned > 0 ? totalMilliseconds * 1_000d / (samples * planned) : null);
-    }
-
-    private static long ProjectionInteger(in DecisionJournalRecord record, int key)
-    {
-        if (!record.HasProjection) return 0;
-        for (var index = 0; index < record.Projection.Count; index++)
-        {
-            var entry = record.Projection.GetEntry(index);
-            if (entry.Key.Value == key && entry.Value.Kind == ServiceProjectionValueKind.Integer)
-                return entry.Value.Integer;
-        }
-        return 0;
-    }
-
-    private static TraceDashboardProjectionEntry[] Projection(
-        in DecisionJournalRecord record,
-        IReadOnlyDictionary<ulong, string> serviceMachineIds)
-    {
-        if (!record.HasProjection) return Array.Empty<TraceDashboardProjectionEntry>();
-        serviceMachineIds.TryGetValue(record.Service.Value, out var serviceMachineId);
-        var output = new TraceDashboardProjectionEntry[record.Projection.Count];
-        for (var index = 0; index < output.Length; index++)
-        {
-            var entry = record.Projection.GetEntry(index);
-            output[index] = new TraceDashboardProjectionEntry(
-                entry.Key.Value,
-                ProjectionName(serviceMachineId, entry.Key.Value),
-                entry.Value.Kind.ToString(),
-                ProjectionValue(serviceMachineId, entry.Key.Value, entry.Value));
-        }
-        return output;
-    }
-
-    private static string ProjectionName(string? serviceMachineId, int key)
-    {
-        if (string.Equals(
-                serviceMachineId,
-                AutomataWorldCollectionPolicies.ServiceId.Value,
-                StringComparison.Ordinal))
-            return key switch
-            {
-                1 => "Entities",
-                2 => "Complete",
-                3 => "Unavailable categories",
-                _ => NeutralProjectionName(key),
-            };
-        if (string.Equals(
-                serviceMachineId,
-                AutoHarvestServicePolicies.ServiceId.Value,
-                StringComparison.Ordinal))
-            return key switch
-            {
-                1 => "Next pair",
-                2 => "Has planned action",
-                3 => "Planned pair",
-                4 => "Fruit selected",
-                5 => "Fruit health",
-                6 => "Fruit feature-scoped",
-                7 => "Treasure selected",
-                8 => "Treasure health",
-                9 => "Treasure feature-scoped",
-                _ => NeutralProjectionName(key),
-            };
-        if (string.Equals(
-                serviceMachineId,
-                AutoBuyServicePolicies.ServiceId.Value,
-                StringComparison.Ordinal))
-            return key switch
-            {
-                AutoBuyServiceProjection.CapturedCandidatesKey => "Captured candidates",
-                AutoBuyServiceProjection.CapturedStructuresKey => "Captured structures",
-                AutoBuyServiceProjection.CapturedUpgradesKey => "Captured upgrades",
-                AutoBuyServiceProjection.EligibleCandidatesKey => "Eligible candidates",
-                AutoBuyServiceProjection.PlannedActionsKey => "Planned actions",
-                AutoBuyServiceProjection.RequestedLevelsKey => "Requested levels",
-                AutoBuyServiceProjection.ExcludedKindNotSelectedKey => "Excluded: kind not selected",
-                AutoBuyServiceProjection.ExcludedUnavailableKey => "Excluded: unavailable",
-                AutoBuyServiceProjection.ExcludedRequirementsUnmetKey => "Excluded: requirements unmet",
-                AutoBuyServiceProjection.ExcludedTerminalKey => "Excluded: terminal",
-                AutoBuyServiceProjection.ExcludedUnaffordableKey => "Excluded: unaffordable",
-                AutoBuyServiceProjection.ExcludedUnpriceableKey => "Excluded: unpriceable",
-                AutoBuyServiceProjection.FullGroupsKey => "Groups: full",
-                AutoBuyServiceProjection.ReducedGroupsKey => "Groups: reduced",
-                AutoBuyServiceProjection.ReducedGroupLevelsKey => "Reduced-group levels",
-                AutoBuyServiceProjection.LedgerStarvedKey => "Groups: ledger-starved",
-                _ => NeutralProjectionName(key),
-            };
-        if (string.Equals(
-                serviceMachineId,
-                SpellLevelServicePolicies.ServiceId.Value,
-                StringComparison.Ordinal))
-            return key switch
-            {
-                SpellLevelServiceProjection.CapturedSpellsKey => "Captured spells",
-                SpellLevelServiceProjection.ReadySpellsKey => "Ready spells",
-                SpellLevelServiceProjection.PlannedActionsKey => "Planned actions",
-                SpellLevelServiceProjection.CapabilityKey => "Capability",
-                SpellLevelServiceProjection.ExcludedUndiscoveredKey => "Excluded: undiscovered",
-                SpellLevelServiceProjection.ExcludedNotReadyKey => "Excluded: not ready",
-                SpellLevelServiceProjection.ExcludedOutrankedKey => "Excluded: outranked",
-                _ => NeutralProjectionName(key),
-            };
-        if (string.Equals(
-                serviceMachineId,
-                AutoCastServicePolicies.ServiceId.Value,
-                StringComparison.Ordinal))
-            return key switch
-            {
-                AutoCastServiceProjection.CapturedSlotsKey => "Captured slots",
-                AutoCastServiceProjection.EligibleSlotsKey => "Eligible slots",
-                AutoCastServiceProjection.PlannedActionsKey => "Planned actions",
-                AutoCastServiceProjection.HoldingChargeKey => "Holding charge",
-                AutoCastServiceProjection.ChannelBlockedKey => "Channel blocked",
-                AutoCastServiceProjection.ExcludedEmptyKey => "Excluded: empty",
-                AutoCastServiceProjection.ExcludedBusyKey => "Excluded: busy",
-                AutoCastServiceProjection.ExcludedNotReadyKey => "Excluded: not ready",
-                AutoCastServiceProjection.ExcludedReserveFloorKey => "Excluded: reserve floor",
-                AutoCastServiceProjection.ExcludedBelowStartThresholdKey =>
-                    "Excluded: below start threshold",
-                AutoCastServiceProjection.ExcludedOutrankedKey => "Excluded: outranked",
-                _ => NeutralProjectionName(key),
-            };
-        if (string.Equals(
-                serviceMachineId,
-                AutoConceptServicePolicies.ServiceId.Value,
-                StringComparison.Ordinal))
-            return key switch
-            {
-                AutoConceptServiceProjection.CapturedRecipesKey => "Captured recipes",
-                AutoConceptServiceProjection.EligibleRecipesKey => "Eligible recipes",
-                AutoConceptServiceProjection.ActiveRecipesKey => "Active recipes",
-                AutoConceptServiceProjection.OwnedRecipesKey => "Owned recipes",
-                AutoConceptServiceProjection.PlannedActionsKey => "Planned actions",
-                AutoConceptServiceProjection.DecisionKindKey => "Decision kind",
-                AutoConceptServiceProjection.IdleReasonKey => "Idle reason",
-                _ => NeutralProjectionName(key),
-            };
-        if (string.Equals(
-                serviceMachineId,
-                MentorServicePolicies.ServiceId.Value,
-                StringComparison.Ordinal))
-            return key switch
-            {
-                MentorServiceProjection.LastInputSequenceKey => "Last input sequence",
-                MentorServiceProjection.TotalMissedInputsKey => "Missed inputs",
-                MentorServiceProjection.PlannedActionsKey => "Planned actions",
-                MentorServiceProjection.RecipientsKey => "Recipients",
-                _ => NeutralProjectionName(key),
-            };
-        return NeutralProjectionName(key);
-    }
-
-    private static string NeutralProjectionName(int key) =>
-        "Field " + key.ToString(CultureInfo.InvariantCulture);
-
-    private static string ProjectionValue(
-        string? serviceMachineId,
-        int key,
-        ServiceProjectionValue value)
-    {
-        if (value.Kind == ServiceProjectionValueKind.Boolean) return value.Boolean ? "true" : "false";
-        if (value.Kind == ServiceProjectionValueKind.FloatingPoint)
-            return value.FloatingPoint.ToString("0.###", CultureInfo.InvariantCulture);
-        if (string.Equals(
-                serviceMachineId,
-                AutoHarvestServicePolicies.ServiceId.Value,
-                StringComparison.Ordinal) &&
-            value.Integer is >= int.MinValue and <= int.MaxValue)
-        {
-            var integer = (int)value.Integer;
-            if (key is 1 or 3 && Enum.IsDefined(typeof(AutoHarvestPair), integer))
-                return ((AutoHarvestPair)integer).ToString();
-            if (key is 5 or 8 && Enum.IsDefined(typeof(AutoHarvestPairHealthKind), integer))
-                return ((AutoHarvestPairHealthKind)integer).ToString();
-        }
-        if (string.Equals(
-                serviceMachineId,
-                AutoConceptServicePolicies.ServiceId.Value,
-                StringComparison.Ordinal) &&
-            value.Integer is >= int.MinValue and <= int.MaxValue)
-        {
-            var integer = (int)value.Integer;
-            if (key == AutoConceptServiceProjection.DecisionKindKey &&
-                Enum.IsDefined(typeof(AutoConceptDecisionKind), integer))
-                return ((AutoConceptDecisionKind)integer).ToString();
-            if (key == AutoConceptServiceProjection.IdleReasonKey &&
-                Enum.IsDefined(typeof(AutoConceptIdleReason), integer))
-                return ((AutoConceptIdleReason)integer).ToString();
-        }
-        return value.Integer.ToString(CultureInfo.InvariantCulture);
-    }
-
-    private static string Wake(in DecisionJournalRecord record)
-    {
-        if (!record.HasWake) return "Unavailable";
-        return record.Wake.Kind switch
-        {
-            WakePolicyKind.AfterDecision or WakePolicyKind.AfterBatch =>
-                record.Wake.Kind + " " + Milliseconds(record.Wake.Delay.Ticks).ToString("0.###", CultureInfo.InvariantCulture) + " ms",
-            WakePolicyKind.At => "At " + record.Wake.DueTime.Ticks.ToString(CultureInfo.InvariantCulture),
-            _ => record.Wake.Kind.ToString(),
-        };
+            null,
+            null);
     }
 
     private static TraceDashboardStageAggregate Aggregate(

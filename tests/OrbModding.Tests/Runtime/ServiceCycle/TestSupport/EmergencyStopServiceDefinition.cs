@@ -48,6 +48,9 @@ internal sealed class EmergencyStopServiceDefinition :
         in ServiceCycleStartContext context) =>
         ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
 
+    public ServiceActionJournalAttribution DescribeAction(in EmergencyStopAction action) =>
+        ServiceActionJournalAttribution.Publication;
+
     public ServiceActionResult TryExecute(
         in EmergencyStopAction action,
         in SuiteRuntimeConfiguration config,

@@ -1,3 +1,4 @@
+using System;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
@@ -208,7 +209,10 @@ internal static class DecisionJournalObserverTestData
             1,
             native,
             completedAt);
-        return new ServiceActionDispatch(fact, true, receipt);
+        var attribution = ServiceActionJournalAttribution.Native(
+            new Guid("11111111-1111-1111-1111-111111111111"),
+            ServiceActionNativeTypeId.StructureSO);
+        return new ServiceActionDispatch(fact, attribution, true, receipt);
     }
 
     /// <summary>
@@ -235,40 +239,12 @@ internal static class DecisionJournalObserverTestData
             actionCount: 1,
             committedCount: 1,
             default,
-            completedAt,
-            publishedCount: 1);
-        return new ServiceActionDispatch(fact, true, receipt);
-    }
-
-    /// <summary>
-    /// One batch that published, mutated, and skipped. The terminal action is the skipped one, which
-    /// attempted a mutation and committed none.
-    /// </summary>
-    internal static ServiceActionDispatch MixedAction(ulong cycleValue)
-    {
-        var cycle = Identity(cycleValue);
-        var completedAt = new MonotonicTimestamp(45);
-        var result = ServiceActionResult.Skipped(
-            CommonActionResultCodes.Skipped,
-            ServiceNativeMutationEvidence.Observed(
-                NativeMutationOutcome.PostconditionFailed,
-                new NativeMutationCallOutcome(1, 1, 0)));
-        var context = new ServiceActionContext(
-            cycle,
-            new BatchId(cycleValue),
-            new ActionId(3),
-            2,
-            new MonotonicTimestamp(44));
-        var fact = new ServiceActionFact(context, result, new MonotonicTimestamp(44), completedAt);
-        var receipt = BatchReceipt.Completed(
-            cycle,
-            new BatchId(cycleValue),
-            actionCount: 3,
-            committedCount: 2,
-            new ServiceNativeCallTotals(2, 2, 1),
-            completedAt,
-            publishedCount: 1);
-        return new ServiceActionDispatch(fact, true, receipt);
+            completedAt);
+        return new ServiceActionDispatch(
+            fact,
+            ServiceActionJournalAttribution.Publication,
+            true,
+            receipt);
     }
 
     private sealed class DiscardingSink : IDecisionJournalRecordSink

@@ -96,7 +96,7 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
     }
 
     [Fact]
-    public void CompletedActionCycleWritesProjectionWakeAndTerminalFacts()
+    public void CompletedActionCycleWritesOneAttributedOutcome()
     {
         var clock = new ThreadSafeTestClock(100);
         using var registry = new ServiceCycleRegistry(1, clock);
@@ -121,18 +121,13 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
         runtime.RequestStop();
         AdvanceTo(runtime, DecisionJournalRuntimeState.Stopped);
 
-        var decision = Assert.Single(
+        var action = Assert.Single(
             storage.ReadRecords(),
-            item => item.Kind == DecisionJournalRecordKind.DecisionSpan);
-        Assert.True(decision.HasProjection);
-        Assert.True(decision.HasWake);
-        Assert.Equal(WakePolicy.AfterBatch(new MonotonicDuration(17)), decision.Wake);
-        Assert.Equal(BatchTerminalDisposition.Completed, decision.TerminalDisposition);
-        Assert.Equal(1, decision.ActionCount);
-        Assert.Equal(1, decision.CommittedActions);
-        Assert.Equal(1, decision.NativeCallsAttempted);
-        Assert.Equal(1, decision.MutationAttempts);
-        Assert.Equal(1, decision.MutationsCommitted);
+            item => item.Kind == DecisionJournalRecordKind.Action);
+        Assert.Equal(ServiceActionDisposition.Committed, action.ActionOutcome.Disposition);
+        Assert.Equal(CommonActionResultCodes.Committed.Value, action.ActionOutcome.Code);
+        Assert.Equal(ServiceActionNativeTypeId.StructureSO, action.Attribution.NativeType);
+        Assert.NotEqual(Guid.Empty, action.Attribution.CandidateId);
     }
 
     [Fact]
@@ -165,10 +160,8 @@ public sealed class ServiceCycleDecisionJournalRuntimeTests
             records,
             item => item.Kind == DecisionJournalRecordKind.DecisionSpan);
         Assert.Equal((int)EmergencyStopReason.SafetyInterlock, transition.TransitionCode);
-        Assert.Equal(BatchTerminalDisposition.Rejected, decision.TerminalDisposition);
-        Assert.Equal(CommonActionResultCodes.EmergencyStop.Value, decision.TerminalResultCode);
-        Assert.Equal(2, decision.ActionCount);
-        Assert.Equal(0, decision.CommittedActions);
+        Assert.Equal(DecisionJournalDecisionOutcomeKind.Batch, decision.DecisionOutcomeKind);
+        Assert.Equal(CommonActionResultCodes.EmergencyStop.Value, decision.DecisionOutcomeCode);
         Assert.Equal(0, definition.ActionExecutionCount);
     }
 

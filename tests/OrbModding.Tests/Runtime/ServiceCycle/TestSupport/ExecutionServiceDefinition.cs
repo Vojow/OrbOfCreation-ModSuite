@@ -112,6 +112,13 @@ internal class ExecutionServiceDefinition :
         return StartDecision;
     }
 
+    public ServiceActionJournalAttribution DescribeAction(in ExecutionAction action) =>
+        PublishesGeneration.HasValue
+            ? ServiceActionJournalAttribution.Publication
+            : ServiceActionJournalAttribution.Native(
+                new Guid("11111111-1111-1111-1111-111111111111"),
+                ServiceActionNativeTypeId.StructureSO);
+
     public ServiceActionResult TryExecute(
         in ExecutionAction action,
         in SuiteRuntimeConfiguration config,

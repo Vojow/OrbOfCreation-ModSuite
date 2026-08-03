@@ -25,12 +25,12 @@ public sealed class DecisionJournalCoalescerTests
     }
 
     [Fact]
-    public void DecisionChangeClosesPriorSpanImmediately()
+    public void DecisionOutcomeChangeClosesPriorSpanImmediately()
     {
         var sink = new RecordingSink();
         var journal = Create(sink);
-        journal.Observe(CreateObservation(1, 1, projectionValue: 7));
-        journal.Observe(CreateObservation(2, 2, projectionValue: 8));
+        journal.Observe(CreateObservation(1, 1));
+        journal.Observe(CreateObservation(2, 2, faultOccurrence: 1));
 
         Assert.Single(sink.Records);
         journal.Stop(new MonotonicTimestamp(3));

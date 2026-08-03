@@ -11,14 +11,17 @@ internal sealed class AutomataDecisionJournalPathPolicy : IAutomataDecisionJourn
 {
     internal const int LiveCandidateBlockCount = 10;
 
-    /// <summary>The journal's share of the suite's ~100 MB on-disk budget, in whole segments.</summary>
+    /// <summary>The journal's fixed 64 MiB on-disk envelope.</summary>
     /// <remarks>
-    /// A segment is 80 header + 128 x 512 records + 40 footer = 65,656 bytes, so 1,520 full segments
-    /// occupy 99,797,120 bytes. The floor on coverage is one checkpoint segment per minute — over 25
-    /// hours of unattended play before the oldest evidence rolls off, and far longer than that
-    /// whenever segments fill on decisions rather than on the checkpoint.
+    /// Every committed segment is at most 80 header + 128 x 80 records + 40 footer = 10,360 bytes.
+    /// The retained count leaves room for one maximum-sized temporary segment while its atomic
+    /// commit and oldest-first eviction complete, so even the write transition stays inside the
+    /// envelope.
     /// </remarks>
-    internal const int LiveCandidateMaximumCommittedSegments = 1_520;
+    internal const long LiveCandidateMaximumBytes = 64L * 1024 * 1024;
+    internal static readonly int LiveCandidateMaximumCommittedSegments = checked(
+        (int)(LiveCandidateMaximumBytes / DecisionJournalSegmentCodec.GetEncodedLength(
+            DecisionJournalSegmentCodec.MaximumRecords)) - 1);
     internal const string ArtifactName = "journal";
     private static readonly MonotonicDuration CheckpointInterval =
         MonotonicDuration.FromTimeSpan(TimeSpan.FromMinutes(1));

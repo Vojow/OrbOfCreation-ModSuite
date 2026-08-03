@@ -29,7 +29,7 @@ internal static class DecisionJournalReport
         writer.WriteLine("# ServiceCycle decision-journal report");
         writer.WriteLine();
         writer.WriteLine("- Scope: Validated retained durable window");
-        writer.WriteLine("- Format: OSJD v1");
+        writer.WriteLine("- Format: OSJD wire schema 3");
         writer.WriteLine("- Artifact: `journal`");
         writer.WriteLine($"- Segments: {Number(window.SegmentCount)}");
         writer.WriteLine($"- Retained records: {Number(window.RecordCount)}");
@@ -53,7 +53,7 @@ internal static class DecisionJournalReport
             "- Writer terminal state: Unavailable. OSJD has no terminal manifest or persisted live-status result.");
         writer.WriteLine();
         writer.WriteLine(
-            "This format omits empty pumps, frame and pump timing, physical worker scheduling, wall-clock time, service names, and exception text. Those facts are not inferred.");
+            "This format omits empty pumps, frame and pump timing, physical worker scheduling, wall-clock time, service names, exception text, projection snapshots, wake policies, and aggregate native-call accounting. Those facts are not inferred.");
         writer.WriteLine();
     }
 
@@ -106,7 +106,7 @@ internal static class DecisionJournalReport
         writer.WriteLine("## Numeric run/service view");
         writer.WriteLine();
         writer.WriteLine(
-            "OSJD v1 carries numeric service and projection identities only; this report does not infer feature names or schemas.");
+            "OSJD schema 3 carries numeric service identities plus exact per-action candidate, native-type, list, view, route-status, disposition, and result-code sentinels. This report does not infer feature names.");
         writer.WriteLine();
         if (analysis.ServiceCount == 0)
         {
@@ -114,8 +114,8 @@ internal static class DecisionJournalReport
         }
         else
         {
-            writer.WriteLine("| Run | Service | Spans / observations / capture attempts | Terminals complete / rejected / faulted / orphaned / unavailable | Actions planned / committed | Native calls / mutation attempts / committed | Fault-bearing observations | Lifecycle transitions | World-gate holds |");
-            writer.WriteLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+            writer.WriteLine("| Run | Service | Decision spans / observations / cycles | Batch-only decisions | Actions total / committed / rejected / faulted / skipped | Fault-bearing observations | Lifecycle transitions | World-gate holds |");
+            writer.WriteLine("|---|---:|---:|---:|---:|---:|---:|---:|");
             for (var index = 0; index < analysis.ServiceCount; index++)
             {
                 var service = analysis.GetService(index);
@@ -128,23 +128,17 @@ internal static class DecisionJournalReport
                     writer,
                     service.DecisionSpans,
                     service.Observations,
-                    service.CaptureAttempts);
+                    service.Cycles);
+                writer.Write(" | ");
+                writer.Write(Number(service.BatchDecisions));
                 writer.Write(" | ");
                 WriteFive(
                     writer,
-                    service.TerminalCompleted,
-                    service.TerminalRejected,
-                    service.TerminalFaulted,
-                    service.TerminalOrphaned,
-                    service.TerminalUnavailable);
-                writer.Write(" | ");
-                WritePair(writer, service.PlannedActions, service.CommittedActions);
-                writer.Write(" | ");
-                WriteTriple(
-                    writer,
-                    service.NativeCalls,
-                    service.MutationAttempts,
-                    service.MutationsCommitted);
+                    service.Actions,
+                    service.CommittedActions,
+                    service.RejectedActions,
+                    service.FaultedActions,
+                    service.SkippedActions);
                 writer.Write(" | ");
                 writer.Write(Number(service.FaultBearingObservations));
                 writer.Write(" | ");
@@ -170,9 +164,6 @@ internal static class DecisionJournalReport
         writer.Write("..");
         writer.Write(Number(last));
     }
-
-    private static void WritePair(TextWriter writer, long first, long second) =>
-        writer.Write($"{Number(first)} / {Number(second)}");
 
     private static void WriteTriple(TextWriter writer, long first, long second, long third) =>
         writer.Write($"{Number(first)} / {Number(second)} / {Number(third)}");

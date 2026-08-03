@@ -79,13 +79,6 @@ public enum ServiceCycleSemanticFields : ulong
     NativeMutationOutcome = 1UL << 24,
 
     /// <summary>
-    /// How many of a batch's committed actions published a snapshot instead of mutating the game.
-    /// Carried so the batch-level "one attempted mutation per action" check stays exact now that an
-    /// action can commit without touching the game.
-    /// </summary>
-    PublishedCount = 1UL << 25,
-
-    /// <summary>
     /// Which reading of the game a cycle ran against. The fourth pinned generation, and the last one
     /// the wire was missing: without it a decision can be read but not answered for, because nothing
     /// says which collection it acted on.

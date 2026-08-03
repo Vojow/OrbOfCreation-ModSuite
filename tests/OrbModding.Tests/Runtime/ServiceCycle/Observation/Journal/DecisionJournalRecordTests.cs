@@ -1,6 +1,7 @@
 using System;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 using Xunit;
@@ -25,52 +26,61 @@ public sealed class DecisionJournalRecordTests
         Assert.Equal(21, span.LastTimestampTicks);
         Assert.Equal(1, span.FirstFaultOccurrence);
         Assert.Equal(2, span.LastFaultOccurrence);
-        Assert.Equal(2, span.CommittedActions);
-        Assert.Equal(2, span.NativeCallsAttempted);
-        Assert.Equal(2, span.MutationsCommitted);
-    }
-
-    /// <summary>
-    /// Published actions sum across a span the way committed ones do.
-    /// </summary>
-    /// <remarks>
-    /// Per-repeat, like the action count, would be wrong: two repeats that share an action count can
-    /// publish different halves of it, and the span's native expectations are stated against the sum.
-    /// A span of pure publications therefore keeps owing no native evidence however long it runs.
-    /// </remarks>
-    [Fact]
-    public void ConsecutivePublicationsSumThePublishedActions()
-    {
-        var first = DecisionJournalRecord.Decision(PublicationObservation(1, 10));
-        var second = DecisionJournalRecord.Decision(PublicationObservation(2, 20));
-
-        var span = first.Coalesce(in second);
-
-        Assert.Equal(2, span.RepeatCount);
-        Assert.Equal(1, span.ActionCount);
-        Assert.Equal(2, span.CommittedActions);
-        Assert.Equal(2, span.PublishedActions);
-        Assert.Equal(0, span.NativeCallsAttempted);
-        Assert.Equal(0, span.MutationAttempts);
-        Assert.Equal(0, span.MutationsCommitted);
+        Assert.Equal(DecisionJournalDecisionOutcomeKind.Fault, span.DecisionOutcomeKind);
+        Assert.Equal(CommonActionResultCodes.AdapterFault.Value, span.DecisionOutcomeCode);
     }
 
     [Fact]
-    public void ProjectionChangeBreaksSpan()
+    public void OneActionCarriesExactAttributionAndOneOutcome()
     {
-        var first = DecisionJournalRecord.Decision(CreateObservation(1, 10, projectionValue: 7));
-        var second = DecisionJournalRecord.Decision(CreateObservation(2, 20, projectionValue: 8));
+        var candidate = new Guid("11111111-1111-1111-1111-111111111111");
+        var list = new Guid("22222222-2222-2222-2222-222222222222");
+        var view = new Guid("33333333-3333-3333-3333-333333333333");
+        var attribution = ServiceActionJournalAttribution.Routed(
+            candidate,
+            ServiceActionNativeTypeId.StructureSO,
+            list,
+            view);
+        var context = new ServiceActionContext(
+            Identity(1),
+            new BatchId(1),
+            new ActionId(1),
+            0,
+            new MonotonicTimestamp(10));
+        var result = ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected);
+        var fact = new ServiceActionFact(
+            context,
+            result,
+            new MonotonicTimestamp(10),
+            new MonotonicTimestamp(11));
+        var observation = new DecisionJournalActionObservation(
+            new ServiceCycleTraceServiceId(1),
+            in fact,
+            in attribution);
 
-        Assert.False(first.CanCoalesceWith(in second));
+        var record = DecisionJournalRecord.Action(in observation);
+
+        Assert.Equal(DecisionJournalRecordKind.Action, record.Kind);
+        Assert.Equal(candidate, record.Attribution.CandidateId);
+        Assert.Equal(ServiceActionNativeTypeId.StructureSO, record.Attribution.NativeType);
+        Assert.Equal(list, record.Attribution.ListId);
+        Assert.Equal(view, record.Attribution.ViewId);
+        Assert.Equal(ServiceActionDisposition.Rejected, record.ActionOutcome.Disposition);
+        Assert.Equal(CommonActionResultCodes.PolicyRejected.Value, record.ActionOutcome.Code);
     }
 
     [Fact]
-    public void WakeChangeBreaksSpan()
+    public void NativeAttributionRequiresBothCandidateUuidAndExactType()
     {
-        var first = DecisionJournalRecord.Decision(CreateObservation(1, 10, wakeTicks: 5));
-        var second = DecisionJournalRecord.Decision(CreateObservation(2, 20, wakeTicks: 6));
-
-        Assert.False(first.CanCoalesceWith(in second));
+        Assert.Throws<ArgumentException>(() => ServiceActionJournalAttribution.Native(
+            Guid.Empty,
+            ServiceActionNativeTypeId.StructureSO));
+        Assert.Throws<ArgumentException>(() => new ServiceActionJournalAttribution(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            ServiceActionNativeTypeId.NotApplicable,
+            Guid.Empty,
+            Guid.Empty,
+            ServiceActionRouteStatus.NotApplicable));
     }
 
     [Fact]
@@ -177,8 +187,8 @@ public sealed class DecisionJournalRecordTests
         var record = DecisionJournalRecord.Decision(in observation);
 
         Assert.Equal((ulong)4, record.FirstCycle);
-        Assert.Equal((ulong)0, record.Strategy);
-        Assert.Equal(CommonServiceDecisionCodes.CaptureUnavailable.Value, record.CaptureDecisionCode);
+        Assert.Equal(DecisionJournalDecisionOutcomeKind.Capture, record.DecisionOutcomeKind);
+        Assert.Equal(CommonServiceDecisionCodes.CaptureUnavailable.Value, record.DecisionOutcomeCode);
     }
 
     [Fact]
@@ -212,18 +222,7 @@ public sealed class DecisionJournalRecordTests
 
         Assert.Equal((ulong)5, record.FirstCycle);
         Assert.Equal(ServiceFaultCategory.Capture, record.FaultCategory);
-        Assert.Equal(0, record.CaptureDecisionCode);
+        Assert.Equal(DecisionJournalDecisionOutcomeKind.Fault, record.DecisionOutcomeKind);
+        Assert.Equal(CommonActionResultCodes.AdapterFault.Value, record.DecisionOutcomeCode);
     }
-
-    private static DecisionJournalObservation PublicationObservation(ulong cycleValue, long timestamp) =>
-        CreateObservation(
-            BatchReceipt.Completed(
-                Identity(cycleValue),
-                new BatchId(cycleValue),
-                actionCount: 1,
-                committedCount: 1,
-                default,
-                new MonotonicTimestamp(timestamp + 1),
-                publishedCount: 1),
-            timestamp);
 }

@@ -88,7 +88,9 @@ internal readonly struct AutoBuyCandidateRow
         bool isMaxQueuedLevel,
         bool meetsNextLevelRequirements,
         int costRowStart,
-        int costRowCount)
+        int costRowCount,
+        Guid owningListId = default,
+        Guid owningViewId = default)
         : this(
             kind,
             uuid,
@@ -101,7 +103,9 @@ internal readonly struct AutoBuyCandidateRow
             isMaxQueuedLevel,
             meetsNextLevelRequirements,
             costRowStart,
-            costRowCount)
+            costRowCount,
+            owningListId,
+            owningViewId)
     {
     }
 
@@ -117,11 +121,15 @@ internal readonly struct AutoBuyCandidateRow
         bool isMaxQueuedLevel,
         bool meetsNextLevelRequirements,
         int costRowStart,
-        int costRowCount)
+        int costRowCount,
+        Guid owningListId = default,
+        Guid owningViewId = default)
     {
         Kind = kind;
         Uuid = uuid;
         OwningView = owningView;
+        OwningListId = owningListId;
+        OwningViewId = owningViewId;
         IsAvailable = isAvailable;
         CurrentLevel = currentLevel;
         QueuedLevels = queuedLevels;
@@ -141,6 +149,8 @@ internal readonly struct AutoBuyCandidateRow
     /// availability. Every non-available member maps one-to-one to a planner exclusion reason.
     /// </summary>
     public AutoBuyOwningViewStatus OwningView { get; }
+    public Guid OwningListId { get; }
+    public Guid OwningViewId { get; }
     public bool IsAvailable { get; }
     public int CurrentLevel { get; }
     public int QueuedLevels { get; }

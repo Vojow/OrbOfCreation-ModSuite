@@ -2,6 +2,7 @@ using OrbAutomata;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbMentor;
 
@@ -18,6 +19,15 @@ internal static class MentorService
             in metadata,
             static () => new MentorWorkerDefinition(),
             ShouldStart,
+            static (in MentorCycleAction action) =>
+                ServiceActionJournalAttribution.Native(
+                    action.RecipientId,
+                    action.Domain switch
+                    {
+                        MasteryExperienceDomain.Spell => ServiceActionNativeTypeId.SpellRecipeSO,
+                        MasteryExperienceDomain.Artifact => ServiceActionNativeTypeId.EquipmentSO,
+                        _ => ServiceActionNativeTypeId.AlchemyRecipeSO,
+                    }),
             actions.TryExecute);
     }
 

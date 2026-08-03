@@ -138,6 +138,7 @@ public sealed partial class ServiceCycleArchitectureTests
                 "DefaultWakePolicy",
                 "FaultRecoveryPolicy",
                 "ShouldStart",
+                "DescribeAction",
                 "TryExecute",
             },
             MemberNames(typeof(IServiceCycleMainThreadDefinition<>)));

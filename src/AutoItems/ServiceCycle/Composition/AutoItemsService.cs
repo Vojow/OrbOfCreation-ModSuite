@@ -19,6 +19,10 @@ internal static class AutoItemsService
             in metadata,
             static () => new AutoItemsWorkerDefinition(),
             ShouldStart,
+            static (in AutoItemsCycleAction action) =>
+                ServiceActionJournalAttribution.Native(
+                    action.ItemId,
+                    ServiceActionNativeTypeId.ConsumableSO),
             actions.TryExecute);
     }
 

@@ -99,6 +99,8 @@ internal sealed class TypeSafetyDefinition<TState, TAction> :
         new WorkerDefinition(_state);
     public ServiceStartDecision ShouldStart(in SuiteRuntimeConfiguration config, in ServiceCycleStartContext context) =>
         ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
+    public ServiceActionJournalAttribution DescribeAction(in TAction action) =>
+        ServiceActionJournalAttribution.Publication;
     public ServiceActionResult TryExecute(
         in TAction action,
         in SuiteRuntimeConfiguration config,

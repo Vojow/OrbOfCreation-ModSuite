@@ -8,11 +8,10 @@ namespace OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Format;
 internal static class DecisionJournalSegmentCodec
 {
     /// <summary>
-    /// v2 added the span's published-action total. A v1 store cannot be continued: its records claim
-    /// zero publications, which is a different fact from "the writer did not know". Reconciliation
-    /// abandons and counts such a store rather than failing.
+    /// v3 replaces the fixed accounting record with compact attributed action outcomes. Older
+    /// stores cannot be continued and are loudly counted by reconciliation before recording starts.
     /// </summary>
-    internal const ushort SchemaVersion = 2;
+    internal const ushort SchemaVersion = 3;
     internal const int HeaderBytes = 80;
     internal const int FooterBytes = 40;
     internal const int MaximumRecords = 128;

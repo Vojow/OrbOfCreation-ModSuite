@@ -199,6 +199,8 @@ public sealed class ServiceCycleTombstoneRetentionTests
             in SuiteRuntimeConfiguration config,
             in ServiceCycleStartContext context) =>
             ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
+        public ServiceActionJournalAttribution DescribeAction(in RetainedAction action) =>
+            ServiceActionJournalAttribution.Publication;
         public ServiceActionResult TryExecute(
             in RetainedAction action,
             in SuiteRuntimeConfiguration config,
