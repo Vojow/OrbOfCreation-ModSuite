@@ -91,6 +91,7 @@ internal class ExecutionServiceDefinition :
         ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
     internal Action? ShouldStartCallback { get; set; }
     internal Action? ActionCallback { get; set; }
+    internal bool ThrowOnDescribeAction { get; set; }
     internal MonotonicTimestamp LastActionAttemptedAt { get; private set; }
     internal int StateCreateCount => _worker.StateCreateCount;
     internal int StateReleaseCount => _worker.StateReleaseCount;
@@ -110,6 +111,17 @@ internal class ExecutionServiceDefinition :
         StartCount++;
         ShouldStartCallback?.Invoke();
         return StartDecision;
+    }
+
+    public ServiceActionJournalAttribution DescribeAction(in ExecutionAction action)
+    {
+        if (ThrowOnDescribeAction)
+            throw new InvalidOperationException("attribution exploded");
+        return PublishesGeneration.HasValue
+            ? ServiceActionJournalAttribution.Publication
+            : ServiceActionJournalAttribution.Native(
+                new Guid("11111111-1111-1111-1111-111111111111"),
+                ServiceActionNativeTypeId.StructureSO);
     }
 
     public ServiceActionResult TryExecute(

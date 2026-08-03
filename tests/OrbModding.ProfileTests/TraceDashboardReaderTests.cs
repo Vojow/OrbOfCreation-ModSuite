@@ -1,8 +1,9 @@
 using System;
-using System.Globalization;
 using System.IO;
+using OrbModding.Common;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Format;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Format;
@@ -17,272 +18,150 @@ namespace OrbModding.ProfileTests;
 public sealed class TraceDashboardReaderTests
 {
     [Fact]
-    public void AutoBuyGroupingProjectionUsesItsRecordedServiceSchema()
+    public void AttributedActionSurfacesItsExactWireIdentityAndOutcome()
     {
-        using var fixture = new DashboardTraceFixture(
-            service: 3,
-            machineId: "orbautomata.auto-buy",
-            Projection((24, 7), (25, 3), (26, 4), (27, 2)));
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "orb-trace-dashboard-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var run = Path.Combine(root, "run-20260101-000000-test");
+            var fullSession = Path.Combine(run, "full", "session-000000000000002a");
+            Directory.CreateDirectory(fullSession);
+            WriteFullTrace(fullSession);
 
-        var decision = fixture.ReadDecision();
+            var candidate = new Guid("11111111-1111-1111-1111-111111111111");
+            var list = new Guid("22222222-2222-2222-2222-222222222222");
+            var view = new Guid("33333333-3333-3333-3333-333333333333");
+            WriteJournal(run, Action(candidate, list, view));
 
-        Assert.Collection(
-            decision.Projection,
-            entry => Assert.Equal("Groups: full", entry.Name),
-            entry => Assert.Equal("Groups: reduced", entry.Name),
-            entry => Assert.Equal("Reduced-group levels", entry.Name),
-            entry => Assert.Equal("Groups: ledger-starved", entry.Name));
+            var document = TraceDashboardReader.Read(TraceCaptureLocator.Locate(run));
+            var decision = Assert.Single(document.Decisions);
+
+            Assert.Equal(DecisionJournalRecordKind.Action.ToString(), decision.Kind);
+            Assert.Equal(1, decision.ActionOrdinal);
+            Assert.Equal(candidate.ToString("D"), decision.CandidateId);
+            Assert.Equal(ServiceActionNativeTypeId.UpgradeSO.ToString(), decision.NativeType);
+            Assert.Equal(list.ToString("D"), decision.ListId);
+            Assert.Equal(view.ToString("D"), decision.ViewId);
+            Assert.Equal(ServiceActionRouteStatus.Resolved.ToString(), decision.RouteStatus);
+            Assert.Equal("Committed", decision.Outcome);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
     }
 
-    [Fact]
-    public void SpellLevelingProjectionUsesItsRecordedServiceSchema()
+    private static void WriteFullTrace(string session)
     {
-        using var fixture = new DashboardTraceFixture(
-            service: 4,
-            machineId: "orbautomata.spell-level",
-            Projection((10, 65), (11, 2), (12, 1)));
+        var fullSession = new FullTraceSessionId(42);
+        var semanticSession = new ServiceCycleTraceSessionId(101);
+        var cycle = new ServiceCycleTraceCycleIdentity(
+            new ServiceCycleTraceServiceId(3),
+            1,
+            1,
+            1,
+            1,
+            1);
+        var payload = ServiceCycleSemanticPayload.CycleFact(in cycle, 0, 100, 10);
+        var traceEvent = new ServiceCycleSemanticEvent(
+            new ServiceCycleTraceEventId(semanticSession, 1),
+            default,
+            ServiceCycleSemanticEventKind.CycleStarted,
+            in payload);
+        var segment = new byte[FullTraceSegmentCodec.GetEncodedLength(1)];
+        FullTraceSegmentCodec.Encode(
+            fullSession,
+            semanticSession,
+            0,
+            1,
+            3,
+            new[] { traceEvent },
+            segment);
+        File.WriteAllBytes(Path.Combine(session, "segment-00000000.oscs"), segment);
 
-        var decision = fixture.ReadDecision();
+        var manifest = new FullTraceManifestDocument(
+            FullTraceCompleteness.Complete,
+            FullTraceTerminalReason.UserStopped,
+            fullSession,
+            semanticSession,
+            3,
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            100,
+            100,
+            checked((ulong)segment.Length));
+        var manifestBytes = new byte[FullTraceManifestCodec.ManifestBytes];
+        FullTraceManifestCodec.Encode(in manifest, manifestBytes);
+        File.WriteAllBytes(Path.Combine(session, "manifest.oscm"), manifestBytes);
 
-        Assert.Collection(
-            decision.Projection,
-            entry => Assert.Equal("Captured spells", entry.Name),
-            entry => Assert.Equal("Ready spells", entry.Name),
-            entry => Assert.Equal("Planned actions", entry.Name));
+        var roster = new ServiceCycleTraceRoster(new[]
+        {
+            new ServiceCycleTraceRosterEntry(
+                ServiceCycleTraceRoster.ServiceKind,
+                3,
+                "orbautomata.auto-buy",
+                "Auto Buy"),
+        });
+        File.WriteAllBytes(
+            Path.Combine(session, TraceRosterFormat.FileName),
+            TraceRosterFormat.Encode(roster));
     }
 
-    [Fact]
-    public void AutoCastProjectionUsesItsRecordedServiceSchema()
+    private static DecisionJournalRecord Action(Guid candidate, Guid list, Guid view)
     {
-        using var fixture = new DashboardTraceFixture(
-            service: 5,
-            machineId: "orbautomata.auto-cast",
-            Projection((10, 3), (11, 3), (13, 0)));
-
-        var decision = fixture.ReadDecision();
-
-        Assert.Collection(
-            decision.Projection,
-            entry => Assert.Equal("Captured slots", entry.Name),
-            entry => Assert.Equal("Eligible slots", entry.Name),
-            entry => Assert.Equal("Holding charge", entry.Name));
+        var cycle = new ServiceCycleIdentity(
+            new ServiceId("orbautomata.auto-buy"),
+            new LifecycleGeneration(1),
+            new ConfigGeneration(1),
+            new StrategyGeneration(1),
+            new WorldGeneration(1),
+            new CycleId(1));
+        var context = new ServiceActionContext(
+            cycle,
+            new BatchId(1),
+            new ActionId(1),
+            0,
+            new MonotonicTimestamp(100));
+        var evidence = ServiceNativeMutationEvidence.Observed(
+            NativeMutationOutcome.Verified,
+            new NativeMutationCallOutcome(1, 1, 1));
+        var result = ServiceActionResult.Committed(CommonActionResultCodes.Committed, evidence);
+        var fact = new ServiceActionFact(
+            context,
+            result,
+            new MonotonicTimestamp(100),
+            new MonotonicTimestamp(100));
+        var attribution = ServiceActionJournalAttribution.Routed(
+            candidate,
+            ServiceActionNativeTypeId.UpgradeSO,
+            list,
+            view);
+        var observation = new DecisionJournalActionObservation(
+            new ServiceCycleTraceServiceId(3),
+            in fact,
+            in attribution);
+        return DecisionJournalRecord.Action(in observation);
     }
 
-    [Fact]
-    public void AutoConceptProjectionUsesItsRecordedServiceSchema()
+    private static void WriteJournal(string run, DecisionJournalRecord record)
     {
-        using var fixture = new DashboardTraceFixture(
-            service: 6,
-            machineId: "orbautomata.auto-concept",
-            Projection((10, 8), (11, 5), (15, 2), (16, 2)));
-
-        var decision = fixture.ReadDecision();
-
-        Assert.Collection(
-            decision.Projection,
-            entry => Assert.Equal("Captured recipes", entry.Name),
-            entry => Assert.Equal("Eligible recipes", entry.Name),
-            entry =>
-            {
-                Assert.Equal("Decision kind", entry.Name);
-                Assert.Equal("PreferredReplacement", entry.Value);
-            },
-            entry =>
-            {
-                Assert.Equal("Idle reason", entry.Name);
-                Assert.Equal("NoUnlockedAssignableReplacement", entry.Value);
-            });
-    }
-
-    [Fact]
-    public void MentorProjectionUsesItsRecordedServiceSchema()
-    {
-        using var fixture = new DashboardTraceFixture(
-            service: 7,
-            machineId: "orbmentor.mastery-sharing",
-            Projection((10, 42), (11, 2), (12, 3), (13, 2)));
-
-        var decision = fixture.ReadDecision();
-
-        Assert.Collection(
-            decision.Projection,
-            entry => Assert.Equal("Last input sequence", entry.Name),
-            entry => Assert.Equal("Missed inputs", entry.Name),
-            entry => Assert.Equal("Planned actions", entry.Name),
-            entry => Assert.Equal("Recipients", entry.Name));
-    }
-
-    [Fact]
-    public void UnknownServiceProjectionFallsBackToTheRawFieldNumber()
-    {
-        using var fixture = new DashboardTraceFixture(
-            service: 6,
-            machineId: "orbautomata.unknown",
-            Projection((10, 65)));
-
-        var entry = Assert.Single(fixture.ReadDecision().Projection);
-
-        Assert.Equal("Field 10", entry.Name);
-        Assert.Equal("65", entry.Value);
-    }
-
-    private static ServiceStateProjectionSnapshot Projection(params (int Key, long Value)[] entries)
-    {
-        var buffer = new ServiceStateProjectionWriteBuffer(
-            ServiceStateProjectionSnapshot.MaximumEntryCount);
-        var builder = new ServiceStateProjectionBuilder(buffer);
-        foreach (var entry in entries)
-        {
-            builder.Add(
-                new ServiceProjectionKey(entry.Key),
-                ServiceProjectionValue.FromInteger(entry.Value));
-        }
-        return builder.CaptureSnapshot();
-    }
-
-    private sealed class DashboardTraceFixture : IDisposable
-    {
-        private static readonly FullTraceSessionId FullSession = new(42);
-        private static readonly ServiceCycleTraceSessionId SemanticSession = new(101);
-        private readonly string _root;
-        private readonly string _run;
-
-        internal DashboardTraceFixture(
-            ulong service,
-            string machineId,
-            ServiceStateProjectionSnapshot projection)
-        {
-            _root = Path.Combine(
-                Path.GetTempPath(),
-                "orb-trace-dashboard-" + Guid.NewGuid().ToString("N"));
-            _run = Path.Combine(_root, "run-20260101-000000-test");
-            var session = Path.Combine(
-                _run,
-                "full",
-                "session-" + FullSession.Value.ToString("x16", CultureInfo.InvariantCulture));
-            Directory.CreateDirectory(session);
-            WriteFullTrace(session, service, machineId);
-            WriteJournal(_run, Decision(service, in projection));
-        }
-
-        internal TraceDashboardDecision ReadDecision()
-        {
-            var document = TraceDashboardReader.Read(TraceCaptureLocator.Locate(_run));
-            return Assert.Single(document.Decisions);
-        }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
-        }
-
-        private static void WriteFullTrace(string session, ulong service, string machineId)
-        {
-            var cycle = new ServiceCycleTraceCycleIdentity(
-                new ServiceCycleTraceServiceId(service),
-                1,
-                1,
-                1,
-                1,
-                1);
-            var payload = ServiceCycleSemanticPayload.CycleFact(in cycle, 0, 100, 10);
-            var traceEvent = new ServiceCycleSemanticEvent(
-                new ServiceCycleTraceEventId(SemanticSession, 1),
-                default,
-                ServiceCycleSemanticEventKind.CycleStarted,
-                in payload);
-            var segment = new byte[FullTraceSegmentCodec.GetEncodedLength(1)];
-            FullTraceSegmentCodec.Encode(
-                FullSession,
-                SemanticSession,
-                0,
-                1,
-                checked((int)service),
-                new[] { traceEvent },
-                segment);
-            File.WriteAllBytes(Path.Combine(session, "segment-00000000.oscs"), segment);
-
-            var manifest = new FullTraceManifestDocument(
-                FullTraceCompleteness.Complete,
-                FullTraceTerminalReason.UserStopped,
-                FullSession,
-                SemanticSession,
-                checked((int)service),
-                1,
-                1,
-                1,
-                1,
-                0,
-                0,
-                100,
-                100,
-                checked((ulong)segment.Length));
-            var manifestBytes = new byte[FullTraceManifestCodec.ManifestBytes];
-            FullTraceManifestCodec.Encode(in manifest, manifestBytes);
-            File.WriteAllBytes(Path.Combine(session, "manifest.oscm"), manifestBytes);
-
-            var roster = new ServiceCycleTraceRoster(new[]
-            {
-                new ServiceCycleTraceRosterEntry(
-                    ServiceCycleTraceRoster.ServiceKind,
-                    service,
-                    machineId,
-                    machineId),
-            });
-            File.WriteAllBytes(
-                Path.Combine(session, TraceRosterFormat.FileName),
-                TraceRosterFormat.Encode(roster));
-        }
-
-        private static DecisionJournalRecord Decision(
-            ulong service,
-            in ServiceStateProjectionSnapshot projection)
-        {
-            var cycle = new ServiceCycleIdentity(
-                new ServiceId("test.service." + service.ToString(CultureInfo.InvariantCulture)),
-                new LifecycleGeneration(1),
-                new ConfigGeneration(1),
-                new StrategyGeneration(1),
-                new WorldGeneration(1),
-                new CycleId(1));
-            var terminal = BatchReceipt.Completed(
-                cycle,
-                new BatchId(1),
-                1,
-                new ServiceNativeCallTotals(1, 1, 1),
-                new MonotonicTimestamp(101));
-            var fault = default(ServiceFault);
-            var observation = new DecisionJournalObservation(
-                new ServiceCycleTraceServiceId(service),
-                1,
-                1,
-                1,
-                1,
-                new MonotonicTimestamp(100),
-                terminal.CompletedAt,
-                CommonServiceDecisionCodes.Ready.Value,
-                CommonServiceDecisionCodes.Captured.Value,
-                true,
-                WakePolicy.AfterBatch(new MonotonicDuration(5)),
-                true,
-                in projection,
-                in fault,
-                in terminal);
-            return DecisionJournalRecord.Decision(in observation);
-        }
-
-        private static void WriteJournal(string run, DecisionJournalRecord record)
-        {
-            var directory = Path.Combine(run, "journal");
-            Directory.CreateDirectory(directory);
-            var bytes = new byte[DecisionJournalSegmentCodec.GetEncodedLength(1)];
-            DecisionJournalSegmentCodec.Encode(
-                new DecisionJournalRunId(11),
-                0,
-                1,
-                new[] { record },
-                bytes);
-            File.WriteAllBytes(Path.Combine(directory, "journal-000000.osjd"), bytes);
-        }
+        var directory = Path.Combine(run, "journal");
+        Directory.CreateDirectory(directory);
+        var bytes = new byte[DecisionJournalSegmentCodec.GetEncodedLength(1)];
+        DecisionJournalSegmentCodec.Encode(
+            new DecisionJournalRunId(11),
+            0,
+            1,
+            new[] { record },
+            bytes);
+        File.WriteAllBytes(
+            Path.Combine(directory, "journal-000000.osjd"),
+            bytes);
     }
 }

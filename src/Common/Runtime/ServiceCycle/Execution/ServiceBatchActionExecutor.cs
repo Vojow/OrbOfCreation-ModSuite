@@ -2,6 +2,7 @@ using System;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime;
+using OrbModding.Common.Runtime.Tracing.BufferedSegments;
 #if SERVICE_CYCLE_PROFILE
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Profile;
 #endif
@@ -100,6 +101,7 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
         var snapshot = configuration.Snapshot;
         observer?.ActionAttempted(ordinal, in context);
         var executionStartedAt = _runtime.Clock.Now;
+        var attribution = DescribeAction(in action, out var attributionFailureReason);
         var result = ExecuteAction(in action, in snapshot, in context);
 
         var observedAt = _runtime.Clock.Now;
@@ -119,9 +121,6 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
         _runtime.State.NativeOutcome = ServiceActionResult.AddNativeOutcomes(
             in _runtime.State.NativeOutcome,
             in native);
-        if (result.Disposition == ServiceActionDisposition.Committed &&
-            result.Effect == ServiceActionEffect.Publication)
-            _runtime.State.PublishedCount++;
         if (result.Disposition == ServiceActionDisposition.Skipped &&
             result.Effect == ServiceActionEffect.None)
             _runtime.State.PreNativeSkippedCount++;
@@ -129,12 +128,16 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
         return advances
             ? _outcomes.Advance(
                 in actionFact,
+                in attribution,
+                attributionFailureReason,
                 in pendingRecovery,
                 observedAt,
                 result.Disposition == ServiceActionDisposition.Committed,
                 nonBlockingHandoff)
             : _outcomes.Terminate(
                 in actionFact,
+                in attribution,
+                attributionFailureReason,
                 in result,
                 in pendingRecovery,
                 index,
@@ -160,6 +163,31 @@ internal sealed class ServiceBatchActionExecutor<TState, TAction>
         catch
         {
             return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
+        }
+    }
+
+    private ServiceActionJournalAttribution DescribeAction(
+        in TAction action,
+        out string? failureReason)
+    {
+        try
+        {
+            var attribution = _runtime.Definition.DescribeAction(in action);
+            if (attribution.IsValid)
+            {
+                failureReason = null;
+                return attribution;
+            }
+            failureReason = "the service returned an invalid attribution value";
+            return ServiceActionJournalAttribution.Failed;
+        }
+        catch (Exception exception) when (!BufferedSegmentFailurePolicy.IsProcessFatal(exception))
+        {
+            var root = exception.GetBaseException();
+            failureReason = string.IsNullOrWhiteSpace(root.Message)
+                ? root.GetType().FullName ?? root.GetType().Name
+                : root.Message;
+            return ServiceActionJournalAttribution.Failed;
         }
     }
 

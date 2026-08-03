@@ -133,6 +133,9 @@ public sealed class ServiceReferenceResourceValidationTests
             in ServiceCycleStartContext context) =>
             ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
 
+        public ServiceActionJournalAttribution DescribeAction(in DefaultValueAction action) =>
+            ServiceActionJournalAttribution.Publication;
+
         public ServiceActionResult TryExecute(
             in DefaultValueAction action,
             in SuiteRuntimeConfiguration config,

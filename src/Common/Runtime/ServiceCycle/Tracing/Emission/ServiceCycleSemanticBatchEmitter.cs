@@ -134,8 +134,7 @@ internal sealed class ServiceCycleSemanticBatchEmitter
             totals.NativeCallsAttempted,
             totals.MutationAttempts,
             totals.MutationsCommitted,
-            receipt.CompletedAt.Ticks,
-            receipt.PublishedCount);
+            receipt.CompletedAt.Ticks);
         var emergency = receipt.EmergencyStop;
         if (receipt.HasEmergencyStopContext)
         {

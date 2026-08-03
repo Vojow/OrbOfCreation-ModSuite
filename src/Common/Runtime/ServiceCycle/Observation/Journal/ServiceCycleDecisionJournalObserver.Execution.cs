@@ -87,6 +87,13 @@ internal sealed partial class ServiceCycleDecisionJournalObserver
                 dispatch.RecoveredFault,
                 dispatch.Fault,
                 observedAt);
+            var actionFact = dispatch.ActionFact;
+            var attribution = dispatch.Attribution;
+            var action = new DecisionJournalActionObservation(
+                service.Service,
+                in actionFact,
+                in attribution);
+            _journal.ObserveAction(in action);
             if (!dispatch.BatchTerminal) return;
             if (service.ApplyTerminal(dispatch.Receipt, dispatch.Fault, observedAt, out var decision))
                 _journal.Observe(in decision);

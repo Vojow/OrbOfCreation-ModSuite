@@ -3,6 +3,7 @@ using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 using Xunit;
+using static OrbModding.Tests.Runtime.ServiceCycle.Observation.Journal.DecisionJournalObserverTestData;
 using static OrbModding.Tests.Runtime.ServiceCycle.Observation.Journal.DecisionJournalTestData;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.Observation.Journal;
@@ -25,12 +26,12 @@ public sealed class DecisionJournalCoalescerTests
     }
 
     [Fact]
-    public void DecisionChangeClosesPriorSpanImmediately()
+    public void DecisionOutcomeChangeClosesPriorSpanImmediately()
     {
         var sink = new RecordingSink();
         var journal = Create(sink);
-        journal.Observe(CreateObservation(1, 1, projectionValue: 7));
-        journal.Observe(CreateObservation(2, 2, projectionValue: 8));
+        journal.Observe(CreateObservation(1, 1));
+        journal.Observe(CreateObservation(2, 2, faultOccurrence: 1));
 
         Assert.Single(sink.Records);
         journal.Stop(new MonotonicTimestamp(3));
@@ -97,6 +98,55 @@ public sealed class DecisionJournalCoalescerTests
 
         Assert.Equal(3, sink.Records.Count);
         Assert.Equal(DecisionJournalRecordKind.EmergencyEntered, sink.Records[2].Kind);
+    }
+
+    [Fact]
+    public void BreakServiceSpanClearsActionCycleSuppression()
+    {
+        var sink = new RecordingSink();
+        var journal = Create(sink);
+        var dispatch = CompletedAction(1);
+        var fact = dispatch.ActionFact;
+        var attribution = dispatch.Attribution;
+        var action = new DecisionJournalActionObservation(
+            new ServiceCycleTraceServiceId(1),
+            in fact,
+            in attribution);
+        journal.ObserveAction(in action);
+
+        journal.BreakServiceSpan(new ServiceCycleTraceServiceId(1), new MonotonicTimestamp(46));
+        journal.Observe(CreateObservation(1, 47));
+        journal.Stop(new MonotonicTimestamp(49));
+
+        Assert.Equal(2, sink.Records.Count);
+        Assert.Equal(DecisionJournalRecordKind.DecisionSpan, sink.Records[1].Kind);
+    }
+
+    [Fact]
+    public void LifecycleTransitionClearsActionCycleSuppression()
+    {
+        var sink = new RecordingSink();
+        var journal = Create(sink);
+        var dispatch = CompletedAction(1);
+        var fact = dispatch.ActionFact;
+        var attribution = dispatch.Attribution;
+        var action = new DecisionJournalActionObservation(
+            new ServiceCycleTraceServiceId(1),
+            in fact,
+            in attribution);
+        journal.ObserveAction(in action);
+        var transition = DecisionJournalRecord.Transition(
+            DecisionJournalRecordKind.LifecycleChanged,
+            new ServiceCycleTraceServiceId(1),
+            2,
+            new MonotonicTimestamp(46));
+
+        journal.ObserveTransition(in transition);
+        journal.Observe(CreateObservation(1, 47));
+        journal.Stop(new MonotonicTimestamp(49));
+
+        Assert.Equal(3, sink.Records.Count);
+        Assert.Equal(DecisionJournalRecordKind.DecisionSpan, sink.Records[2].Kind);
     }
 
     [Fact]

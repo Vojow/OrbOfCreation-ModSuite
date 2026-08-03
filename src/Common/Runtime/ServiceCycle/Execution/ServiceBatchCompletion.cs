@@ -40,7 +40,6 @@ internal sealed class ServiceBatchCompletion<TState, TAction>
             _runtime.State.NativeOutcome,
             now,
             emergency,
-            _runtime.State.PublishedCount,
             _runtime.State.PreNativeSkippedCount);
         CompleteBatch(in receipt, now, true, nonBlockingHandoff);
         return true;
@@ -128,7 +127,6 @@ internal sealed class ServiceBatchCompletion<TState, TAction>
                 _runtime.Actions.Cursor,
                 _runtime.State.NativeOutcome,
                 now,
-                _runtime.State.PublishedCount,
                 _runtime.State.PreNativeSkippedCount);
             CompleteLifecycleOrphan(in receipt);
             return new ServiceRunnerRetirement(

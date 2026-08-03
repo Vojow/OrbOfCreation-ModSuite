@@ -103,18 +103,10 @@ internal sealed class AutoConceptCycleActionAdapter : IAutoConceptCycleActionPor
         in AutoConceptCycleAction action,
         in AutoConceptSubmission submission)
     {
+        if (submission.Verified) return;
         var replacement = action.ReplacementId == Guid.Empty
             ? string.Empty
             : $" with replacement {action.ReplacementId:D}";
-        if (submission.Verified)
-        {
-            var sign = submission.AppliedDelta >= 0 ? "+" : string.Empty;
-            Plugin.Log?.LogAutomataInfo(
-                $"Auto Concept completed {action.Kind} for {action.RecipeId:D}{replacement}; " +
-                $"quantity delta {sign}{submission.AppliedDelta}.");
-            return;
-        }
-
         var message =
             $"Auto Concept did not complete {action.Kind} for {action.RecipeId:D}{replacement}: " +
             submission.Reason;

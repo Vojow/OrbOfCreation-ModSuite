@@ -59,6 +59,9 @@ internal sealed class SyntheticServiceDefinition :
         in ServiceCycleStartContext context) =>
         ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
 
+    public ServiceActionJournalAttribution DescribeAction(in SyntheticAction action) =>
+        ServiceActionJournalAttribution.Publication;
+
 
     public ServiceActionResult TryExecute(
         in SyntheticAction action,

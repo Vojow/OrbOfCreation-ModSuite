@@ -75,17 +75,13 @@ internal sealed class DecisionJournalAnalysis
         private readonly ulong _run;
         private long _decisionSpans;
         private long _observations;
-        private long _captureAttempts;
-        private long _terminalCompleted;
-        private long _terminalRejected;
-        private long _terminalFaulted;
-        private long _terminalOrphaned;
-        private long _terminalUnavailable;
-        private long _plannedActions;
+        private long _cycles;
+        private long _batchDecisions;
+        private long _actions;
         private long _committedActions;
-        private long _nativeCalls;
-        private long _mutationAttempts;
-        private long _mutationsCommitted;
+        private long _rejectedActions;
+        private long _faultedActions;
+        private long _skippedActions;
         private long _faultBearingObservations;
         private long _lifecycleChanges;
         private long _worldGateHolds;
@@ -104,19 +100,32 @@ internal sealed class DecisionJournalAnalysis
                     _decisionSpans = checked(_decisionSpans + 1);
                     _observations = checked(_observations + record.RepeatCount);
                     if (record.FirstCycle != 0)
-                        _captureAttempts = checked(_captureAttempts + record.RepeatCount);
+                        _cycles = checked(_cycles + record.RepeatCount);
                     if (record.FaultCategory != 0)
                     {
                         _faultBearingObservations = checked(
                             _faultBearingObservations + record.RepeatCount);
                     }
-                    _plannedActions = checked(
-                        _plannedActions + checked((long)record.ActionCount * record.RepeatCount));
-                    _committedActions = checked(_committedActions + record.CommittedActions);
-                    _nativeCalls = checked(_nativeCalls + record.NativeCallsAttempted);
-                    _mutationAttempts = checked(_mutationAttempts + record.MutationAttempts);
-                    _mutationsCommitted = checked(_mutationsCommitted + record.MutationsCommitted);
-                    AddTerminal(record.TerminalDisposition, record.RepeatCount);
+                    if (record.DecisionOutcomeKind == DecisionJournalDecisionOutcomeKind.Batch)
+                        _batchDecisions = checked(_batchDecisions + record.RepeatCount);
+                    break;
+                case DecisionJournalRecordKind.Action:
+                    _actions = checked(_actions + 1);
+                    switch (record.ActionOutcome.Disposition)
+                    {
+                        case ServiceActionDisposition.Committed:
+                            _committedActions = checked(_committedActions + 1);
+                            break;
+                        case ServiceActionDisposition.Rejected:
+                            _rejectedActions = checked(_rejectedActions + 1);
+                            break;
+                        case ServiceActionDisposition.Faulted:
+                            _faultedActions = checked(_faultedActions + 1);
+                            break;
+                        case ServiceActionDisposition.Skipped:
+                            _skippedActions = checked(_skippedActions + 1);
+                            break;
+                    }
                     break;
                 case DecisionJournalRecordKind.LifecycleChanged:
                     _lifecycleChanges = checked(_lifecycleChanges + 1);
@@ -132,40 +141,17 @@ internal sealed class DecisionJournalAnalysis
             _service,
             _decisionSpans,
             _observations,
-            _captureAttempts,
-            _terminalCompleted,
-            _terminalRejected,
-            _terminalFaulted,
-            _terminalOrphaned,
-            _terminalUnavailable,
-            _plannedActions,
+            _cycles,
+            _batchDecisions,
+            _actions,
             _committedActions,
-            _nativeCalls,
-            _mutationAttempts,
-            _mutationsCommitted,
+            _rejectedActions,
+            _faultedActions,
+            _skippedActions,
             _faultBearingObservations,
             _lifecycleChanges,
             _worldGateHolds);
 
-        private void AddTerminal(BatchTerminalDisposition disposition, long count)
-        {
-            switch (disposition)
-            {
-                case 0: _terminalUnavailable = checked(_terminalUnavailable + count); break;
-                case BatchTerminalDisposition.Completed:
-                    _terminalCompleted = checked(_terminalCompleted + count);
-                    break;
-                case BatchTerminalDisposition.Rejected:
-                    _terminalRejected = checked(_terminalRejected + count);
-                    break;
-                case BatchTerminalDisposition.Faulted:
-                    _terminalFaulted = checked(_terminalFaulted + count);
-                    break;
-                case BatchTerminalDisposition.Orphaned:
-                    _terminalOrphaned = checked(_terminalOrphaned + count);
-                    break;
-            }
-        }
     }
 }
 
@@ -202,17 +188,13 @@ internal readonly struct DecisionJournalServiceSummary
         ulong service,
         long decisionSpans,
         long observations,
-        long captureAttempts,
-        long terminalCompleted,
-        long terminalRejected,
-        long terminalFaulted,
-        long terminalOrphaned,
-        long terminalUnavailable,
-        long plannedActions,
+        long cycles,
+        long batchDecisions,
+        long actions,
         long committedActions,
-        long nativeCalls,
-        long mutationAttempts,
-        long mutationsCommitted,
+        long rejectedActions,
+        long faultedActions,
+        long skippedActions,
         long faultBearingObservations,
         long lifecycleChanges,
         long worldGateHolds)
@@ -221,17 +203,13 @@ internal readonly struct DecisionJournalServiceSummary
         Service = service;
         DecisionSpans = decisionSpans;
         Observations = observations;
-        CaptureAttempts = captureAttempts;
-        TerminalCompleted = terminalCompleted;
-        TerminalRejected = terminalRejected;
-        TerminalFaulted = terminalFaulted;
-        TerminalOrphaned = terminalOrphaned;
-        TerminalUnavailable = terminalUnavailable;
-        PlannedActions = plannedActions;
+        Cycles = cycles;
+        BatchDecisions = batchDecisions;
+        Actions = actions;
         CommittedActions = committedActions;
-        NativeCalls = nativeCalls;
-        MutationAttempts = mutationAttempts;
-        MutationsCommitted = mutationsCommitted;
+        RejectedActions = rejectedActions;
+        FaultedActions = faultedActions;
+        SkippedActions = skippedActions;
         FaultBearingObservations = faultBearingObservations;
         LifecycleChanges = lifecycleChanges;
         WorldGateHolds = worldGateHolds;
@@ -241,17 +219,13 @@ internal readonly struct DecisionJournalServiceSummary
     internal ulong Service { get; }
     internal long DecisionSpans { get; }
     internal long Observations { get; }
-    internal long CaptureAttempts { get; }
-    internal long TerminalCompleted { get; }
-    internal long TerminalRejected { get; }
-    internal long TerminalFaulted { get; }
-    internal long TerminalOrphaned { get; }
-    internal long TerminalUnavailable { get; }
-    internal long PlannedActions { get; }
+    internal long Cycles { get; }
+    internal long BatchDecisions { get; }
+    internal long Actions { get; }
     internal long CommittedActions { get; }
-    internal long NativeCalls { get; }
-    internal long MutationAttempts { get; }
-    internal long MutationsCommitted { get; }
+    internal long RejectedActions { get; }
+    internal long FaultedActions { get; }
+    internal long SkippedActions { get; }
     internal long FaultBearingObservations { get; }
     internal long LifecycleChanges { get; }
 

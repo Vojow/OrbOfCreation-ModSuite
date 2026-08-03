@@ -27,6 +27,10 @@ internal static class SpellLevelService
                 in metadata,
                 createWorker: static () => new SpellLevelWorkerDefinition(),
                 shouldStart: ShouldStart,
+                describeAction: static (in SpellLevelCycleAction action) =>
+                    ServiceActionJournalAttribution.Native(
+                        action.Uuid,
+                        ServiceActionNativeTypeId.SpellRecipeSO),
                 execute: actions.TryExecute);
 
         // Only Spell Leveling's own policy, which is Auto Buy's: the feature has no settings of its

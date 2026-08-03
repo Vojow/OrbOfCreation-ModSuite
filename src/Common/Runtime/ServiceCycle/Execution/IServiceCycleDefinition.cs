@@ -27,6 +27,7 @@ public interface IServiceCycleMainThreadDefinition<TAction>
     ServiceStartDecision ShouldStart(
         in SuiteRuntimeConfiguration config,
         in ServiceCycleStartContext context);
+    ServiceActionJournalAttribution DescribeAction(in TAction action);
     ServiceActionResult TryExecute(
         in TAction action,
         in SuiteRuntimeConfiguration config,

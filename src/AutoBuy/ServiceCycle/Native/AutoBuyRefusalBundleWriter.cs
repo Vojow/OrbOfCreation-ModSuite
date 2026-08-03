@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 
 namespace OrbAutomata;
 
@@ -19,8 +20,8 @@ internal interface IAutoBuyRefusalBundlePort
 }
 
 /// <summary>
-/// Writes refusal bundles to a stable directory under the suite's trace root and keeps the newest
-/// few.
+/// Writes structural-refusal bundles to a stable directory under the suite's trace root and keeps
+/// the newest evidence within fixed count and byte budgets.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -37,6 +38,9 @@ internal sealed class AutoBuyRefusalBundleWriter : IAutoBuyRefusalBundlePort
 {
     /// <summary>Bundles that survive a write, counting the one being written.</summary>
     internal const int RetainedBundles = 8;
+    internal const long RetainedBytes = 1024L * 1024L;
+
+    private static readonly Encoding Utf8WithoutBom = new UTF8Encoding(false);
 
     private readonly Func<string> _directory;
 
@@ -52,11 +56,14 @@ internal sealed class AutoBuyRefusalBundleWriter : IAutoBuyRefusalBundlePort
         {
             var directory = _directory();
             if (string.IsNullOrWhiteSpace(directory)) return false;
+            var bytes = Utf8WithoutBom.GetBytes(contents ?? string.Empty);
+            if (bytes.LongLength > RetainedBytes) return false;
             Directory.CreateDirectory(directory);
             var target = Path.Combine(directory, AutoBuyRefusalBundle.FileName(utcNow));
-            File.WriteAllText(target, contents ?? string.Empty);
+            if (File.Exists(target)) return false;
+            if (!MakeRoom(directory, Path.GetFileName(target), bytes.LongLength)) return false;
+            File.WriteAllBytes(target, bytes);
             path = target;
-            Sweep(directory, Path.GetFileName(target));
             return true;
         }
         catch (Exception exception) when (IsRecoverable(exception))
@@ -66,42 +73,49 @@ internal sealed class AutoBuyRefusalBundleWriter : IAutoBuyRefusalBundlePort
     }
 
     /// <summary>
-    /// Deletes the oldest bundles until at most <see cref="RetainedBundles"/> remain. The file name
-    /// carries a fixed-width UTC timestamp, so ordinal order is chronological order without trusting
-    /// filesystem timestamps a copied directory would not preserve.
+    /// Deletes oldest owned bundles before the write until both count and byte budgets have room.
+    /// The file name carries a fixed-width UTC timestamp, so ordinal order is chronological without
+    /// trusting filesystem timestamps a copied directory would not preserve.
     /// </summary>
-    private static void Sweep(string directory, string current)
+    private static bool MakeRoom(string directory, string current, long incomingBytes)
     {
-        var names = new List<string>();
-        try
+        var existing = new List<BundleFile>();
+        foreach (var file in Directory.EnumerateFiles(
+                     directory,
+                     AutoBuyRefusalBundle.FileNamePrefix + "*.txt"))
         {
-            foreach (var file in Directory.EnumerateFiles(directory, AutoBuyRefusalBundle.FileNamePrefix + "*.txt"))
-            {
-                var name = Path.GetFileName(file);
-                if (!string.Equals(name, current, StringComparison.Ordinal)) names.Add(name);
-            }
-        }
-        catch (Exception exception) when (IsRecoverable(exception))
-        {
-            return;
+            var name = Path.GetFileName(file);
+            if (string.Equals(name, current, StringComparison.Ordinal)) continue;
+            existing.Add(new BundleFile(name, new FileInfo(file).Length));
         }
 
-        names.Sort(StringComparer.Ordinal);
-        var removable = names.Count - (RetainedBundles - 1);
-        for (var index = 0; index < removable; index++)
+        existing.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Name, right.Name));
+        var totalBytes = incomingBytes;
+        foreach (var bundle in existing) totalBytes = checked(totalBytes + bundle.Bytes);
+        var index = 0;
+        while (existing.Count - index + 1 > RetainedBundles || totalBytes > RetainedBytes)
         {
-            try
-            {
-                File.Delete(Path.Combine(directory, names[index]));
-            }
-            catch (Exception exception) when (IsRecoverable(exception))
-            {
-                // A file someone is reading, or one the filesystem refuses, waits for the next write.
-            }
+            if (index >= existing.Count) return false;
+            var bundle = existing[index++];
+            File.Delete(Path.Combine(directory, bundle.Name));
+            totalBytes -= bundle.Bytes;
         }
+        return true;
+    }
+
+    private readonly struct BundleFile
+    {
+        public BundleFile(string name, long bytes)
+        {
+            Name = name;
+            Bytes = bytes;
+        }
+
+        public string Name { get; }
+        public long Bytes { get; }
     }
 
     private static bool IsRecoverable(Exception exception) =>
         exception is IOException or UnauthorizedAccessException or ArgumentException or
-            NotSupportedException or System.Security.SecurityException;
+            NotSupportedException or OverflowException or System.Security.SecurityException;
 }

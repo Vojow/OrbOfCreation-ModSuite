@@ -119,7 +119,9 @@ internal readonly struct AutoBuyCycleAction
         long collectedAtEpoch,
         int count,
         AutoBuyPlanBelief belief,
-        MonotonicTimestamp worldCollectedAt)
+        MonotonicTimestamp worldCollectedAt,
+        Guid owningListId = default,
+        Guid owningViewId = default)
     {
         if (kind is not (AutoBuyCandidateKind.Structure or AutoBuyCandidateKind.Upgrade))
             throw new ArgumentOutOfRangeException(nameof(kind));
@@ -133,6 +135,8 @@ internal readonly struct AutoBuyCycleAction
         Count = count;
         Belief = belief;
         WorldCollectedAt = worldCollectedAt;
+        OwningListId = owningListId;
+        OwningViewId = owningViewId;
     }
 
     public AutoBuyCandidateKind Kind { get; }
@@ -156,6 +160,10 @@ internal readonly struct AutoBuyCycleAction
 
     /// <summary>When the world snapshot was collected, for refusal timing diagnostics.</summary>
     public MonotonicTimestamp WorldCollectedAt { get; }
+
+    /// <summary>The deterministic authored list/view route that admitted this candidate.</summary>
+    public Guid OwningListId { get; }
+    public Guid OwningViewId { get; }
 
     /// <summary>
     /// How many levels this action should request for its candidate — the live bulk or multiplier

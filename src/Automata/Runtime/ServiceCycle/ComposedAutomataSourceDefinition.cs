@@ -20,6 +20,7 @@ internal sealed class ComposedAutomataSourceDefinition<TState, TAction> :
     private readonly AutomataSourceWorkerFactory<TState, TAction> _createWorker;
     private readonly AutomataStartPolicy _shouldStart;
     private readonly AutomataSourceCapture _capture;
+    private readonly AutomataDescribeAction<TAction> _describeAction;
     private readonly AutomataExecute<TAction> _execute;
 
     internal ComposedAutomataSourceDefinition(
@@ -27,6 +28,7 @@ internal sealed class ComposedAutomataSourceDefinition<TState, TAction> :
         AutomataSourceWorkerFactory<TState, TAction> createWorker,
         AutomataStartPolicy shouldStart,
         AutomataSourceCapture capture,
+        AutomataDescribeAction<TAction> describeAction,
         AutomataExecute<TAction> execute)
     {
         ServiceId = metadata.ServiceId;
@@ -35,6 +37,7 @@ internal sealed class ComposedAutomataSourceDefinition<TState, TAction> :
         _createWorker = createWorker ?? throw new ArgumentNullException(nameof(createWorker));
         _shouldStart = shouldStart ?? throw new ArgumentNullException(nameof(shouldStart));
         _capture = capture ?? throw new ArgumentNullException(nameof(capture));
+        _describeAction = describeAction ?? throw new ArgumentNullException(nameof(describeAction));
         _execute = execute ?? throw new ArgumentNullException(nameof(execute));
     }
 
@@ -62,4 +65,7 @@ internal sealed class ComposedAutomataSourceDefinition<TState, TAction> :
         in SuiteRuntimeConfiguration config,
         in ServiceActionContext context) =>
         _execute(in action, in config, in context);
+
+    public ServiceActionJournalAttribution DescribeAction(in TAction action) =>
+        _describeAction(in action);
 }

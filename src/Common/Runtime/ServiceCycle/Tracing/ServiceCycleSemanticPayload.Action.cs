@@ -16,19 +16,17 @@ public readonly partial struct ServiceCycleSemanticPayload
         long nativeCalls,
         long mutationAttempts,
         long mutationsCommitted,
-        long timestampTicks,
-        int publishedCount = 0) =>
+        long timestampTicks) =>
         new(
             CycleFields | ServiceCycleSemanticFields.Batch | ServiceCycleSemanticFields.Disposition |
             ServiceCycleSemanticFields.Code | ServiceCycleSemanticFields.ActionCount |
             ServiceCycleSemanticFields.CommittedCount | ServiceCycleSemanticFields.ActionIndex |
             ServiceCycleSemanticFields.UntouchedSuffixCount | ServiceCycleSemanticFields.NativeCallTotals |
-            ServiceCycleSemanticFields.PublishedCount | ServiceCycleSemanticFields.Timestamp,
+            ServiceCycleSemanticFields.Timestamp,
             identity.Service.Value, identity.LifecycleGeneration, identity.ConfigurationGeneration,
             identity.StrategyGeneration, 0, identity.CycleId, batch, 0, 0,
             timestampTicks, 0, 0, 0, 0, code, disposition, terminalIndex, actionCount, committedCount,
             suffixCount, 0, nativeCalls, mutationAttempts, mutationsCommitted, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            publishedCount,
             world: identity.WorldGeneration);
 
     internal static ServiceCycleSemanticPayload ActionFact(

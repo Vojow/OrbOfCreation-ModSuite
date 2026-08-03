@@ -156,6 +156,20 @@ public sealed class SuiteFramePump : IDisposable
     public SuiteFramePumpReport PumpFrame(long frameIdentity) =>
         _executor.Pump(frameIdentity);
 
+    internal int AttributionFailureCount => _state.AttributionFailures.Count;
+
+    internal ServiceActionAttributionFailure AttributionFailureAt(int index)
+    {
+        EnsureIdle("Action-attribution failures cannot be read while a frame is being pumped.");
+        return _state.AttributionFailures.At(index);
+    }
+
+    internal void ClearAttributionFailures()
+    {
+        EnsureIdle("Action-attribution failures cannot be cleared while a frame is being pumped.");
+        _state.AttributionFailures.Clear();
+    }
+
     /// <summary>
     /// Applies what the configuration slot says about the emergency stop, ahead of the frame.
     /// </summary>

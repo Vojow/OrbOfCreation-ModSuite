@@ -29,6 +29,32 @@ namespace OrbModding.Tests.Services.AutoBuy.Runtime.ServiceCycle;
 public sealed class AutoBuyServiceCompositionTests
 {
     [Fact]
+    public void DefinitionAttributesTheExactCandidateTypeListAndView()
+    {
+        var candidate = Guid.NewGuid();
+        var list = Guid.NewGuid();
+        var view = Guid.NewGuid();
+        var definition = AutoBuyService.Define(new ActionPort(Thread.CurrentThread.ManagedThreadId));
+        var action = new AutoBuyCycleAction(
+            AutoBuyCandidateKind.Structure,
+            candidate,
+            collectedAtEpoch: 1,
+            count: 1,
+            belief: default,
+            worldCollectedAt: default,
+            owningListId: list,
+            owningViewId: view);
+
+        var attribution = definition.DescribeAction(in action);
+
+        Assert.Equal(candidate, attribution.CandidateId);
+        Assert.Equal(ServiceActionNativeTypeId.StructureSO, attribution.NativeType);
+        Assert.Equal(list, attribution.ListId);
+        Assert.Equal(view, attribution.ViewId);
+        Assert.Equal(ServiceActionRouteStatus.Resolved, attribution.RouteStatus);
+    }
+
+    [Fact]
     public void CommonPumpExecutesThePlainServiceThroughMainThreadPorts()
     {
         var ownerThread = Thread.CurrentThread.ManagedThreadId;
@@ -82,6 +108,9 @@ public sealed class AutoBuyServiceCompositionTests
         pump.PumpFrame(3);
 
         Assert.True(actions.ExecutionCount > 0);
+        Assert.NotEqual(Guid.Empty, actions.LastCandidateId);
+        Assert.NotEqual(Guid.Empty, actions.LastListId);
+        Assert.NotEqual(Guid.Empty, actions.LastViewId);
     }
 
     [Fact]
@@ -176,6 +205,9 @@ public sealed class AutoBuyServiceCompositionTests
 
         public ActionPort(int ownerThread) => _ownerThread = ownerThread;
         public int ExecutionCount { get; private set; }
+        public Guid LastCandidateId { get; private set; }
+        public Guid LastListId { get; private set; }
+        public Guid LastViewId { get; private set; }
 
         public ServiceActionResult TryExecute(
             in AutoBuyCycleAction action,
@@ -184,6 +216,9 @@ public sealed class AutoBuyServiceCompositionTests
         {
             Assert.Equal(_ownerThread, Thread.CurrentThread.ManagedThreadId);
             ExecutionCount++;
+            LastCandidateId = action.Uuid;
+            LastListId = action.OwningListId;
+            LastViewId = action.OwningViewId;
             var call = new NativeMutationCallOutcome(1, 1, 1);
             return ServiceActionResult.Committed(
                 CommonActionResultCodes.Committed,

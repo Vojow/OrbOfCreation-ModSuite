@@ -62,6 +62,9 @@ public sealed class AutoItemsServiceCycleTypeSafetyTests
             in ServiceCycleStartContext context) =>
             ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
 
+        public ServiceActionJournalAttribution DescribeAction(in AutoItemsCycleAction action) =>
+            ServiceActionJournalAttribution.Native(action.ItemId, ServiceActionNativeTypeId.ConsumableSO);
+
         public ServiceActionResult TryExecute(
             in AutoItemsCycleAction action,
             in SuiteRuntimeConfiguration config,

@@ -93,6 +93,8 @@ internal sealed class ServiceActionOutcomeWindowProjection :
     public long TimelineRevision => _timelineRevision;
     public bool IsFaulted => false;
 
+    public void ObserveAction(in DecisionJournalActionObservation observation) { }
+
     public ServiceActionOutcomeWindowCopyResult CopyTo(
         Span<ServiceActionOutcomeSnapshot> destination)
     {

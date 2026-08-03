@@ -23,6 +23,10 @@ internal static class AutoScribeService
             in metadata,
             () => new AutoScribeWorkerDefinition(profile),
             ShouldStart,
+            static (in AutoScribeCycleAction action) =>
+                ServiceActionJournalAttribution.Native(
+                    action.RecipeId,
+                    ServiceActionNativeTypeId.CraftingRecipeSO),
             actions.TryExecute);
     }
 

@@ -132,6 +132,9 @@ internal sealed class LifecycleServiceDefinition :
         return ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready);
     }
 
+    public ServiceActionJournalAttribution DescribeAction(in LifecycleAction action) =>
+        ServiceActionJournalAttribution.Publication;
+
     public ServiceActionResult TryExecute(
         in LifecycleAction action,
         in SuiteRuntimeConfiguration config,

@@ -147,13 +147,15 @@ internal static class AutoBuyFrameProjector
             return;
         }
 
+        var owningView = OwningView(
+            world, kind, uuid, categoryId, out var owningListId, out var owningViewId);
         Append(
             ref candidates,
             candidateCount,
             new AutoBuyCandidateRow(
                 kind,
                 uuid,
-                OwningView(world, kind, uuid, categoryId),
+                owningView,
                 levels.IsAvailable,
                 levels.CurrentLevel,
                 levels.QueuedLevels,
@@ -162,7 +164,9 @@ internal static class AutoBuyFrameProjector
                 levels.IsMaxQueuedLevel,
                 levels.MeetsNextLevelRequirements,
                 costStart,
-                costRowCount));
+                costRowCount,
+                owningListId,
+                owningViewId));
         candidateCount++;
     }
 
@@ -170,8 +174,12 @@ internal static class AutoBuyFrameProjector
         GameWorldState world,
         AutoBuyCandidateKind kind,
         Guid candidateId,
-        Guid categoryId)
+        Guid categoryId,
+        out Guid owningListId,
+        out Guid owningViewId)
     {
+        owningListId = Guid.Empty;
+        owningViewId = Guid.Empty;
         if (!WorldLookup.TryFind(
                 world.PurchaseViewRelations,
                 candidateId,
@@ -248,7 +256,11 @@ internal static class AutoBuyFrameProjector
             }
 
             if (routeReadable && routeAvailable)
+            {
+                owningListId = route.ListId;
+                owningViewId = route.ViewId;
                 return AutoBuyOwningViewStatus.Available;
+            }
             if (!routeReadable) unreadable = true;
         }
         return unreadable

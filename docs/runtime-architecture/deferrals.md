@@ -32,8 +32,11 @@ other three streams answer most bug reports. Resume from
 
 ## The suite's on-disk cap
 
-The journal half of the ~100 MB cap is done. The cap as the north star states it also covers BepInEx's
-own logs, and nothing constrains `LogOutput.log`, so the mandate is open.
+The always-on journal has a 64 MiB envelope, routine per-action success/no-op logging is absent, and
+structural refusal bundles have a 1 MiB envelope. The cap as the north star states it also covers
+BepInEx's own retention and explicitly armed diagnostic sessions. BepInEx owns `LogOutput.log`, while
+full traces intentionally have no live byte cutoff, so the combined mandate remains open even though
+ordinary release steady state is bounded by design.
 
 ## Worker-side profile stages
 
@@ -75,8 +78,9 @@ acknowledged-build path stays fail-closed at each adapter. Quantify the per-cand
 
 ## Auto Buy's parked items
 
-- **Structured "X of Y levels" in the trace and journal.** The per-action level counts are text-log
-  only. The shared `NativeMutationCallOutcome` is a *call*-count model whose coherence invariant
+- **Structured "X of Y levels" in the trace and journal.** Routine per-action text narration is not
+  emitted, and the compact journal deliberately carries only one outcome sentinel. The shared
+  `NativeMutationCallOutcome` is a *call*-count model whose coherence invariant
   (`committed == attempts` for a verified action) cannot express "3 of 5 levels", so carrying it needs a
   new feature-scoped units field on the shared `ServiceActionResult` plus recorder and journal plumbing.
   It cuts across the Auto Harvest action path too, where "harvested X of Y" would use the same field, so

@@ -122,22 +122,17 @@ internal sealed class SpellLevelCycleActionAdapter : ISpellLevelCycleActionPort
 
     private static void Narrate(in SpellLevelCycleAction action, in SpellLevelSubmission submission)
     {
+        if (submission.Verified || submission.Preflight is not (
+                SpellLevelPreflight.Proceeded or SpellLevelPreflight.ContractUnavailable))
+            return;
+
         var what = action.Kind == SpellLevelActionKind.All
             ? "every ready spell"
             : $"spell {action.Uuid:D}";
-        if (submission.Verified)
-        {
-            Plugin.Log?.LogAutomataInfo($"Spell Leveling bought a mastery level for {what}.");
-            return;
-        }
-
         var message =
             $"Spell Leveling did not level {what}: {submission.Reason} " +
             $"(planned at mastery {action.Belief.MasteryLevel} with {action.Belief.ReadySpellCount} ready).";
-        if (submission.Preflight == SpellLevelPreflight.Proceeded)
-            Plugin.Log?.LogAutomataWarning(message);
-        else
-            Plugin.Log?.LogAutomataInfo(message);
+        Plugin.Log?.LogAutomataWarning(message);
     }
 
     private bool Owns()

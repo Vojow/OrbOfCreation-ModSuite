@@ -12,8 +12,8 @@ internal interface IAutoBuyRefusalResponsePort
 }
 
 /// <summary>
-/// Writes every refusal in full, skips expected affordability staleness, and stands Auto Buy down
-/// only for structural or otherwise impossible disagreements.
+/// Logs expected affordability staleness without a synchronous capture, and stands Auto Buy down
+/// with one bounded diagnostic only for structural or otherwise impossible disagreements.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -59,19 +59,20 @@ internal sealed class AutoBuyRefusalResponder : IAutoBuyRefusalResponsePort
         // refusal again.
         if (!_isActive()) return;
 
-        var now = _utcNow();
-        var located = _bundles.TryWrite(AutoBuyRefusalBundle.Render(in report, now), now, out var path);
-        var where = located ? path : "unavailable (the bundle could not be written)";
         if (report.Diagnosis.Classification ==
             AutoBuyRefusalClassification.AffordabilityChanged)
         {
             var affordabilitySummary =
                 $"Auto Buy skipped a purchase whose live resources had moved since planning " +
-                $"({report.Candidate}): {report.Diagnosis.Describe()}. Diagnostic bundle: {where}. " +
+                $"({report.Candidate}): {report.Diagnosis.Describe()}. " +
                 "Auto Buy remains enabled and will re-plan from the next world collection.";
             _log(affordabilitySummary);
             return;
         }
+
+        var now = _utcNow();
+        var located = _bundles.TryWrite(AutoBuyRefusalBundle.Render(in report, now), now, out var path);
+        var where = located ? path : "unavailable (the bundle could not be written or retained within budget)";
 
         var summary =
             $"Auto Buy planned a purchase the game would not take ({report.Candidate}): " +

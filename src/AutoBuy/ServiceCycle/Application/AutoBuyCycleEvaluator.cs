@@ -203,7 +203,9 @@ internal static class AutoBuyCycleEvaluator
                 frame.Global.CollectedAtEpoch,
                 count,
                 preferredCount == 1 ? decision.Belief : belief,
-                frame.Global.CollectedAt);
+                frame.Global.CollectedAt,
+                candidate.OwningListId,
+                candidate.OwningViewId);
             actions.Add(in action);
             emitted++;
             requestedLevels = checked(requestedLevels + count);

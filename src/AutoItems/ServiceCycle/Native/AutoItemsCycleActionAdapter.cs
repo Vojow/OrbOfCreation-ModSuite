@@ -67,7 +67,6 @@ internal sealed class AutoItemsCycleActionAdapter : IAutoItemsCycleActionPort
             submission = AutoItemsSubmission.Reject(
                 AutoItemsPreflight.ContractUnavailable,
                 reason);
-            Plugin.Log?.LogAutomataWarning(reason);
         }
 
         _health.Observe(in submission);
