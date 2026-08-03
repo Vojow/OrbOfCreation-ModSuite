@@ -238,10 +238,13 @@ public sealed class AutoScribeOneShotCraftGameActionTests : IDisposable
 
         _lifecycle = 2;
         var stale = Submit(actionBoundary, fixture.Action);
+        _lifecycle = 0;
+        var invalid = Submit(actionBoundary, fixture.Action);
         _lifecycle = 1;
         var wrongThread = await Task.Run(() => Submit(actionBoundary, fixture.Action));
 
         Assert.Equal(AutoScribePreflight.LifecycleReplaced, stale.Preflight);
+        Assert.Equal(AutoScribePreflight.LifecycleReplaced, invalid.Preflight);
         Assert.Equal(AutoScribePreflight.WrongThread, wrongThread.Preflight);
         Assert.Equal(0, fixture.Recipe.PurchaseCalls);
     }

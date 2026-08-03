@@ -64,7 +64,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
                 AutoScribePreflight.ContractUnavailable,
                 "The live lifecycle could not be read: " + ex.GetBaseException().Message);
         }
-        if (liveLifecycle != action.CollectedAtEpoch)
+        if (liveLifecycle <= 0 || liveLifecycle != action.CollectedAtEpoch)
             return AutoScribeSubmission.Reject(
                 AutoScribePreflight.LifecycleReplaced,
                 "Action lifecycle " + action.CollectedAtEpoch +
@@ -721,9 +721,9 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
         foreach (var value in work)
         {
             if (ReferenceEquals(value, instance) &&
-                Invoke<Guid>(native.InstanceRecipe, instance) == recipeId &&
-                Level(InvokeObject(native.InstanceQuantity, instance)) == level &&
-                !Invoke<bool>(native.InstanceExpired, instance))
+                Invoke<Guid>(native.InstanceRecipe, value) == recipeId &&
+                Level(InvokeObject(native.InstanceQuantity, value)) == level &&
+                !Invoke<bool>(native.InstanceExpired, value))
                 return true;
         }
         return false;

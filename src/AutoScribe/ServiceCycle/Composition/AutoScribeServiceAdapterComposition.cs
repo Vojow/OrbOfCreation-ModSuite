@@ -36,7 +36,10 @@ internal sealed class AutoScribeServiceAdapterComposition
             dependencies.ReadOwnershipFailure,
             health);
         return new AutoScribeServiceAdapterComposition(
-            AutoScribeService.Define(dependencies.Profile, actionPort),
+            AutoScribeService.Define(
+                dependencies.Profile,
+                actionPort,
+                dependencies.OwnsActionFamily),
             gameAction,
             health);
     }

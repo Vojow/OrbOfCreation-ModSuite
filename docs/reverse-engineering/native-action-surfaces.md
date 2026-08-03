@@ -416,6 +416,14 @@ Two `CraftingInstanceListVariable`s hold the live work: `ActiveScribeInstances`
 repeating instance per recipe in the second; neither list retains caller ownership, so those
 instances are observable but not editable by anyone else.
 
+Queue ownership and `CraftingInstance.IsAuto()` normally agree, but the game does not make that
+an invariant at insertion. `CraftingInstanceListVariable.Initialize()` normalizes existing items
+with `SetAuto(isAutoList)`, `UICraftingPage.QueueCraft()` creates a non-auto instance, and
+`CraftingInstanceListVariable.AutomateCraft()` calls `SetAuto()` before adding an automatic one.
+However, inherited `GenericListVariable<CraftingInstance>.Add()` does not set the flag and the
+public `CraftingInstance.SetAuto(bool)` remains mutable after insertion. World capture therefore
+verifies both facts and fails loudly if an instance contradicts its containing queue.
+
 New queued work is proved by reference membership of the exact newly constructed instance, not by
 finding any instance with the same recipe and quantity. Instant work has no queue destination;
 `CraftingInstance.InstantCraft()` reaches `CompleteCraft`, whose monotonic sentinel for a one-shot

@@ -53,7 +53,7 @@ internal static class AutoScribeServiceProjection
                     break;
                 case BlockedReasonKey
                     when entry.Value.Integer is >= (int)AutoScribeEvidenceReason.None
-                        and <= (int)AutoScribeEvidenceReason.TargetEvidenceContradictory:
+                        and <= (int)AutoScribeEvidenceReason.QueueEvidenceUnavailable:
                     blockedReason = (AutoScribeEvidenceReason)entry.Value.Integer;
                     break;
             }

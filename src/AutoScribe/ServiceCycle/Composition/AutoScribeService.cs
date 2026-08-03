@@ -9,10 +9,12 @@ internal static class AutoScribeService
 {
     internal static IAutomataServiceDefinition<AutoScribeCycleState, AutoScribeCycleAction> Define(
         AutoScribeIdentityProfile profile,
-        IAutoScribeCycleActionPort actions)
+        IAutoScribeCycleActionPort actions,
+        Func<bool> ownsActionFamily)
     {
         if (profile is null) throw new ArgumentNullException(nameof(profile));
         if (actions is null) throw new ArgumentNullException(nameof(actions));
+        if (ownsActionFamily is null) throw new ArgumentNullException(nameof(ownsActionFamily));
         var metadata = new AutomataServiceMetadata(
             AutoScribeServicePolicies.ServiceId,
             WakePolicy.OnPublication,
@@ -22,18 +24,29 @@ internal static class AutoScribeService
         return AutomataService.Define<AutoScribeCycleState, AutoScribeCycleAction>(
             in metadata,
             () => new AutoScribeWorkerDefinition(profile),
-            ShouldStart,
+            (in SuiteRuntimeConfiguration config, in ServiceCycleStartContext context) =>
+                ShouldStart(in config, in context, ownsActionFamily),
             actions.TryExecute);
     }
 
-    private static ServiceStartDecision ShouldStart(
+    internal static ServiceStartDecision ShouldStart(
         in SuiteRuntimeConfiguration config,
-        in ServiceCycleStartContext context) =>
-        AutoScribeConfigurationPolicy.IsOperational(config)
+        in ServiceCycleStartContext context,
+        Func<bool> ownsActionFamily) =>
+        AutoScribeConfigurationPolicy.IsOperational(config) && Owns(ownsActionFamily)
             ? ServiceStartDecision.Ready(CommonServiceDecisionCodes.Ready)
             : ServiceStartDecision.Wait(
                 CommonServiceDecisionCodes.NotReady,
                 WakePolicy.OnPublication);
+
+    private static bool Owns(Func<bool> ownsActionFamily)
+    {
+        try { return ownsActionFamily(); }
+        catch (Exception ex) when (ex is InvalidOperationException or MemberAccessException)
+        {
+            return false;
+        }
+    }
 }
 
 internal static class AutoScribeServicePolicies

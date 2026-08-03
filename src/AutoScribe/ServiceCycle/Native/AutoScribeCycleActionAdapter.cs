@@ -54,8 +54,8 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
             return ServiceActionResult.Rejected(CommonActionResultCodes.LifecycleReplaced);
 
         var submission = _gameAction.Submit(in action);
-        _health.Observe(in submission);
-        if (AutoScribeActionHealth.IsFailure(in submission))
+        var enteredFailure = _health.Observe(in submission);
+        if (enteredFailure)
             Plugin.Log?.LogAutomataWarning(
                 $"Auto Scribe {submission.Stage}/{submission.Preflight}: {submission.Reason}");
         return Map(in submission);
@@ -101,22 +101,11 @@ internal sealed class AutoScribeCycleActionAdapter : IAutoScribeCycleActionPort
                 ? ServiceActionResult.Committed(CommonActionResultCodes.Committed, evidence)
                 : ServiceActionResult.Faulted(code, evidence);
         }
-        return IsExpectedRejection(submission.Preflight)
+        return AutoScribeSubmissionPolicy.Classify(in submission) ==
+            AutoScribeSubmissionClass.Backpressure
             ? ServiceActionResult.Rejected(code)
             : ServiceActionResult.Faulted(code);
     }
-
-    private static bool IsExpectedRejection(AutoScribePreflight preflight) =>
-        preflight is AutoScribePreflight.IdentityUnavailable or
-            AutoScribePreflight.RelationshipMismatch or
-            AutoScribePreflight.RecipeUnavailable or
-            AutoScribePreflight.TargetUnavailable or
-            AutoScribePreflight.QueueFull or
-            AutoScribePreflight.CompetingSupply or
-            AutoScribePreflight.Unaffordable or
-            AutoScribePreflight.MutationPermitUnavailable or
-            AutoScribePreflight.Quarantined or
-            AutoScribePreflight.LifecycleReplaced;
 
     private bool Owns()
     {

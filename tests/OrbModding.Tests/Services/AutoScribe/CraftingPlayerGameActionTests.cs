@@ -219,6 +219,8 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
 
         _lifecycle = 12;
         var stale = Submit(boundary, recipe, lifecycle: 11);
+        _lifecycle = 0;
+        var invalid = Submit(boundary, recipe, lifecycle: 0);
         _lifecycle = 11;
         _permit = false;
         var noPermit = Submit(boundary, recipe);
@@ -226,6 +228,7 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
         var wrongThread = await Task.Run(() => Submit(boundary, recipe));
 
         Assert.Equal(CraftingPlayerPreflight.LifecycleReplaced, stale.Preflight);
+        Assert.Equal(CraftingPlayerPreflight.LifecycleReplaced, invalid.Preflight);
         Assert.Equal(CraftingPlayerPreflight.MutationPermitUnavailable, noPermit.Preflight);
         Assert.Equal(CraftingPlayerPreflight.WrongThread, wrongThread.Preflight);
         Assert.Equal(0, recipe.PurchaseCalls);

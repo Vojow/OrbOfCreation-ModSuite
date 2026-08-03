@@ -15185,6 +15185,25 @@
       "place": "capture"
     },
     {
+      "id": "auto-scribe.instance.auto",
+      "assembly": "assembly-csharp",
+      "type": "CraftingInstance",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsAuto",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata Auto Scribe world publication"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "auto-scribe.instance.check-instant",
       "assembly": "assembly-csharp",
       "type": "CraftingInstance",

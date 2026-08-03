@@ -11,7 +11,9 @@ evidence for any enabled producible role blocks the complete service for that pu
 the first exact role and reason. A healthy role is never produced around an unknown sibling.
 Published `ActiveScribeInstances` occupancy is normal backpressure: a full queue emits no action and
 waits for another world publication. The GameAction still revalidates live room immediately before
-payment so a queue race is an ordinary refusal, not a feature fault.
+payment so a queue race is an ordinary refusal, not a feature fault. Action-family contention is
+also publication-level backpressure: the service does not start a worker or schedule an action
+until it owns `CraftingQueueSubmission`.
 
 Selection uses stable semantic roles and an audited cost rank as a fair rotating order:
 Advancement, Power, Learning, Excellence, Development, then Echoing. The cursor survives across
@@ -56,8 +58,11 @@ queue or that exact instance reached native completion on the instant path. It d
 resource balances, Scroll ledgers, reconstruct payment deltas, or assemble a receipt. After a native
 exception it rereads that same sentinel; an observable outcome commits, while an absent transition
 faults and quarantines this GameAction until lifecycle replacement. Ordinary pre-payment refusals
-remain quiet; only contract, ownership, thread, or post-payment ambiguity enters action health and
-warning logs. Nothing attempts rollback of game-owned irreversible effects.
+and readiness/ownership contention remain quiet. Contract and relationship contradictions,
+wrong-thread execution, post-payment ambiguity, and failed verification enter action health and
+warning logs. A warning is emitted when that failure state is entered or changes; a persistent
+quarantine does not warn again on each publication. Nothing attempts rollback of game-owned
+irreversible effects.
 
 The same `AutoScribeOneShotCraftGameAction` also owns the manual one-shot player capability exposed
 as `game_craft`. Its player overload leaves the Auto Scribe planner and mutation boundary unchanged, but

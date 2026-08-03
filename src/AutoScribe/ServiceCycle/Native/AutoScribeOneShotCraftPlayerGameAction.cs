@@ -33,7 +33,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 CraftingPlayerPreflight.LifecycleReplaced,
                 "The live lifecycle could not be read: " + ex.GetBaseException().Message);
         }
-        if (liveLifecycle != action.LifecycleEpoch)
+        if (liveLifecycle <= 0 || liveLifecycle != action.LifecycleEpoch)
             return CraftingPlayerSubmission.Reject(
                 in action,
                 CraftingPlayerPreflight.LifecycleReplaced,

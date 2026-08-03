@@ -350,11 +350,15 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             {
                 if (value is null) continue;
                 var instance = RequireExact(value, native.InstanceType, "CraftingInstance");
+                var instanceAutomatic = Invoke<bool>(native.InstanceAutomatic, instance);
+                if (instanceAutomatic != isAutomatic)
+                    throw new InvalidOperationException(
+                        $"CraftingInstance.IsAuto() contradicted containing Scribe queue {EntityIdentityFormatter.Format(queueId)}.");
                 frame.ScribeWork.Append(new WorldScribeWork(
                     queueId,
                     Invoke<Guid>(native.InstanceRecipe, instance),
                     Level(InvokeObject(native.InstanceQuantity, instance)),
-                    isAutomatic,
+                    instanceAutomatic,
                     Invoke<bool>(native.InstanceExpired, instance)));
                 sampled++;
             }
@@ -619,6 +623,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             MethodInfo listMaximum,
             MethodInfo instanceRecipe,
             MethodInfo instanceQuantity,
+            MethodInfo instanceAutomatic,
             MethodInfo instanceExpired,
             MethodInfo enchantmentInstanceIdentity,
             MethodInfo enchantmentIdentity,
@@ -669,6 +674,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             ListMaximum = listMaximum;
             InstanceRecipe = instanceRecipe;
             InstanceQuantity = instanceQuantity;
+            InstanceAutomatic = instanceAutomatic;
             InstanceExpired = instanceExpired;
             EnchantmentInstanceIdentity = enchantmentInstanceIdentity;
             EnchantmentIdentity = enchantmentIdentity;
@@ -720,6 +726,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
         internal MethodInfo ListMaximum { get; }
         internal MethodInfo InstanceRecipe { get; }
         internal MethodInfo InstanceQuantity { get; }
+        internal MethodInfo InstanceAutomatic { get; }
         internal MethodInfo InstanceExpired { get; }
         internal MethodInfo EnchantmentInstanceIdentity { get; }
         internal MethodInfo EnchantmentIdentity { get; }
@@ -803,6 +810,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
                     MethodFromHierarchy(instanceList, "GetMax", typeof(int)),
                     MethodFromHierarchy(instance, "GetGuidReference", typeof(Guid)),
                     Method(instance, "GetQuantity", bigDouble, Instance),
+                    Method(instance, "IsAuto", typeof(bool), Instance),
                     Method(instance, "IsExpired", typeof(bool), Instance),
                     MethodFromHierarchy(enchantInstance, "GetGuidReference", typeof(Guid)),
                     MethodFromHierarchy(enchantment, "GetGuid", typeof(Guid)),
