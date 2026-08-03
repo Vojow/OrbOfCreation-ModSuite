@@ -533,6 +533,7 @@ internal sealed class AutomataActionFamilyOwnership : IDisposable
         GameMcpCommandKind.AlchemyLoadout => AlchemyLoadoutFamilies,
         GameMcpCommandKind.RitualLifecycle => RitualLifecycleFamilies,
         GameMcpCommandKind.GenericLevel => GenericLevelFamilies,
+        GameMcpCommandKind.CraftingStation => ScribeFamilies,
         GameMcpCommandKind.Loadout => PlayerLoadoutFamilies,
         GameMcpCommandKind.HarvestLifecycle => HarvestLifecycleFamilies,
         GameMcpCommandKind.StructureLifecycle => StructureLifecycleFamilies,

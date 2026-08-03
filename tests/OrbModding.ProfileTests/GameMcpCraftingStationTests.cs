@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Newtonsoft.Json.Linq;
+using OrbAutomata;
 using OrbAutomata.GameMcp;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
@@ -20,6 +21,32 @@ public sealed class GameMcpCraftingStationTests
     private static readonly Guid SecondId = Guid.Parse("fd000000-0000-0000-0000-000000000005");
     private static readonly Guid OutputId = Guid.Parse("fd000000-0000-0000-0000-000000000006");
     private static readonly Guid ResourceId = Guid.Parse("fd000000-0000-0000-0000-000000000007");
+
+    [Theory]
+    [InlineData((int)GameMcpCommandKind.CraftingStation, "set_level")]
+    [InlineData((int)GameMcpCommandKind.AlchemyLoadout, "add")]
+    [InlineData((int)GameMcpCommandKind.RitualLifecycle, "select")]
+    [InlineData((int)GameMcpCommandKind.GenericLevel, "purchase")]
+    [InlineData((int)GameMcpCommandKind.Loadout, "select")]
+    [InlineData((int)GameMcpCommandKind.HarvestLifecycle, "add_element")]
+    [InlineData((int)GameMcpCommandKind.StructureLifecycle, "disable")]
+    [InlineData((int)GameMcpCommandKind.ReturnToMenu, "return_to_menu")]
+    public void EveryMissionCommandKindHasAnOperationScopedActionFamily(
+        int kindValue,
+        string mode)
+    {
+        using var ownership = new AutomataActionFamilyOwnership(
+            new ActionFamilyOwnershipRegistry());
+
+        Assert.True(ownership.TryBeginGameMcpOperation(
+            (GameMcpCommandKind)kindValue,
+            mode,
+            out var scope,
+            out var reason), reason);
+        if ((GameMcpCommandKind)kindValue == GameMcpCommandKind.CraftingStation)
+            Assert.True(ownership.TryCaptureScribeMutationPermit());
+        scope.Dispose();
+    }
 
     [Fact]
     public void Tool_exposes_exactly_the_three_selectors_level_and_activation_controls()
