@@ -377,7 +377,8 @@ internal static class OwnedMasteryCostMath
                 positions[at++] = raw.Position;
             }
 
-            ScaleCosts(costs, standardId, spell.MasteryLevel + 1, programs, entries);
+            if (!ScaleCosts(costs, standardId, spell.MasteryLevel + 1, programs, entries))
+                return PublicationTable<WorldMasteryCost>.Empty;
             for (var index = 0; index < costs.Length; index++)
             {
                 var affordable = WorldLookup.TryFind(resources, costs[index].ResourceId, out var resource) &&
@@ -392,7 +393,7 @@ internal static class OwnedMasteryCostMath
         return PublicationTable<WorldMasteryCost>.Create(rows, written);
     }
 
-    private static void ScaleCosts(
+    private static bool ScaleCosts(
         Span<GameResourceCost> costs,
         Guid standardId,
         int level,
@@ -403,13 +404,15 @@ internal static class OwnedMasteryCostMath
         {
             for (var index = 0; index < costs.Length; index++)
             {
-                WorldModifierProgramMath.TryAdjustScaledList(
-                    programs, entries, standardId, WorldModifierProgramRole.SpellLevelingStandard,
-                    new BigDouble(level - 1), costs[index].Value, out var value);
+                if (!WorldModifierProgramMath.TryAdjustScaledList(
+                        programs, entries, standardId, WorldModifierProgramRole.SpellLevelingStandard,
+                        new BigDouble(level - 1), costs[index].Value, out var value))
+                    return false;
                 costs[index] = costs[index].WithValue(value);
             }
         }
         GameCostMath.RoundToTwoSigs(costs);
+        return true;
     }
 
     internal static bool TryFindRange(

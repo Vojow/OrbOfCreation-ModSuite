@@ -25,6 +25,7 @@ internal sealed class DifferentialVerificationSession
 {
     private readonly int _tickBudget;
     private readonly int _entityBudget;
+    private bool _currentEntityWasExpectedSkip;
 
     internal DifferentialVerificationSession(
         string subject = "Game math",
@@ -46,6 +47,7 @@ internal sealed class DifferentialVerificationSession
     internal int TicksElapsed { get; private set; }
     internal int EntitiesVerified { get; private set; }
     internal int Unverifiable { get; private set; }
+    internal int ExpectedSkips { get; private set; }
 
     /// <summary>The first reason an entity could not be read, kept for the verdict line.</summary>
     internal string FirstUnverifiableReason { get; private set; } = string.Empty;
@@ -81,12 +83,32 @@ internal sealed class DifferentialVerificationSession
     /// caller should <see cref="Complete"/>.
     /// </summary>
     internal bool WantsMoreWork() =>
-        IsRunning && TicksElapsed < _tickBudget && EntitiesVerified + Unverifiable < _entityBudget;
+        IsRunning && TicksElapsed < _tickBudget &&
+        EntitiesVerified + Unverifiable + ExpectedSkips < _entityBudget;
 
     /// <summary>Whether another entity fits within the entity budget this tick.</summary>
-    internal bool HasEntityBudget() => EntitiesVerified + Unverifiable < _entityBudget;
+    internal bool HasEntityBudget() =>
+        EntitiesVerified + Unverifiable + ExpectedSkips < _entityBudget;
 
-    internal void RecordVerified() => EntitiesVerified++;
+    internal void RecordVerified()
+    {
+        if (_currentEntityWasExpectedSkip)
+        {
+            _currentEntityWasExpectedSkip = false;
+            return;
+        }
+        EntitiesVerified++;
+    }
+
+    /// <summary>
+    /// Classifies the current entity as an expected skip. The caller's ordinary successful-entity
+    /// bookkeeping is consumed rather than also counting this entity as verified.
+    /// </summary>
+    internal void RecordExpectedSkip()
+    {
+        ExpectedSkips++;
+        _currentEntityWasExpectedSkip = true;
+    }
 
     internal void RecordUnverifiable(string reason)
     {
@@ -110,7 +132,9 @@ internal sealed class DifferentialVerificationSession
         if (EntitiesVerified == 0)
         {
             var reason = FirstUnverifiableReason.Length == 0
-                ? "no entities were available to check."
+                ? ExpectedSkips > 0
+                    ? $"{ExpectedSkips} entities were uninstantiated."
+                    : "no entities were available to check."
                 : FirstUnverifiableReason;
             return $"{Subject} verification INCONCLUSIVE: nothing could be verified — {reason}";
         }
@@ -118,6 +142,7 @@ internal sealed class DifferentialVerificationSession
         var summary = Run.Summarize();
         var detail = $" [{EntitiesVerified} entities";
         if (Unverifiable > 0) detail += $", {Unverifiable} unreadable";
+        if (ExpectedSkips > 0) detail += $", {ExpectedSkips} uninstantiated";
 
         // Stated only when the run actually spanned frames. A single-frame run always spent exactly
         // one tick, so reporting it says nothing and invites the reader to ask what the others were.

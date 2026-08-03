@@ -9,6 +9,7 @@ namespace OrbModding.Tests.Runtime.Verification;
 
 public sealed class AutomataOwnedFormulaVerifierTests
 {
+    private static readonly Guid ConceptId = Guid.Parse("50000000-0000-0000-0000-000000000001");
     private static readonly Guid SpellId = Guid.Parse("60000000-0000-0000-0000-000000000001");
     private static readonly Guid ResourceId = Guid.Parse("70000000-0000-0000-0000-000000000001");
 
@@ -54,6 +55,47 @@ public sealed class AutomataOwnedFormulaVerifierTests
         Assert.False(new AutomataConceptDrainVerifier(typeof(object), typeof(object)).IsAvailable);
     }
 
+    [Fact]
+    public void UninstantiatedConceptRecipeIsAnExpectedNamedSkip()
+    {
+        var verifier = new AutomataConceptDrainVerifier(typeof(DrainRecipe), typeof(DrainInstance));
+        var session = new DifferentialVerificationSession("Concept drain");
+        session.Start();
+
+        var verified = verifier.TryVerify(
+            new DrainRecipe(), new GameWorldState(), session.Run, session, out var failure);
+        if (verified) session.RecordVerified();
+        else session.RecordUnverifiable(failure);
+
+        Assert.True(verified);
+        Assert.Equal(string.Empty, failure);
+        Assert.Equal(1, session.ExpectedSkips);
+        Assert.Equal(0, session.EntitiesVerified);
+        Assert.Equal(0, session.Unverifiable);
+    }
+
+    [Fact]
+    public void InstantiatedConceptRecipeWithoutBasisRemainsUnverifiable()
+    {
+        var instances = PublicationTable<WorldAlchemyInstance>.Create(new[]
+        {
+            new WorldAlchemyInstance(ConceptId, 1, 1, true, BigDouble.One),
+        });
+        var verifier = new AutomataConceptDrainVerifier(typeof(DrainRecipe), typeof(DrainInstance));
+        var session = new DifferentialVerificationSession("Concept drain");
+        session.Start();
+
+        var verified = verifier.TryVerify(
+            new DrainRecipe(), new GameWorldState { AlchemyInstances = instances },
+            session.Run, session, out var failure);
+        if (!verified) session.RecordUnverifiable(failure);
+
+        Assert.False(verified);
+        Assert.Contains("no immutable owned drain basis", failure, StringComparison.Ordinal);
+        Assert.Equal(0, session.ExpectedSkips);
+        Assert.Equal(1, session.Unverifiable);
+    }
+
     private static string VerifySpell(double ownedAmount, double nativeAmount)
     {
         var resource = new ResourceSO();
@@ -82,5 +124,20 @@ public sealed class AutomataOwnedFormulaVerifierTests
         else session.RecordUnverifiable(failure);
         session.EndTick();
         return session.Complete();
+    }
+
+    private sealed class DrainRecipe
+    {
+        public Guid GetGuid() => ConceptId;
+        public int GetMaxUsageSlots() => 1;
+    }
+
+    private sealed class DrainInstance
+    {
+        public int quantity = 1;
+
+        public DrainInstance(DrainRecipe recipe) => _ = recipe;
+
+        public BigDouble GetDrainCostMod() => BigDouble.One;
     }
 }

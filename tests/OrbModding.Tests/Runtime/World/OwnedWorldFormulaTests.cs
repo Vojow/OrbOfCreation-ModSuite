@@ -42,6 +42,17 @@ public sealed class OwnedWorldFormulaTests
     }
 
     [Fact]
+    public void MasteryScalingRefusesARecordShapedStandardInsteadOfUsingUnscaledCosts()
+    {
+        var world = MasteryWorld(
+            masteryLevel: 1,
+            new RawMasteryCost(Recipe, 0, ResourceA, new BigDouble(10)),
+            standardIsRecord: true);
+
+        Assert.Equal(0, world.Count);
+    }
+
+    [Fact]
     public void OrdinaryAffordabilityDividesByQualityAndIgnoresReservation()
     {
         var resource = Resource(quantity: 4, capacity: 100, quality: 200, bandwidth: false);
@@ -152,7 +163,8 @@ public sealed class OwnedWorldFormulaTests
         int masteryLevel,
         RawMasteryCost first = default,
         RawMasteryCost second = default,
-        double perLevelRaw = 0)
+        double perLevelRaw = 0,
+        bool standardIsRecord = false)
     {
         var costs = new RawMasteryCostBuffer();
         if (first.ResourceId != Guid.Empty) costs.Append(in first);
@@ -161,7 +173,8 @@ public sealed class OwnedWorldFormulaTests
         var spell = SpellSample(masteryLevel);
         spells.Append(in spell);
         var program = new WorldModifierProgram(
-            Recipe, WorldModifierProgramRole.SpellLevelingStandard, false, 0, false, default);
+            Recipe, WorldModifierProgramRole.SpellLevelingStandard,
+            standardIsRecord, 0, false, default);
         var programs = PublicationTable<WorldModifierProgram>.Create(new[] { program });
         var entries = perLevelRaw == 0
             ? PublicationTable<WorldModifierProgramEntry>.Empty

@@ -167,19 +167,6 @@ internal sealed class WorldAlchemyInstanceBuffer
         if (_count >= _samples.Length) Array.Resize(ref _samples, _samples.Length * 2);
         _samples[_count++] = sample;
     }
-
-    internal void Append(in WorldAlchemyInstance row)
-    {
-        var sample = new RawWorldAlchemyInstance(
-            row.RecipeId,
-            row.Quantity,
-            row.QueuedQuantity,
-            row.DrainReadable,
-            isDrainApplied: true,
-            row.DrainRatio,
-            row.DrainRatio);
-        Append(in sample);
-    }
 }
 
 internal static class WorldAlchemyRowDeriver

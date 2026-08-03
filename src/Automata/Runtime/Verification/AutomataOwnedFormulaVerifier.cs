@@ -46,6 +46,12 @@ internal sealed class AutomataConceptDrainVerifier
         try
         {
             var id = (Guid)_recipeId!.Invoke(recipe, null)!;
+            if (!WorldAlchemyInstanceLookup.TryFind(world.AlchemyInstances, id, out var active))
+            {
+                timing.RecordExpectedSkip();
+                failure = string.Empty;
+                return true;
+            }
             if (!WorldConceptDrainBasisDeriver.TryFind(world.ConceptDrainBasis, id, out _) ||
                 !WorldAlchemyCostLookup.TryFindRange(
                     world.AlchemyCosts, id, WorldAlchemyCostKind.RecipeDrain,
@@ -56,9 +62,7 @@ internal sealed class AutomataConceptDrainVerifier
             }
 
             var maximum = (int)_maximum!.Invoke(recipe, null)!;
-            var current = WorldAlchemyInstanceLookup.TryFind(world.AlchemyInstances, id, out var active)
-                ? Math.Max(active.Quantity, active.QueuedQuantity)
-                : 0;
+            var current = Math.Max(active.Quantity, active.QueuedQuantity);
             if (!WorldModifierProgramMath.TryFoldRecord(
                     world.ModifierPrograms,
                     world.ModifierProgramEntries,
