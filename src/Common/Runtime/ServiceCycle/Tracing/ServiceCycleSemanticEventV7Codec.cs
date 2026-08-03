@@ -6,6 +6,7 @@ namespace OrbModding.Common.Runtime.ServiceCycle.Tracing;
 internal static class ServiceCycleSemanticEventV7Codec
 {
     internal const int RecordBytes = 288;
+    private const ulong RetiredPublishedCountField = 1UL << 25;
 
     internal static void Write(Span<byte> bytes, in ServiceCycleSemanticEvent item)
     {
@@ -18,8 +19,8 @@ internal static class ServiceCycleSemanticEventV7Codec
         WriteU64(bytes, 24, item.Parent.Sequence);
         WriteI32(bytes, 32, (int)item.Kind);
         var payload = item.Payload;
-        // Retired publication accounting. Per-action effect/evidence is authoritative; the old
-        // batch ledger slot stays burned so schema-v7 readers fail closed on any non-zero value.
+        // Retired publication accounting. Per-action effect/evidence is authoritative; new records
+        // burn the old batch-ledger slot to zero.
         WriteU32(bytes, 36, 0);
         WriteU64(bytes, 40, (ulong)payload.Fields);
         WriteU64(bytes, 48, payload.Service);
@@ -66,14 +67,24 @@ internal static class ServiceCycleSemanticEventV7Codec
     internal static ServiceCycleSemanticEvent Read(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length != RecordBytes) throw Invalid();
-        if (ReadU32(bytes, 36) != 0) throw Invalid();
         var id = ReadIdentity(bytes, 0, 8, required: true);
         var parent = ReadIdentity(bytes, 16, 24, required: false);
         var kindValue = ReadI32(bytes, 32);
         if (kindValue is < (int)ServiceCycleSemanticEventKind.ConfigurationPublished or
             > (int)ServiceCycleSemanticEventKind.ActionSkipped) throw Invalid();
+        var kind = (ServiceCycleSemanticEventKind)kindValue;
+        var fields = ReadU64(bytes, 40);
+        var hasRetiredPublicationCount = (fields & RetiredPublishedCountField) != 0;
+        var retiredPublicationCount = ReadU32(bytes, 36);
+        var batchTerminal = kind is ServiceCycleSemanticEventKind.BatchCompleted or
+            ServiceCycleSemanticEventKind.BatchAborted or ServiceCycleSemanticEventKind.BatchOrphaned;
+        if (hasRetiredPublicationCount && !batchTerminal ||
+            retiredPublicationCount != 0 &&
+            (!hasRetiredPublicationCount || retiredPublicationCount > int.MaxValue))
+            throw Invalid();
+        fields &= ~RetiredPublishedCountField;
         var payload = new ServiceCycleSemanticPayload(
-            (ServiceCycleSemanticFields)ReadU64(bytes, 40),
+            (ServiceCycleSemanticFields)fields,
             ReadU64(bytes, 48), ReadU64(bytes, 56), ReadU64(bytes, 64), ReadU64(bytes, 72),
             ReadU64(bytes, 80), ReadU64(bytes, 88), ReadU64(bytes, 96), ReadU64(bytes, 104), ReadU64(bytes, 112),
             ReadI64(bytes, 120), ReadI64(bytes, 128), ReadI64(bytes, 136), ReadI64(bytes, 144), ReadU64(bytes, 152),
@@ -86,7 +97,7 @@ internal static class ServiceCycleSemanticEventV7Codec
             ReadI32(bytes, 284));
         try
         {
-            return new ServiceCycleSemanticEvent(id, parent, (ServiceCycleSemanticEventKind)kindValue, in payload);
+            return new ServiceCycleSemanticEvent(id, parent, kind, in payload);
         }
         catch (ArgumentException)
         {
