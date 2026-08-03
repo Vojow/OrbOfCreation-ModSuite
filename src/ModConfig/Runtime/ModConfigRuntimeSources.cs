@@ -2,8 +2,6 @@ using System;
 using OrbModding.Common;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
-using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
-using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime.Verification;
@@ -21,8 +19,7 @@ internal sealed class ModConfigRuntimeSources
         IRuntimeDiagnosticsSource diagnostics,
         IServiceActionOutcomeWindowSource actionOutcomes,
         IServiceCyclePumpTimingSource pumpTiming,
-        IManualFullTraceControl manualFullTrace,
-        IHostTraceDumpControl hostTraceDump,
+        IDiagnosticsBundleControl diagnosticsBundle,
         IDifferentialVerificationControl differentialVerification,
         IDecisionJournalStatusSource decisionJournal
 #if SERVICE_CYCLE_PROFILE
@@ -35,8 +32,7 @@ internal sealed class ModConfigRuntimeSources
         Diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         ActionOutcomes = actionOutcomes ?? throw new ArgumentNullException(nameof(actionOutcomes));
         PumpTiming = pumpTiming ?? throw new ArgumentNullException(nameof(pumpTiming));
-        ManualFullTrace = manualFullTrace ?? throw new ArgumentNullException(nameof(manualFullTrace));
-        HostTraceDump = hostTraceDump ?? throw new ArgumentNullException(nameof(hostTraceDump));
+        DiagnosticsBundle = diagnosticsBundle ?? throw new ArgumentNullException(nameof(diagnosticsBundle));
         DifferentialVerification = differentialVerification ??
                                    throw new ArgumentNullException(nameof(differentialVerification));
         DecisionJournal = decisionJournal ?? throw new ArgumentNullException(nameof(decisionJournal));
@@ -50,8 +46,7 @@ internal sealed class ModConfigRuntimeSources
     public IRuntimeDiagnosticsSource Diagnostics { get; }
     public IServiceActionOutcomeWindowSource ActionOutcomes { get; }
     public IServiceCyclePumpTimingSource PumpTiming { get; }
-    public IManualFullTraceControl ManualFullTrace { get; }
-    public IHostTraceDumpControl HostTraceDump { get; }
+    public IDiagnosticsBundleControl DiagnosticsBundle { get; }
     public IDifferentialVerificationControl DifferentialVerification { get; }
     public IDecisionJournalStatusSource DecisionJournal { get; }
 #if SERVICE_CYCLE_PROFILE

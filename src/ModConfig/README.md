@@ -89,7 +89,8 @@ It presents:
 - configuration-schema and feature-health status;
 - per-service capability state and current reason;
 - latest scheduling and cycle evidence;
-- explicit start/stop controls for manual full traces;
+- one bug-report action that packages already-held evidence into a capped zip;
+- a separate player-facing game-math check;
 - start/stop controls for profiling builds;
 - read-only rolling decision-journal health; and
 - one 30-minute automation timeline of committed work, followed by one quiet average/worst

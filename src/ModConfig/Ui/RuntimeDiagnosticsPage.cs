@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
-using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
-using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace.Control;
+using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
@@ -22,8 +21,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
     private readonly RectTransform _content;
     private readonly ScrollRect _scroll;
     private readonly TextMeshProUGUI _labelTemplate;
-    private readonly IManualFullTraceControl _traceControl;
-    private readonly IHostTraceDumpControl _hostTraceDump;
+    private readonly IDiagnosticsBundleControl _diagnosticsBundle;
     private readonly IDifferentialVerificationControl _differentialVerification;
     private readonly IDecisionJournalStatusSource _decisionJournal;
     private readonly IServiceActionOutcomeWindowSource _actionOutcomes;
@@ -33,8 +31,8 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
 #endif
     private readonly Dictionary<string, RuntimeDiagnosticsCardView> _cards = new(StringComparer.Ordinal);
     private readonly List<string> _staleKeys = new();
-    private ManualFullTraceControlView? _traceView;
-    private HostTraceDumpControlView? _hostTraceDumpView;
+    private DiagnosticsBundleControlView? _diagnosticsBundleView;
+    private DifferentialVerificationControlView? _differentialVerificationView;
     private ActionOutcomeView? _actionOutcomeView;
     private RuntimeFeatureHealthGridView? _featureHealthView;
 #if SERVICE_CYCLE_PROFILE
@@ -42,8 +40,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
 #endif
     private float _rememberedScrollOffset;
     private int _renderGeneration;
-    private long _traceRevision = -1;
-    private long _hostTraceDumpRevision = -1;
+    private long _diagnosticsBundleRevision = -1;
     private long _differentialVerificationRevision = -1;
     private long _decisionJournalRevision = -1;
     private long _actionOutcomeRevision = -1;
@@ -56,8 +53,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         RectTransform content,
         ScrollRect scroll,
         TextMeshProUGUI labelTemplate,
-        IManualFullTraceControl traceControl,
-        IHostTraceDumpControl hostTraceDump,
+        IDiagnosticsBundleControl diagnosticsBundle,
         IDifferentialVerificationControl differentialVerification,
         IDecisionJournalStatusSource decisionJournal,
         IServiceActionOutcomeWindowSource actionOutcomes,
@@ -70,8 +66,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
         _content = content ?? throw new ArgumentNullException(nameof(content));
         _scroll = scroll ?? throw new ArgumentNullException(nameof(scroll));
         _labelTemplate = labelTemplate ?? throw new ArgumentNullException(nameof(labelTemplate));
-        _traceControl = traceControl ?? throw new ArgumentNullException(nameof(traceControl));
-        _hostTraceDump = hostTraceDump ?? throw new ArgumentNullException(nameof(hostTraceDump));
+        _diagnosticsBundle = diagnosticsBundle ?? throw new ArgumentNullException(nameof(diagnosticsBundle));
         _differentialVerification = differentialVerification ??
                                     throw new ArgumentNullException(nameof(differentialVerification));
         _decisionJournal = decisionJournal ?? throw new ArgumentNullException(nameof(decisionJournal));
@@ -82,8 +77,7 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
 #endif
     }
 
-    public bool ObservabilityChanged => _traceRevision != _traceControl.Revision ||
-        _hostTraceDumpRevision != _hostTraceDump.Revision ||
+    public bool ObservabilityChanged => _diagnosticsBundleRevision != _diagnosticsBundle.Revision ||
         _differentialVerificationRevision != _differentialVerification.Revision ||
         _decisionJournalRevision != _decisionJournal.Revision ||
         _actionOutcomeRevision != _actionOutcomes.TimelineRevision
@@ -110,17 +104,18 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
             RuntimeFeatureHealthProjection.Build(dashboard),
             top,
             siblingIndex++);
-        _hostTraceDumpView ??= new HostTraceDumpControlView(
+        _diagnosticsBundleView ??= new DiagnosticsBundleControlView(
             _content,
             _labelTemplate,
-            _hostTraceDump,
+            _diagnosticsBundle);
+        top += _diagnosticsBundleView.Layout(_content.rect.width, top, siblingIndex++);
+        _diagnosticsBundleRevision = _diagnosticsBundle.Revision;
+        _differentialVerificationView ??= new DifferentialVerificationControlView(
+            _content,
+            _labelTemplate,
             _differentialVerification);
-        top += _hostTraceDumpView.Layout(_content.rect.width, top, siblingIndex++);
-        _hostTraceDumpRevision = _hostTraceDump.Revision;
+        top += _differentialVerificationView.Layout(_content.rect.width, top, siblingIndex++);
         _differentialVerificationRevision = _differentialVerification.Revision;
-        _traceView ??= new ManualFullTraceControlView(_content, _labelTemplate, _traceControl);
-        top += _traceView.Layout(_content.rect.width, top, siblingIndex++);
-        _traceRevision = _traceControl.Revision;
 #if SERVICE_CYCLE_PROFILE
         _performanceProfileView ??= new PerformanceProfileControlView(
             _content,
@@ -197,10 +192,10 @@ internal sealed class RuntimeDiagnosticsPage : IDisposable
 
     public void Clear()
     {
-        _traceView?.Dispose();
-        _traceView = null;
-        _hostTraceDumpView?.Dispose();
-        _hostTraceDumpView = null;
+        _diagnosticsBundleView?.Dispose();
+        _diagnosticsBundleView = null;
+        _differentialVerificationView?.Dispose();
+        _differentialVerificationView = null;
         _actionOutcomeView?.Dispose();
         _actionOutcomeView = null;
         _featureHealthView?.Dispose();

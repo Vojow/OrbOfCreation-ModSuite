@@ -15,7 +15,7 @@ using Xunit;
 
 namespace OrbModding.Tests.Runtime.ServiceCycle.Observation.HostTrace;
 
-public sealed class HostTraceDumpWriterTests
+public sealed class HostTraceSnapshotWriterTests
 {
     private static readonly FullTraceSessionId DumpSession = new(0xD0_00_00_01);
     private static readonly ServiceCycleTraceSessionId SemanticSession = new(0x5E_00_00_01);
@@ -27,7 +27,7 @@ public sealed class HostTraceDumpWriterTests
         var source = Ring(capacity, fill: true);
         var storage = new MemorySessionStorage();
 
-        var outcome = HostTraceDumpWriter.Write(source, DumpSession, storage, serviceCapacity: 1);
+        var outcome = HostTraceSnapshotWriter.Write(source, DumpSession, storage, serviceCapacity: 1);
 
         var manifest = FullTraceManifestCodec.Decode(Assert.IsType<byte[]>(storage.Manifest));
         var oldest = source.Cursor.Sequence - (ulong)capacity + 1;
@@ -57,7 +57,7 @@ public sealed class HostTraceDumpWriterTests
         var source = Ring(capacity: 64, fill: false);
         var storage = new MemorySessionStorage();
 
-        var outcome = HostTraceDumpWriter.Write(source, DumpSession, storage, serviceCapacity: 1);
+        var outcome = HostTraceSnapshotWriter.Write(source, DumpSession, storage, serviceCapacity: 1);
 
         Assert.Equal(0, outcome.WrittenEvents);
         Assert.Equal(0, outcome.BytesWritten);
@@ -70,7 +70,7 @@ public sealed class HostTraceDumpWriterTests
     /// on its own. The roster lands before the manifest, because the manifest seals the session.
     /// </summary>
     [Fact]
-    public void ADumpCarriesTheNamesOfTheServicesItRecorded()
+    public void ASnapshotCarriesTheNamesOfTheServicesItRecorded()
     {
         var source = Ring(capacity: 64, fill: true);
         var storage = new MemorySessionStorage();
@@ -79,7 +79,7 @@ public sealed class HostTraceDumpWriterTests
             new ServiceCycleTraceRosterEntry(ServiceCycleTraceRoster.ServiceKind, 1, "orbautomata.auto-harvest", "Auto Harvest"),
         });
 
-        HostTraceDumpWriter.Write(source, DumpSession, storage, serviceCapacity: 1, roster);
+        HostTraceSnapshotWriter.Write(source, DumpSession, storage, serviceCapacity: 1, roster);
 
         Assert.True(storage.SideArtifacts.TryGetValue(TraceRosterFormat.FileName, out var written));
         var decoded = TraceRosterFormat.Decode(Encoding.UTF8.GetString(written!));
@@ -88,12 +88,12 @@ public sealed class HostTraceDumpWriterTests
     }
 
     [Fact]
-    public void ADumpWithNoRosterIsStillAReadableSession()
+    public void ASnapshotWithNoRosterIsStillAReadableSession()
     {
         var source = Ring(capacity: 64, fill: true);
         var storage = new MemorySessionStorage();
 
-        var outcome = HostTraceDumpWriter.Write(source, DumpSession, storage, serviceCapacity: 1);
+        var outcome = HostTraceSnapshotWriter.Write(source, DumpSession, storage, serviceCapacity: 1);
 
         Assert.Equal(64, outcome.WrittenEvents);
         Assert.Empty(storage.SideArtifacts);

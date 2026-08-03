@@ -101,6 +101,14 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 _configurationGeneration);
     }
 
+    public AutomataDiagnosticsRuntimeEvidence CaptureDiagnostics()
+    {
+        if (_disposed)
+            return AutomataDiagnosticsRuntimeEvidence.Unavailable(
+                "The automation runtime has shut down.");
+        return _host.CaptureDiagnostics();
+    }
+
 #if SERVICE_CYCLE_PROFILE
     public GameMcpRuntimeState CaptureGameMcpState()
     {

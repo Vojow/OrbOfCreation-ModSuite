@@ -21,7 +21,7 @@ rather than overriding the game.
 3. [Shared world collection](world-collection.md) — the one reader: what it collects, how it reads
    without writing, and the freshness gate every consumer is held by.
 4. [Collection quirks](world-collection-decisions.md) — the numbered W-entries source comments cite.
-5. [Observability](observability.md) — the four observation products, their artifacts, and how to
+5. [Observability](observability.md) — the observation products, their artifacts, and how to
    read a capture.
 6. [Architecture](architecture.md) — where the components sit and what depends on what.
 7. [Goals and invariants](goals-and-invariants.md) — product goals, the conditions on owned math,
@@ -36,10 +36,10 @@ rather than overriding the game.
   per accepted frame. The game stays authoritative for availability, cost, quantity, queue room,
   completion, and mutation results. There is one production path, no runtime selector, and no
   fallback implementation.
-- **Observability.** Manual full traces, the rolling decision journal, and opt-in performance
-  profiles are independent diagnostic products sharing only neutral transport and storage. Recorded
-  runs are re-read as evidence, never re-executed. Diagnostic failure disables or faults that path
-  without changing gameplay behaviour.
+- **Observability.** One release action packages past evidence from the rolling decision journal,
+  recent-event ring, configuration, identifiable save files, and redacted log into a capped bug-report
+  zip. Profiling builds separately own their correlated full trace and performance profile. Diagnostic
+  failure disables or faults that path without changing gameplay behaviour.
 - **Verification.** `./script/test` is the complete bounded portable gate; real-reference builds and
   installed-game contract tests cover reflected game boundaries; interactive runtime validation is
   required for gameplay, UI, save, and installation claims. Passing one boundary does not imply

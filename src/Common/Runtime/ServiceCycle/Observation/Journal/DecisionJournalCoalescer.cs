@@ -121,6 +121,14 @@ internal sealed class DecisionJournalCoalescer : IDecisionJournalObservationSink
         _nextCheckpoint = AddSaturated(now, _checkpointInterval);
     }
 
+    public void Flush(MonotonicTimestamp now)
+    {
+        if (IsFaulted) return;
+        EnsureRunning(now);
+        if (AppendAllOpen() && !_sink.TryFlush()) IsFaulted = true;
+        _nextCheckpoint = AddSaturated(now, _checkpointInterval);
+    }
+
     public void Stop(MonotonicTimestamp now)
     {
         if (_stopped) return;

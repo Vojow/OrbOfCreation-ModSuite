@@ -67,7 +67,7 @@ internal sealed class FullTraceRuntimeSession : IDisposable
         if (_state is not (FullTraceRuntimeSessionState.Idle or
             FullTraceRuntimeSessionState.Complete or
             FullTraceRuntimeSessionState.Incomplete))
-            throw new InvalidOperationException("A manual full-trace session is already active.");
+            throw new InvalidOperationException("A full-trace session is already active.");
         if (storage is null) throw new ArgumentNullException(nameof(storage));
 
         ReleaseTerminalResources();
@@ -121,7 +121,7 @@ internal sealed class FullTraceRuntimeSession : IDisposable
         EnsureOwner();
         ThrowIfDisposed();
         if (_state is not (FullTraceRuntimeSessionState.Arming or FullTraceRuntimeSessionState.Recording))
-            throw new InvalidOperationException("No active manual full-trace session can stop.");
+            throw new InvalidOperationException("No active full-trace session can stop.");
         BeginStopping(FullTraceTerminalReason.UserStopped);
     }
 
@@ -165,7 +165,7 @@ internal sealed class FullTraceRuntimeSession : IDisposable
             _rosterWritten = true;
         }
 
-        var recorder = _recorder ?? throw new InvalidOperationException("The arming recorder is unavailable.");
+        var recorder = _recorder ?? throw new InvalidOperationException("The full-trace recorder is unavailable.");
         if (!_pump.TryAttachManualSemanticTrace(recorder, out var attached)) return;
         _attachedTrace = attached ?? throw new InvalidOperationException("The pump attached no semantic trace.");
         _state = FullTraceRuntimeSessionState.Recording;

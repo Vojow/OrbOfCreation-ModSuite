@@ -11,7 +11,7 @@ namespace OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace;
 /// <para>
 /// Deliberately not a recorder. An always-on disk trace would cost roughly 69 MiB an hour, which both
 /// blows the suite's disk budget and contradicts the full-trace mandate's own near-zero idle cost; the
-/// mandate's recorder is the one a user arms. What an always-attached ring buys instead is that the
+/// profiling recorder is a separate companion. What an always-attached ring buys instead is that the
 /// events leading up to a bug already exist when the user notices it, rather than only after they
 /// reproduce it.
 /// </para>

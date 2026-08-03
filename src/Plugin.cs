@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using BepInEx;
@@ -23,8 +24,6 @@ using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Diagnostics;
-using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
-using OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Status;
 using OrbModding.Common.Runtime.World;
@@ -145,6 +144,7 @@ public sealed class Plugin : BaseUnityPlugin
     private ModConfigRuntimeSources? _runtimeSources;
     private ModConfigFeatureCommands? _modConfigFeatureCommands;
     private SuiteUiSurfaceDiagnostics? _uiSurfaceDiagnostics;
+    private DiagnosticsBundleController? _diagnosticsBundleController;
     private AutomaticSaveBackupHealth? _automaticSaveBackupHealth;
     private Action? _runUiMaintenance;
 
@@ -263,6 +263,7 @@ public sealed class Plugin : BaseUnityPlugin
         ObserveLifecycle(GameLifecycleTransitionKind.SceneEntered, SceneManager.GetActiveScene().name);
         _lifecycleLease = GameLifecycleMonitor.Shared.CaptureLease();
 
+        ComposeDiagnosticsBundle();
         ComposeModConfig();
         if (_runtimeActivationAllowed && _configurationStore.Current.General.Enabled)
         {
@@ -408,12 +409,13 @@ public sealed class Plugin : BaseUnityPlugin
                             ServiceActionOutcomeWindowRegistry.Shared,
                             pumpTiming: ServiceCyclePumpTimingRegistry.Shared,
                             observability: new AutomataServiceCycleObservabilityOptions(
-                            AutomataFullTracePathPolicy.Create(
-                                ManualFullTraceControlRegistry.Shared),
+#if SERVICE_CYCLE_PROFILE
+                            AutomataFullTracePathPolicy.CreateOptions(),
+#else
+                            default,
+#endif
                             AutomataDecisionJournalPathPolicy.Create(
                                 DecisionJournalStatusRegistry.Shared),
-                            AutomataHostTraceDumpPathPolicy.Create(
-                                HostTraceDumpRegistry.Shared),
                             AutoStartServiceCycleDiagnostics)),
                     new IAutomataServiceCycleFeature[]
                     {
@@ -536,6 +538,60 @@ public sealed class Plugin : BaseUnityPlugin
             "Auto Buy fills the available queue and groups structures by live Bulk Development.");
     }
 
+    private void ComposeDiagnosticsBundle()
+    {
+        var configRoot = string.IsNullOrWhiteSpace(Paths.ConfigPath)
+            ? string.Empty
+            : Path.GetFullPath(Paths.ConfigPath);
+        var bepInExRoot = configRoot.Length == 0
+            ? string.Empty
+            : Path.GetDirectoryName(configRoot) ?? string.Empty;
+        var output = configRoot.Length == 0
+            ? string.Empty
+            : Path.Combine(configRoot, "OrbOfCreation-ModSuite", "diagnostics");
+        var logPath = bepInExRoot.Length == 0
+            ? string.Empty
+            : Path.Combine(bepInExRoot, "LogOutput.log");
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var redactor = new DiagnosticsTextRedactor(
+            new[]
+            {
+                userProfile,
+                Application.persistentDataPath,
+                configRoot,
+                bepInExRoot,
+            },
+            new[] { Environment.UserName });
+        var buildIdentity = _auditedBuild
+            ? "audited baseline " + _auditedBaselineId
+            : "unverified assembly pair " + _observedBuildFingerprint;
+        _diagnosticsBundleController = DiagnosticsBundleController.TryCreate(
+            DiagnosticsBundleRegistry.Shared,
+            new DiagnosticsBundleControllerOptions(
+                output,
+                Config.ConfigFilePath,
+                Application.persistentDataPath,
+                logPath,
+                PluginIds.ReleaseVersion,
+                buildIdentity,
+                () => FeatureStatusRegistry.Shared.GetSnapshot(),
+                () => RuntimeDiagnosticsRegistry.Shared.GetSnapshot(),
+                CaptureDiagnosticsRuntimeEvidence,
+                () => DecisionJournalStatusSources.Shared.Status,
+                () => AutomataLoggingExtensions.Flush(Log),
+                redactor),
+            Log);
+    }
+
+    private AutomataDiagnosticsRuntimeEvidence CaptureDiagnosticsRuntimeEvidence()
+    {
+        if (_serviceCycleActivation is not null &&
+            _serviceCycleActivation.TryCaptureDiagnostics(out var evidence))
+            return evidence;
+        return AutomataDiagnosticsRuntimeEvidence.Unavailable(
+            "The automation runtime is not active, so recent event and journal evidence is unavailable.");
+    }
+
     /// <summary>
     /// Composed last so the catalog the browser later discovers already sees the automation and
     /// mastery feature statuses published above it.
@@ -553,8 +609,7 @@ public sealed class Plugin : BaseUnityPlugin
             RuntimeDiagnosticsRegistry.Shared,
             ServiceActionOutcomeWindowSources.Shared,
             ServiceCyclePumpTimingRegistry.Shared,
-            ManualFullTraceControlRegistry.Shared,
-            HostTraceDumpRegistry.Shared,
+            DiagnosticsBundleRegistry.Shared,
             _mathVerification ??
             throw new InvalidOperationException("Differential verification control was not composed."),
             DecisionJournalStatusSources.Shared
@@ -611,6 +666,7 @@ public sealed class Plugin : BaseUnityPlugin
         }
 
         UpdateAutomata();
+        _diagnosticsBundleController?.Tick();
 #if SERVICE_CYCLE_PROFILE
         _gameMcpCommands?.ObserveEmergencyStop(
             _configurationStore!.Current.Safety.EmergencyDisable);
@@ -932,6 +988,8 @@ public sealed class Plugin : BaseUnityPlugin
         _uiWork?.Dispose();
         _uiWork = null;
         _runUiMaintenance = null;
+        _diagnosticsBundleController?.Dispose();
+        _diagnosticsBundleController = null;
         _runtimeSources = null;
         _modConfigFeatureCommands = null;
         _uiSurfaceDiagnostics?.Dispose();

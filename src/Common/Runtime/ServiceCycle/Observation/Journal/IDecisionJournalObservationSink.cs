@@ -15,5 +15,6 @@ internal interface IDecisionJournalObservationSink
     void ObserveTransition(in DecisionJournalRecord transition);
     void BreakServiceSpan(ServiceCycleTraceServiceId service, MonotonicTimestamp observedAt);
     void Advance(MonotonicTimestamp now);
+    void Flush(MonotonicTimestamp now);
     void Stop(MonotonicTimestamp now);
 }

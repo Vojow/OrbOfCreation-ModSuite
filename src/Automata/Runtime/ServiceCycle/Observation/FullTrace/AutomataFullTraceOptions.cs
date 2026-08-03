@@ -1,5 +1,4 @@
 using System;
-using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Control;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Format;
 using OrbModding.Common.Runtime.ServiceCycle.Tracing;
 using OrbModding.Common.Runtime.Tracing;
@@ -18,7 +17,7 @@ internal readonly struct AutomataFullTraceSessionSpec
         if (!semanticSession.IsValid)
             throw new ArgumentException("A valid semantic session is required.", nameof(semanticSession));
         Storage = storage ?? throw new ArgumentNullException(nameof(storage));
-        if (!ManualFullTraceStatus.IsSafeArtifactName(artifactName))
+        if (!IsSafeArtifactName(artifactName))
             throw new ArgumentException("A bounded artifact basename is required.", nameof(artifactName));
         Session = session;
         SemanticSession = semanticSession;
@@ -29,6 +28,19 @@ internal readonly struct AutomataFullTraceSessionSpec
     internal ServiceCycleTraceSessionId SemanticSession { get; }
     internal ISegmentSessionStorage Storage { get; }
     internal string ArtifactName { get; }
+
+    internal static bool IsSafeArtifactName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 128 || value is "." or "..") return false;
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+            if (character is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '.' or '-' or '_')
+                continue;
+            return false;
+        }
+        return true;
+    }
 }
 
 internal interface IAutomataFullTraceSessionSource
@@ -38,15 +50,11 @@ internal interface IAutomataFullTraceSessionSource
 
 internal readonly struct AutomataFullTraceOptions
 {
-    internal AutomataFullTraceOptions(
-        ManualFullTraceControlRegistry control,
-        IAutomataFullTraceSessionSource sessions)
+    internal AutomataFullTraceOptions(IAutomataFullTraceSessionSource sessions)
     {
-        Control = control ?? throw new ArgumentNullException(nameof(control));
         Sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
     }
 
-    internal bool Enabled => Control is not null && Sessions is not null;
-    internal ManualFullTraceControlRegistry? Control { get; }
+    internal bool Enabled => Sessions is not null;
     internal IAutomataFullTraceSessionSource? Sessions { get; }
 }

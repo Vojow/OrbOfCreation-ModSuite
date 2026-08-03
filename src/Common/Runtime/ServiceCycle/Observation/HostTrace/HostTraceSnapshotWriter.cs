@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.FullTrace.Format;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Roster;
@@ -9,32 +11,59 @@ using OrbModding.Common.Runtime.Tracing.BufferedSegments;
 
 namespace OrbModding.Common.Runtime.ServiceCycle.Observation.HostTrace;
 
-internal readonly struct HostTraceDumpOutcome
+internal sealed class HostTraceSnapshot
 {
-    internal HostTraceDumpOutcome(long writtenEvents, long bytesWritten, ulong overwrittenEvents)
+    internal HostTraceSnapshot(
+        long writtenEvents,
+        long bytesWritten,
+        ulong overwrittenEvents,
+        IReadOnlyList<HostTraceSnapshotMember> members)
     {
         WrittenEvents = writtenEvents;
         BytesWritten = bytesWritten;
         OverwrittenEvents = overwrittenEvents;
+        Members = members ?? throw new ArgumentNullException(nameof(members));
     }
 
     internal long WrittenEvents { get; }
     internal long BytesWritten { get; }
     internal ulong OverwrittenEvents { get; }
+    internal IReadOnlyList<HostTraceSnapshotMember> Members { get; }
 }
 
-/// <summary>
-/// Writes whatever the host ring is holding into an ordinary full-trace session artifact.
-/// </summary>
-/// <remarks>
-/// Synchronous and on the main thread, unlike the armed recorder's background writer, because a dump
-/// is one bounded user-initiated write rather than a stream: the events are already in hand, and a
-/// second writer thread would only add a lifecycle to get wrong. The artifact is the same OSCS/OSCM
-/// pair an armed session produces, so the analysis tool reads a dump without knowing it is one.
-/// </remarks>
-internal static class HostTraceDumpWriter
+internal readonly struct HostTraceSnapshotMember
 {
-    internal static HostTraceDumpOutcome Write(
+    internal HostTraceSnapshotMember(string name, byte[] bytes, bool isText)
+    {
+        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Bytes = bytes ?? throw new ArgumentNullException(nameof(bytes));
+        IsText = isText;
+    }
+
+    internal string Name { get; }
+    internal byte[] Bytes { get; }
+    internal bool IsText { get; }
+}
+
+/// <summary>Materializes the host's bounded recent-event ring without creating another disk artifact.</summary>
+internal static class HostTraceSnapshotWriter
+{
+    internal static HostTraceSnapshot Capture(
+        ServiceCycleSemanticTraceSource source,
+        FullTraceSessionId session,
+        int serviceCapacity,
+        ServiceCycleTraceRoster? roster = null)
+    {
+        var storage = new SnapshotStorage();
+        var outcome = Write(source, session, storage, serviceCapacity, roster);
+        return new HostTraceSnapshot(
+            outcome.WrittenEvents,
+            outcome.BytesWritten,
+            outcome.OverwrittenEvents,
+            storage.Members);
+    }
+
+    internal static HostTraceSnapshotOutcome Write(
         ServiceCycleSemanticTraceSource source,
         FullTraceSessionId session,
         ISegmentSessionStorage storage,
@@ -48,7 +77,7 @@ internal static class HostTraceDumpWriter
 
         var held = source.Count;
         var overwritten = source.OverwrittenTotal;
-        if (held == 0) return new HostTraceDumpOutcome(0, 0, overwritten);
+        if (held == 0) return new HostTraceSnapshotOutcome(0, 0, overwritten);
 
         var terminalRequest = new FullTraceTerminalRequest();
         terminalRequest.Set(FullTraceTerminalReason.UserStopped);
@@ -60,13 +89,8 @@ internal static class HostTraceDumpWriter
             serviceCapacity,
             firstSemanticSequence: source.Cursor.Sequence - (ulong)held + 1);
         consumer.Initialize();
-
-        // A dump is the same artifact an armed session writes, so it carries the same roster: the
-        // reader of a bug report has no more idea what service 2 was than the reader of a capture.
         TraceRosterWriter.TryWrite(storage, roster);
 
-        // Full segments except the last: the segment writer accepts one partial segment and it must
-        // be the final one, so the drain buffer is exactly a segment rather than the whole ring.
         var buffer = new ServiceCycleSemanticEvent[FullTraceSegmentCodec.MaximumRecords];
         var cursor = default(ServiceCycleTraceCursor);
         var blockOrdinal = 0L;
@@ -94,9 +118,44 @@ internal static class HostTraceDumpWriter
             acceptedRecords: written,
             writtenRecords: written,
             firstIncompleteSequence: 0));
-        return new HostTraceDumpOutcome(
+        return new HostTraceSnapshotOutcome(
             written,
             checked(bytes + FullTraceManifestCodec.ManifestBytes),
             overwritten);
     }
+
+    private sealed class SnapshotStorage : ISegmentSessionStorage, ISessionSideArtifactSink
+    {
+        private readonly List<HostTraceSnapshotMember> _members = new();
+
+        internal IReadOnlyList<HostTraceSnapshotMember> Members => _members;
+
+        public void Initialize() { }
+
+        public void CommitSegment(long ordinal, ReadOnlySpan<byte> bytes) => _members.Add(
+            new HostTraceSnapshotMember(
+                "segment-" + ordinal.ToString("D8", CultureInfo.InvariantCulture) + ".oscs",
+                bytes.ToArray(),
+                isText: false));
+
+        public void CommitManifest(ReadOnlySpan<byte> bytes) => _members.Add(
+            new HostTraceSnapshotMember("manifest.oscm", bytes.ToArray(), isText: false));
+
+        public void CommitSideArtifact(string name, ReadOnlySpan<byte> bytes) => _members.Add(
+            new HostTraceSnapshotMember(name, bytes.ToArray(), isText: true));
+    }
+}
+
+internal readonly struct HostTraceSnapshotOutcome
+{
+    internal HostTraceSnapshotOutcome(long writtenEvents, long bytesWritten, ulong overwrittenEvents)
+    {
+        WrittenEvents = writtenEvents;
+        BytesWritten = bytesWritten;
+        OverwrittenEvents = overwrittenEvents;
+    }
+
+    internal long WrittenEvents { get; }
+    internal long BytesWritten { get; }
+    internal ulong OverwrittenEvents { get; }
 }
