@@ -161,6 +161,7 @@ internal static class AutoBuyCycleEvaluator
             ref readonly var candidate = ref candidates[decision.CandidateIndex];
             var count = 0;
             var belief = default(AutoBuyPlanBelief);
+            var plannedSpend = PublicationTable<AutoBuyPlannedSpend>.Empty;
             for (var candidateCount = preferredCount; candidateCount >= 1; candidateCount--)
             {
                 if (!TryCommitSpend(
@@ -171,7 +172,8 @@ internal static class AutoBuyCycleEvaluator
                         candidateCount,
                         in absoluteReserve,
                         relativeMultiplier,
-                        out belief))
+                        out belief,
+                        out plannedSpend))
                     continue;
 
                 count = candidateCount;
@@ -205,7 +207,8 @@ internal static class AutoBuyCycleEvaluator
                 preferredCount == 1 ? decision.Belief : belief,
                 frame.Global.CollectedAt,
                 candidate.OwningListId,
-                candidate.OwningViewId);
+                candidate.OwningViewId,
+                plannedSpend);
             actions.Add(in action);
             emitted++;
             requestedLevels = checked(requestedLevels + count);
@@ -359,9 +362,11 @@ internal static class AutoBuyCycleEvaluator
         int levels,
         in BigDouble absoluteReserve,
         double relativeMultiplier,
-        out AutoBuyPlanBelief belief)
+        out AutoBuyPlanBelief belief,
+        out PublicationTable<AutoBuyPlannedSpend> plannedSpend)
     {
         belief = default;
+        plannedSpend = PublicationTable<AutoBuyPlannedSpend>.Empty;
         var start = candidate.CostRowStart;
         var end = start + candidate.CostRowCount;
         var maxRatio = 0.0;
@@ -414,6 +419,8 @@ internal static class AutoBuyCycleEvaluator
         if (pricedResourceCount == 0)
             return false;
 
+        var terms = new AutoBuyPlannedSpend[pricedResourceCount];
+        var termIndex = 0;
         for (var i = start; i < end; i++)
         {
             if (!IsFirstRowForItsResource(costs, start, i))
@@ -422,6 +429,14 @@ internal static class AutoBuyCycleEvaluator
             var resourceIndex = costs[i].ResourceRowIndex;
             if (!TryCombinedExactCost(costs, start, end, resourceIndex, levels, out var cost))
                 return false;
+            if (IsZero(cost))
+                continue;
+            var remaining = resources[resourceIndex].Spendable - committed[resourceIndex];
+            terms[termIndex++] = new AutoBuyPlannedSpend(
+                resources[resourceIndex].ResourceId,
+                cost,
+                remaining,
+                RequiredFloor(in cost, in absoluteReserve, relativeMultiplier));
             committed[resourceIndex] += cost;
         }
 
@@ -440,6 +455,7 @@ internal static class AutoBuyCycleEvaluator
             bindingCost,
             bindingAvailable,
             bindingFloor);
+        plannedSpend = PublicationTable<AutoBuyPlannedSpend>.Create(terms, termIndex);
         return true;
     }
 
