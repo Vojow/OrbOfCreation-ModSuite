@@ -733,6 +733,12 @@ public sealed class RitualSO : IdScriptableObject, IDiscoverable
     public bool ThrowBeforeDiscovery { get; set; }
     public bool ThrowAfterDiscovery { get; set; }
     public int DiscoverCalls { get; private set; }
+    public ResourceCostList activationCost = new ResourceCostList();
+    public ResourceCostList completionCost = new ResourceCostList();
+    public bool NativeUsageRequirementsMet { get; set; } = true;
+    public int NativeMaximumSelectedLevel { get; set; } = 1;
+    public bool SuppressLevelChange { get; set; }
+    public bool SuppressCancel { get; set; }
 
     /// <summary>
     /// Left null by default on purpose: the game leaves these null before first use, and the count
@@ -785,6 +791,21 @@ public sealed class RitualSO : IdScriptableObject, IDiscoverable
         chainLevel = chainLevelN;
         battleTotalWeight = totalWeight;
     }
+    public int GetMaxSelectedLevel() => NativeMaximumSelectedLevel;
+    public bool HasMetUsageRequirements() => NativeUsageRequirementsMet;
+    public ResourceCostList GetActivationCost() => activationCost;
+    public ResourceCostList GetSelectedCompletionCost() => completionCost;
+    public void ChangeStartingLevel(int value)
+    {
+        if (!SuppressLevelChange)
+            selectedLevel = Math.Max(0, Math.Min(value, GetMaxSelectedLevel()));
+    }
+    public bool IsDurationRitual() => durationRewardBlocks.Count > 0;
+    public bool IsDurationActive() => ritualInstances is { Count: > 0 };
+    public void Cancel()
+    {
+        if (!SuppressCancel) ritualInstances?.Clear();
+    }
     public bool hideEndScreenResults;
     public bool isDiscoverRequired;
     public bool forceLevel;
@@ -793,6 +814,39 @@ public sealed class RitualSO : IdScriptableObject, IDiscoverable
     public int maxWaves;
     public double baseWeight;
     public int minimumEffectLevel;
+}
+
+public sealed class RitualVariable
+{
+    public RitualSO? Value { get; private set; }
+    public bool SuppressToggle { get; set; }
+
+    public bool IsItem(RitualSO ritual) => ReferenceEquals(Value, ritual);
+    public void ToggleValue(RitualSO ritual)
+    {
+        if (SuppressToggle) return;
+        Value = ReferenceEquals(Value, ritual) ? null : ritual;
+    }
+}
+
+public sealed class RitualManager
+{
+    public static RitualManager? instance;
+    public RitualVariable selectedRitual = new RitualVariable();
+    public bool SuppressActivation { get; set; }
+
+    public void ActivateSelectedRitual()
+    {
+        if (!SuppressActivation && selectedRitual.Value is { } ritual)
+            ritual.inBattle = true;
+    }
+}
+
+public sealed class BattleManager
+{
+    public static BattleManager? instance;
+    public bool InCombat { get; set; }
+    public bool IsInCombat() => InCombat;
 }
 
 public sealed class AchievementSO : IdScriptableObject

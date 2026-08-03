@@ -359,6 +359,14 @@ internal sealed class GameMcpProtocolRouter
                 if (builder.Mode == "move")
                     builder.SlotIndex = RequiredInt(arguments, "destination", 0, int.MaxValue);
                 break;
+            case "game_ritual":
+                builder.Mode = RequireOneOf(arguments, "mode",
+                    "select", "deselect", "set_level", "activate", "cancel_duration");
+                builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.ExpectedNativeType = OptionalString(arguments, "expectedNativeType");
+                if (builder.Mode == "set_level")
+                    builder.Amount = checked(RequiredInt(arguments, "level", 0, int.MaxValue - 1) + 1);
+                break;
             case "game_challenge":
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "select", "activate", "abandon", "fetch_time", "fetch_prestige");
@@ -455,7 +463,8 @@ internal sealed class GameMcpProtocolRouter
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
-            "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" when
+            "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
+            "game_ritual" when
                 !(name == "game_discover" && request.Mode == "preview") &&
                 !(name == "game_spell_loadout" && request.Mode == "preview") =>
                 GameMcpOperationClass.Gameplay,
@@ -484,7 +493,8 @@ internal sealed class GameMcpProtocolRouter
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
-            "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" =>
+            "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
+            "game_ritual" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
         "game_navigate" or "game_continue" =>
@@ -773,6 +783,26 @@ internal sealed class GameMcpProtocolRouter
                 readOnly: false,
                 idempotent: false),
             Tool(
+                "game_ritual",
+                "Select, level, activate, or cancel a ritual reward",
+                "Drive the Ritual list controls. Discovery stays on game_discover surface devote; cancel_duration ends a completed run's duration reward, not an active battle.",
+                ModeSchema(ActionSchema(
+                    new JObject
+                    {
+                        ["mode"] = EnumSchema(
+                            "select", "deselect", "set_level", "activate", "cancel_duration"),
+                        ["uuid"] = StringSchema("Published RitualSO UUID."),
+                        ["level"] = IntegerSchema(0, int.MaxValue - 1),
+                    },
+                    "mode", "uuid"),
+                    ModeRule("select", forbidden: new[] { "level" }),
+                    ModeRule("deselect", forbidden: new[] { "level" }),
+                    ModeRule("set_level", new[] { "level" }),
+                    ModeRule("activate", forbidden: new[] { "level" }),
+                    ModeRule("cancel_duration", forbidden: new[] { "level" })),
+                readOnly: false,
+                idempotent: false),
+            Tool(
                 "game_challenge",
                 "Select, queue, abandon, or fetch challenges",
                 "Drive one exact native challenge decision. Target modes return the changed state; fetch modes return the named offers needed for the next decision.",
@@ -1044,6 +1074,19 @@ internal sealed class GameMcpProtocolRouter
             else if (mode != "move" && destination)
                 errors.Add(ValidationError("unexpected_for_mode", "destination",
                     "field 'destination' is accepted only for mode 'move'"));
+        }
+
+        if (string.Equals(name, "game_ritual", StringComparison.Ordinal) &&
+            arguments["mode"]?.Type == JTokenType.String)
+        {
+            var mode = (string?)arguments["mode"];
+            var level = arguments.ContainsKey("level");
+            if (mode == "set_level" && !level)
+                errors.Add(ValidationError("missing_required", "level",
+                    "required field 'level' is missing for mode 'set_level'"));
+            else if (mode != "set_level" && level)
+                errors.Add(ValidationError("unexpected_for_mode", "level",
+                    "field 'level' is accepted only for mode 'set_level'"));
         }
 
         if (string.Equals(name, "game_spell_level", StringComparison.Ordinal) &&

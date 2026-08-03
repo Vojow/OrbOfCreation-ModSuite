@@ -32,6 +32,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly GenericDiscoveryGameAction? _genericDiscovery;
     private readonly EquipmentLoadoutGameAction? _equipmentLoadout;
     private readonly AlchemyLoadoutGameAction? _alchemyLoadout;
+    private readonly RitualLifecycleGameAction? _ritualLifecycle;
     private readonly ChallengeGameAction? _challenges;
     private readonly PrestigeGameAction? _prestige;
     private readonly ResearchGameAction? _research;
@@ -54,6 +55,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         GenericDiscoveryGameAction? genericDiscovery = null,
         EquipmentLoadoutGameAction? equipmentLoadout = null,
         AlchemyLoadoutGameAction? alchemyLoadout = null,
+        RitualLifecycleGameAction? ritualLifecycle = null,
         ChallengeGameAction? challenges = null,
         PrestigeGameAction? prestige = null,
         ResearchGameAction? research = null)
@@ -72,6 +74,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _genericDiscovery = genericDiscovery;
         _equipmentLoadout = equipmentLoadout;
         _alchemyLoadout = alchemyLoadout;
+        _ritualLifecycle = ritualLifecycle;
         _challenges = challenges;
         _prestige = prestige;
         _research = research;
@@ -140,6 +143,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _genericDiscovery?.InvalidateLifecycle();
         _equipmentLoadout?.InvalidateLifecycle();
         _alchemyLoadout?.InvalidateLifecycle();
+        _ritualLifecycle?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
         _prestige?.InvalidateLifecycle();
         _research?.InvalidateLifecycle();
@@ -203,6 +207,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecuteEquipmentLoadout(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.AlchemyLoadout)
                 return ExecuteAlchemyLoadout(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.RitualLifecycle)
+                return ExecuteRitualLifecycle(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Challenge)
                 return ExecuteChallenge(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Prestige)
@@ -558,6 +564,35 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
             configurationGeneration, submission.Reason,
             GameMcpPrestigeProjection.Project(in submission));
+    }
+
+    private GameMcpCommandResult ExecuteRitualLifecycle(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_ritualLifecycle is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared Ritual GameAction was not composed", lifecycle,
+                configurationGeneration);
+        GameMcpNativeActionAdmission.AssertNativeType(command, "RitualSO");
+        var kind = command.Mode switch
+        {
+            "select" => RitualLifecycleActionKind.Select,
+            "deselect" => RitualLifecycleActionKind.Deselect,
+            "set_level" => RitualLifecycleActionKind.SetLevel,
+            "activate" => RitualLifecycleActionKind.Activate,
+            "cancel_duration" => RitualLifecycleActionKind.CancelDuration,
+            _ => throw new ArgumentException("unsupported Ritual mode " + command.Mode),
+        };
+        var action = new RitualLifecycleAction(kind, command.TargetId,
+            kind == RitualLifecycleActionKind.SetLevel ? command.Amount - 1 : 0,
+            command.ExpectedLifecycleGeneration);
+        var submission = _ritualLifecycle.Submit(in action);
+        var result = RitualLifecycleActionResultMapper.Map(in submission);
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason,
+            GameMcpRitualLifecycleProjection.Project(in submission));
     }
 
     private GameMcpCommandResult ExecuteResearch(
@@ -935,6 +970,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _genericDiscovery?.Dispose();
             _equipmentLoadout?.Dispose();
             _alchemyLoadout?.Dispose();
+            _ritualLifecycle?.Dispose();
             _challenges?.Dispose();
             _prestige?.Dispose();
             _research?.Dispose();

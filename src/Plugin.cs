@@ -577,6 +577,14 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .AlchemyLoadoutOwnershipFailure)
+                    , createRitualLifecycle: () => new RitualLifecycleGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureRitualLifecycleMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .RitualLifecycleOwnershipFailure)
                     , createChallenges: () => new ChallengeGameAction(
                         readAutoHarvestLifecycleEpoch,
                         tryCaptureMutationPermit: () =>
@@ -1928,6 +1936,8 @@ public sealed class Plugin : BaseUnityPlugin
             nativeType = "AlchemyRecipeSO";
             if (request.Mode == "move") amount = checked(request.SlotIndex + 1);
         }
+        else if (kind == GameMcpCommandKind.RitualLifecycle)
+            nativeType = "RitualSO";
         else if (kind == GameMcpCommandKind.Challenge)
             nativeType = "ChallengeSO";
         else if (kind == GameMcpCommandKind.Prestige)

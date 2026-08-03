@@ -1,4 +1,8 @@
 using System;
+using System.Collections;
+using System.Linq.Expressions;
+using System.Reflection;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
 
@@ -33,7 +37,8 @@ internal readonly struct WorldRitual : IWorldEntity
         int maxWaves,
         double baseWeight,
         int minimumEffectLevel,
-        WorldDiscoverableDecision discovery = default)
+        WorldDiscoverableDecision discovery = default,
+        WorldRitualDecision decision = default)
     {
         RitualId = ritualId;
         Discovered = discovered;
@@ -59,6 +64,7 @@ internal readonly struct WorldRitual : IWorldEntity
         BaseWeight = baseWeight;
         MinimumEffectLevel = minimumEffectLevel;
         Discovery = discovery;
+        Decision = decision;
     }
 
     internal Guid RitualId { get; }
@@ -137,6 +143,52 @@ internal readonly struct WorldRitual : IWorldEntity
     internal int MinimumEffectLevel { get; }
 
     internal WorldDiscoverableDecision Discovery { get; }
+
+    /// <summary>The currently staged player decision; prices exist only for the selected row.</summary>
+    internal WorldRitualDecision Decision { get; }
+}
+
+internal readonly struct WorldRitualCost
+{
+    internal WorldRitualCost(Guid resourceId, BigDouble cost)
+    {
+        ResourceId = resourceId;
+        Cost = cost;
+    }
+
+    internal Guid ResourceId { get; }
+    internal BigDouble Cost { get; }
+}
+
+internal readonly struct WorldRitualDecision
+{
+    private readonly PublicationTable<WorldRitualCost>? _activationCosts;
+    private readonly PublicationTable<WorldRitualCost>? _completionCosts;
+
+    internal WorldRitualDecision(
+        bool selected,
+        int maximumStartingLevel,
+        bool usageRequirementsMet,
+        bool activationAffordable,
+        PublicationTable<WorldRitualCost> activationCosts,
+        PublicationTable<WorldRitualCost> completionCosts)
+    {
+        Selected = selected;
+        MaximumStartingLevel = Math.Max(maximumStartingLevel, 0);
+        UsageRequirementsMet = usageRequirementsMet;
+        ActivationAffordable = activationAffordable;
+        _activationCosts = activationCosts ?? throw new ArgumentNullException(nameof(activationCosts));
+        _completionCosts = completionCosts ?? throw new ArgumentNullException(nameof(completionCosts));
+    }
+
+    internal bool Selected { get; }
+    internal int MaximumStartingLevel { get; }
+    internal bool UsageRequirementsMet { get; }
+    internal bool ActivationAffordable { get; }
+    internal PublicationTable<WorldRitualCost> ActivationCosts =>
+        _activationCosts ?? PublicationTable<WorldRitualCost>.Empty;
+    internal PublicationTable<WorldRitualCost> CompletionCosts =>
+        _completionCosts ?? PublicationTable<WorldRitualCost>.Empty;
 }
 
 /// <summary>A ritual's cached modifier records — what a run at the chosen level is worth.</summary>
@@ -241,6 +293,13 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
     private Func<object, double>? _baseWeight;
     private Func<object, int>? _minimumEffectLevel;
     private WorldDiscoverableBinding? _discovery;
+    private readonly Func<string, Type?> _resolveType;
+    private WorldRitualDecisionBinding? _decision;
+
+    internal WorldRitualBinder(Func<string, Type?> resolveType)
+    {
+        _resolveType = resolveType ?? throw new ArgumentNullException(nameof(resolveType));
+    }
 
     internal override string Category => "rituals";
 
@@ -288,7 +347,8 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
         _baseWeight = bind.Field<double>("baseWeight");
         _minimumEffectLevel = bind.Field<int>("minimumEffectLevel");
         _discovery = new WorldDiscoverableBinding(type, TypeName);
-        return Join(bind.Failure, _discovery.Failure);
+        _decision = new WorldRitualDecisionBinding(type, _resolveType);
+        return Join(bind.Failure, _discovery.Failure, _decision.Failure);
     }
 
     internal override WorldRitual Read(object entity) =>
@@ -329,8 +389,192 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
             _maxWaves!(entity),
             _baseWeight!(entity),
             _minimumEffectLevel!(entity),
-            _discovery!.Read(entity));
+            _discovery!.Read(entity),
+            _decision!.Read(entity));
 
-    private static string Join(string left, string right) =>
-        left.Length == 0 ? right : right.Length == 0 ? left : left + "; " + right;
+    private static string Join(params string[] values)
+    {
+        var result = string.Empty;
+        for (var index = 0; index < values.Length; index++)
+        {
+            if (values[index].Length == 0) continue;
+            result = result.Length == 0 ? values[index] : result + "; " + values[index];
+        }
+        return result;
+    }
+}
+
+/// <summary>Reads only the selected ritual's level and two screen-visible price lists.</summary>
+internal sealed class WorldRitualDecisionBinding
+{
+    private const BindingFlags Instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+    private const BindingFlags Static = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+    private readonly Type? _managerType;
+    private readonly Func<object?>? _manager;
+    private readonly Func<object, object?>? _selectedVariable;
+    private readonly Func<object, object, bool>? _isSelected;
+    private readonly Func<object, int>? _maximumStartingLevel;
+    private readonly Func<object, bool>? _usageRequirementsMet;
+    private readonly Func<object, object?>? _activationCost;
+    private readonly Func<object, object?>? _completionCost;
+    private readonly Func<object, bool>? _hasEnough;
+    private readonly Func<object, IList?>? _costEntries;
+    private readonly Func<object, object?>? _costResource;
+    private readonly Func<object, BigDouble>? _costValue;
+    private readonly Func<object, Guid>? _resourceId;
+
+    internal WorldRitualDecisionBinding(Type ritualType, Func<string, Type?> resolveType)
+    {
+        _managerType = resolveType("RitualManager");
+        var variableType = resolveType("RitualVariable");
+        var costType = resolveType("ResourceCostList");
+        var tupleType = resolveType("ResourceTuple");
+        var resourceType = resolveType("ResourceSO");
+        if (_managerType is null || variableType is null || costType is null ||
+            tupleType is null || resourceType is null)
+        {
+            Failure = "Ritual decision types were unavailable";
+            return;
+        }
+
+        _manager = StaticReference(_managerType, "instance", _managerType);
+        _selectedVariable = Reference(_managerType, "selectedRitual", variableType);
+        _isSelected = CallWithReference<bool>(variableType, "IsItem", ritualType);
+        var ritual = new WorldMemberBinding(ritualType, "RitualSO");
+        _maximumStartingLevel = ritual.Call<int>("GetMaxSelectedLevel");
+        _usageRequirementsMet = ritual.Call<bool>("HasMetUsageRequirements");
+        _activationCost = ritual.CallObject("GetActivationCost", costType);
+        _completionCost = ritual.CallObject("GetSelectedCompletionCost", costType);
+
+        var cost = new WorldMemberBinding(costType, "ResourceCostList");
+        _hasEnough = cost.Call<bool>("HasEnough");
+        var entriesMethod = costType.GetMethod("GetEntries", Instance, null, Type.EmptyTypes, null);
+        var entriesType = entriesMethod?.ReturnType;
+        var exactTuple = entriesType is { IsGenericType: true }
+            ? entriesType.GetGenericArguments()[0]
+            : null;
+        _costEntries = cost.CallList("GetEntries", exactTuple);
+        var tuple = new WorldMemberBinding(tupleType, "ResourceTuple");
+        _costResource = tuple.Reference("resource", resourceType);
+        _costValue = tuple.Call<BigDouble>("GetValue");
+        var resource = new WorldMemberBinding(resourceType, "ResourceSO");
+        _resourceId = resource.Call<Guid>("GetGuid");
+
+        Failure = Join(
+            _manager is null ? "RitualManager.instance was unavailable" : string.Empty,
+            _selectedVariable is null ? "RitualManager.selectedRitual was unavailable" : string.Empty,
+            _isSelected is null ? "RitualVariable.IsItem was unavailable" : string.Empty,
+            ritual.Failure,
+            cost.Failure,
+            tuple.Failure,
+            resource.Failure);
+    }
+
+    internal string Failure { get; }
+
+    internal WorldRitualDecision Read(object ritual)
+    {
+        var manager = _manager!();
+        if (manager is null || manager.GetType() != _managerType)
+            throw new InvalidOperationException("RitualManager.instance was unavailable");
+        var selectedVariable = _selectedVariable!(manager) ??
+            throw new InvalidOperationException("RitualManager.selectedRitual was unavailable");
+        var selected = _isSelected!(selectedVariable, ritual);
+        if (!selected)
+            return new WorldRitualDecision(
+                false, 0, false, false,
+                PublicationTable<WorldRitualCost>.Empty,
+                PublicationTable<WorldRitualCost>.Empty);
+
+        var activation = _activationCost!(ritual) ??
+            throw new InvalidOperationException("RitualSO.GetActivationCost returned null");
+        var completion = _completionCost!(ritual) ??
+            throw new InvalidOperationException("RitualSO.GetSelectedCompletionCost returned null");
+        return new WorldRitualDecision(
+            true,
+            _maximumStartingLevel!(ritual),
+            _usageRequirementsMet!(ritual),
+            _hasEnough!(activation),
+            ReadCosts(activation),
+            ReadCosts(completion));
+    }
+
+    private PublicationTable<WorldRitualCost> ReadCosts(object cost)
+    {
+        var entries = _costEntries!(cost) ??
+            throw new InvalidOperationException("ResourceCostList.GetEntries returned null");
+        var rows = new WorldRitualCost[entries.Count];
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var entry = entries[index] ??
+                throw new InvalidOperationException("Ritual cost row " + index + " was null");
+            var resource = _costResource!(entry) ??
+                throw new InvalidOperationException("Ritual cost row " + index + " had no resource");
+            rows[index] = new WorldRitualCost(
+                _resourceId!(resource), _costValue!(entry));
+        }
+        return PublicationTable<WorldRitualCost>.Create(rows);
+    }
+
+    private static Func<object?>? StaticReference(Type owner, string name, Type exactType)
+    {
+        var field = owner.GetField(name, Static);
+        if (field is null || !field.IsStatic || field.FieldType != exactType) return null;
+        try
+        {
+            return Expression.Lambda<Func<object?>>(
+                Expression.Convert(Expression.Field(null, field), typeof(object))).Compile();
+        }
+        catch (Exception) { return null; }
+    }
+
+    private static Func<object, object?>? Reference(Type owner, string name, Type exactType)
+    {
+        var field = owner.GetField(name, Instance);
+        if (field is null || field.IsStatic || field.FieldType != exactType) return null;
+        try
+        {
+            var target = Expression.Parameter(typeof(object), "target");
+            return Expression.Lambda<Func<object, object?>>(
+                Expression.Convert(
+                    Expression.Field(Expression.Convert(target, owner), field),
+                    typeof(object)),
+                target).Compile();
+        }
+        catch (Exception) { return null; }
+    }
+
+    private static Func<object, object, T>? CallWithReference<T>(
+        Type owner,
+        string name,
+        Type argumentType)
+    {
+        var method = owner.GetMethod(name, Instance, null, new[] { argumentType }, null);
+        if (method is null || method.ReturnType != typeof(T)) return null;
+        try
+        {
+            var target = Expression.Parameter(typeof(object), "target");
+            var argument = Expression.Parameter(typeof(object), "argument");
+            return Expression.Lambda<Func<object, object, T>>(
+                Expression.Call(
+                    Expression.Convert(target, owner),
+                    method,
+                    Expression.Convert(argument, argumentType)),
+                target,
+                argument).Compile();
+        }
+        catch (Exception) { return null; }
+    }
+
+    private static string Join(params string[] values)
+    {
+        var result = string.Empty;
+        for (var index = 0; index < values.Length; index++)
+        {
+            if (values[index].Length == 0) continue;
+            result = result.Length == 0 ? values[index] : result + "; " + values[index];
+        }
+        return result;
+    }
 }

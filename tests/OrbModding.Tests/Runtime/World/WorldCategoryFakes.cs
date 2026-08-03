@@ -65,6 +65,8 @@ internal static class WorldCategoryFakes
         ["Targeting.ITargetable"] = typeof(IFakeScribeTargetable),
         ["EnchantmentSO+EnchantItemScript"] = typeof(FakeScribeEnchantItemScript),
         ["RitualSO"] = typeof(FakeRitual),
+        ["RitualManager"] = typeof(FakeRitualManager),
+        ["RitualVariable"] = typeof(FakeRitualVariable),
         ["AchievementSO"] = typeof(FakeAchievement),
         ["AdvancementSO"] = typeof(FakeAdvancement),
         ["ChallengeSO"] = typeof(FakeChallenge),
@@ -117,6 +119,7 @@ internal static class WorldCategoryFakes
         FakeGlyph.All.Clear();
         FakeConsumable.All.Clear();
         FakeRitual.All.Clear();
+        FakeRitualManager.instance = new FakeRitualManager();
         FakeAchievement.All.Clear();
         FakeAdvancement.All.Clear();
         FakeChallenge.All.Clear();
@@ -1620,6 +1623,27 @@ internal sealed class FakeRitual : global::IDiscoverable
     public int maxWaves;
     public double baseWeight;
     public int minimumEffectLevel;
+    public int maximumSelectedLevel = 1;
+    public bool usageRequirementsMet = true;
+    public FakeCraftingResourceCostList activationCost = new();
+    public FakeCraftingResourceCostList completionCost = new();
+
+    public int GetMaxSelectedLevel() => maximumSelectedLevel;
+    public bool HasMetUsageRequirements() => usageRequirementsMet;
+    public FakeCraftingResourceCostList GetActivationCost() => activationCost;
+    public FakeCraftingResourceCostList GetSelectedCompletionCost() => completionCost;
+}
+
+internal sealed class FakeRitualVariable
+{
+    public FakeRitual? value;
+    public bool IsItem(FakeRitual ritual) => ReferenceEquals(value, ritual);
+}
+
+internal sealed class FakeRitualManager
+{
+    public static FakeRitualManager instance = new();
+    public FakeRitualVariable selectedRitual = new();
 }
 
 internal sealed class FakeAchievement

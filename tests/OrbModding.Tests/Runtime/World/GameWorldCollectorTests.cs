@@ -2246,6 +2246,8 @@ public sealed class GameWorldCollectorTests : IDisposable
     {
         var idle = Guid.NewGuid();
         var ticking = Guid.NewGuid();
+        var knowledge = new FakeResource { Quantity = new BigDouble(80) };
+        FakeResource.All.Add(knowledge);
 
         FakeRitual.All.Add(new FakeRitual
         {
@@ -2253,7 +2255,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             discovered = true,
             durationRewardBlocks = { new object() },
         });
-        FakeRitual.All.Add(new FakeRitual
+        var selected = new FakeRitual
         {
             Identity = ticking,
             discovered = true,
@@ -2266,7 +2268,14 @@ public sealed class GameWorldCollectorTests : IDisposable
             battleTotalWeight = new BigDouble(4200d),
             ritualInstances = new List<object> { new(), new() },
             durationRewardBlocks = { new object() },
-        });
+            maximumSelectedLevel = 12,
+            activationCost = new FakeCraftingResourceCostList()
+                .With(knowledge, new BigDouble(5)),
+            completionCost = new FakeCraftingResourceCostList()
+                .With(knowledge, new BigDouble(2)),
+        };
+        FakeRitual.All.Add(selected);
+        FakeRitualManager.instance.selectedRitual.value = selected;
 
         var collector = Collector();
         var report = collector.Collect();
@@ -2283,6 +2292,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, quiet.DurationRewardBlocks);
 
         Assert.True(WorldLookup.TryFind(world.Rituals, ticking, out var running));
+        Assert.True(running.Decision.Selected);
+        Assert.Equal(12, running.Decision.MaximumStartingLevel);
+        Assert.True(running.Decision.ActivationAffordable);
+        Assert.Equal(1, running.Decision.ActivationCosts.Count);
+        Assert.Equal(1, running.Decision.CompletionCosts.Count);
+        Assert.Equal(new BigDouble(5), running.Decision.ActivationCosts[0].Cost);
+        Assert.Equal(new BigDouble(2), running.Decision.CompletionCosts[0].Cost);
         Assert.True(running.InBattle);
         Assert.Equal(2, running.ActiveInstances);
         Assert.Equal(7, running.SelectedLevel);

@@ -245,7 +245,7 @@ internal sealed class GameWorldCollector
         _consumables = new WorldConsumableReader(resolveType("ConsumableSO"));
         _consumableInventory = new WorldConsumableInventoryReader(resolveType);
         _scribeRelations = new WorldScribeRelationReader(resolveType);
-        _rituals = Reader(new WorldRitualBinder(), resolveType, static frame => frame.Rituals);
+        _rituals = Reader(new WorldRitualBinder(resolveType), resolveType, static frame => frame.Rituals);
         _achievements = Reader(new WorldAchievementBinder(), resolveType, static frame => frame.Achievements);
         _advancements = Reader(new WorldAdvancementBinder(), resolveType, static frame => frame.Advancements);
         _challenges = Reader(new WorldChallengeBinder(), resolveType, static frame => frame.Challenges);

@@ -109,7 +109,7 @@ does not refresh it by hidden navigation.
 
 ## Tool surface
 
-The registry is exactly 35 tools. It is built once per lifecycle and never changes mid-session, so
+The registry is exactly 36 tools. It is built once per lifecycle and never changes mid-session, so
 there is no `tools/list_changed` notification. The rows below are in `tools/list` order.
 
 | Tool | Purpose |
@@ -137,6 +137,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_discover` | Preview or confirm one composed discovery on seven surfaces, or drive one Discovery Tree offer lifecycle |
 | `game_equipment` | Equip/increase or unequip/decrease one created artifact using live native multi-buy |
 | `game_alchemy` | Add, remove, or reorder one ordinary Alchemy recipe through its visible list |
+| `game_ritual` | Select a Ritual, set its starting level, activate it, or cancel its duration reward |
 | `game_challenge` | Select, activate, abandon, or fetch the Time/prestige challenge offers |
 | `game_prestige` | Confirm and perform the irreversible persistent reset |
 | `game_research` | Develop/queue, pause, resume, cancel, or apply a free research bonus level |
@@ -331,6 +332,23 @@ multi-buy and live usage-capacity calculation. `mode="move"` also requires the z
 the ordered slot before and after for a move. The action boundary revalidates exact recipe identity,
 ordinary-family classification, discovery, capacity, and multi-buy before invoking the same native
 engage, disengage, or list-swap route as the UI.
+
+### Ritual lifecycle
+
+Ritual discovery remains `game_discover(surface="devote")`. Once discovered, a `rituals` detail
+row reports the selected Ritual, current/reached/maximum starting level, battle state, and active
+duration-reward state. Only the selected row carries the native activation and completion prices;
+unselected rows do not publish a speculative ledger. `setLevel`, `activate`, and
+`cancelDuration` each carry only the binding availability or refusal reason that affects the next
+decision.
+
+`game_ritual(mode="select"|"deselect"|"activate"|"cancel_duration", uuid=...)` reproduces the
+corresponding visible Ritual control. `mode="set_level"` also requires the zero-based `level`
+shown by the Ritual screen. The old runestone-selection manager methods are empty/null-returning in
+v1.0.5 and are deliberately absent. Activation revalidates the selected Ritual and the screen's
+native price before payment; success is the settled battle transition. `cancel_duration` ends an
+already-running duration reward and does not claim to cancel a battle. Selection, level, battle,
+and duration activity each use one game-written outcome sentinel and never a resource ledger.
 
 ### Challenge decision loop
 

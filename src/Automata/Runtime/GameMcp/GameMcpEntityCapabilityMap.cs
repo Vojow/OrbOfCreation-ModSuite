@@ -123,6 +123,9 @@ internal static class GameMcpEntityCapabilityMap
             GameMcpCommandKind.AlchemyLoadout =>
                 Entity(world.EntityIdentities, world.AlchemyRecipes, target,
                     "alchemy-recipes", capability, out reason),
+            GameMcpCommandKind.RitualLifecycle =>
+                Entity(world.EntityIdentities, world.Rituals, target,
+                    "rituals", capability, out reason),
             _ => Unsupported(capability, out reason),
         };
     }
@@ -408,7 +411,8 @@ internal static class GameMcpEntityCapabilityMap
         D("time-runes", "TimeRuneSO", GameMcpCommandKind.GenericDiscovery),
         D("glyphs", "GlyphSO", GameMcpCommandKind.GenericDiscovery),
         D("consumables", "ConsumableSO", GameMcpCommandKind.Consumable),
-        D("rituals", "RitualSO", GameMcpCommandKind.GenericDiscovery),
+        D("rituals", "RitualSO", GameMcpCommandKind.GenericDiscovery,
+            GameMcpCommandKind.RitualLifecycle),
         D("achievements", "AchievementSO"),
         D("advancements", "AdvancementSO"),
         D("challenges", "ChallengeSO", GameMcpCommandKind.Challenge,

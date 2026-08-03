@@ -36,6 +36,7 @@ internal enum GameMcpCommandKind
     Prestige = 25,
     Research = 26,
     AlchemyLoadout = 27,
+    RitualLifecycle = 28,
 }
 
 internal static class GameMcpCommandKinds
@@ -48,7 +49,7 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.Crafting or GameMcpCommandKind.GenericDiscovery or
             GameMcpCommandKind.EquipmentLoadout or GameMcpCommandKind.Challenge or
             GameMcpCommandKind.Prestige or GameMcpCommandKind.Research or
-            GameMcpCommandKind.AlchemyLoadout;
+            GameMcpCommandKind.AlchemyLoadout or GameMcpCommandKind.RitualLifecycle;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -68,6 +69,7 @@ internal static class GameMcpCommandKinds
         "game_prestige" => GameMcpCommandKind.Prestige,
         "game_research" => GameMcpCommandKind.Research,
         "game_alchemy" => GameMcpCommandKind.AlchemyLoadout,
+        "game_ritual" => GameMcpCommandKind.RitualLifecycle,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -118,6 +120,7 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.Prestige => "game_prestige",
         GameMcpCommandKind.Research => "game_research",
         GameMcpCommandKind.AlchemyLoadout => "game_alchemy",
+        GameMcpCommandKind.RitualLifecycle => "game_ritual",
         _ => string.Empty,
     };
 }

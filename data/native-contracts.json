@@ -21614,6 +21614,219 @@
       "type": "AbstractListVariable", "typeVisibility": "public", "kind": "method", "member": "UpdateObservable",
       "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
       "owners": ["Automata ordinary Alchemy GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual.type-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.manager.type-action", "assembly": "assembly-csharp",
+      "type": "RitualManager", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.variable.type-action", "assembly": "assembly-csharp",
+      "type": "RitualVariable", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.cost.type-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.tuple.type-action", "assembly": "assembly-csharp",
+      "type": "ResourceTuple", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.resource.type-action", "assembly": "assembly-csharp",
+      "type": "ResourceSO", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.battle-manager.type-action", "assembly": "assembly-csharp",
+      "type": "BattleManager", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.manager-instance-action", "assembly": "assembly-csharp",
+      "type": "RitualManager", "typeVisibility": "public", "kind": "field", "member": "instance",
+      "visibility": "public", "static": true, "valueType": "RitualManager",
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.manager-selected-action", "assembly": "assembly-csharp",
+      "type": "RitualManager", "typeVisibility": "public", "kind": "field", "member": "selectedRitual",
+      "visibility": "public", "static": false, "valueType": "RitualVariable",
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.variable-toggle-action", "assembly": "assembly-csharp",
+      "type": "AbstractVariable`1", "typeVisibility": "public", "kind": "method", "member": "ToggleValue",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["!0"],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.variable-is-item-action", "assembly": "assembly-csharp",
+      "type": "AbstractVariable`1", "typeVisibility": "public", "kind": "method", "member": "IsItem",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": ["!0"],
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-discovered-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "IsDiscovered",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-force-level-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "field", "member": "forceLevel",
+      "visibility": "public", "static": false, "valueType": "System.Boolean",
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-force-level-value-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "field", "member": "forceLevelValue",
+      "visibility": "public", "static": false, "valueType": "System.Int32",
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-selected-level-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "field", "member": "selectedLevel",
+      "visibility": "public", "static": false, "valueType": "System.Int32",
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-max-selected-level-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "GetMaxSelectedLevel",
+      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-change-level-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "ChangeStartingLevel",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["System.Int32"],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-activation-cost-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "GetActivationCost",
+      "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.cost-has-enough-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "HasEnough",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.cost-perform-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "PerformCost",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.cost-entries-action", "assembly": "assembly-csharp",
+      "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "GetEntries",
+      "visibility": "public", "static": false, "returnType": "System.Collections.Generic.List`1<ResourceTuple>", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.tuple-resource-action", "assembly": "assembly-csharp",
+      "type": "ResourceTuple", "typeVisibility": "public", "kind": "field", "member": "resource",
+      "visibility": "public", "static": false, "valueType": "ResourceSO",
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.tuple-value-action", "assembly": "assembly-csharp",
+      "type": "ResourceTuple", "typeVisibility": "public", "kind": "method", "member": "GetValue",
+      "visibility": "public", "static": false, "returnType": "BigDouble", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.resource-guid-action", "assembly": "assembly-csharp",
+      "type": "IdScriptableObject", "typeVisibility": "public", "kind": "method", "member": "GetGuid",
+      "visibility": "public", "static": false, "returnType": "System.Guid", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction", "Common Ritual decision world collection"],
+      "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.resource-has-amount-action", "assembly": "assembly-csharp",
+      "type": "ResourceSO", "typeVisibility": "public", "kind": "method", "member": "HasAmount",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": ["BigDouble"],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.manager-activate-action", "assembly": "assembly-csharp",
+      "type": "RitualManager", "typeVisibility": "public", "kind": "method", "member": "ActivateSelectedRitual",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.battle-manager-instance-action", "assembly": "assembly-csharp",
+      "type": "BattleManager", "typeVisibility": "public", "kind": "field", "member": "instance",
+      "visibility": "public", "static": true, "valueType": "BattleManager",
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.battle-active-action", "assembly": "assembly-csharp",
+      "type": "BattleManager", "typeVisibility": "public", "kind": "method", "member": "IsInCombat",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-in-battle-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "field", "member": "inBattle",
+      "visibility": "public", "static": false, "valueType": "System.Boolean",
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-duration-kind-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "IsDurationRitual",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-duration-active-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "IsDurationActive",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-cancel-action", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "Cancel",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-usage-requirements-capture", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "HasMetUsageRequirements",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Common Ritual decision world collection"], "usages": ["reflection"], "place": "capture"
+    },
+    {
+      "id": "ritual-lifecycle.ritual-completion-cost-capture", "assembly": "assembly-csharp",
+      "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "GetSelectedCompletionCost",
+      "visibility": "public", "static": false, "returnType": "ResourceCostList", "parameters": [],
+      "owners": ["Common Ritual decision world collection"], "usages": ["reflection"], "place": "capture"
     }
   ],
   "sourceAudit": {
@@ -21626,6 +21839,7 @@
       "src/AutoItems",
       "src/AutoScribe",
       "src/AlchemyLoadout",
+      "src/RitualLifecycle",
       "src/Automata",
       "src/Common",
       "src/DiscoveryTree",

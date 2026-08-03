@@ -1,0 +1,164 @@
+using System;
+using System.Collections;
+using System.Threading.Tasks;
+using OrbAutomata;
+using OrbModding.Common;
+using Xunit;
+
+namespace OrbModding.Tests.Services.RitualLifecycle;
+
+public sealed class RitualLifecycleGameActionTests : IDisposable
+{
+    private const long Epoch = 113;
+    private readonly IDictionary _registry = new Hashtable();
+
+    public RitualLifecycleGameActionTests()
+    {
+        RitualManager.instance = new RitualManager();
+        BattleManager.instance = new BattleManager();
+    }
+
+    public void Dispose()
+    {
+        RitualManager.instance = null;
+        BattleManager.instance = null;
+    }
+
+    [Fact]
+    public void Select_and_deselect_use_the_visible_toggle_and_observe_selection()
+    {
+        var ritual = Ritual();
+        Register(ritual);
+        using var boundary = Boundary();
+
+        var selected = Submit(boundary, ritual, RitualLifecycleActionKind.Select);
+        var deselected = Submit(boundary, ritual, RitualLifecycleActionKind.Deselect);
+
+        Assert.True(selected.Verified, selected.Reason);
+        Assert.True(deselected.Verified, deselected.Reason);
+        Assert.False(RitualManager.instance!.selectedRitual.IsItem(ritual));
+    }
+
+    [Fact]
+    public void Starting_level_uses_the_native_clamp_route_and_one_level_sentinel()
+    {
+        var ritual = Ritual();
+        ritual.NativeMaximumSelectedLevel = 7;
+        Register(ritual);
+        RitualManager.instance!.selectedRitual.ToggleValue(ritual);
+        using var boundary = Boundary();
+
+        var changed = Submit(boundary, ritual, RitualLifecycleActionKind.SetLevel, level: 5);
+        ritual.SuppressLevelChange = true;
+        var missing = Submit(boundary, ritual, RitualLifecycleActionKind.SetLevel, level: 6);
+
+        Assert.True(changed.Verified, changed.Reason);
+        Assert.Equal(5, ritual.selectedLevel);
+        Assert.Equal(RitualLifecyclePreflight.VerificationFailed, missing.Preflight);
+    }
+
+    [Fact]
+    public void Activate_revalidates_and_pays_the_screen_cost_before_the_manager_callback()
+    {
+        var ritual = Ritual();
+        var resource = new ResourceSO { quantity = new BigDouble(10) };
+        resource.SetGuid(Guid.NewGuid());
+        ritual.activationCost.costs.Add(new ResourceTuple(resource, new BigDouble(3)));
+        Register(ritual);
+        RitualManager.instance!.selectedRitual.ToggleValue(ritual);
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, ritual, RitualLifecycleActionKind.Activate);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.True(ritual.inBattle);
+        Assert.Equal(1, ritual.activationCost.PerformCalls);
+        Assert.Equal(new BigDouble(7), resource.quantity);
+    }
+
+    [Fact]
+    public void Activate_no_op_fails_the_game_written_in_battle_sentinel()
+    {
+        var ritual = Ritual();
+        Register(ritual);
+        RitualManager.instance!.selectedRitual.ToggleValue(ritual);
+        RitualManager.instance.SuppressActivation = true;
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, ritual, RitualLifecycleActionKind.Activate);
+
+        Assert.Equal(RitualLifecyclePreflight.VerificationFailed, result.Preflight);
+        Assert.False(ritual.inBattle);
+    }
+
+    [Fact]
+    public void Cancel_duration_clears_game_owned_effect_instances_and_no_op_fails()
+    {
+        var ritual = Ritual();
+        ritual.durationRewardBlocks.Add(new object());
+        ritual.ritualInstances = new System.Collections.Generic.List<object> { new object() };
+        Register(ritual);
+        using var boundary = Boundary();
+
+        var canceled = Submit(boundary, ritual, RitualLifecycleActionKind.CancelDuration);
+        ritual.ritualInstances!.Add(new object());
+        ritual.SuppressCancel = true;
+        var missing = Submit(boundary, ritual, RitualLifecycleActionKind.CancelDuration);
+
+        Assert.True(canceled.Verified, canceled.Reason);
+        Assert.Equal(RitualLifecyclePreflight.VerificationFailed, missing.Preflight);
+    }
+
+    [Fact]
+    public async Task Unity_thread_is_refused_before_identity_or_native_state()
+    {
+        var ritual = Ritual();
+        Register(ritual);
+        using var boundary = Boundary();
+
+        var result = await Task.Run(() =>
+            Submit(boundary, ritual, RitualLifecycleActionKind.Select));
+
+        Assert.Equal(RitualLifecyclePreflight.WrongThread, result.Preflight);
+    }
+
+    [Fact]
+    public void Every_missing_member_disables_the_complete_lifecycle_binding_set()
+    {
+        foreach (var missing in RitualLifecycleNativeBindings.ContractIds)
+        {
+            using var boundary = Boundary(includeContract: id => id != missing);
+            Assert.False(boundary.BindingsAvailable);
+            Assert.Contains(missing, boundary.BindingFailure, StringComparison.Ordinal);
+        }
+    }
+
+    private RitualLifecycleGameAction Boundary(Func<string, bool>? includeContract = null)
+    {
+        var resolver = new TypedRegistryResolver(() => Epoch,
+            () => TypedRegistrySourceSnapshot.Ready(_registry),
+            value => value is IdScriptableObject item ? item.GetGuid() : null);
+        return new RitualLifecycleGameAction(() => Epoch, static () => true,
+            static () => "RitualLifecycle ownership was revoked.",
+            includeContract: includeContract, registry: resolver);
+    }
+
+    private static RitualLifecycleSubmission Submit(
+        RitualLifecycleGameAction boundary,
+        RitualSO ritual,
+        RitualLifecycleActionKind kind,
+        int level = 0)
+    {
+        var action = new RitualLifecycleAction(kind, ritual.GetGuid(), level, Epoch);
+        return boundary.Submit(in action);
+    }
+
+    private void Register(RitualSO ritual) => _registry.Add(ritual.GetGuid(), ritual);
+
+    private static RitualSO Ritual()
+    {
+        var ritual = new RitualSO { discovered = true };
+        ritual.SetGuid(Guid.NewGuid());
+        return ritual;
+    }
+}

@@ -668,6 +668,7 @@ public sealed class WorldRequirementEvaluatorTests : IDisposable
         global::SpellRecipeSO.All.Clear();
         global::AlchemyRecipeSO.All.Clear();
         global::RitualSO.All.Clear();
+        global::RitualManager.instance = new global::RitualManager();
         global::IntVariable.All.Clear();
         global::PrerequisiteLinkSO.All.Clear();
         global::GameManager.currentFrame = 0;

@@ -560,6 +560,7 @@ internal static class GameMcpWorldQuery
             GameMcpCommandKind.Crafting => ProjectCraftingDelta(state, command),
             GameMcpCommandKind.EquipmentLoadout => ProjectEquipmentDelta(state, command),
             GameMcpCommandKind.AlchemyLoadout => ProjectAlchemyLoadoutDelta(state, command),
+            GameMcpCommandKind.RitualLifecycle => ProjectRitualLifecycleDelta(state, command),
             GameMcpCommandKind.Research => ProjectResearchDelta(state, command),
             GameMcpCommandKind.GenericDiscovery => ProjectDiscoveryDelta(state, command),
             _ => ProjectPostState(state, PostStateCategory(command), command.TargetId),
@@ -708,6 +709,50 @@ internal static class GameMcpWorldQuery
             hadBefore ? (object)previous.TargetAmount : null,
             current.TargetAmount,
             "activeAmount");
+    }
+
+    private static GameMcpValue ProjectRitualLifecycleDelta(
+        GameMcpFrameContext state,
+        GameMcpCommand command)
+    {
+        if (state.World is null)
+            return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
+        var world = state.World.Snapshot;
+        if (!WorldLookup.TryFind(world.Rituals, command.TargetId, out var current))
+            return PostStateUnavailable("post_state_not_published",
+                "the settled world has no Ritual row for that ritual");
+        var oldWorld = Before(command);
+        WorldRitual previous = default;
+        var hadBefore = oldWorld is not null &&
+            WorldLookup.TryFind(oldWorld.Rituals, command.TargetId, out previous);
+        if (command.Mode == "activate")
+            return Change(command.TargetId,
+                hadBefore ? (object)previous.InBattle : null,
+                current.InBattle,
+                "activeBattle");
+        if (command.Mode == "cancel_duration")
+            return Change(command.TargetId,
+                hadBefore ? (object)(previous.ActiveInstances > 0) : null,
+                current.ActiveInstances > 0,
+                "activeDurationReward");
+
+        var result = new JObject { ["uuid"] = command.TargetId.ToString("D") };
+        if (command.Mode is "select" or "deselect")
+            result["selected"] = new JObject
+            {
+                ["before"] = hadBefore && previous.Decision.Selected,
+                ["after"] = current.Decision.Selected,
+            };
+        else
+            result["startingLevel"] = new JObject
+            {
+                ["before"] = hadBefore ? previous.SelectedLevel : (int?)null,
+                ["after"] = current.SelectedLevel,
+            };
+        var next = new JObject();
+        AddRitualDecision(world, next, in current);
+        result["next"] = next;
+        return result.Freeze();
     }
 
     private static GameMcpValue ProjectHarvestDelta(
@@ -1110,6 +1155,7 @@ internal static class GameMcpWorldQuery
         },
         GameMcpCommandKind.EquipmentLoadout => "equipment",
         GameMcpCommandKind.AlchemyLoadout => "alchemy-recipes",
+        GameMcpCommandKind.RitualLifecycle => "rituals",
         GameMcpCommandKind.Research => "research",
         _ => throw new ArgumentOutOfRangeException(nameof(command.Kind)),
     };
@@ -3467,8 +3513,91 @@ internal static class GameMcpWorldQuery
             ["reachedLevel"] = ritual.ReachedLevel,
             ["selectedLevel"] = ritual.SelectedLevel,
         };
+        AddRitualDecision(world, result, in ritual);
         AddDiscoveryDecision(world, result, ritual.Discovery);
         return result.Freeze();
+    }
+
+    private static void AddRitualDecision(
+        GameWorldState world,
+        JObject result,
+        in WorldRitual ritual)
+    {
+        var selected = ritual.Decision.Selected;
+        var anyBattleActive = false;
+        for (var index = 0; index < world.Rituals.Count; index++)
+            if (world.Rituals[index].InBattle) { anyBattleActive = true; break; }
+        result["selected"] = selected;
+        var level = new JObject
+        {
+            ["available"] = selected && !ritual.ForceLevel && !anyBattleActive,
+            ["current"] = ritual.SelectedLevel,
+        };
+        if (selected && !ritual.ForceLevel)
+        {
+            level["maximum"] = ritual.Decision.MaximumStartingLevel;
+            if (anyBattleActive) level["reasonCode"] = "ritual_battle_active";
+        }
+        else if (ritual.ForceLevel)
+            level["reasonCode"] = "level_locked";
+        else
+            level["reasonCode"] = "not_selected";
+        result["setLevel"] = level;
+
+        var activateAvailable = ritual.Discovered && selected && !anyBattleActive &&
+            ritual.Decision.UsageRequirementsMet && ritual.Decision.ActivationAffordable;
+        var activate = new JObject { ["available"] = activateAvailable };
+        if (selected)
+        {
+            activate["affordable"] = ritual.Decision.ActivationAffordable;
+            var activationCosts = ProjectRitualCosts(world, ritual.Decision.ActivationCosts);
+            if (activationCosts.Count > 0) activate["costs"] = activationCosts;
+            var completionCosts = ProjectRitualCosts(world, ritual.Decision.CompletionCosts);
+            if (completionCosts.Count > 0) activate["completionCosts"] = completionCosts;
+        }
+        if (!activateAvailable)
+            activate["reasonCode"] = !ritual.Discovered
+                ? "not_discovered"
+                : !selected
+                    ? "not_selected"
+                    : anyBattleActive
+                        ? "ritual_battle_active"
+                        : !ritual.Decision.UsageRequirementsMet
+                            ? "usage_requirements_unmet"
+                            : "unaffordable";
+        result["activate"] = activate;
+
+        var durationAvailable = ritual.DurationRewardBlocks > 0 && ritual.ActiveInstances > 0;
+        result["cancelDuration"] = durationAvailable
+            ? new JObject { ["available"] = true }
+            : new JObject
+            {
+                ["available"] = false,
+                ["reasonCode"] = ritual.DurationRewardBlocks > 0
+                    ? "no_active_duration_reward"
+                    : "not_a_duration_ritual",
+            };
+    }
+
+    private static JArray ProjectRitualCosts(
+        GameWorldState world,
+        PublicationTable<WorldRitualCost> costs)
+    {
+        var result = new JArray();
+        for (var index = 0; index < costs.Count; index++)
+        {
+            var cost = costs[index];
+            var row = new JObject
+            {
+                ["resourceId"] = cost.ResourceId.ToString("D"),
+                ["amount"] = new GameMcpDomainValue(cost.Cost),
+            };
+            if (WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource))
+                row["spendableAmount"] = new GameMcpDomainValue(
+                    SpendableAmount(world, cost.ResourceId, resource.Reading.Quantity));
+            result.Add(row);
+        }
+        return result;
     }
 
     private static GameMcpValue ProjectTimeRune(GameWorldState world, in WorldTimeRune rune)
