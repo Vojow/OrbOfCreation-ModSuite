@@ -34,6 +34,8 @@ internal static class AutoBuyPurchaseNarration
         {
             AutoBuyPurchasePreflight.CandidateUnavailable =>
                 $"Auto Buy failed to purchase {candidate}: candidate could not be resolved.",
+            AutoBuyPurchasePreflight.AffordabilityUnavailable =>
+                $"Auto Buy failed to purchase {candidate}: live affordability could not be read.",
             AutoBuyPurchasePreflight.OwningViewUnavailable =>
                 Refusal(candidate, "owning view unavailable"),
             AutoBuyPurchasePreflight.OwningViewRelationMissing =>

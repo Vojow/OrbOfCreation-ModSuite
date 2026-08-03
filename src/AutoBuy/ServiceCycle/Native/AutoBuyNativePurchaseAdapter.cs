@@ -23,6 +23,7 @@ internal enum AutoBuyPurchasePreflight
     Proceeded = 0,
     CandidateUnavailable,
     NotAdmissible,
+    AffordabilityUnavailable,
     SingleBuyUnavailable,
     OwningViewUnavailable,
     OwningViewRelationMissing,
@@ -281,8 +282,8 @@ internal sealed class AutoBuyNativePurchaseAdapter :
         // The shipped CanPurchase contracts differ materially. StructureSO checks only its
         // per-level requirements and ActionManager.CanLoadAction(); it checks neither IsAvailable()
         // nor affordability. UpgradeSO checks max queued level, affordability, IsAvailable(), queued
-        // level requirements, and ActionManager.CanLoadAction(). The explicit gates above close the
-        // structure gap and keep the owning view outside both methods visible at this boundary.
+        // level requirements, and ActionManager.CanLoadAction(). The explicit gates around this fold
+        // close both structure gaps and keep the owning view outside both methods visible here.
 #if SERVICE_CYCLE_PROFILE
         _profileOperations.AddReflectedMethodCall();
 #endif
@@ -302,6 +303,30 @@ internal sealed class AutoBuyNativePurchaseAdapter :
                 AutoBuyPurchasePreflight.NotAdmissible, accessors.Diagnose(source));
         }
 
+        AutoBuyLiveCostSnapshot liveCosts;
+        if (kind == AutoBuyCandidateKind.Structure)
+        {
+            // StructureSO.CanPurchase() omits affordability and Purchase(true) silently no-ops when
+            // its cost cannot be paid. Re-read that exact native term before entering the mutation
+            // verifier; an unread term is an adapter fault, never evidence that purchase is safe.
+            var diagnosis = accessors.Diagnose(source);
+            if (diagnosis.HasEnough == AutoBuyAdmissionTerm.Refused)
+            {
+                return AutoBuyPurchaseSubmission.Rejected(
+                    AutoBuyPurchasePreflight.NotAdmissible, in diagnosis);
+            }
+            if (diagnosis.HasEnough != AutoBuyAdmissionTerm.Passed)
+            {
+                return AutoBuyPurchaseSubmission.Rejected(
+                    AutoBuyPurchasePreflight.AffordabilityUnavailable, in diagnosis);
+            }
+            liveCosts = diagnosis.LiveCosts;
+        }
+        else
+        {
+            liveCosts = accessors.ReadLiveCosts(source);
+        }
+
         if (kind == AutoBuyCandidateKind.Upgrade)
         {
             var capacity = accessors.ReadDestinationCapacity(source);
@@ -312,8 +337,6 @@ internal sealed class AutoBuyNativePurchaseAdapter :
         // Preserve the resource identities and first-level terms before the native call spends them.
         // The action adapter keeps these detached values only for this batch, so a later refusal can
         // name earlier purchases that touched the same resources.
-        var liveCosts = accessors.ReadLiveCosts(source);
-
 #if SERVICE_CYCLE_PROFILE
         var submissionStage = _profileOperations.Begin(
             ServiceCycleProfileSpan.AutoBuyActionNativeSubmission,
@@ -441,7 +464,8 @@ internal sealed class AutoBuyNativePurchaseAdapter :
                 {
                     if (ReadLiveGate(AutoBuyCandidateKind.Structure, uuid, lifecycleEpoch, source, accessors) !=
                             AutoBuyPurchasePreflight.Proceeded ||
-                        !accessors.TryReadAdmission(source, out var admitted) || !admitted)
+                        !accessors.TryReadAdmission(source, out var admitted) || !admitted ||
+                        accessors.Diagnose(source).HasEnough != AutoBuyAdmissionTerm.Passed)
                         break;
                     accessors.InvokePurchase(source);
                 }
@@ -701,9 +725,9 @@ internal sealed class AutoBuyNativePurchaseAdapter :
 
         /// <summary>
         /// Reads each admission term the game exposes on its own, so a refusal can name a cause. Only
-        /// ever called after <see cref="TryReadAdmission"/> already said no, and it answers with
-        /// <see cref="AutoBuyAdmissionTerm.Unread"/> rather than throwing, because a diagnosis that
-        /// can fail the action it is diagnosing is worse than no diagnosis.
+        /// called after <see cref="TryReadAdmission"/> said no, or to read the affordability term
+        /// that StructureSO.CanPurchase() omits. It answers with <see cref="AutoBuyAdmissionTerm.Unread"/>
+        /// rather than throwing; the action boundary treats an unread required term as a fault.
         /// </summary>
         public AutoBuyAdmissionDiagnosis Diagnose(object source)
         {

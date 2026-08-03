@@ -23,6 +23,20 @@ public sealed class AutoBuyPurchaseNarrationTests
     }
 
     [Fact]
+    public void DescribeWarning_AffordabilityUnavailable_IsActionable()
+    {
+        var submission = AutoBuyPurchaseSubmission.Rejected(
+            AutoBuyPurchasePreflight.AffordabilityUnavailable);
+
+        var warning = AutoBuyPurchaseNarration.DescribeWarning(
+            AutoBuyCandidateKind.Structure, CandidateId, in submission);
+
+        Assert.Equal(
+            $"Auto Buy failed to purchase Structure {CandidateId:D}: live affordability could not be read.",
+            warning);
+    }
+
+    [Fact]
     public void DescribeWarning_SuccessAndOrdinaryRefusalsAreSilent()
     {
         var verified = Attempted(before: 4, delta: 3, requested: 3);

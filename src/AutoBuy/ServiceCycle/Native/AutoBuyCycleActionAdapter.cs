@@ -369,6 +369,8 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         {
             case AutoBuyPurchasePreflight.CandidateUnavailable:
                 return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
+            case AutoBuyPurchasePreflight.AffordabilityUnavailable:
+                return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
             case AutoBuyPurchasePreflight.NotAdmissible:
                 return submission.Diagnosis.Classification ==
                     AutoBuyRefusalClassification.AffordabilityChanged
@@ -399,11 +401,6 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
         var evidence = ServiceNativeMutationEvidence.Observed(submission.Outcome, submission.CallOutcome);
         if (submission.Verified)
             return ServiceActionResult.Committed(CommonActionResultCodes.Committed, evidence);
-        if (submission.Outcome == NativeMutationOutcome.PostconditionFailed &&
-            submission.CommittedLevels == 0)
-        {
-            return ServiceActionResult.Skipped(CommonActionResultCodes.Skipped, evidence);
-        }
         return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault, evidence);
     }
 }
