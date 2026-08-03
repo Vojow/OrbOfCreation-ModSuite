@@ -150,6 +150,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `suite_emergency_stop` | Engage or resume the suite's shared emergency stop |
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
 | `game_continue` | Continue the already-selected save from the Start scene |
+| `game_return_to_menu` | Raise the native manual-save event and return from play to the Start scene |
 | `game_screen_catalog` | Read compact named tabs with the active tab/subtab marked and grouped |
 | `game_navigate` | Navigate a catalog tab/subtab and optional published plot UUID |
 | `game_tooltips` | Page through active tooltip-bearing elements by exact indexed path |
@@ -992,6 +993,14 @@ native `SaveStateManager.StartGame` method for the save the player has already s
 select, delete, reset, import, or rewrite a save, and it accepts no native type, method, or UI input
 from the caller. Its success waits for the transition and returns the new `scene` and
 `runtimeAvailable` state.
+
+`game_return_to_menu` is the opposite lifecycle boundary. On `Main` it invokes the visible
+`UIBackToMenuButton.BackToMenu` callback, which raises the game's authored manual-save event before
+requesting the literal `Start` destination. The response is completed as soon as the native screen
+fade becomes active, before scene teardown can invalidate the HTTP operation. Its compact success
+is `status: committed, scene: Start`; the scene transition then clears every lifecycle-retained
+world, identity, binding, and lease through the ordinary lifecycle observer. The tool cannot choose
+a save, suppress the save event, select another scene, or run while another transition is active.
 
 `game_screen_catalog` reads the live Main-scene UI. Top tabs retain native rail order. Current
 subtabs are active `UIViewRadioButton` controls under the current native content area. Inactive

@@ -995,14 +995,60 @@ public class Player
     }
 }
 
+public class VoidEventChannel : UnityEngine.ScriptableObject
+{
+    public int RaiseCalls { get; private set; }
+
+    public void Raise() => RaiseCalls++;
+}
+
+public class UIScreenFlash : UnityEngine.MonoBehaviour
+{
+    public static UIScreenFlash instance = new();
+    private bool isActive;
+
+    public UIScreenFlash FadeIn(float delay, float duration)
+    {
+        if (!SuppressFade) isActive = true;
+        return this;
+    }
+
+    public static bool SuppressFade { get; set; }
+    public bool ActiveForTests => isActive;
+
+    public static void ResetForTests()
+    {
+        instance = new UIScreenFlash();
+        SuppressFade = false;
+    }
+}
+
+public class UIBackToMenuButton : UnityEngine.MonoBehaviour
+{
+    public VoidEventChannel manualSave = new();
+
+    public void BackToMenu()
+    {
+        if (manualSave is not null) manualSave.Raise();
+        SaveStateManager.instance.BackToMainMenu();
+    }
+}
+
 public class SaveStateManager
 {
+    public static SaveStateManager instance = new();
+
     public void ImplementLoadedJson()
     {
     }
 
     public void StartGame()
     {
+    }
+
+    public void BackToMainMenu()
+    {
+        UIScreenFlash.instance.FadeIn(0f, 0f);
     }
 }
 

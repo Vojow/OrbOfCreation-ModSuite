@@ -38,6 +38,7 @@ internal static class AutomataServiceCycleComposition
         Func<HarvestLifecycleGameAction>? createHarvestLifecycle = null,
         Func<PlotLifecycleGameAction>? createPlotLifecycle = null,
         Func<StructureLifecycleGameAction>? createStructureLifecycle = null,
+        Func<ReturnToMenuGameAction>? createReturnToMenu = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
         Func<ResearchGameAction>? createResearch = null)
@@ -66,6 +67,7 @@ internal static class AutomataServiceCycleComposition
                 createHarvestLifecycle,
                 createPlotLifecycle,
                 createStructureLifecycle,
+                createReturnToMenu,
                 createChallenges,
                 createPrestige,
                 createResearch);
@@ -109,6 +111,7 @@ internal static class AutomataServiceCycleComposition
         Func<HarvestLifecycleGameAction>? createHarvestLifecycle = null,
         Func<PlotLifecycleGameAction>? createPlotLifecycle = null,
         Func<StructureLifecycleGameAction>? createStructureLifecycle = null,
+        Func<ReturnToMenuGameAction>? createReturnToMenu = null,
         Func<ChallengeGameAction>? createChallenges = null,
         Func<PrestigeGameAction>? createPrestige = null,
         Func<ResearchGameAction>? createResearch = null)
@@ -140,6 +143,7 @@ internal static class AutomataServiceCycleComposition
         HarvestLifecycleGameAction? harvestLifecycle = null;
         PlotLifecycleGameAction? plotLifecycle = null;
         StructureLifecycleGameAction? structureLifecycle = null;
+        ReturnToMenuGameAction? returnToMenu = null;
         ChallengeGameAction? challenges = null;
         PrestigeGameAction? prestige = null;
         ResearchGameAction? research = null;
@@ -215,6 +219,7 @@ internal static class AutomataServiceCycleComposition
             harvestLifecycle = createHarvestLifecycle?.Invoke();
             plotLifecycle = createPlotLifecycle?.Invoke();
             structureLifecycle = createStructureLifecycle?.Invoke();
+            returnToMenu = createReturnToMenu?.Invoke();
             challenges = createChallenges?.Invoke();
             prestige = createPrestige?.Invoke();
             research = createResearch?.Invoke();
@@ -240,6 +245,7 @@ internal static class AutomataServiceCycleComposition
                 harvestLifecycle,
                 plotLifecycle,
                 structureLifecycle,
+                returnToMenu,
                 challenges,
                 prestige,
                 research);
@@ -262,6 +268,7 @@ internal static class AutomataServiceCycleComposition
             harvestLifecycle?.Dispose();
             plotLifecycle?.Dispose();
             structureLifecycle?.Dispose();
+            returnToMenu?.Dispose();
             challenges?.Dispose();
             prestige?.Dispose();
             research?.Dispose();

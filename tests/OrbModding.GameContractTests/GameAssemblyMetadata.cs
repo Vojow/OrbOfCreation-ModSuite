@@ -230,6 +230,12 @@ internal sealed class GameAssemblyMetadata : IDisposable
     public int GetFieldToken(string fullName, string fieldName) =>
         MetadataTokens.GetToken(RequireField(fullName, fieldName));
 
+    public byte[] GetMethodBodyBytes(string fullName, string methodName)
+    {
+        var method = Reader.GetMethodDefinition(RequireUniqueMethod(fullName, methodName));
+        return _peReader.GetMethodBody(method.RelativeVirtualAddress).GetILBytes()!;
+    }
+
     public MethodDispatchContract GetMethodDispatch(string fullName, string methodName)
     {
         var method = Reader.GetMethodDefinition(RequireUniqueMethod(fullName, methodName));

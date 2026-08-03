@@ -931,3 +931,19 @@ Its admission is two authored booleans, and their binding is **unproven**.
 the same names and types — but assembly metadata cannot prove the prefab references point at the
 same two assets. A manager-side read is the screen-independent *analogue* of the modal's gate, not a
 proven equivalent; settling it needs the shipped prefab or a comparison observed in game.
+
+---
+
+## Back to Menu
+
+`UIBackToMenuButton.BackToMenu` (`0x0600280D`) raises its authored `manualSave` event before calling
+`SaveStateManager.BackToMainMenu` (`0x060006FF`). The manager method passes the literal `Start` to
+`AnimateChangeScene` (`0x06000700`). Calling the manager directly is not UI-equivalent because it
+omits the save event.
+
+`AnimateChangeScene` starts `UIScreenFlash.FadeIn`, enables the loading animation, and registers the
+actual scene load as the animation-complete callback. `FadeIn` synchronously writes private
+`UIScreenFlash.isActive` before animating alpha. That directional false-to-true fact is the only
+stable transition sentinel available before the callback tears down the current lifecycle. The
+complete contract and validation list live in
+[`return-to-menu-native-pipeline.md`](return-to-menu-native-pipeline.md).

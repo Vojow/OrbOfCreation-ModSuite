@@ -40,6 +40,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     private readonly HarvestLifecycleGameAction? _harvestLifecycle;
     private readonly PlotLifecycleGameAction? _plotLifecycle;
     private readonly StructureLifecycleGameAction? _structureLifecycle;
+    private readonly ReturnToMenuGameAction? _returnToMenu;
     private readonly ChallengeGameAction? _challenges;
     private readonly PrestigeGameAction? _prestige;
     private readonly ResearchGameAction? _research;
@@ -70,6 +71,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         HarvestLifecycleGameAction? harvestLifecycle = null,
         PlotLifecycleGameAction? plotLifecycle = null,
         StructureLifecycleGameAction? structureLifecycle = null,
+        ReturnToMenuGameAction? returnToMenu = null,
         ChallengeGameAction? challenges = null,
         PrestigeGameAction? prestige = null,
         ResearchGameAction? research = null)
@@ -96,6 +98,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _harvestLifecycle = harvestLifecycle;
         _plotLifecycle = plotLifecycle;
         _structureLifecycle = structureLifecycle;
+        _returnToMenu = returnToMenu;
         _challenges = challenges;
         _prestige = prestige;
         _research = research;
@@ -172,6 +175,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         _harvestLifecycle?.InvalidateLifecycle();
         _plotLifecycle?.InvalidateLifecycle();
         _structureLifecycle?.InvalidateLifecycle();
+        _returnToMenu?.InvalidateLifecycle();
         _challenges?.InvalidateLifecycle();
         _prestige?.InvalidateLifecycle();
         _research?.InvalidateLifecycle();
@@ -249,6 +253,8 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 return ExecutePlotLifecycle(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.StructureLifecycle)
                 return ExecuteStructureLifecycle(command, lifecycle, configuration.Generation.Value);
+            if (command.Kind == GameMcpCommandKind.ReturnToMenu)
+                return ExecuteReturnToMenu(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Challenge)
                 return ExecuteChallenge(command, lifecycle, configuration.Generation.Value);
             if (command.Kind == GameMcpCommandKind.Prestige)
@@ -739,6 +745,26 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             GameMcpStructureLifecycleProjection.Project(in submission));
     }
 
+    private GameMcpCommandResult ExecuteReturnToMenu(
+        GameMcpCommand command,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (_returnToMenu is null)
+            return GameMcpCommandResult.Rejected("contract_unavailable",
+                "the shared Back to Menu GameAction was not composed", lifecycle,
+                configurationGeneration);
+        GameMcpNativeActionAdmission.AssertNativeType(command, "UIBackToMenuButton");
+        var action = new ReturnToMenuAction(command.ExpectedLifecycleGeneration);
+        var submission = _returnToMenu.Submit(in action);
+        var result = ReturnToMenuActionResultMapper.Map(in submission);
+        var details = submission.Verified
+            ? new GameMcpObjectBuilder { ["scene"] = "Start" }.Freeze()
+            : new GameMcpObjectBuilder().Freeze();
+        return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
+            configurationGeneration, submission.Reason, details);
+    }
+
     private GameMcpCommandResult ExecuteGenericLevel(
         GameMcpCommand command,
         long lifecycle,
@@ -1164,6 +1190,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _harvestLifecycle?.Dispose();
             _plotLifecycle?.Dispose();
             _structureLifecycle?.Dispose();
+            _returnToMenu?.Dispose();
             _challenges?.Dispose();
             _prestige?.Dispose();
             _research?.Dispose();

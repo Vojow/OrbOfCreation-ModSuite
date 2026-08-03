@@ -17,6 +17,7 @@ using Xunit;
 
 namespace OrbModding.ProfileTests;
 
+[Collection(GameMcpServiceCycleRuntimeCollection.Name)]
 public sealed class GameMcpDiscoveryTreeOfferTests
 {
     [Fact]

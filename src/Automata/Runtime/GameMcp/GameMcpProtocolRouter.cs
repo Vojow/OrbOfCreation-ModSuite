@@ -221,6 +221,7 @@ internal sealed class GameMcpProtocolRouter
             case "suite_configuration":
             case "trace_health":
             case "game_continue":
+            case "game_return_to_menu":
             case "game_screen_catalog":
                 break;
             case "world_list":
@@ -519,7 +520,7 @@ internal sealed class GameMcpProtocolRouter
         GameMcpOperationRequestBuilder request) => name switch
     {
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_harvest_setup" or "game_structure" or
+            "game_harvest_setup" or "game_structure" or "game_return_to_menu" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
@@ -550,7 +551,7 @@ internal sealed class GameMcpProtocolRouter
         "trace_health" => GameMcpFrameData.TraceWriterHealth,
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
         "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_harvest_setup" or "game_structure" or
+            "game_harvest_setup" or "game_structure" or "game_return_to_menu" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
@@ -1055,6 +1056,13 @@ internal sealed class GameMcpProtocolRouter
                 "game_continue",
                 "Continue the selected save",
                 "On the Start scene only, invoke the game's audited native Continue action for the already selected save.",
+                ObjectSchema(),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_return_to_menu",
+                "Return to the Start screen",
+                "While playing, invoke the game's Back to Menu button, including its authored manual-save event, and acknowledge after the native screen transition starts but before scene teardown.",
                 ObjectSchema(),
                 readOnly: false,
                 idempotent: false),

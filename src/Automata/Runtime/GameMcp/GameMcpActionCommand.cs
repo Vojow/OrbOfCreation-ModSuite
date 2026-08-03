@@ -42,6 +42,7 @@ internal enum GameMcpCommandKind
     Loadout = 31,
     HarvestLifecycle = 32,
     StructureLifecycle = 33,
+    ReturnToMenu = 34,
 }
 
 internal static class GameMcpCommandKinds
@@ -57,7 +58,13 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.AlchemyLoadout or GameMcpCommandKind.RitualLifecycle or
             GameMcpCommandKind.GenericLevel or GameMcpCommandKind.CraftingStation or
             GameMcpCommandKind.Loadout or GameMcpCommandKind.HarvestLifecycle or
-            GameMcpCommandKind.StructureLifecycle;
+            GameMcpCommandKind.StructureLifecycle or GameMcpCommandKind.ReturnToMenu;
+
+    internal static bool IsEntityGameplayAction(GameMcpCommandKind kind) =>
+        IsGameplayAction(kind) && kind != GameMcpCommandKind.ReturnToMenu;
+
+    internal static bool RequiresPostStateSettlement(GameMcpCommandKind kind) =>
+        IsGameplayAction(kind) && kind != GameMcpCommandKind.ReturnToMenu;
 
     internal static GameMcpCommandKind FromToolName(string toolName) => toolName switch
     {
@@ -83,6 +90,7 @@ internal static class GameMcpCommandKinds
         "game_loadout" => GameMcpCommandKind.Loadout,
         "game_harvest_setup" => GameMcpCommandKind.HarvestLifecycle,
         "game_structure" => GameMcpCommandKind.StructureLifecycle,
+        "game_return_to_menu" => GameMcpCommandKind.ReturnToMenu,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -139,6 +147,7 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.Loadout => "game_loadout",
         GameMcpCommandKind.HarvestLifecycle => "game_harvest_setup",
         GameMcpCommandKind.StructureLifecycle => "game_structure",
+        GameMcpCommandKind.ReturnToMenu => "game_return_to_menu",
         _ => string.Empty,
     };
 }
@@ -769,6 +778,17 @@ internal static class GameMcpActionResultCodeNames
             if (code == StructureLifecycleActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == StructureLifecycleActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == StructureLifecycleActionResultCodes.VerificationFailed) return "verification_failed";
+        }
+        if (commandKind == GameMcpCommandKind.ReturnToMenu)
+        {
+            if (code == ReturnToMenuActionResultCodes.ContractUnavailable) return "contract_unavailable";
+            if (code == ReturnToMenuActionResultCodes.WrongThread) return "wrong_thread";
+            if (code == ReturnToMenuActionResultCodes.WrongScene) return "wrong_scene";
+            if (code == ReturnToMenuActionResultCodes.TransitionInProgress) return "transition_in_progress";
+            if (code == ReturnToMenuActionResultCodes.ControlUnavailable) return "control_unavailable";
+            if (code == ReturnToMenuActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
+            if (code == ReturnToMenuActionResultCodes.PostCommitFault) return "post_commit_fault";
+            if (code == ReturnToMenuActionResultCodes.VerificationFailed) return "verification_failed";
         }
         if (commandKind == GameMcpCommandKind.CraftingStation)
         {

@@ -30,7 +30,7 @@ public sealed class GameMcpEntityCapabilityMapTests
             .OrderBy(static kind => kind)
             .ToArray();
         var declaredGameplay = Enum.GetValues<GameMcpCommandKind>()
-            .Where(GameMcpCommandKinds.IsGameplayAction)
+            .Where(GameMcpCommandKinds.IsEntityGameplayAction)
             .OrderBy(static kind => kind)
             .ToArray();
         Assert.Equal(declaredGameplay, mappedGameplay);
@@ -49,8 +49,8 @@ public sealed class GameMcpEntityCapabilityMapTests
             .Select(name => (Name: name, Kind: GameMcpCommandKinds.FromToolName(name)))
             .ToArray();
 
-        Assert.Equal(31, mappings.Length);
-        Assert.Equal(31, mappings.Select(mapping => mapping.Kind).Distinct().Count());
+        Assert.Equal(32, mappings.Length);
+        Assert.Equal(32, mappings.Select(mapping => mapping.Kind).Distinct().Count());
         Assert.Equal(
             new[]
             {
@@ -78,11 +78,11 @@ public sealed class GameMcpEntityCapabilityMapTests
                 "game_craft",
             }.OrderBy(name => name, StringComparer.Ordinal),
             mappings
-                .Where(mapping => GameMcpCommandKinds.IsGameplayAction(mapping.Kind))
+                .Where(mapping => GameMcpCommandKinds.IsEntityGameplayAction(mapping.Kind))
                 .Select(mapping => mapping.Name)
                 .OrderBy(name => name, StringComparer.Ordinal));
         Assert.All(
-            mappings.Where(mapping => GameMcpCommandKinds.IsGameplayAction(mapping.Kind)),
+            mappings.Where(mapping => GameMcpCommandKinds.IsEntityGameplayAction(mapping.Kind)),
             mapping => Assert.Contains(
                 GameMcpEntityCapabilityMap.Entries,
                 descriptor => descriptor.Capabilities.Contains(mapping.Kind)));

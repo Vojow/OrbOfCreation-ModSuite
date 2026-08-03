@@ -22919,6 +22919,26 @@
     {
       "id": "structure-lifecycle.toggle-action", "assembly": "assembly-csharp", "type": "StructureSO", "typeVisibility": "public", "kind": "method", "member": "ToggleDisabled",
       "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [], "owners": ["Automata structure lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.button.type-action", "assembly": "assembly-csharp", "type": "UIBackToMenuButton", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.button-action", "assembly": "assembly-csharp", "type": "UIBackToMenuButton", "typeVisibility": "public", "kind": "method", "member": "BackToMenu",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.screen-flash.type-action", "assembly": "assembly-csharp", "type": "UIScreenFlash", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.screen-flash-instance-action", "assembly": "assembly-csharp", "type": "UIScreenFlash", "typeVisibility": "public", "kind": "field", "member": "instance",
+      "visibility": "public", "static": true, "valueType": "UIScreenFlash", "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.screen-flash-active-action", "assembly": "assembly-csharp", "type": "UIScreenFlash", "typeVisibility": "public", "kind": "field", "member": "isActive",
+      "visibility": "private", "static": false, "valueType": "System.Boolean", "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
     }
   ],
   "sourceAudit": {
@@ -22938,6 +22958,7 @@
       "src/HarvestLifecycle",
       "src/PlotLifecycle",
       "src/StructureLifecycle",
+      "src/RunTransition",
     "src/GenericDiscovery",
       "src/GenericLevel",
       "src/Loadout",

@@ -644,6 +644,18 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .StructureLifecycleOwnershipFailure)
+                    , createReturnToMenu: () => new ReturnToMenuGameAction(
+                        readAutoHarvestLifecycleEpoch,
+                        tryCaptureMutationPermit: () =>
+                            _automataActionFamilyOwnership!
+                                .TryCaptureRunTransitionMutationPermit(),
+                        readOwnershipFailure: () =>
+                            _automataActionFamilyOwnership!
+                                .RunTransitionOwnershipFailure,
+                        readScene: () => SceneManager.GetActiveScene().name,
+                        findLoadedObjects: type => Resources.FindObjectsOfTypeAll(type)
+                            .Cast<object>()
+                            .ToArray())
                     , createChallenges: () => new ChallengeGameAction(
                         readAutoHarvestLifecycleEpoch,
                         tryCaptureMutationPermit: () =>
@@ -1605,6 +1617,11 @@ public sealed class Plugin : BaseUnityPlugin
         }
         if (string.Equals(result.Status, "committed", StringComparison.Ordinal))
         {
+            if (!GameMcpCommandKinds.RequiresPostStateSettlement(command.Kind))
+            {
+                execution = ProjectGameMcpCommand(command, result);
+                return true;
+            }
             var actionCompletedAtUtcTicks = DateTime.UtcNow.Ticks;
             StartCoroutine(CompleteGameMcpGameplayPostState(
                 command,
@@ -2032,6 +2049,11 @@ public sealed class Plugin : BaseUnityPlugin
             nativeType = "HarvestElementSO";
         else if (kind == GameMcpCommandKind.StructureLifecycle)
             nativeType = "StructureSO";
+        else if (kind == GameMcpCommandKind.ReturnToMenu)
+        {
+            nativeType = "UIBackToMenuButton";
+            mode = "return_to_menu";
+        }
         else if (kind == GameMcpCommandKind.Challenge)
             nativeType = "ChallengeSO";
         else if (kind == GameMcpCommandKind.Prestige)
