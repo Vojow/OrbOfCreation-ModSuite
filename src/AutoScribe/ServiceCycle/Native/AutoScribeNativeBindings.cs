@@ -23,7 +23,6 @@ internal sealed class AutoScribeNativeBindings
         Type instanceType,
         Type instanceListType,
         Type consumableType,
-        Type consumableCountType,
         Type enchantmentType,
         Type resourceCostType,
         Type bigDoubleType,
@@ -50,7 +49,6 @@ internal sealed class AutoScribeNativeBindings
         FieldInfo onUseEffects,
         FieldInfo targetOptions,
         FieldInfo enchantScriptEnchantment,
-        FieldInfo consumableCounts,
         MethodInfo identity,
         MethodInfo consumableIdentity,
         MethodInfo enchantmentIdentity,
@@ -68,8 +66,6 @@ internal sealed class AutoScribeNativeBindings
         MethodInfo instanceInitiate,
         MethodInfo instanceInstantCheck,
         MethodInfo instanceInstant,
-        MethodInfo countLevel,
-        MethodInfo countQuantity,
         MethodInfo scalingBasic,
         MethodInfo getTargeting,
         MethodInfo getRandomList)
@@ -80,7 +76,6 @@ internal sealed class AutoScribeNativeBindings
         InstanceType = instanceType;
         InstanceListType = instanceListType;
         ConsumableType = consumableType;
-        ConsumableCountType = consumableCountType;
         EnchantmentType = enchantmentType;
         ResourceCostType = resourceCostType;
         BigDoubleType = bigDoubleType;
@@ -107,7 +102,6 @@ internal sealed class AutoScribeNativeBindings
         OnUseEffects = onUseEffects;
         TargetOptions = targetOptions;
         EnchantScriptEnchantment = enchantScriptEnchantment;
-        ConsumableCounts = consumableCounts;
         Identity = identity;
         ConsumableIdentity = consumableIdentity;
         EnchantmentIdentity = enchantmentIdentity;
@@ -125,8 +119,6 @@ internal sealed class AutoScribeNativeBindings
         InstanceInitiate = instanceInitiate;
         InstanceInstantCheck = instanceInstantCheck;
         InstanceInstant = instanceInstant;
-        CountLevel = countLevel;
-        CountQuantity = countQuantity;
         ScalingBasic = scalingBasic;
         GetTargeting = getTargeting;
         GetRandomList = getRandomList;
@@ -138,7 +130,6 @@ internal sealed class AutoScribeNativeBindings
     internal Type InstanceType { get; }
     internal Type InstanceListType { get; }
     internal Type ConsumableType { get; }
-    internal Type ConsumableCountType { get; }
     internal Type EnchantmentType { get; }
     internal Type ResourceCostType { get; }
     internal Type BigDoubleType { get; }
@@ -165,7 +156,6 @@ internal sealed class AutoScribeNativeBindings
     internal FieldInfo OnUseEffects { get; }
     internal FieldInfo TargetOptions { get; }
     internal FieldInfo EnchantScriptEnchantment { get; }
-    internal FieldInfo ConsumableCounts { get; }
     internal MethodInfo Identity { get; }
     internal MethodInfo ConsumableIdentity { get; }
     internal MethodInfo EnchantmentIdentity { get; }
@@ -183,8 +173,6 @@ internal sealed class AutoScribeNativeBindings
     internal MethodInfo InstanceInitiate { get; }
     internal MethodInfo InstanceInstantCheck { get; }
     internal MethodInfo InstanceInstant { get; }
-    internal MethodInfo CountLevel { get; }
-    internal MethodInfo CountQuantity { get; }
     internal MethodInfo ScalingBasic { get; }
     internal MethodInfo GetTargeting { get; }
     internal MethodInfo GetRandomList { get; }
@@ -200,7 +188,6 @@ internal sealed class AutoScribeNativeBindings
             var instance = Type("CraftingInstance");
             var instanceList = Type("CraftingInstanceListVariable");
             var consumable = Type("ConsumableSO");
-            var count = Type("ConsumableCount");
             var enchantment = Type("EnchantmentSO");
             var cost = Type("ResourceCostList");
             var big = Type("BigDouble");
@@ -222,7 +209,6 @@ internal sealed class AutoScribeNativeBindings
                 instance,
                 instanceList,
                 consumable,
-                count,
                 enchantment,
                 cost,
                 big,
@@ -249,7 +235,6 @@ internal sealed class AutoScribeNativeBindings
                 CollectionField(consumable, "onUseEffects", block),
                 Field(request, "targetOptions", options),
                 Field(enchantScript, "enchantment", enchantment),
-                CollectionField(consumable, "consumableCounts", count),
                 MethodFromHierarchy(recipe, "GetGuid", typeof(Guid)),
                 MethodFromHierarchy(consumable, "GetGuid", typeof(Guid)),
                 MethodFromHierarchy(enchantment, "GetGuid", typeof(Guid)),
@@ -267,8 +252,6 @@ internal sealed class AutoScribeNativeBindings
                 Method(instance, "Initiate", typeof(void)),
                 Method(instance, "CheckInstantCraft", typeof(bool)),
                 Method(instance, "InstantCraft", typeof(void)),
-                Method(count, "GetLevel", typeof(int)),
-                Method(count, "GetQuantity", typeof(int)),
                 StaticMethod(scaling, "Basic", scaling, big),
                 Method(options, "GetTargeting", selection),
                 Method(

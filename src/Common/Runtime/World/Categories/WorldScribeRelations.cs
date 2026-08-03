@@ -335,10 +335,14 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             var values = RequireList(
                 native.InstanceListValue.GetValue(queue),
                 "CraftingInstance list value");
+            var isAutomatic = Require<bool>(native.AutoList.GetValue(queue),
+                "CraftingInstanceListVariable.isAutoList");
+            if (isAutomatic != (queueId == KnownEntities.AutoScribeInstances.Uuid))
+                throw new InvalidOperationException(
+                    $"Scribe queue {EntityIdentityFormatter.Format(queueId)} contradicted its native automation role.");
             frame.ScribeQueues.Append(new WorldScribeQueue(
                 queueId,
-                Require<bool>(native.AutoList.GetValue(queue),
-                    "CraftingInstanceListVariable.isAutoList"),
+                isAutomatic,
                 CountNonNull(values),
                 Invoke<int>(native.ListMaximum, queue)));
             sampled++;
@@ -346,11 +350,15 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             {
                 if (value is null) continue;
                 var instance = RequireExact(value, native.InstanceType, "CraftingInstance");
+                var instanceAutomatic = Invoke<bool>(native.InstanceAutomatic, instance);
+                if (instanceAutomatic != isAutomatic)
+                    throw new InvalidOperationException(
+                        $"CraftingInstance.IsAuto() contradicted containing Scribe queue {EntityIdentityFormatter.Format(queueId)}.");
                 frame.ScribeWork.Append(new WorldScribeWork(
                     queueId,
                     Invoke<Guid>(native.InstanceRecipe, instance),
                     Level(InvokeObject(native.InstanceQuantity, instance)),
-                    Invoke<bool>(native.InstanceAutomatic, instance),
+                    instanceAutomatic,
                     Invoke<bool>(native.InstanceExpired, instance)));
                 sampled++;
             }

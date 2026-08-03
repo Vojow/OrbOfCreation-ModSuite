@@ -33,7 +33,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 CraftingPlayerPreflight.LifecycleReplaced,
                 "The live lifecycle could not be read: " + ex.GetBaseException().Message);
         }
-        if (liveLifecycle != action.LifecycleEpoch)
+        if (liveLifecycle <= 0 || liveLifecycle != action.LifecycleEpoch)
             return CraftingPlayerSubmission.Reject(
                 in action,
                 CraftingPlayerPreflight.LifecycleReplaced,
@@ -93,6 +93,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 in action,
                 CraftingPlayerPreflight.Unaffordable,
                 "CraftingRecipeSO.CanBuy() refused the exact direct-craft recipe.");
+        var revisionBefore = native.RecipeEffectRevision(recipe);
         if (!TryPlayerCraftingPermit(in action, out var permitFailure)) return permitFailure;
 
         try
@@ -101,6 +102,11 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         }
         catch (Exception ex) when (IsExpected(ex))
         {
+            if (RecipeEffectAdvancedBestEffort(native, recipe, revisionBefore))
+                return Verified(
+                    in action,
+                    1,
+                    "The exact recipe advanced its native craft-effect publication before Execute threw.");
             return PlayerCraftingFault(
                 in action,
                 CraftingPlayerPreflight.PostCommitFault,
@@ -110,14 +116,34 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 "CraftingRecipeSO.Execute threw after the direct composite began: " +
                 ex.GetBaseException().Message);
         }
-
-        return new CraftingPlayerSubmission(
-            action.RecipeId,
-            CraftingPlayerPreflight.Proceeded,
-            CraftingPlayerNativeStage.Verification,
-            NativeMutationOutcome.Verified,
-            new NativeMutationCallOutcome(1, 1, 1),
-            "The exact recipe completed its native direct Execute composite.");
+        int revisionAfter;
+        try
+        {
+            revisionAfter = native.RecipeEffectRevision(recipe);
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            return PlayerCraftingFault(
+                in action,
+                CraftingPlayerPreflight.PostCommitFault,
+                CraftingPlayerNativeStage.Verification,
+                NativeMutationOutcome.AfterCaptureFailed,
+                1,
+                "The native craft-effect publication could not be read after Execute: " +
+                ex.GetBaseException().Message);
+        }
+        if (revisionAfter <= revisionBefore)
+            return PlayerCraftingFault(
+                in action,
+                CraftingPlayerPreflight.VerificationFailed,
+                CraftingPlayerNativeStage.Verification,
+                NativeMutationOutcome.PostconditionFailed,
+                1,
+                "CraftingRecipeSO.Execute did not advance the native craft-effect publication.");
+        return Verified(
+            in action,
+            1,
+            "The exact recipe advanced its native craft-effect publication.");
     }
 
     private CraftingPlayerSubmission SubmitQueued(
@@ -172,6 +198,9 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
 
         var stage = CraftingPlayerNativeStage.Payment;
         var calls = 1;
+        object? created = null;
+        var instant = false;
+        var admissionKnown = false;
         try
         {
             native.RecipePurchase(recipe, purchase, previous);
@@ -185,46 +214,44 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                     native,
                     existing,
                     previousInstanceQuantity,
-                    purchase,
                     calls);
             }
 
             stage = CraftingPlayerNativeStage.Construction;
             calls = 2;
-            var instance = native.ConstructInstance(recipe, purchase);
+            created = native.ConstructInstance(recipe, purchase);
             calls = 3;
-            if (native.InstanceIsInstant(instance))
+            instant = native.InstanceIsInstant(created);
+            admissionKnown = true;
+            if (instant)
             {
                 stage = CraftingPlayerNativeStage.Admission;
                 calls = 4;
-                native.InstanceInstant(instance);
-                return new CraftingPlayerSubmission(
-                    action.RecipeId,
-                    CraftingPlayerPreflight.Proceeded,
-                    CraftingPlayerNativeStage.Verification,
-                    NativeMutationOutcome.Verified,
-                    new NativeMutationCallOutcome(calls, 1, 1),
-                    "The exact recipe completed through native instant admission.");
+                native.InstanceInstant(created);
+                return VerifyInstant(in action, native, created, calls);
             }
 
             stage = CraftingPlayerNativeStage.Initiation;
             calls = 4;
-            native.InstanceInitiate(instance);
+            native.InstanceInitiate(created);
             stage = CraftingPlayerNativeStage.Admission;
             calls = 5;
-            native.QueueAdd(queue, instance);
+            native.QueueAdd(queue, created);
             return VerifyQueued(
                 in action,
                 native,
                 queue,
-                instance,
+                created,
                 calls);
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            var landed = existing is null
-                ? ContainsExactInstanceBestEffort(native, queue, action.RecipeId)
-                : InstanceQuantityBestEffort(native, existing) == previousInstanceQuantity + purchase;
+            var landed = existing is not null
+                ? InstanceQuantityBestEffort(native, existing) > previousInstanceQuantity
+                : created is not null && admissionKnown && (instant
+                    ? InstanceExpiredBestEffort(native, created)
+                    : ContainsExactInstanceBestEffort(
+                        native, queue, created));
             if (landed)
             {
                 return new CraftingPlayerSubmission(
@@ -251,19 +278,36 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         CraftingPlayerNativeBindings native,
         object instance,
         BigDouble previous,
-        BigDouble purchase,
         int calls)
     {
-        if (native.InstanceQuantity(instance) != previous + purchase)
+        if (native.InstanceQuantity(instance) <= previous)
             return PlayerCraftingFault(
                 in action,
                 CraftingPlayerPreflight.VerificationFailed,
                 CraftingPlayerNativeStage.Verification,
                 NativeMutationOutcome.PostconditionFailed,
                 calls,
-                "The exact crafting instance did not reach its requested quantity.");
+                "The exact crafting instance quantity did not increase.");
         return Verified(in action, calls,
-            "The exact crafting instance reached its requested quantity.");
+            "The exact crafting instance quantity increased.");
+    }
+
+    private CraftingPlayerSubmission VerifyInstant(
+        in CraftingPlayerAction action,
+        CraftingPlayerNativeBindings native,
+        object instance,
+        int calls)
+    {
+        if (!native.InstanceExpired(instance))
+            return PlayerCraftingFault(
+                in action,
+                CraftingPlayerPreflight.VerificationFailed,
+                CraftingPlayerNativeStage.Verification,
+                NativeMutationOutcome.PostconditionFailed,
+                calls,
+                "The exact instant crafting instance did not reach native completion.");
+        return Verified(in action, calls,
+            "The exact instant crafting instance reached native completion.");
     }
 
     private CraftingPlayerSubmission VerifyQueued(
@@ -273,7 +317,7 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         object instance,
         int calls)
     {
-        if (!ContainsExactInstance(native, queue, instance, action.RecipeId))
+        if (!ContainsExactInstance(native, queue, instance))
             return PlayerCraftingFault(
                 in action,
                 CraftingPlayerPreflight.VerificationFailed,
@@ -348,13 +392,11 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
     private static bool ContainsExactInstance(
         CraftingPlayerNativeBindings native,
         object queue,
-        object instance,
-        Guid recipeId)
+        object instance)
     {
         var values = native.QueueValues(queue);
         for (var index = 0; index < values.Count; index++)
-            if (ReferenceEquals(values[index], instance) &&
-                native.InstanceRecipe(instance) == recipeId)
+            if (ReferenceEquals(values[index], instance))
                 return true;
         return false;
     }
@@ -362,11 +404,11 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
     private static bool ContainsExactInstanceBestEffort(
         CraftingPlayerNativeBindings native,
         object queue,
-        Guid recipeId)
+        object instance)
     {
         try
         {
-            return FindInstance(native, queue, recipeId) is not null;
+            return ContainsExactInstance(native, queue, instance);
         }
         catch (Exception ex) when (IsExpected(ex))
         {
@@ -385,6 +427,35 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         catch (Exception ex) when (IsExpected(ex))
         {
             return BigDouble.NaN;
+        }
+    }
+
+    private static bool InstanceExpiredBestEffort(
+        CraftingPlayerNativeBindings native,
+        object instance)
+    {
+        try
+        {
+            return native.InstanceExpired(instance);
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            return false;
+        }
+    }
+
+    private static bool RecipeEffectAdvancedBestEffort(
+        CraftingPlayerNativeBindings native,
+        object recipe,
+        int before)
+    {
+        try
+        {
+            return native.RecipeEffectRevision(recipe) > before;
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            return false;
         }
     }
 

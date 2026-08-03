@@ -358,6 +358,10 @@ CraftingRecipeSO.Execute()
   → PassiveObservable.Channel.Update()
 ```
 
+`GetEffectChannel().Observe("craft").GetObservableId()` is the direct route's directional outcome
+sentinel: the audited composite increments it only after cost admission, so a strictly larger id
+proves the synchronous native action completed without reconstructing a resource ledger.
+
 The page route has no equivalent. `UICraftingPage.UIStart` installs `ContextRecipeClick` and
 `ContextRecipeInteraction` and owns the authored recipe-list, queue, mode and main-type relations;
 `ContextRecipeClick` reads the recipe's current queue quantity, obtains
@@ -411,6 +415,23 @@ Two `CraftingInstanceListVariable`s hold the live work: `ActiveScribeInstances`
 (`f6cb65a8-a959-477c-9293-ff66f646c95d`). The game's own automation creates or updates one
 repeating instance per recipe in the second; neither list retains caller ownership, so those
 instances are observable but not editable by anyone else.
+
+Queue ownership and `CraftingInstance.IsAuto()` normally agree, but the game does not make that
+an invariant at insertion. `CraftingInstanceListVariable.Initialize()` normalizes existing items
+with `SetAuto(isAutoList)`, `UICraftingPage.QueueCraft()` creates a non-auto instance, and
+`CraftingInstanceListVariable.AutomateCraft()` calls `SetAuto()` before adding an automatic one.
+However, inherited `GenericListVariable<CraftingInstance>.Add()` does not set the flag and the
+public `CraftingInstance.SetAuto(bool)` remains mutable after insertion. World capture therefore
+verifies both facts and fails loudly if an instance contradicts its containing queue.
+
+This mechanism was audited from Orb of Creation v1.0.5 `Assembly-CSharp.dll`, SHA-256
+`46b723ad8e3df5adf7186ec32b220c338e26c1cc79369e01213c091155073bdc`, decompiled with
+ILSpy 10.1.1.8388.
+
+New queued work is proved by reference membership of the exact newly constructed instance, not by
+finding any instance with the same recipe and quantity. Instant work has no queue destination;
+`CraftingInstance.InstantCraft()` reaches `CompleteCraft`, whose monotonic sentinel for a one-shot
+instance is `IsExpired()` changing to true.
 
 Every `StructureSO` owns an `EnchantmentSO.EnchantTable`. A native enchantment upgrade keeps a
 stronger existing instance and replaces an equal-or-lower one only when the proposed scaling is

@@ -41,6 +41,20 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
     }
 
     [Fact]
+    public void DirectRecipeWithoutCraftPublicationCannotReportVerified()
+    {
+        var recipe = Register(Recipe());
+        recipe.SuppressEffectPublication = true;
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, recipe);
+
+        Assert.Equal(CraftingPlayerPreflight.VerificationFailed, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
+        Assert.Equal(1, recipe.ExecuteCalls);
+    }
+
+    [Fact]
     public void TimedRecipeWithoutAuthoredPageRefusesBeforePayment()
     {
         var recipe = Register(Recipe());
@@ -104,6 +118,22 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
         Assert.Empty(page.craftingQueueInstances.value);
         Assert.Equal(1, Assert.Single(recipe.InstantOutput.consumableCounts).Quantity);
         Assert.Equal(new NativeMutationCallOutcome(4, 1, 1), result.CallOutcome);
+    }
+
+    [Fact]
+    public void InstantPageRecipeWithoutNativeCompletionCannotReportVerified()
+    {
+        var recipe = Register(Recipe());
+        recipe.InstantCraftEnabled = true;
+        recipe.InstantOutput = new ConsumableSO();
+        recipe.SuppressInstantAdmission = true;
+        Page(recipe, mode: 1, maximum: 2);
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, recipe);
+
+        Assert.Equal(CraftingPlayerPreflight.VerificationFailed, result.Preflight);
+        Assert.Equal(NativeMutationOutcome.PostconditionFailed, result.Outcome);
     }
 
     [Fact]
@@ -189,6 +219,8 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
 
         _lifecycle = 12;
         var stale = Submit(boundary, recipe, lifecycle: 11);
+        _lifecycle = 0;
+        var invalid = Submit(boundary, recipe, lifecycle: 0);
         _lifecycle = 11;
         _permit = false;
         var noPermit = Submit(boundary, recipe);
@@ -196,6 +228,7 @@ public sealed class CraftingPlayerGameActionTests : IDisposable
         var wrongThread = await Task.Run(() => Submit(boundary, recipe));
 
         Assert.Equal(CraftingPlayerPreflight.LifecycleReplaced, stale.Preflight);
+        Assert.Equal(CraftingPlayerPreflight.LifecycleReplaced, invalid.Preflight);
         Assert.Equal(CraftingPlayerPreflight.MutationPermitUnavailable, noPermit.Preflight);
         Assert.Equal(CraftingPlayerPreflight.WrongThread, wrongThread.Preflight);
         Assert.Equal(0, recipe.PurchaseCalls);

@@ -63,6 +63,35 @@ public sealed class AutomataWorldCapturePortTests
         Assert.Contains("resources", line);
     }
 
+    [Fact]
+    public void AnInstanceThatContradictsItsContainingQueueFailsCaptureLoudly()
+    {
+        var seeded = SeedScribeRelations();
+        var active = Assert.IsType<global::CraftingInstanceListVariable>(
+            global::IdScriptableObject.RuntimeLookup[KnownEntities.ActiveScribeInstances.Uuid]);
+        active.value.Add(new global::CraftingInstance { Automatic = true });
+        var announced = new List<string>();
+        var port = new AutomataWorldCapturePort(
+            new GameWorldCollector(),
+            () => 1,
+            () => 1,
+            r => announced.Add(r.Describe()));
+
+        try
+        {
+            port.Collect(new GameWorldCycleFrame());
+
+            var line = Assert.Single(announced);
+            Assert.StartsWith("World collection incomplete", line);
+            Assert.Contains("CraftingInstance.IsAuto() contradicted", line);
+        }
+        finally
+        {
+            foreach (var identity in seeded)
+                global::IdScriptableObject.RuntimeLookup.Remove(identity);
+        }
+    }
+
     private static IReadOnlyList<System.Guid> SeedScribeRelations()
     {
         var identities = new List<System.Guid>();
