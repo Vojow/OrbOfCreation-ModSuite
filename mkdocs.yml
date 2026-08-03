@@ -9,14 +9,20 @@ strict: true
 
 theme:
   name: material
+  logo: assets/orb-logo.svg
+  favicon: assets/orb-logo.svg
+  palette:
+    scheme: slate
   features:
     - navigation.indexes
-    - navigation.sections
     - search.highlight
     - search.suggest
 
 plugins:
   - search
+
+extra_css:
+  - assets/orb-theme.css
 
 markdown_extensions:
   - toc:
