@@ -69,6 +69,13 @@ internal static class OrbGameMath
     }
 
     /// <summary>
+    /// Ported from <c>Utils.SnapFloorToInt(BigDouble)</c>: narrow through <c>ToFloat()</c>, add the
+    /// game's 0.001 tolerance, then floor. Bandwidth affordability uses this on both operands.
+    /// </summary>
+    internal static int SnapFloorToInt(BigDouble value) =>
+        (int)Math.Floor((float)value.ToDouble() + 0.001f);
+
+    /// <summary>
     /// Ported from <c>Utils.RoundToTwoSigsEarly(BigDouble)</c>:
     /// <c>if (!(value >= 100)) return RoundToTwoSigs(value); return value;</c>
     /// </summary>

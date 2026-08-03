@@ -85,6 +85,11 @@ internal sealed class GameWorldCycleFrame
     internal WorldAlchemyInstanceBuffer AlchemyInstances { get; } = new();
 
     internal WorldAlchemyCostBuffer AlchemyCosts { get; } = new();
+    internal RawConceptDrainBasisBuffer ConceptDrainBasis { get; } = new();
+    internal WorldModifierProgramBuffer ModifierPrograms { get; } = new();
+    internal WorldModifierProgramEntryBuffer ModifierProgramEntries { get; } = new();
+    internal RawMasteryCostBuffer MasteryCosts { get; } = new();
+    internal Guid MasteryCostStandardId { get; set; }
 
     /// <summary>
     /// What each plot's author decided, and the phases it authors. Keyed by the plot rather than
@@ -112,7 +117,7 @@ internal sealed class GameWorldCycleFrame
     internal WorldRelationBuffer<WorldPurchaseViewRoute> PurchaseViewRoutes { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyRecipe, WorldAlchemyRecipe> AlchemyRecipes { get; } = new();
     internal WorldSampleBuffer<WorldAlchemyType, WorldAlchemyType> AlchemyTypes { get; } = new();
-    internal WorldSampleBuffer<WorldSpellRecipe, WorldSpellRecipe> SpellRecipes { get; } = new();
+    internal WorldSampleBuffer<RawSpellRecipeSample, WorldSpellRecipe> SpellRecipes { get; } = new();
     internal WorldSampleBuffer<WorldSpellType, WorldSpellType> SpellTypes { get; } = new();
     internal WorldSampleBuffer<WorldEquipment, WorldEquipment> Equipment { get; } = new();
     internal WorldSampleBuffer<WorldEquipmentType, WorldEquipmentType> EquipmentTypes { get; } = new();
@@ -227,6 +232,19 @@ internal static class GameWorldFrameDeriver
             frame.ModifierVariables.Build(WorldIdentityDeriver<WorldModifierVariable>.Shared);
         var intVariables =
             frame.IntVariables.Build(WorldIdentityDeriver<WorldNumberVariable>.Shared);
+        var alchemyTypes = frame.AlchemyTypes.Build(WorldIdentityDeriver<WorldAlchemyType>.Shared);
+        var alchemyCosts = WorldAlchemyCostDeriver.Build(frame.AlchemyCosts);
+        var modifierPrograms = WorldModifierProgramDeriver.Build(frame.ModifierPrograms);
+        var modifierProgramEntries = WorldModifierProgramDeriver.Build(frame.ModifierProgramEntries);
+        var conceptDrainBasis = WorldConceptDrainBasisDeriver.Build(
+            frame.ConceptDrainBasis, alchemyTypes, intVariables, alchemyCosts, resources);
+        var spellLevelCosts = OwnedMasteryCostMath.Build(
+            frame.MasteryCosts,
+            frame.SpellRecipes,
+            frame.MasteryCostStandardId,
+            modifierPrograms,
+            modifierProgramEntries,
+            resources);
 
         // Built after the three tables it reads, because a cost is the one derived fact that is not a
         // function of its own category: it needs the entity's modifiers, each resource's attribute
@@ -266,8 +284,11 @@ internal static class GameWorldFrameDeriver
             BoolVariables = frame.BoolVariables.Build(WorldIdentityDeriver<WorldBoolVariable>.Shared),
             ModifierVariables = modifierVariables,
             AlchemyRecipes = frame.AlchemyRecipes.Build(WorldIdentityDeriver<WorldAlchemyRecipe>.Shared),
-            AlchemyTypes = frame.AlchemyTypes.Build(WorldIdentityDeriver<WorldAlchemyType>.Shared),
-            SpellRecipes = frame.SpellRecipes.Build(WorldIdentityDeriver<WorldSpellRecipe>.Shared),
+            AlchemyTypes = alchemyTypes,
+            SpellRecipes = frame.SpellRecipes.Build(new WorldSpellRecipeDeriver(spellLevelCosts)),
+            MasteryCosts = spellLevelCosts,
+            ModifierPrograms = modifierPrograms,
+            ModifierProgramEntries = modifierProgramEntries,
             SpellTypes = frame.SpellTypes.Build(WorldIdentityDeriver<WorldSpellType>.Shared),
             Equipment = frame.Equipment.Build(WorldIdentityDeriver<WorldEquipment>.Shared),
             EquipmentTypes = frame.EquipmentTypes.Build(WorldIdentityDeriver<WorldEquipmentType>.Shared),
@@ -356,7 +377,8 @@ internal static class GameWorldFrameDeriver
             MasteryExperience = WorldMasteryExperienceDeriver.Build(frame.MasteryExperience),
             ConceptRecipes = WorldAlchemyRowDeriver.Build(frame.ConceptRecipes),
             AlchemyInstances = WorldAlchemyRowDeriver.Build(frame.AlchemyInstances),
-            AlchemyCosts = WorldAlchemyCostDeriver.Build(frame.AlchemyCosts),
+            ConceptDrainBasis = conceptDrainBasis,
+            AlchemyCosts = alchemyCosts,
             PlotAuthoring = WorldPlotAuthoringDeriver.Build(frame.PlotAuthoring),
             PlotPhaseDescriptors =
                 WorldPlotPhaseDescriptorDeriver.Build(frame.PlotPhaseDescriptors),

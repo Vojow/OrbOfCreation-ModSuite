@@ -488,7 +488,7 @@
       "parameters": [],
       "owners": [
         "Automata Auto Concept action boundary",
-        "Automata world collection"
+        "Automata owned Concept drain verification"
       ],
       "usages": [
         "reflection"
@@ -561,7 +561,8 @@
         "System.Int32"
       ],
       "owners": [
-        "Automata Auto Concept action boundary"
+        "Automata Auto Concept action boundary",
+        "Automata owned Concept drain verification"
       ],
       "usages": [
         "reflection"
@@ -745,6 +746,24 @@
       "place": "capture"
     },
     {
+      "id": "alchemy-recipe.bandwidth-cost",
+      "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "bandwidthCost",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "alchemy-recipe.cached-completion-time",
       "assembly": "assembly-csharp",
       "type": "AlchemyRecipeSO",
@@ -809,6 +828,24 @@
       "visibility": "public",
       "static": false,
       "valueType": "System.Double",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "alchemy-recipe.completion-cost-advance-mod",
+      "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "completionCostAdvanceMod",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ModifierListRef",
       "owners": [
         "Automata world collection"
       ],
@@ -909,6 +946,24 @@
       "place": "capture"
     },
     {
+      "id": "alchemy-recipe.drain-cost-level-mod",
+      "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "drainCostLevelMod",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ModifierListRef",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "alchemy-recipe.effect-levels",
       "assembly": "assembly-csharp",
       "type": "AlchemyRecipeSO",
@@ -936,6 +991,24 @@
       "visibility": "public",
       "static": false,
       "valueType": "ValueModifierRecord",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "alchemy-recipe.instance-scaling",
+      "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "instanceScaling",
+      "visibility": "public",
+      "static": false,
+      "valueType": "InstanceScalingRef",
       "owners": [
         "Automata world collection"
       ],
@@ -1023,25 +1096,6 @@
         "reflection"
       ],
       "place": "action"
-    },
-    {
-      "id": "alchemy-recipe.get-max-usage-capture",
-      "assembly": "assembly-csharp",
-      "type": "AlchemyRecipeSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetMaxUsageSlots",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Int32",
-      "parameters": [],
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
     },
     {
       "id": "alchemy-recipe.is-advancement-recipe",
@@ -1388,6 +1442,24 @@
       "place": "capture"
     },
     {
+      "id": "alchemy-recipe.usage-prerequisites",
+      "assembly": "assembly-csharp",
+      "type": "AlchemyRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "usagePrerequisites",
+      "visibility": "public",
+      "static": false,
+      "valueType": "Prerequisites+Container",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "alchemy-type.all",
       "assembly": "assembly-csharp",
       "type": "AlchemyTypeSO",
@@ -1614,6 +1686,42 @@
       "visibility": "public",
       "static": false,
       "valueType": "IntVariable",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "alchemy-type.requirement-cost-penalty",
+      "assembly": "assembly-csharp",
+      "type": "AlchemyTypeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "reqCostPenalty",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ValueModifier",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "alchemy-type.requirement-speed-penalty",
+      "assembly": "assembly-csharp",
+      "type": "AlchemyTypeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "reqSpeedPenalty",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ValueModifier",
       "owners": [
         "Automata world collection"
       ],
@@ -4720,6 +4828,42 @@
       "place": "capture"
     },
     {
+      "id": "global-values.instance",
+      "assembly": "assembly-csharp",
+      "type": "GlobalValues",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "instance",
+      "visibility": "public",
+      "static": true,
+      "valueType": "GlobalValues",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "global-values.spell-leveling-standard",
+      "assembly": "assembly-csharp",
+      "type": "GlobalValues",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "spellLevelingStandard",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ModifierListVariable",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "global-variables.get-global-structure-type",
       "assembly": "assembly-csharp",
       "type": "GlobalVariables",
@@ -5615,6 +5759,114 @@
       "static": false,
       "returnType": "ValueModifierList",
       "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "instance-scaling-ref.scaling",
+      "assembly": "assembly-csharp",
+      "type": "InstanceScalingRef",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "scaling",
+      "visibility": "public",
+      "static": false,
+      "valueType": "InstanceScalingSO",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "instance-scaling.instance-scaling",
+      "assembly": "assembly-csharp",
+      "type": "InstanceScalingSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "instanceScaling",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ScalingConversion",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "instance-scaling.rarity-blacklist",
+      "assembly": "assembly-csharp",
+      "type": "InstanceScalingSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "rarityAttributeBlacklist",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<ScalingType>",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "instance-scaling.use-rarity",
+      "assembly": "assembly-csharp",
+      "type": "InstanceScalingSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "useRarity",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Boolean",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "modifier-list-ref.variable",
+      "assembly": "assembly-csharp",
+      "type": "ModifierListRef",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "variable",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ModifierListVariable",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "modifier-list-variable.value",
+      "assembly": "assembly-csharp",
+      "type": "ModifierListVariable",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "value",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ValueModifierList",
       "owners": [
         "Automata world collection"
       ],
@@ -7129,6 +7381,25 @@
       "place": "action"
     },
     {
+      "id": "prerequisites.check-capture",
+      "assembly": "assembly-csharp",
+      "type": "Prerequisites+Container",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "Check",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "prerequisites.check-at-level",
       "assembly": "assembly-csharp",
       "type": "Prerequisites+Container",
@@ -7867,6 +8138,7 @@
       "parameters": [],
       "owners": [
         "Automata world-collection verification",
+        "Automata owned spell-level affordability verification",
         "Automata spell leveling",
         "Automata Auto Buy refusal diagnostics"
       ],
@@ -7887,7 +8159,8 @@
       "returnType": "System.Void",
       "parameters": [],
       "owners": [
-        "Automata spell leveling"
+        "Automata spell leveling",
+        "Automata owned spell-level cost verification"
       ],
       "usages": [
         "reflection"
@@ -10854,6 +11127,42 @@
       "visibility": "public",
       "static": false,
       "valueType": "System.Int32",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "scaling-map.values",
+      "assembly": "assembly-csharp",
+      "type": "ScalingMap`2",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "values",
+      "visibility": "family",
+      "static": false,
+      "valueType": "System.Collections.Generic.Dictionary`2<ScalingType,!0>",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spell-recipe.base-leveling-cost",
+      "assembly": "assembly-csharp",
+      "type": "SpellRecipeSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "baseLevelingCost",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
       "owners": [
         "Automata world collection"
       ],

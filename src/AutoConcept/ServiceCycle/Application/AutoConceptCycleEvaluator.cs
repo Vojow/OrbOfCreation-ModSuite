@@ -454,8 +454,9 @@ internal static class AutoConceptCycleEvaluator
         int target,
         in SuiteRuntimeConfiguration config)
     {
-        if (!WorldAlchemyCostLookup.TryFindProspectiveRange(
-                world.AlchemyCosts, candidate.Id, target, out var start, out var count))
+        if (!WorldAlchemyCostLookup.TryFindRange(
+                world.AlchemyCosts, candidate.Id, WorldAlchemyCostKind.RecipeDrain,
+                out var start, out var count))
             return false;
 
         WorldAlchemyCostLookup.TryFindRange(
@@ -464,19 +465,27 @@ internal static class AutoConceptCycleEvaluator
 
         for (var offset = 0; offset < count; offset++)
         {
-            var prospective = world.AlchemyCosts[start + offset];
+            var authored = world.AlchemyCosts[start + offset];
+            if (!OwnedConceptDrainMath.TryComputeCost(
+                    world,
+                    candidate.Id,
+                    target,
+                    authored.ResourceId,
+                    authored.Amount,
+                    out var prospectiveAmount))
+                return false;
             var current = default(BigDouble);
             for (var currentOffset = 0; currentOffset < currentCount; currentOffset++)
             {
                 var row = world.AlchemyCosts[currentStart + currentOffset];
-                if (row.ResourceId != prospective.ResourceId) continue;
+                if (row.ResourceId != authored.ResourceId) continue;
                 current = row.Amount;
                 break;
             }
 
-            var incremental = prospective.Amount - current;
+            var incremental = prospectiveAmount - current;
             if (incremental.CompareTo(default) <= 0) continue;
-            if (!WorldLookup.TryFind(world.Resources, prospective.ResourceId, out var resource) ||
+            if (!WorldLookup.TryFind(world.Resources, authored.ResourceId, out var resource) ||
                 resource.Reading.Quantity.CompareTo(default) <= 0)
                 return false;
 

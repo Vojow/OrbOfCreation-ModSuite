@@ -1,7 +1,73 @@
 using System;
-using System.Reflection;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
+
+internal readonly struct RawSpellRecipeSample : IWorldEntity
+{
+    internal RawSpellRecipeSample(
+        Guid spellRecipeId,
+        bool discovered,
+        int discRarityLevel,
+        BigDouble masteryXp,
+        int masteryLevel,
+        bool masteryLevelReady,
+        bool hiddenDiscovery,
+        bool isRequiredDiscovery,
+        int penaltyUsageCost,
+        double castSpeed,
+        int baseCharges,
+        bool repeatInstantEffects,
+        BigDouble spellPowerMod,
+        BigDouble spellCostMod,
+        BigDouble spellCdSpeedMod,
+        BigDouble spellDurationMod,
+        BigDouble spellSpecialMod,
+        BigDouble spellXpMod,
+        bool hasAlertedThisMastery)
+    {
+        SpellRecipeId = spellRecipeId;
+        Discovered = discovered;
+        DiscRarityLevel = discRarityLevel;
+        MasteryXp = masteryXp;
+        MasteryLevel = masteryLevel;
+        MasteryLevelReady = masteryLevelReady;
+        HiddenDiscovery = hiddenDiscovery;
+        IsRequiredDiscovery = isRequiredDiscovery;
+        PenaltyUsageCost = penaltyUsageCost;
+        CastSpeed = castSpeed;
+        BaseCharges = baseCharges;
+        RepeatInstantEffects = repeatInstantEffects;
+        SpellPowerMod = spellPowerMod;
+        SpellCostMod = spellCostMod;
+        SpellCdSpeedMod = spellCdSpeedMod;
+        SpellDurationMod = spellDurationMod;
+        SpellSpecialMod = spellSpecialMod;
+        SpellXpMod = spellXpMod;
+        HasAlertedThisMastery = hasAlertedThisMastery;
+    }
+
+    public Guid EntityId => SpellRecipeId;
+    internal Guid SpellRecipeId { get; }
+    internal bool Discovered { get; }
+    internal int DiscRarityLevel { get; }
+    internal BigDouble MasteryXp { get; }
+    internal int MasteryLevel { get; }
+    internal bool MasteryLevelReady { get; }
+    internal bool HiddenDiscovery { get; }
+    internal bool IsRequiredDiscovery { get; }
+    internal int PenaltyUsageCost { get; }
+    internal double CastSpeed { get; }
+    internal int BaseCharges { get; }
+    internal bool RepeatInstantEffects { get; }
+    internal BigDouble SpellPowerMod { get; }
+    internal BigDouble SpellCostMod { get; }
+    internal BigDouble SpellCdSpeedMod { get; }
+    internal BigDouble SpellDurationMod { get; }
+    internal BigDouble SpellSpecialMod { get; }
+    internal BigDouble SpellXpMod { get; }
+    internal bool HasAlertedThisMastery { get; }
+}
 
 /// <summary>One spell recipe as published: discovery, its mastery track, and the six cached records that say what a cast of it is worth.</summary>
 internal readonly struct WorldSpellRecipe : IWorldEntity
@@ -27,6 +93,38 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         BigDouble spellSpecialMod,
         BigDouble spellXpMod,
         bool hasAlertedThisMastery)
+        : this(
+            spellRecipeId, discovered, discRarityLevel, masteryXp, masteryLevel,
+            masteryLevelReady, masteryLevelAffordable, 0, Guid.Empty, hiddenDiscovery,
+            isRequiredDiscovery, penaltyUsageCost, castSpeed, baseCharges, repeatInstantEffects,
+            spellPowerMod, spellCostMod, spellCdSpeedMod, spellDurationMod, spellSpecialMod,
+            spellXpMod, hasAlertedThisMastery)
+    {
+    }
+
+    internal WorldSpellRecipe(
+        Guid spellRecipeId,
+        bool discovered,
+        int discRarityLevel,
+        BigDouble masteryXp,
+        int masteryLevel,
+        bool masteryLevelReady,
+        bool masteryLevelAffordable,
+        int masteryLevelCostCount,
+        Guid masteryLevelBindingResourceId,
+        bool hiddenDiscovery,
+        bool isRequiredDiscovery,
+        int penaltyUsageCost,
+        double castSpeed,
+        int baseCharges,
+        bool repeatInstantEffects,
+        BigDouble spellPowerMod,
+        BigDouble spellCostMod,
+        BigDouble spellCdSpeedMod,
+        BigDouble spellDurationMod,
+        BigDouble spellSpecialMod,
+        BigDouble spellXpMod,
+        bool hasAlertedThisMastery)
     {
         SpellRecipeId = spellRecipeId;
         Discovered = discovered;
@@ -35,6 +133,8 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
         MasteryLevel = masteryLevel;
         MasteryLevelReady = masteryLevelReady;
         MasteryLevelAffordable = masteryLevelAffordable;
+        MasteryLevelCostCount = masteryLevelCostCount;
+        MasteryLevelBindingResourceId = masteryLevelBindingResourceId;
         HiddenDiscovery = hiddenDiscovery;
         IsRequiredDiscovery = isRequiredDiscovery;
         PenaltyUsageCost = penaltyUsageCost;
@@ -82,6 +182,12 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
     /// </remarks>
     internal bool MasteryLevelAffordable { get; }
 
+    /// <summary>The number of independently evaluated rows in the derived next-level cost vector.</summary>
+    internal int MasteryLevelCostCount { get; }
+
+    /// <summary>The first unaffordable row's resource, or empty when every row is affordable.</summary>
+    internal Guid MasteryLevelBindingResourceId { get; }
+
     internal bool HiddenDiscovery { get; }
 
     internal bool IsRequiredDiscovery { get; }
@@ -109,7 +215,7 @@ internal readonly struct WorldSpellRecipe : IWorldEntity
     internal bool HasAlertedThisMastery { get; }
 }
 
-internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe>
+internal sealed class WorldSpellRecipeBinder : WorldRowBinder<RawSpellRecipeSample, WorldSpellRecipe>
 {
     private Func<object, Guid>? _id;
     private Func<object, bool>? _discovered;
@@ -117,8 +223,6 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
     private Func<object, BigDouble>? _masteryXp;
     private Func<object, int>? _masteryLevel;
     private Func<object, bool>? _masteryLevelReady;
-    private MethodInfo? _getLevelCost;
-    private Func<object, bool>? _levelCostHasEnough;
     private Func<object, bool>? _hiddenDiscovery;
     private Func<object, bool>? _isRequiredDiscovery;
     private Func<object, int>? _penaltyUsageCost;
@@ -146,14 +250,6 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
         _masteryXp = bind.Field<BigDouble>("masteryExperience");
         _masteryLevel = bind.Field<int>("masteryLevel");
         _masteryLevelReady = bind.Call<bool>("IsReadyToLevelMastery");
-        _getLevelCost = type.GetMethod(
-            "GetLevelCost",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            types: Type.EmptyTypes,
-            modifiers: null);
-        var levelCost = bind.Elements(_getLevelCost?.ReturnType, "SpellRecipeSO.GetLevelCost()");
-        _levelCostHasEnough = levelCost.Call<bool>("HasEnough");
         _hiddenDiscovery = bind.Field<bool>("hiddenDiscovery");
         _isRequiredDiscovery = bind.Field<bool>("isRequiredDiscovery");
         _penaltyUsageCost = bind.Field<int>("penaltyUsageCost");
@@ -170,18 +266,14 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
         return bind.Failure;
     }
 
-    internal override WorldSpellRecipe Read(object entity)
-    {
-        var levelCost = _getLevelCost!.Invoke(entity, null);
-        var affordable = levelCost is not null && _levelCostHasEnough!(levelCost);
-        return new(
+    internal override RawSpellRecipeSample Read(object entity) =>
+        new(
             _id!(entity),
             _discovered!(entity),
             _discRarityLevel!(entity),
             _masteryXp!(entity),
             _masteryLevel!(entity),
             _masteryLevelReady!(entity),
-            affordable,
             _hiddenDiscovery!(entity),
             _isRequiredDiscovery!(entity),
             _penaltyUsageCost!(entity),
@@ -195,5 +287,53 @@ internal sealed class WorldSpellRecipeBinder : WorldPlainBinder<WorldSpellRecipe
             _spellSpecialMod!(entity),
             _spellXpMod!(entity),
             _hasAlertedThisMastery!(entity));
+}
+
+internal sealed class WorldSpellRecipeDeriver : WorldRowDeriver<RawSpellRecipeSample, WorldSpellRecipe>
+{
+    private readonly PublicationTable<WorldMasteryCost> _costs;
+
+    internal WorldSpellRecipeDeriver(PublicationTable<WorldMasteryCost> costs) => _costs = costs;
+
+    internal override WorldSpellRecipe Derive(in RawSpellRecipeSample sample)
+    {
+        var affordable = true;
+        var binding = Guid.Empty;
+        var count = 0;
+        if (OwnedMasteryCostMath.TryFindRange(_costs, sample.SpellRecipeId, out var start, out count))
+        {
+            for (var index = 0; index < count; index++)
+            {
+                var cost = _costs[start + index];
+                if (cost.Affordable) continue;
+                affordable = false;
+                binding = cost.ResourceId;
+                break;
+            }
+        }
+
+        return new WorldSpellRecipe(
+            sample.SpellRecipeId,
+            sample.Discovered,
+            sample.DiscRarityLevel,
+            sample.MasteryXp,
+            sample.MasteryLevel,
+            sample.MasteryLevelReady,
+            affordable,
+            count,
+            binding,
+            sample.HiddenDiscovery,
+            sample.IsRequiredDiscovery,
+            sample.PenaltyUsageCost,
+            sample.CastSpeed,
+            sample.BaseCharges,
+            sample.RepeatInstantEffects,
+            sample.SpellPowerMod,
+            sample.SpellCostMod,
+            sample.SpellCdSpeedMod,
+            sample.SpellDurationMod,
+            sample.SpellSpecialMod,
+            sample.SpellXpMod,
+            sample.HasAlertedThisMastery);
     }
 }

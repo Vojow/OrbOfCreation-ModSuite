@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using OrbAutomata;
 using OrbModding.Common.Runtime;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common.Runtime.GameMath;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Execution;
 using OrbModding.Common.Runtime.World;
@@ -393,9 +394,6 @@ public sealed class AutoConceptCycleEvaluatorTests
             {
                 new WorldAlchemyCost(
                     Alpha, WorldAlchemyCostKind.RecipeDrain, Resource, new BigDouble(60)),
-                new WorldAlchemyCost(
-                    Alpha, WorldAlchemyCostKind.ProspectiveDrain, Resource,
-                    new BigDouble(60), targetQuantity: 1),
             });
         var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
 
@@ -407,7 +405,7 @@ public sealed class AutoConceptCycleEvaluatorTests
     }
 
     [Fact]
-    public void DepthPlansTheLargestPublishedTargetThatClearsTheReserve()
+    public void DepthPlansTheLargestOwnedFormulaTargetThatClearsTheReserve()
     {
         var world = World(
             new[] { Recipe(Alpha, maximum: 4) },
@@ -419,13 +417,8 @@ public sealed class AutoConceptCycleEvaluatorTests
                     Alpha, WorldAlchemyCostKind.RecipeDrain, Resource, new BigDouble(10)),
                 new WorldAlchemyCost(
                     Alpha, WorldAlchemyCostKind.CurrentDrain, Resource, new BigDouble(10)),
-                new WorldAlchemyCost(
-                    Alpha, WorldAlchemyCostKind.ProspectiveDrain, Resource,
-                    new BigDouble(40), targetQuantity: 2),
-                new WorldAlchemyCost(
-                    Alpha, WorldAlchemyCostKind.ProspectiveDrain, Resource,
-                    new BigDouble(70), targetQuantity: 4),
-            });
+            },
+            costScalingPerQuantity: 2);
         var state = AutoConceptCycleState.Create(new LifecycleGeneration(1));
 
         var action = Assert.Single(Plan(
@@ -559,7 +552,8 @@ public sealed class AutoConceptCycleEvaluatorTests
         long collectedAtEpoch = 1,
         Guid? cannotAddNow = null,
         WorldResource[]? resources = null,
-        WorldAlchemyCost[]? costs = null)
+        WorldAlchemyCost[]? costs = null,
+        double costScalingPerQuantity = 0)
     {
         var concepts = new WorldConceptRecipeBuffer();
         foreach (var recipe in recipes)
@@ -583,6 +577,34 @@ public sealed class AutoConceptCycleEvaluatorTests
         var active = new WorldAlchemyInstanceBuffer();
         foreach (var instance in instances) active.Append(in instance);
 
+        var programs = new List<WorldModifierProgram>();
+        var entries = new List<WorldModifierProgramEntry>();
+        var bases = new List<WorldConceptDrainBasis>();
+        foreach (var recipe in recipes)
+        {
+            AddRecord(programs, recipe.RecipeId, WorldModifierProgramRole.ConceptDrain, 100);
+            AddRecord(programs, recipe.RecipeId, WorldModifierProgramRole.ConceptSpeed, 100);
+            AddRecord(programs, recipe.RecipeId, WorldModifierProgramRole.ConceptFreeUsageSlots, 0);
+            AddRecord(programs, recipe.RecipeId, WorldModifierProgramRole.ConceptOverdriveSpeed, 100);
+            AddRecord(programs, recipe.RecipeId, WorldModifierProgramRole.ConceptOverdriveDrain, 100);
+            programs.Add(new WorldModifierProgram(
+                recipe.RecipeId, WorldModifierProgramRole.ConceptCompletionCost, false, 0, false, default));
+            programs.Add(new WorldModifierProgram(
+                recipe.RecipeId, WorldModifierProgramRole.ConceptDrainLevel, false, 0, false, default));
+            programs.Add(new WorldModifierProgram(
+                recipe.RecipeId, WorldModifierProgramRole.InstanceScalingCost, false, 0, false, default));
+            programs.Add(new WorldModifierProgram(
+                recipe.RecipeId, WorldModifierProgramRole.InstanceScalingSpeed, false, 0, false, default));
+            if (costScalingPerQuantity != 0)
+                entries.Add(new WorldModifierProgramEntry(
+                    recipe.RecipeId, WorldModifierProgramRole.InstanceScalingCost,
+                    WorldModifierProgramEntrySet.Modifier, 0, Guid.Empty,
+                    GameValueModifierType.Raw, 0, new BigDouble(costScalingPerQuantity)));
+            bases.Add(new WorldConceptDrainBasis(
+                recipe.RecipeId, recipe.CoreTypeId, recipe.RecipeId, 0, 1, true,
+                default, default, default, false, false));
+        }
+
         return new GameWorldState
         {
             AlchemyRecipes = WorldTable.Create(recipes),
@@ -591,9 +613,19 @@ public sealed class AutoConceptCycleEvaluatorTests
             Resources = WorldTable.Create(resources ?? Array.Empty<WorldResource>()),
             AlchemyCosts = PublicationTable<WorldAlchemyCost>.Create(
                 costs ?? Array.Empty<WorldAlchemyCost>()),
+            ModifierPrograms = PublicationTable<WorldModifierProgram>.Create(programs.ToArray()),
+            ModifierProgramEntries = PublicationTable<WorldModifierProgramEntry>.Create(entries.ToArray()),
+            ConceptDrainBasis = PublicationTable<WorldConceptDrainBasis>.Create(bases.ToArray()),
             CollectedAtEpoch = collectedAtEpoch,
         };
     }
+
+    private static void AddRecord(
+        List<WorldModifierProgram> programs,
+        Guid owner,
+        WorldModifierProgramRole role,
+        double memo) =>
+        programs.Add(new WorldModifierProgram(owner, role, true, memo, false, new BigDouble(memo)));
 
     private static WorldResource DrainingResource(
         Guid id,

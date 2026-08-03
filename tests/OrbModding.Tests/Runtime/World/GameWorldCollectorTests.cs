@@ -195,7 +195,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Forty-six passes: the four categories
+        // The scope claim, asserted rather than described. Forty-seven passes: the four categories
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
@@ -207,7 +207,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(46, report.Categories.Length);
+        Assert.Equal(47, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
@@ -262,7 +262,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
-    public void ASpellsMasteryReadinessAndAffordabilityAreCollectedFromTheGamesOwnAnswers()
+    public void ASpellsMasteryReadinessRemainsNativeWhileAnEmptyAuthoredCostIsAffordable()
     {
         // The one fact on a spell recipe that is not a field. Its threshold lives in a container the
         // snapshot does not publish, so MasteryXp has nothing to be compared against and the game's
@@ -294,7 +294,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(readyRow.MasteryLevelAffordable);
         Assert.True(WorldLookup.TryFind(world.SpellRecipes, banking, out var bankingRow));
         Assert.False(bankingRow.MasteryLevelReady);
-        Assert.False(bankingRow.MasteryLevelAffordable);
+        Assert.True(bankingRow.MasteryLevelAffordable);
 
         // Same mastery level on both: readiness is its own fact, not one the level implies.
         Assert.Equal(readyRow.MasteryLevel, bankingRow.MasteryLevel);
@@ -390,15 +390,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, currentCount);
         Assert.Equal(11d, world.AlchemyCosts[currentStart].Amount.ToDouble());
 
-        Assert.True(WorldAlchemyCostLookup.TryFindProspectiveRange(
+        Assert.False(WorldAlchemyCostLookup.TryFindRange(
             world.AlchemyCosts,
             recipe.Identity,
-            targetQuantity: 4,
-            out var prospectiveStart,
-            out var prospectiveCount));
-        Assert.Equal(1, prospectiveCount);
-        Assert.Equal(resource, world.AlchemyCosts[prospectiveStart].ResourceId);
-        Assert.Equal(28d, world.AlchemyCosts[prospectiveStart].Amount.ToDouble());
+            WorldAlchemyCostKind.Bandwidth,
+            out _,
+            out var bandwidthCount));
+        Assert.Equal(0, bandwidthCount);
     }
 
     [Fact]

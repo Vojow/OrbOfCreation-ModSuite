@@ -330,6 +330,25 @@ internal static class NativeAccessorBinder
         }
     }
 
+    /// <summary>Binds a value-typed native field and boxes only at this infrequent structural seam.</summary>
+    internal static Func<object, object?>? BoxedField(Type? owner, string name)
+    {
+        if (owner is null) return null;
+        var field = owner.GetField(name, Instance);
+        if (field is null || !field.FieldType.IsValueType) return null;
+        var source = Expression.Parameter(typeof(object), "source");
+        var read = Expression.Convert(
+            Expression.Field(Expression.Convert(source, owner), field), typeof(object));
+        try
+        {
+            return Expression.Lambda<Func<object, object?>>(read, source).Compile();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Binds a single-valued reference to another entity as that entity's identity.
     /// </summary>
