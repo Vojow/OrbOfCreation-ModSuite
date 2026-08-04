@@ -2487,8 +2487,8 @@ internal static class GameMcpWorldQuery
         else if (action.Reading.PrerequisiteEvidence !=
                  PlotActionPrerequisiteEvidence.NativeLatchedTrue)
         {
-            available = false;
-            reason = "needs_live_prerequisite_check";
+            result["requiresLiveCheck"] = true;
+            return result.Freeze();
         }
         else if (!action.ElementCostKnown)
         {

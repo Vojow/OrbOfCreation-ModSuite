@@ -39,6 +39,7 @@ public sealed class GameMcpHarvestLifecycleTests
             ["mode"] = "add_element_action",
             ["uuid"] = ElementId.ToString("D"),
             ["actionUuid"] = ActionId.ToString("D"),
+            ["amount"] = 1,
         });
         Assert.Equal(GameMcpOperationClass.Gameplay, operation.Classification);
     }
@@ -55,6 +56,7 @@ public sealed class GameMcpHarvestLifecycleTests
                 {
                     ["mode"] = "add_element_action",
                     ["uuid"] = ElementId.ToString("D"),
+                    ["amount"] = 1,
                 },
             }));
         var extra = router.Handle(GameMcpAcceptanceFixture.Request(2, "tools/call",
@@ -66,6 +68,7 @@ public sealed class GameMcpHarvestLifecycleTests
                     ["mode"] = "add_element",
                     ["uuid"] = ElementId.ToString("D"),
                     ["actionUuid"] = ActionId.ToString("D"),
+                    ["amount"] = 1,
                 },
             }));
 

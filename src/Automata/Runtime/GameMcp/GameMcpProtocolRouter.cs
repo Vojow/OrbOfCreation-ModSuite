@@ -254,7 +254,7 @@ internal sealed class GameMcpProtocolRouter
                 break;
             case "game_purchase":
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.Amount = OptionalIntInRange(arguments, "count", 1, 1, 1000);
+                builder.Amount = RequiredInt(arguments, "amount", 1, 1000);
                 break;
             case "game_cast":
                 builder.Uuid = RequireUuid(arguments, "uuid");
@@ -265,8 +265,7 @@ internal sealed class GameMcpProtocolRouter
             case "game_concept":
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.Mode = RequireOneOf(arguments, "mode", "add", "remove_owned");
-                builder.Amount = OptionalIntInRange(
-                    arguments, "amount", 1, 1, 1_000_000);
+                builder.Amount = RequiredInt(arguments, "amount", 1, 1_000_000);
                 break;
             case "game_agromancy":
                 builder.Mode = RequireOneOf(arguments, "mode",
@@ -279,8 +278,7 @@ internal sealed class GameMcpProtocolRouter
                     "remove_element_action"
                     ? RequireUuid(arguments, "actionUuid")
                     : Guid.Empty;
-                builder.Amount = OptionalIntInRange(
-                    arguments, "amount", 1, 1, 10_000);
+                builder.Amount = RequiredInt(arguments, "amount", 1, 10_000);
                 break;
             case "game_structure":
                 builder.Mode = RequireOneOf(arguments, "mode", "enable", "disable");
@@ -561,7 +559,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "world_list",
                 "List exact world rows",
-                "Page through one discoverable category from one immutable published world.",
+                "Page through one discoverable category from one immutable published world. Limit is an upper bound; the response may stop earlier at the byte bound and returns nextOffset when more rows remain.",
                 ObjectSchema(
                     new JObject
                     {
@@ -626,9 +624,9 @@ internal sealed class GameMcpProtocolRouter
                     new JObject
                     {
                         ["uuid"] = StringSchema("Canonical UUID from structures (shown in game as attributes) or upgrades; kind is derived."),
-                        ["count"] = IntegerSchema(1, 1000),
+                        ["amount"] = IntegerSchema(1, 1000),
                     },
-                    "uuid")),
+                    "uuid", "amount")),
             Tool(
                 "game_cast",
                 "Cast an equipped spell",
@@ -652,7 +650,7 @@ internal sealed class GameMcpProtocolRouter
                         ["uuid"] = StringSchema("Alchemy recipe UUID."),
                         ["amount"] = IntegerSchema(1, 1_000_000),
                     },
-                    "mode", "uuid")),
+                    "mode", "uuid", "amount")),
             Tool(
                 "game_agromancy",
                 "Use the Agromancy screen",
@@ -670,12 +668,12 @@ internal sealed class GameMcpProtocolRouter
                         ["amount"] = IntegerSchema(1, 10_000),
                     },
                     "mode", "uuid"),
-                    ModeRule("add_plot_action", new[] { "actionUuid" }),
-                    ModeRule("remove_plot_action", new[] { "actionUuid" }),
-                    ModeRule("add_element", forbidden: new[] { "actionUuid" }),
-                    ModeRule("remove_element", forbidden: new[] { "actionUuid" }),
-                    ModeRule("add_element_action", new[] { "actionUuid" }),
-                    ModeRule("remove_element_action", new[] { "actionUuid" })),
+                    ModeRule("add_plot_action", new[] { "actionUuid", "amount" }),
+                    ModeRule("remove_plot_action", new[] { "actionUuid", "amount" }),
+                    ModeRule("add_element", new[] { "amount" }, new[] { "actionUuid" }),
+                    ModeRule("remove_element", new[] { "amount" }, new[] { "actionUuid" }),
+                    ModeRule("add_element_action", new[] { "actionUuid", "amount" }),
+                    ModeRule("remove_element_action", new[] { "actionUuid", "amount" })),
                 readOnly: false,
                 idempotent: false),
             Tool(

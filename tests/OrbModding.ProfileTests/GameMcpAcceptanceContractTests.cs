@@ -458,11 +458,12 @@ public sealed class GameMcpProtocolSurfaceTests
         Assert.Equal("Purchase an attribute or upgrade", (string?)purchase["title"]);
         Assert.Contains("native StructureSO", (string?)purchase["description"]);
         var required = purchase["inputSchema"]!["required"]!.Values<string>().ToArray();
-        Assert.Equal(new[] { "uuid" }, required);
+        Assert.Equal(new[] { "uuid", "amount" }, required);
         var properties = (JObject)purchase["inputSchema"]!["properties"]!;
         Assert.Null(properties["worldGeneration"]);
         Assert.Null(properties["expectedNativeType"]);
         Assert.Null(properties["kind"]);
+        Assert.Null(properties["count"]);
 
         var screenshot = Assert.Single(
             tools,

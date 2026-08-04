@@ -152,7 +152,11 @@ public sealed class GameMcpFrameRoutingContractTests
         "entity_catalog" or "world_search" => new JObject { ["query"] = "mana" },
         "explain_entity" => new JObject { ["uuid"] = Guid.NewGuid().ToString("D") },
         "suite_health" => new JObject(),
-        "game_purchase" => new JObject { ["uuid"] = Guid.NewGuid().ToString("D") },
+        "game_purchase" => new JObject
+        {
+            ["uuid"] = Guid.NewGuid().ToString("D"),
+            ["amount"] = 1,
+        },
         "game_cast" => new JObject
         {
             ["uuid"] = Guid.NewGuid().ToString("D"),
@@ -163,12 +167,14 @@ public sealed class GameMcpFrameRoutingContractTests
         {
             ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "add",
+            ["amount"] = 1,
         },
         "game_agromancy" => new JObject
         {
             ["uuid"] = Guid.NewGuid().ToString("D"),
             ["actionUuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "add_plot_action",
+            ["amount"] = 1,
         },
         "game_structure" => new JObject
         {

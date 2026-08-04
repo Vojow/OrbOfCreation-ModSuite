@@ -559,6 +559,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
                 ["arguments"] = new JObject
                 {
                     ["uuid"] = "not-a-uuid",
+                    ["amount"] = 1,
                 },
             }));
 

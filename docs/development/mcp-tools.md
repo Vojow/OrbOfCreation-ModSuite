@@ -322,9 +322,9 @@ and select those exact entities.
 
 The `equipment` category is also the artifact-loadout pre-decision surface. Each row names the
 artifact and its primary equipment type, current/maximum stacks, global and type-slot occupancy,
-live multi-buy, usage-cost resources with current holdings, and the exact next equip/unequip amount
-or refusal. Call `game_equipment` with `mode:"equip"` or `mode:"unequip"`; there is no amount
-argument because one call reproduces one native player click. A committed call returns the stack
+usage-cost resources with current holdings, and the next equip/unequip admission or refusal. Call
+`game_equipment` with `mode:"equip"` or `mode:"unequip"` and an explicit positive `amount`; the
+tool never reads or mirrors the UI multi-buy strip. A committed call returns the stack
 count before and after. Usage reservations, effects, and
 attunement are post-state evidence, never payment-verification gates.
 
@@ -388,11 +388,11 @@ active/maximum count, add/remove availability, and the named resource drain for 
 instance. An unavailable control carries only the reason that binds the next decision; no priced
 ledger is computed for an action the screen cannot run.
 
-Call `game_agromancy(mode="add_element"|"remove_element", uuid=...)` for one exact
+Call `game_agromancy(mode="add_element"|"remove_element", uuid=..., amount=...)` for one exact
 `HarvestElementSO`. The `add_element_action` and `remove_element_action` modes additionally require
 `actionUuid` naming an action actually
-offered by that element. `amount` defaults to one and reproduces the visible multi-instance list
-change without depending on the screen's hidden selector state.
+offered by that element. Every mode requires an explicit positive `amount`; no mode depends on
+hidden selector state.
 
 The action boundary revalidates the concrete element/action pair, visibility, active-list room,
 standing usage capacity, and mastery-derived action maximum on Unity's main thread. Success returns
@@ -404,12 +404,12 @@ The `plot-nodes` category is the tile catalog. `agromancy-plot-actions` enumerat
 `PlotNodeSO` / `PlotNodeActionSO` pair authored by the game, not only Auto Harvest's fruit and
 treasure collect pairs. Each row names both handles,
 shows the active quantity, and carries add/remove decisions. An available add includes the plot
-quantity consumed by one instance and the current maximum additional count. A prerequisite latch
-that has not been evaluated is reported as `needs_live_prerequisite_check`; the action boundary
+quantity consumed by one instance and the current maximum additional count. An unevaluated
+prerequisite latch omits `available` and reports `requiresLiveCheck:true`; the action boundary
 performs the exact native check instead of a read mutating the latch.
 
-Call `game_agromancy(mode="add_plot_action"|"remove_plot_action", uuid=..., actionUuid=...)`.
-`amount` defaults to one.
+Call `game_agromancy(mode="add_plot_action"|"remove_plot_action", uuid=..., actionUuid=...,
+amount=...)`. Every call requires an explicit positive `amount`.
 Add uses the same active plot-action list control as `UIPlotNodeActionList.OnActionClick`.
 Remove decrements an existing quantity; at the native minimum it uses that UI handler's distinct
 `Cancel()` path, so crossing from several instances through the last one requires two calls.

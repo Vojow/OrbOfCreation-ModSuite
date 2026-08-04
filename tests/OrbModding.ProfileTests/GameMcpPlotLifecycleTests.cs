@@ -68,9 +68,9 @@ public sealed class GameMcpPlotLifecycleTests
         var blocked = Assert.Single(Json(GameMcpWorldQuery.ListRows(
             GameMcpTestHarness.Context(blockedWorld, generation: 912),
             "agromancy-plot-actions", 0, 10).Freeze(), blockedWorld)["rows"]!.Values<JObject>());
-        Assert.False((bool)blocked["add"]!["available"]!);
-        Assert.Equal("needs_live_prerequisite_check",
-            (string?)blocked["add"]!["reasonCode"]);
+        Assert.Null(blocked["add"]!["available"]);
+        Assert.True((bool)blocked["add"]!["requiresLiveCheck"]!);
+        Assert.Null(blocked["add"]!["reasonCode"]);
         Assert.Null(blocked["add"]!["plotQuantityCost"]);
     }
 
