@@ -748,7 +748,6 @@ internal static class GameMcpActionResultCodeNames
             if (code == AlchemyLoadoutActionResultCodes.AlreadyInRequestedState) return "already_in_requested_state";
             if (code == AlchemyLoadoutActionResultCodes.LoadoutFull) return "loadout_full";
             if (code == AlchemyLoadoutActionResultCodes.UsageUnavailable) return "usage_unavailable";
-            if (code == AlchemyLoadoutActionResultCodes.MultiBuyUnavailable) return "multi_buy_unavailable";
             if (code == AlchemyLoadoutActionResultCodes.DestinationOutOfRange) return "destination_out_of_range";
             if (code == AlchemyLoadoutActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == AlchemyLoadoutActionResultCodes.PostCommitFault) return "post_commit_fault";

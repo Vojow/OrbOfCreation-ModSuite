@@ -15,13 +15,12 @@ internal enum EquipmentLoadoutNativeStage { None = 0, NativeCallback = 1, Verifi
 
 internal readonly struct EquipmentLoadoutState
 {
-    internal EquipmentLoadoutState(int equippedStacks, int maximumStacks, int multiBuy,
+    internal EquipmentLoadoutState(int equippedStacks, int maximumStacks,
         int usedSlots, int maximumSlots, int typeUsedSlots, int typeMaximumSlots,
         bool usageAffordable, int maximumAffordableStacks)
     {
         EquippedStacks = equippedStacks;
         MaximumStacks = maximumStacks;
-        MultiBuy = multiBuy;
         UsedSlots = usedSlots;
         MaximumSlots = maximumSlots;
         TypeUsedSlots = typeUsedSlots;
@@ -31,7 +30,6 @@ internal readonly struct EquipmentLoadoutState
     }
     internal int EquippedStacks { get; }
     internal int MaximumStacks { get; }
-    internal int MultiBuy { get; }
     internal int UsedSlots { get; }
     internal int MaximumSlots { get; }
     internal int TypeUsedSlots { get; }

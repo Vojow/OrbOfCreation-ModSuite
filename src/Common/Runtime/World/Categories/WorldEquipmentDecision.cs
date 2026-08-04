@@ -32,9 +32,8 @@ internal readonly struct WorldEquipmentDecision
         int maximumSlots,
         int typeUsedSlots,
         int typeMaximumSlots,
-        int multiBuy,
-        int nextEquipAmount,
-        int nextUnequipAmount,
+        int maximumEquipAmount,
+        int maximumUnequipAmount,
         bool usageAffordable,
         PublicationTable<WorldEquipmentUsageCost> costs)
     {
@@ -47,9 +46,8 @@ internal readonly struct WorldEquipmentDecision
         MaximumSlots = maximumSlots;
         TypeUsedSlots = typeUsedSlots;
         TypeMaximumSlots = typeMaximumSlots;
-        MultiBuy = multiBuy;
-        NextEquipAmount = nextEquipAmount;
-        NextUnequipAmount = nextUnequipAmount;
+        MaximumEquipAmount = maximumEquipAmount;
+        MaximumUnequipAmount = maximumUnequipAmount;
         UsageAffordable = usageAffordable;
         _costs = costs;
     }
@@ -63,9 +61,8 @@ internal readonly struct WorldEquipmentDecision
     internal int MaximumSlots { get; }
     internal int TypeUsedSlots { get; }
     internal int TypeMaximumSlots { get; }
-    internal int MultiBuy { get; }
-    internal int NextEquipAmount { get; }
-    internal int NextUnequipAmount { get; }
+    internal int MaximumEquipAmount { get; }
+    internal int MaximumUnequipAmount { get; }
     internal bool UsageAffordable { get; }
     internal PublicationTable<WorldEquipmentUsageCost> Costs =>
         _costs ?? PublicationTable<WorldEquipmentUsageCost>.Empty;
@@ -94,8 +91,6 @@ internal sealed class WorldEquipmentDecisionBinding
     private readonly Func<object, object?>? _costResource;
     private readonly Func<object, BigDouble>? _costValue;
     private readonly Func<object, Guid>? _resourceId;
-    private readonly Func<object?>? _multiBuy;
-    private readonly Func<object, int>? _asInt;
 
     internal WorldEquipmentDecisionBinding(Type equipment, Func<string, Type?> resolve)
     {
@@ -105,8 +100,6 @@ internal sealed class WorldEquipmentDecisionBinding
         var cost = resolve("ResourceCostList");
         var entry = resolve("ResourceTuple");
         var resource = resolve("ResourceSO");
-        var intVariable = resolve("IntVariable");
-        var global = resolve("GlobalVariables");
 
         _manager = BindStaticReference(_managerType, "instance", _managerType);
         _equipped = NativeAccessorBinder.Reference(_managerType, "equippedEquipment", _listType);
@@ -127,17 +120,14 @@ internal sealed class WorldEquipmentDecisionBinding
         _costResource = NativeAccessorBinder.Reference(entry, "resource", resource);
         _costValue = NativeAccessorBinder.Call<BigDouble>(entry, "GetValue");
         _resourceId = NativeAccessorBinder.Call<Guid>(resource, "GetGuid");
-        _multiBuy = BindStaticObjectCall(global, "GetMultiBuy", intVariable);
-        _asInt = NativeAccessorBinder.Call<int>(intVariable, "AsInt");
 
         Failure = _managerType is null || _listType is null || type is null || cost is null ||
-            entry is null || resource is null || intVariable is null || global is null ||
+            entry is null || resource is null ||
             _manager is null || _equipped is null || _values is null || _maximum is null ||
             _atMaximum is null || _stacks is null || _typeSlots is null || _equipmentType is null ||
             _typeId is null || _typeMaximum is null || _maximumStacks is null || _usageCost is null ||
             _hasEnough is null || _maximumTimes is null || _costEntries is null ||
-            _costResource is null || _costValue is null || _resourceId is null ||
-            _multiBuy is null || _asInt is null
+            _costResource is null || _costValue is null || _resourceId is null
                 ? "the complete equipment loadout decision binding set was unavailable"
                 : string.Empty;
     }
@@ -158,7 +148,6 @@ internal sealed class WorldEquipmentDecisionBinding
         if (equipmentType is null) return Unavailable("equipment_type_unavailable");
         var cost = _usageCost!(equipment);
         if (cost is null) return Unavailable("usage_cost_unavailable");
-        var multiBuy = Math.Max(_asInt!(_multiBuy!()!), 0);
         var stacks = Math.Max(_stacks!(list, equipment), 0);
         var maximumStacks = Math.Max(_maximumStacks!(equipment), 0);
         var typeUsed = Math.Max(_typeSlots!(list, equipmentType), 0);
@@ -169,10 +158,10 @@ internal sealed class WorldEquipmentDecisionBinding
         if (duplicate || listContains != (stacks > 0))
             return Unavailable("equipment_stack_identity_inconsistent");
         var hasSlot = listContains || (!_atMaximum!(list) && typeUsed < typeMaximum);
-        var nextEquip = hasSlot
-            ? Math.Min(multiBuy, Math.Min(Math.Max(maximumStacks - stacks, 0), maximumTimes))
+        var maximumEquip = hasSlot
+            ? Math.Min(Math.Max(maximumStacks - stacks, 0), maximumTimes)
             : 0;
-        var nextUnequip = Math.Min(multiBuy, stacks);
+        var maximumUnequip = stacks;
         var entries = _costEntries!(cost);
         var rows = new WorldEquipmentUsageCost[entries?.Count ?? 0];
         for (var index = 0; index < rows.Length; index++)
@@ -195,9 +184,8 @@ internal sealed class WorldEquipmentDecisionBinding
             maximum,
             typeUsed,
             typeMaximum,
-            multiBuy,
-            nextEquip,
-            nextUnequip,
+            maximumEquip,
+            maximumUnequip,
             _hasEnough!(cost),
             PublicationTable<WorldEquipmentUsageCost>.Create(rows));
     }
@@ -216,7 +204,7 @@ internal sealed class WorldEquipmentDecisionBinding
     }
 
     private static WorldEquipmentDecision Unavailable(string reason) =>
-        new(false, reason, Guid.Empty, 0, 0, 0, 0, 0, 0, 0, 0, 0, false,
+        new(false, reason, Guid.Empty, 0, 0, 0, 0, 0, 0, 0, 0, false,
             PublicationTable<WorldEquipmentUsageCost>.Empty);
 
     private static Func<object?>? BindStaticReference(Type? owner, string name, Type? exactType)

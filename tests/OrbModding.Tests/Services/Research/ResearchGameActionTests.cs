@@ -191,7 +191,7 @@ public sealed class ResearchGameActionTests : IDisposable
     private static ResearchSubmission Submit(ResearchGameAction boundary,
         ResearchSO target, ResearchActionKind kind)
     {
-        var action = new ResearchAction(kind, target.GetGuid(), Epoch);
+        var action = new ResearchAction(kind, target.GetGuid(), 3, Epoch);
         return boundary.Submit(in action);
     }
 

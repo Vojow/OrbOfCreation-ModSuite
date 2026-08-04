@@ -134,13 +134,12 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
                     "EquipmentManager.instance was unavailable.");
             var list = native.EquippedList(manager);
             var kind = native.ReadEquipmentType(target);
-            var multiBuyValue = native.MultiBuy();
             var cost = native.UsageCost(target);
-            if (list is null || kind is null || multiBuyValue is null || cost is null)
+            if (list is null || kind is null || cost is null)
                 return EquipmentLoadoutSubmission.Reject(EquipmentLoadoutPreflight.ContractUnavailable,
                     "The native equipment decision graph returned a null member.");
-            var before = Capture(native, list, target, kind, cost, multiBuyValue);
-            var requested = RequestedAmount(action.Kind, in before);
+            var before = Capture(native, list, target, kind, cost);
+            var requested = RequestedAmount(action.Kind, action.Amount, in before);
             if (action.Kind == EquipmentLoadoutActionKind.Equip)
             {
                 if (before.EquippedStacks >= before.MaximumStacks)
@@ -159,14 +158,18 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
             else if (before.EquippedStacks == 0)
                 return EquipmentLoadoutSubmission.Reject(EquipmentLoadoutPreflight.AlreadyInRequestedState,
                     "The artifact is not equipped.");
-            if (before.MultiBuy <= 0 || requested <= 0)
-                return EquipmentLoadoutSubmission.Reject(EquipmentLoadoutPreflight.MultiBuyUnavailable,
-                    "The native multi-buy value permits no equipment stack transition.");
+            if (requested <= 0)
+                return EquipmentLoadoutSubmission.Reject(EquipmentLoadoutPreflight.AlreadyInRequestedState,
+                    "The requested artifact stack change has no available level.");
             if (!_tryCaptureMutationPermit())
                 return EquipmentLoadoutSubmission.Reject(EquipmentLoadoutPreflight.MutationPermitUnavailable,
                     _readOwnershipFailure());
-            return Execute(in action, native, manager, list, target,
-                before.EquippedStacks, requested);
+            if (!NativeMultiBuyScope.TryEnter(requested, out var scope, out var scopeReason))
+                return EquipmentLoadoutSubmission.Reject(EquipmentLoadoutPreflight.MultiBuyUnavailable,
+                    "The requested artifact amount could not be applied: " + scopeReason);
+            using (scope)
+                return Execute(in action, native, manager, list, target,
+                    before.EquippedStacks, requested);
         }
         catch (Exception exception) when (IsExpected(exception))
         {
@@ -219,19 +222,18 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
     }
 
     private static EquipmentLoadoutState Capture(EquipmentLoadoutNativeBindings native,
-        object list, object target, object kind, object cost, object multiBuyValue) =>
+        object list, object target, object kind, object cost) =>
         new(Math.Max(native.Stacks(list, target), 0), Math.Max(native.MaximumStacks(target), 0),
-            Math.Max(native.AsInt(multiBuyValue), 0),
             native.Values(list)?.Count ?? throw new InvalidOperationException("Equipment list values were unavailable."),
             Math.Max(native.MaximumSlots(list), 0), Math.Max(native.TypeCount(list, kind), 0),
             Math.Max(native.TypeMaximum(kind), 0), native.HasEnough(cost),
             Math.Max(BigDouble.Floor(native.MaximumTimes(cost)).ToInt(), 0));
 
-    private static int RequestedAmount(EquipmentLoadoutActionKind kind, in EquipmentLoadoutState state) =>
+    private static int RequestedAmount(EquipmentLoadoutActionKind kind, int amount, in EquipmentLoadoutState state) =>
         kind == EquipmentLoadoutActionKind.Equip
-            ? Math.Min(state.MultiBuy, Math.Min(Math.Max(state.MaximumStacks - state.EquippedStacks, 0),
+            ? Math.Min(amount, Math.Min(Math.Max(state.MaximumStacks - state.EquippedStacks, 0),
                 state.MaximumAffordableStacks))
-            : Math.Min(state.MultiBuy, state.EquippedStacks);
+            : Math.Min(amount, state.EquippedStacks);
 
     private static int ExpectedStacks(EquipmentLoadoutActionKind kind, int before, int requested) =>
         kind == EquipmentLoadoutActionKind.Equip

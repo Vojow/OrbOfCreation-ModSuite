@@ -58,14 +58,20 @@ internal sealed class ResearchGameAction : IDisposable
                 return ResearchSubmission.Reject(ResearchPreflight.IdentityUnavailable,
                     resolution.IsResolved ? "The research resolution became stale." : resolution.Reason);
             var target = resolution.Value!;
-            var before = Capture(native, target);
+            var before = Capture(native, target, action.Amount);
             var preflight = Preflight(action.Kind, in before, out var reason);
             if (preflight != ResearchPreflight.Proceeded)
                 return ResearchSubmission.Reject(preflight, reason);
             if (!_tryCaptureMutationPermit())
                 return ResearchSubmission.Reject(ResearchPreflight.MutationPermitUnavailable,
                     _readOwnershipFailure());
-            return Execute(in action, native, target, in before);
+            if (action.Kind != ResearchActionKind.Develop)
+                return Execute(in action, native, target, in before);
+            if (!NativeMultiBuyScope.TryEnter(action.Amount, out var scope, out var scopeReason))
+                return ResearchSubmission.Reject(ResearchPreflight.MultiBuyUnavailable,
+                    "The requested research amount could not be applied: " + scopeReason);
+            using (scope)
+                return Execute(in action, native, target, in before);
         }
         catch (Exception exception) when (IsExpected(exception))
         {
@@ -169,20 +175,18 @@ internal sealed class ResearchGameAction : IDisposable
         }
     }
 
-    private static ResearchAdmissionState Capture(ResearchNativeBindings native, object target)
+    private static ResearchAdmissionState Capture(ResearchNativeBindings native, object target, int amount)
     {
         var cost = native.DevelopmentCost(target) ??
             throw new InvalidOperationException("ResearchSO.GetDevelopmentCost returned null.");
-        var multiBuy = native.MultiBuy() ??
-            throw new InvalidOperationException("GlobalVariables.GetMultiBuy returned null.");
-        return new ResearchAdmissionState(native.QueueMode(), native.AsInt(multiBuy),
+        return new ResearchAdmissionState(native.QueueMode(), amount,
             native.Level(target), native.QueuedLevels(target), native.SelfBonusLevels(target),
             native.IsActive(target), native.IsDeveloping(target), native.CanDevelop(target),
             native.CanApplyBonusLevel(target), native.FreeBonusLevels(target),
-            native.HasEnough(cost), native.MaxLevel(target), QueueableLevels(native, target));
+            native.HasEnough(cost), native.MaxLevel(target), QueueableLevels(native, target, amount));
     }
 
-    private static int QueueableLevels(ResearchNativeBindings native, object target)
+    private static int QueueableLevels(ResearchNativeBindings native, object target, int amount)
     {
         if (!native.QueueMode())
         {
@@ -191,9 +195,7 @@ internal sealed class ResearchGameAction : IDisposable
             return native.CanDevelop(target) && native.HasEnough(cost) ? 1 : 0;
         }
         var currentQueued = native.QueuedLevels(target);
-        var multiBuy = native.MultiBuy() ??
-            throw new InvalidOperationException("GlobalVariables.GetMultiBuy returned null.");
-        var limit = Math.Max(native.AsInt(multiBuy), 0);
+        var limit = amount;
         if (native.HasMaxLevel(target))
             limit = Math.Min(limit,
                 Math.Max(native.MaxLevel(target) - currentQueued - native.Level(target), 0));

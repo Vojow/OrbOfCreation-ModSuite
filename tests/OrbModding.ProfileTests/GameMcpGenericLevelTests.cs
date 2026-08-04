@@ -24,7 +24,7 @@ public sealed class GameMcpGenericLevelTests
             candidate => (string?)candidate["name"] == "game_level");
 
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
-        Assert.Equal(new[] { "mode", "uuid" },
+        Assert.Equal(new[] { "mode", "uuid", "amount" },
             tool["inputSchema"]!["required"]!.Values<string>());
         Assert.Equal(new[] { "purchase", "bonus" },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
@@ -33,6 +33,7 @@ public sealed class GameMcpGenericLevelTests
         {
             ["mode"] = "purchase",
             ["uuid"] = GlyphId.ToString("D"),
+            ["amount"] = 2,
         });
         Assert.Equal(GameMcpOperationClass.Gameplay, operation.Classification);
     }

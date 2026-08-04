@@ -243,8 +243,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(type.Identity, row.Loadout.EquipmentTypeId);
         Assert.Equal(0, row.Loadout.EquippedStacks);
         Assert.Equal(4, row.Loadout.MaximumStacks);
-        Assert.Equal(1, row.Loadout.NextEquipAmount);
-        Assert.Equal(0, row.Loadout.NextUnequipAmount);
+        Assert.Equal(3, row.Loadout.MaximumEquipAmount);
+        Assert.Equal(0, row.Loadout.MaximumUnequipAmount);
         Assert.True(row.Loadout.UsageAffordable);
         Assert.Equal(1, row.Loadout.Costs.Count);
         var cost = row.Loadout.Costs[0];
@@ -1220,8 +1220,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(0, decision.Position);
         Assert.Equal(1, decision.Amount);
         Assert.Equal(2, decision.TargetAmount);
-        Assert.Equal(1, decision.NextAdd);
-        Assert.Equal(1, decision.NextRemove);
+        Assert.Equal(3, decision.MaximumAdd);
+        Assert.Equal(2, decision.TargetAmount);
         Assert.True(WorldAlchemyLoadoutLookup.TryFindCostRange(
             world.AlchemyUsageCosts, recipe.Identity, out var start, out var count));
         Assert.Equal(1, count);

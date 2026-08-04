@@ -3989,11 +3989,11 @@ internal static class GameMcpWorldQuery
             ["targetAmount"] = decision.TargetAmount,
         };
         if (decision.IsActive) loadout["slot"] = decision.Position;
-        var addAvailable = decision.Discovered && decision.CanAdd && decision.NextAdd > 0;
+        var addAvailable = decision.Discovered && decision.CanAdd && decision.MaximumAdd > 0;
         var add = new JObject { ["available"] = addAvailable };
         if (addAvailable)
         {
-            add["maximumAmount"] = decision.NextAdd;
+            add["maximumAmount"] = decision.MaximumAdd;
             add["freeUsesRemaining"] = decision.FreeUsesRemaining;
             var costs = ProjectAlchemyUsageCosts(world, recipeId);
             if (costs.Count > 0) add["usageCosts"] = costs;
@@ -4004,13 +4004,11 @@ internal static class GameMcpWorldQuery
                 ? "not_discovered"
                 : !decision.CanAdd
                     ? "loadout_full"
-                    : decision.MultiBuy <= 0
-                        ? "multi_buy_unavailable"
-                        : "usage_unavailable";
+                    : "usage_unavailable";
         }
         loadout["add"] = add;
-        loadout["remove"] = decision.NextRemove > 0
-            ? new JObject { ["available"] = true, ["maximumAmount"] = decision.NextRemove }
+        loadout["remove"] = decision.TargetAmount > 0
+            ? new JObject { ["available"] = true, ["maximumAmount"] = decision.TargetAmount }
             : new JObject { ["available"] = false, ["reasonCode"] = "not_active" };
         loadout["move"] = decision.IsActive && decision.SlotCount > 1
             ? new JObject
@@ -4067,7 +4065,6 @@ internal static class GameMcpWorldQuery
             result["equipmentTypeId"] = decision.EquipmentTypeId.ToString("D");
             result["equippedStacks"] = decision.EquippedStacks;
             result["maximumStacks"] = decision.MaximumStacks;
-            result["multiBuy"] = decision.MultiBuy;
             result["loadout"] = new JObject
             {
                 ["usedSlots"] = decision.UsedSlots,
@@ -4075,9 +4072,9 @@ internal static class GameMcpWorldQuery
                 ["typeUsedSlots"] = decision.TypeUsedSlots,
                 ["typeMaximumSlots"] = decision.TypeMaximumSlots,
             };
-            var equip = new JObject { ["available"] = equipment.IsCreated && decision.NextEquipAmount > 0 };
-            if (equipment.IsCreated && decision.NextEquipAmount > 0)
-                equip["stacks"] = decision.NextEquipAmount;
+            var equip = new JObject { ["available"] = equipment.IsCreated && decision.MaximumEquipAmount > 0 };
+            if (equipment.IsCreated && decision.MaximumEquipAmount > 0)
+                equip["maximumAmount"] = decision.MaximumEquipAmount;
             else
                 equip["reasonCode"] = !equipment.IsCreated
                     ? "not_created"
@@ -4089,7 +4086,7 @@ internal static class GameMcpWorldQuery
                                 ? "equipment_type_full"
                                 : !decision.UsageAffordable
                                     ? "usage_unaffordable"
-                                    : "multi_buy_unavailable";
+                                    : "usage_unavailable";
             if (decision.Costs.Count > 0)
             {
                 var costs = new JArray();
@@ -4123,11 +4120,11 @@ internal static class GameMcpWorldQuery
                 equip["usageCosts"] = costs;
             }
             result["equip"] = equip;
-            result["unequip"] = decision.NextUnequipAmount > 0
+            result["unequip"] = decision.MaximumUnequipAmount > 0
                 ? new JObject
                 {
                     ["available"] = true,
-                    ["stacks"] = decision.NextUnequipAmount,
+                    ["maximumAmount"] = decision.MaximumUnequipAmount,
                 }
                 : new JObject { ["available"] = false, ["reasonCode"] = "not_equipped" };
         }

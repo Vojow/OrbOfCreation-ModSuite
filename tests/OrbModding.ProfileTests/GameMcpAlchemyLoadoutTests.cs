@@ -27,7 +27,7 @@ public sealed class GameMcpAlchemyLoadoutTests
         Assert.Equal(new[] { "add", "remove", "move" },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
         Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
-        Assert.Null(tool["inputSchema"]!["properties"]!["amount"]);
+        Assert.NotNull(tool["inputSchema"]!["properties"]!["amount"]);
         Assert.Null(tool["inputSchema"]!["properties"]!["level"]);
         var operation = GameMcpProtocolRouter.BuildOperation(
             "game_alchemy",
@@ -35,12 +35,13 @@ public sealed class GameMcpAlchemyLoadoutTests
             {
                 ["mode"] = "add",
                 ["uuid"] = RecipeId.ToString("D"),
+                ["amount"] = 2,
             });
         Assert.Equal(GameMcpOperationClass.Gameplay, operation.Classification);
     }
 
     [Fact]
-    public void Move_requires_destination_and_add_rejects_it_as_inapplicable()
+    public void Modes_require_only_their_explicit_amount_or_destination()
     {
         var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
         var move = router.Handle(GameMcpAcceptanceFixture.Request(1, "tools/call",
@@ -79,6 +80,10 @@ public sealed class GameMcpAlchemyLoadoutTests
             error => error is not null &&
                      (string?)error["code"] == "unexpected_for_mode" &&
                      (string?)error["field"] == "destination");
+        Assert.Contains(addErrors.Values<JObject>(),
+            error => error is not null &&
+                     (string?)error["code"] == "missing_required" &&
+                     (string?)error["field"] == "amount");
     }
 
     [Fact]
@@ -94,7 +99,7 @@ public sealed class GameMcpAlchemyLoadoutTests
         Assert.Equal(2, (int)loadout["activeAmount"]!);
         Assert.Equal(1, (int)loadout["slot"]!);
         Assert.True((bool)loadout["add"]!["available"]!);
-        Assert.Equal(2, (int)loadout["add"]!["maximumAmount"]!);
+        Assert.Equal(4, (int)loadout["add"]!["maximumAmount"]!);
         var add = Assert.IsType<JObject>(loadout["add"]);
         var costs = Assert.IsType<JArray>(add["usageCosts"]);
         var cost = Assert.IsType<JObject>(Assert.Single(costs));
@@ -142,7 +147,7 @@ public sealed class GameMcpAlchemyLoadoutTests
             freeUsageSlots: BigDouble.One, maxUsageSlots: new BigDouble(8),
             cachedCompletionTime: BigDouble.Zero, requiredExperience: BigDouble.One);
         var decision = new WorldAlchemyLoadoutDecision(RecipeId, position, 4,
-            targetAmount, targetAmount, 2, 1, 4, true, true);
+            targetAmount, targetAmount, 1, 4, true, true);
         var rateInputs = default(RawResourceRateInputs);
         var traits = default(RawResourceTraits);
         var modifiers = default(RawResourceModifiers);

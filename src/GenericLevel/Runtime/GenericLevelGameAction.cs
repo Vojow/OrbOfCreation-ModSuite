@@ -167,25 +167,23 @@ internal sealed class GenericLevelGameAction : IDisposable
         var stage = GenericLevelNativeStage.NativeCallback;
         try
         {
-            if (action.Kind == GenericLevelActionKind.Purchase)
+            for (var index = 0; index < action.Amount; index++)
             {
-                if (!binding.CanLevel(target))
-                    return Reject(GenericLevelPreflight.CannotLevel,
-                        "This entity can no longer gain another paid level.");
-                var cost = binding.GetLevelCost(target) ??
-                    throw new InvalidOperationException("GetLevelCost returned null before payment");
-                if (!native.HasEnough(cost)) return Unaffordable(native, cost, "level");
-                binding.PurchaseLevel(target);
-            }
-            else
-            {
-                var cost = binding.GetBonusCost!(target) ??
-                    throw new InvalidOperationException("GetFreeLevelCost returned null before mutation");
-                if (!native.ResourcesVisible(cost))
-                    return Reject(GenericLevelPreflight.ResourcesHidden,
-                        "The resources required for a bonus level are no longer visible.");
-                if (!native.HasEnough(cost)) return Unaffordable(native, cost, "bonus level");
-                binding.PurchaseBonus!(target);
+                if (action.Kind == GenericLevelActionKind.Purchase)
+                {
+                    if (!binding.CanLevel(target)) break;
+                    var cost = binding.GetLevelCost(target) ??
+                        throw new InvalidOperationException("GetLevelCost returned null before payment");
+                    if (!native.HasEnough(cost)) break;
+                    binding.PurchaseLevel(target);
+                }
+                else
+                {
+                    var cost = binding.GetBonusCost!(target) ??
+                        throw new InvalidOperationException("GetFreeLevelCost returned null before mutation");
+                    if (!native.ResourcesVisible(cost) || !native.HasEnough(cost)) break;
+                    binding.PurchaseBonus!(target);
+                }
             }
 
             stage = GenericLevelNativeStage.Verification;

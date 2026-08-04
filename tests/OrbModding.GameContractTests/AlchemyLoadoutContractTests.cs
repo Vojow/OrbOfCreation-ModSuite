@@ -29,7 +29,7 @@ public sealed class AlchemyLoadoutContractTests
     }
 
     [GameAssemblyFact]
-    public void EngageDerivesOneClickFromLiveUsageCapacityAndMultiBuyBeforeAdding()
+    public void UiWrappersDelegateTheirStripSizedDecisionToExplicitCountCoreMethods()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
         Assert.Equal(0x06001604,
@@ -43,19 +43,21 @@ public sealed class AlchemyLoadoutContractTests
         Assert.True(Offset(refs, "GlobalVariables", "GetMultiBuy") >= 0);
         Assert.True(Offset(refs, "GlobalVariables", "GetMultiBuy") <
                     Offset(refs, "AlchemyInstanceListVariable", "AddAlchemyInstances"));
-    }
-
-    [GameAssemblyFact]
-    public void DisengageUsesLiveMultiBuyBeforeTheNativeRemoval()
-    {
-        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
         Assert.Equal(0x06001606,
             assembly.GetMethodToken("AlchemyInstanceListVariable", "DisengageAlchemy", "AlchemyRecipeSO"));
-        var refs = References(assembly, "AlchemyInstanceListVariable", "DisengageAlchemy", "AlchemyRecipeSO");
+        var removeRefs = References(assembly, "AlchemyInstanceListVariable", "DisengageAlchemy", "AlchemyRecipeSO");
 
-        Assert.True(Offset(refs, "GlobalVariables", "GetMultiBuy") >= 0);
-        Assert.True(Offset(refs, "GlobalVariables", "GetMultiBuy") <
-                    Offset(refs, "AlchemyInstanceListVariable", "RemoveAlchemyInstances"));
+        Assert.True(Offset(removeRefs, "GlobalVariables", "GetMultiBuy") >= 0);
+        Assert.True(Offset(removeRefs, "GlobalVariables", "GetMultiBuy") <
+                    Offset(removeRefs, "AlchemyInstanceListVariable", "RemoveAlchemyInstances"));
+        Assert.Contains(References(assembly, "AlchemyInstanceListVariable", "AddAlchemyInstances",
+                "AlchemyRecipeSO", "System.Int32"),
+            reference => reference.DeclaringType == "AlchemyInstance" &&
+                         reference.MemberName == "AddQuantity");
+        Assert.Contains(References(assembly, "AlchemyInstanceListVariable", "RemoveAlchemyInstances",
+                "AlchemyRecipeSO", "System.Int32"),
+            reference => reference.DeclaringType == "AlchemyInstance" &&
+                         reference.MemberName == "RemoveQuantity");
     }
 
     [Fact]
@@ -66,17 +68,15 @@ public sealed class AlchemyLoadoutContractTests
         {
             "alchemy-loadout.recipe.type-action", "alchemy-loadout.manager.type-action",
             "alchemy-loadout.list.type-action", "alchemy-loadout.instance.type-action",
-            "alchemy-loadout.cost.type-action", "alchemy-loadout.int-variable.type-action",
-            "alchemy-loadout.global-variables.type-action", "alchemy-loadout.manager-instance-action",
+            "alchemy-loadout.cost.type-action", "alchemy-loadout.manager-instance-action",
             "alchemy-loadout.manager-active-action", "alchemy-loadout.recipe-discovered-action",
             "alchemy-loadout.recipe-usage-cost-action", "alchemy-loadout.recipe-free-uses-action",
             "alchemy-loadout.recipe-maximum-uses-action", "alchemy-loadout.list-can-add-action",
             "alchemy-loadout.list-values-action", "alchemy-loadout.instance-reference-action",
             "alchemy-loadout.instance-queued-action", "alchemy-loadout.instance-remaining-free-action",
             "alchemy-loadout.instance-remaining-maximum-action", "alchemy-loadout.cost-maximum-times-action",
-            "alchemy-loadout.cost-empty-action", "alchemy-loadout.global-multi-buy-action",
-            "alchemy-loadout.int-as-int-action", "alchemy-loadout.list-engage-action",
-            "alchemy-loadout.list-disengage-action", "alchemy-loadout.list-swap-action",
+            "alchemy-loadout.cost-empty-action", "alchemy-loadout.list-add-count-action",
+            "alchemy-loadout.list-remove-count-action", "alchemy-loadout.list-swap-action",
             "alchemy-loadout.list-update-action",
         };
         Assert.All(expected, id => Assert.Single(

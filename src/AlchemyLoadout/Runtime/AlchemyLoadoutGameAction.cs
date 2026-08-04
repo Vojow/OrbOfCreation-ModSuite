@@ -162,8 +162,7 @@ internal sealed class AlchemyLoadoutGameAction : IDisposable
                     return Reject(AlchemyLoadoutPreflight.LoadoutFull,
                         "The Alchemy loadout has no compatible open slot for this recipe.");
                 var cost = native.UsageCost(recipe);
-                var multiBuy = native.MultiBuy();
-                if (cost is null || multiBuy is null)
+                if (cost is null)
                     return Reject(AlchemyLoadoutPreflight.ContractUnavailable,
                         "The recipe's live usage decision is unavailable.");
                 var free = beforeIndex < 0 ? native.FreeUses(recipe) : native.RemainingFree(values[beforeIndex]!);
@@ -171,22 +170,20 @@ internal sealed class AlchemyLoadoutGameAction : IDisposable
                 var maximumByCost = native.CostEmpty(cost)
                     ? int.MaxValue
                     : Math.Max((native.MaximumTimes(cost) + new BigDouble(Math.Max(free, 0))).ToInt(), 0);
-                if (Math.Min(Math.Max(remaining, 0), maximumByCost) <= 0)
+                var maximumAdditional = Math.Min(Math.Max(remaining, 0), maximumByCost);
+                if (action.Amount <= 0 || action.Amount > maximumAdditional)
                     return Reject(AlchemyLoadoutPreflight.UsageUnavailable,
-                        "The recipe has no remaining free use or affordable resource capacity.");
-                if (native.AsInt(multiBuy) <= 0)
-                    return Reject(AlchemyLoadoutPreflight.MultiBuyUnavailable,
-                        "The current multi-buy permits no Alchemy increase.");
+                        "This recipe can add at most " + maximumAdditional +
+                        " uses with the current capacity and resources.");
             }
             else if (action.Kind == AlchemyLoadoutActionKind.Remove)
             {
                 if (beforeIndex < 0 || beforeTarget <= 0)
                     return Reject(AlchemyLoadoutPreflight.AlreadyInRequestedState,
                         "The recipe is not active in the Alchemy loadout.");
-                var multiBuy = native.MultiBuy();
-                if (multiBuy is null || native.AsInt(multiBuy) <= 0)
-                    return Reject(AlchemyLoadoutPreflight.MultiBuyUnavailable,
-                        "The current multi-buy permits no Alchemy decrease.");
+                if (action.Amount <= 0 || action.Amount > beforeTarget)
+                    return Reject(AlchemyLoadoutPreflight.UsageUnavailable,
+                        "This recipe has only " + beforeTarget + " active uses to remove.");
             }
             else
             {
@@ -234,8 +231,10 @@ internal sealed class AlchemyLoadoutGameAction : IDisposable
         var stage = AlchemyLoadoutNativeStage.NativeCallback;
         try
         {
-            if (action.Kind == AlchemyLoadoutActionKind.Add) native.Engage(list, recipe);
-            else if (action.Kind == AlchemyLoadoutActionKind.Remove) native.Disengage(list, recipe);
+            if (action.Kind == AlchemyLoadoutActionKind.Add)
+                native.AddInstances(list, recipe, action.Amount);
+            else if (action.Kind == AlchemyLoadoutActionKind.Remove)
+                native.RemoveInstances(list, recipe, action.Amount);
             else
             {
                 native.Swap(list, beforeIndex, action.Destination);

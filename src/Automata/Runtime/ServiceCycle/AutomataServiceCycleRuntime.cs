@@ -591,7 +591,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         var kind = command.Mode == "equip"
             ? EquipmentLoadoutActionKind.Equip
             : EquipmentLoadoutActionKind.Unequip;
-        var action = new EquipmentLoadoutAction(kind, command.TargetId,
+        var action = new EquipmentLoadoutAction(kind, command.TargetId, command.Amount,
             command.ExpectedLifecycleGeneration);
         var submission = _equipmentLoadout.Submit(in action);
         var result = EquipmentLoadoutActionResultMapper.Map(in submission);
@@ -647,7 +647,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _ => throw new ArgumentException("unsupported Alchemy mode " + command.Mode),
         };
         var destination = kind == AlchemyLoadoutActionKind.Move ? command.Amount - 1 : -1;
-        var action = new AlchemyLoadoutAction(kind, command.TargetId, destination,
+        var action = new AlchemyLoadoutAction(kind, command.TargetId, destination, command.Amount,
             command.ExpectedLifecycleGeneration);
         var submission = _alchemyLoadout.Submit(in action);
         var result = AlchemyLoadoutActionResultMapper.Map(in submission);
@@ -826,7 +826,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _ => throw new ArgumentException("unsupported level mode " + command.Mode),
         };
         var action = new GenericLevelAction(kind, command.TargetId,
-            command.DerivedNativeType, command.ExpectedLifecycleGeneration);
+            command.DerivedNativeType, command.Amount, command.ExpectedLifecycleGeneration);
         var submission = _genericLevel.Submit(in action);
         var result = GenericLevelActionResultMapper.Map(in submission);
         return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
@@ -917,7 +917,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             "bonus" => ResearchActionKind.Bonus,
             _ => throw new ArgumentException("unsupported research mode " + command.Mode),
         };
-        var action = new ResearchAction(kind, command.TargetId,
+        var action = new ResearchAction(kind, command.TargetId, command.Amount,
             command.ExpectedLifecycleGeneration);
         var submission = _research.Submit(in action);
         var result = ResearchActionResultMapper.Map(in submission);

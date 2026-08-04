@@ -9,7 +9,7 @@ namespace OrbModding.Common.Runtime.World;
 internal readonly struct WorldAlchemyLoadoutDecision : IWorldEntity
 {
     internal WorldAlchemyLoadoutDecision(Guid recipeId, int position, int slotCount, int amount,
-        int targetAmount, int multiBuy, int freeUsesRemaining, int maximumAdd,
+        int targetAmount, int freeUsesRemaining, int maximumAdd,
         bool discovered, bool canAdd)
     {
         RecipeId = recipeId;
@@ -17,7 +17,6 @@ internal readonly struct WorldAlchemyLoadoutDecision : IWorldEntity
         SlotCount = Math.Max(slotCount, 0);
         Amount = Math.Max(amount, 0);
         TargetAmount = Math.Max(targetAmount, 0);
-        MultiBuy = Math.Max(multiBuy, 0);
         FreeUsesRemaining = Math.Max(freeUsesRemaining, 0);
         MaximumAdd = Math.Max(maximumAdd, 0);
         Discovered = discovered;
@@ -30,14 +29,11 @@ internal readonly struct WorldAlchemyLoadoutDecision : IWorldEntity
     internal int SlotCount { get; }
     internal int Amount { get; }
     internal int TargetAmount { get; }
-    internal int MultiBuy { get; }
     internal int FreeUsesRemaining { get; }
     internal int MaximumAdd { get; }
     internal bool Discovered { get; }
     internal bool CanAdd { get; }
     internal bool IsActive => Position >= 0 && TargetAmount > 0;
-    internal int NextAdd => Math.Min(MultiBuy, MaximumAdd);
-    internal int NextRemove => Math.Min(MultiBuy, TargetAmount);
 }
 
 internal readonly struct WorldAlchemyUsageCost
@@ -113,8 +109,6 @@ internal sealed class WorldAlchemyLoadoutReader : IWorldCategoryReader
     private readonly Func<object, IList?>? _costEntries;
     private readonly Func<object, Guid>? _costResourceId;
     private readonly Func<object, BigDouble>? _costAmount;
-    private readonly Func<object?>? _multiBuy;
-    private readonly Func<object, int>? _asInt;
     private readonly string _unavailable;
 
     internal WorldAlchemyLoadoutReader(Func<string, Type?> resolveType)
@@ -126,11 +120,8 @@ internal sealed class WorldAlchemyLoadoutReader : IWorldCategoryReader
         _recipeType = resolveType("AlchemyRecipeSO");
         _instanceType = resolveType("AlchemyInstance");
         var costType = resolveType("ResourceCostList");
-        var globalType = resolveType("GlobalVariables");
-        var intType = resolveType("IntVariable");
         if (_managerType is null || listType is null || recipeListType is null ||
-            _recipeType is null || _instanceType is null || costType is null ||
-            globalType is null || intType is null)
+            _recipeType is null || _instanceType is null || costType is null)
         {
             _unavailable = "the ordinary alchemy types were not found on this build";
             return;
@@ -160,11 +151,6 @@ internal sealed class WorldAlchemyLoadoutReader : IWorldCategoryReader
         var costEntryType = NativeAccessorBinder.CollectionElementType(costType, "costs");
         _costResourceId = NativeAccessorBinder.ReferenceGuid(costEntryType, "resource");
         _costAmount = NativeAccessorBinder.Call<BigDouble>(costEntryType, "GetValue");
-        var getMultiBuy = globalType.GetMethod("GetMultiBuy", Static, null, Type.EmptyTypes, null);
-        _multiBuy = getMultiBuy is not null && getMultiBuy.ReturnType == intType
-            ? () => getMultiBuy.Invoke(null, null)
-            : null;
-        _asInt = NativeAccessorBinder.Call<int>(intType, "AsInt");
         _unavailable = IsBound() ? string.Empty :
             "the ordinary alchemy list or decision members were unavailable";
     }
@@ -189,10 +175,6 @@ internal sealed class WorldAlchemyLoadoutReader : IWorldCategoryReader
                 return WorldCategoryReport.Missing(Category, "the ordinary alchemy lists are unavailable");
             var active = _activeValues!(activeList);
             var recipes = _recipeValues!(recipeList);
-            var multiBuyObject = _multiBuy!();
-            if (multiBuyObject is null)
-                return WorldCategoryReport.Missing(Category, "the current multi-buy value is unavailable");
-            var multiBuy = Math.Max(_asInt!(multiBuyObject), 0);
             var sampled = 0;
             var skipped = 0;
             var firstFailure = string.Empty;
@@ -232,7 +214,7 @@ internal sealed class WorldAlchemyLoadoutReader : IWorldCategoryReader
                     throw new InvalidOperationException("AlchemyInstanceListVariable.CanAddInstance returned no Boolean value");
                 frame.AlchemyLoadout.Append(new WorldAlchemyLoadoutDecision(
                     recipeId, position, active?.Count ?? 0, instance is null ? 0 : _amount!(instance),
-                    instance is null ? 0 : _targetAmount!(instance), multiBuy, free,
+                    instance is null ? 0 : _targetAmount!(instance), free,
                     Math.Min(remaining, maximumByCost), _discovered!(recipe), canAdd));
                 AppendCosts(recipeId, cost, frame.AlchemyUsageCosts);
                 sampled++;
@@ -270,8 +252,7 @@ internal sealed class WorldAlchemyLoadoutReader : IWorldCategoryReader
         _canAdd is not null && _instanceRecipe is not null && _amount is not null &&
         _targetAmount is not null && _remainingFree is not null && _remainingMaximum is not null &&
         _maximumCostTimes is not null && _costIsEmpty is not null && _costEntries is not null &&
-        _costResourceId is not null && _costAmount is not null && _multiBuy is not null &&
-        _asInt is not null;
+        _costResourceId is not null && _costAmount is not null;
 
     private static bool IsOrdinaryCore(Guid id) => id == KnownEntities.Alchemy.Uuid ||
         id == KnownEntities.Brewing.Uuid || id == KnownEntities.Dismantle.Uuid ||

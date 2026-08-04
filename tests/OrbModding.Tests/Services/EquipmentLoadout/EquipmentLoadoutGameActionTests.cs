@@ -26,7 +26,7 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Equip_uses_the_native_multi_buy_click_and_verifies_the_exact_target_stack()
+    public void Equip_uses_the_explicit_amount_and_restores_the_screen_strip()
     {
         var target = Equipment();
         Register(target);
@@ -36,6 +36,7 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
 
         Assert.True(result.Verified, result.Reason);
         Assert.Equal(2, EquipmentManager.instance.equippedEquipment.GetStacks(target));
+        Assert.Equal(2, GlobalVariables.MultiBuy.Value);
         Assert.Equal(new NativeMutationCallOutcome(1, 1, 1), result.CallOutcome);
     }
 
@@ -183,7 +184,7 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
     private static EquipmentLoadoutSubmission Submit(EquipmentLoadoutGameAction boundary,
         EquipmentSO target, EquipmentLoadoutActionKind kind, long epoch = Epoch)
     {
-        var action = new EquipmentLoadoutAction(kind, target.GetGuid(), epoch);
+        var action = new EquipmentLoadoutAction(kind, target.GetGuid(), 2, epoch);
         return boundary.Submit(in action);
     }
 

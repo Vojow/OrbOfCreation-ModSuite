@@ -136,14 +136,14 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_consumable` | Use, cancel, discard, randomize, or reorder one published consumable |
 | `game_craft` | Craft a recipe or control its manual/automated instance |
 | `game_discover` | Preview or confirm one composed discovery on seven surfaces, or drive one Discovery Tree offer lifecycle |
-| `game_equipment` | Equip/increase or unequip/decrease one created artifact using live native multi-buy |
+| `game_equipment` | Equip/increase or unequip/decrease an explicit amount of one created artifact |
 | `game_alchemy` | Add, remove, or reorder one ordinary Alchemy recipe through its visible list |
 | `game_ritual` | Select a Ritual, set its starting level, activate or end its battle, or cancel its duration reward |
-| `game_level` | Buy one paid or bonus level from an ordinary level-list control |
+| `game_level` | Buy an explicit amount of paid or bonus levels from an ordinary level-list control |
 | `game_loadout` | Switch or edit the active player loadout, or save/load/clear an Equipment or Alchemy snapshot slot |
 | `game_challenge` | Select, activate, abandon, or fetch the Time/prestige challenge offers |
 | `game_prestige` | Confirm and perform the irreversible persistent reset |
-| `game_research` | Develop/queue, pause, resume, cancel, or apply a free research bonus level |
+| `game_research` | Develop/queue an explicit amount, pause, resume, cancel, or apply a free research bonus level |
 | `suite_config_set` | Commit one allowlisted setting through the configuration store |
 | `suite_emergency_stop` | Engage or resume the suite's shared emergency stop |
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
@@ -337,12 +337,14 @@ costs with current spendable holdings; an unavailable add carries only its bindi
 recipes remain on `game_concept`, composed Alchemy discovery remains on `game_discover`, and recipe
 leveling belongs to the unified level surface rather than this list lifecycle.
 
-`game_alchemy(mode="add"|"remove", uuid=...)` reproduces one list click using the game's current
-multi-buy and live usage-capacity calculation. `mode="move"` also requires the zero-based
+`game_alchemy(mode="add"|"remove", uuid=..., amount=...)` applies the caller's explicit positive
+amount through the list's native counted mutation after revalidating live usage capacity.
+`mode="move"` instead requires the zero-based
 `destination` exposed by the row. Success returns only the settled queued amount before and after, or
 the ordered slot before and after for a move. The action boundary revalidates exact recipe identity,
-ordinary-family classification, discovery, capacity, and multi-buy before invoking the same native
-engage, disengage, or list-swap route as the UI.
+ordinary-family classification, discovery, and capacity before invoking the explicit-count core
+used by the UI wrappers, or the same list-swap route as the UI. The global multi-buy strip is never
+read or changed.
 
 ### Ritual lifecycle
 
@@ -370,7 +372,7 @@ also carry `bonus`; time runes do not implement that native control. Available d
 the exact named native usage cost and current spendable amount. Inapplicable or unavailable
 controls do not publish priced ledgers.
 
-Call `game_level(mode="purchase"|"bonus", uuid=...)`. The tool derives the exact native type from
+Call `game_level(mode="purchase"|"bonus", uuid=..., amount=...)`. The tool derives the exact native type from
 the published category, repeats the visible button's live admission on Unity's main thread, and
 returns only the settled paid- or bonus-level change plus the resulting total. The paid route
 checks the game's persistent usage cost but does not perform a one-time payment; the concrete

@@ -550,10 +550,11 @@ v1.0.5 assembly fixes the visible routes:
 `EngageAlchemy` first requires either list room or an existing instance. It then derives remaining
 free and maximum uses from `GetFreeUsageSlots` / `GetMaxUsageSlots` for a new recipe, or the instance's
 remaining-use accessors for an existing one. `GetUsageCost().MaximumCostTimes()` contributes the
-resource ceiling, and `GlobalVariables.GetMultiBuy()` clamps the amount before the private
-`AddAlchemyInstances` call. `DisengageAlchemy` reads the same current multi-buy and passes it to
-`RemoveAlchemyInstances`. Therefore the player verb is one click-sized increase or decrease, not an
-arbitrary amount parameter.
+resource ceiling, and `GlobalVariables.GetMultiBuy()` clamps the UI click before the private
+`AddAlchemyInstances(AlchemyRecipeSO,int)` call. `DisengageAlchemy` similarly forwards its strip
+value to `RemoveAlchemyInstances(AlchemyRecipeSO,int)`. The MCP deliberately does not mirror that
+global UI preference: its explicit `amount` is admitted against the same live capacity facts and
+then passed to these counted core methods, which own instance creation/removal and quantity change.
 
 The list's game-written queued quantity is the simplest directional outcome sentinel: it must rise
 after engage and fall after disengage. Reordering requires the same exact recipe to appear at the

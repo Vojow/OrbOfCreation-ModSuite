@@ -322,7 +322,7 @@ public sealed class GameMcpWorldQueryTests
             {
                 "plot-node-actions", "concept-instances", "plot-authoring",
                 "crafting-recipe-state", "crafting-decisions", "consumable-inventory",
-                "loadouts",
+                "loadouts", "harvest-elements", "plot-actions", "action-queue-slots",
             })
             .Distinct(StringComparer.Ordinal)
             .Select(name => new WorldCollectionCategoryStatus(

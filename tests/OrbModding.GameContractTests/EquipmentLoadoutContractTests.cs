@@ -59,16 +59,14 @@ public sealed class EquipmentLoadoutContractTests
         {
             "equipment-loadout.equipment.type-action", "equipment-loadout.manager.type-action",
             "equipment-loadout.list.type-action", "equipment-loadout.equipment-type.type-action",
-            "equipment-loadout.cost.type-action", "equipment-loadout.int-variable.type-action",
-            "equipment-loadout.global-variables.type-action", "equipment-loadout.manager-instance-action",
+            "equipment-loadout.cost.type-action", "equipment-loadout.manager-instance-action",
             "equipment-loadout.manager-equipped-list-action", "equipment-loadout.equipment-created-action",
             "equipment-loadout.equipment-type-field-action", "equipment-loadout.equipment-maximum-action",
             "equipment-loadout.equipment-cost-action", "equipment-loadout.list-stacks-action",
             "equipment-loadout.list-maximum-action", "equipment-loadout.list-at-maximum-action",
             "equipment-loadout.list-values-action", "equipment-loadout.list-type-count-action",
             "equipment-loadout.type-maximum-action", "equipment-loadout.cost-enough-action",
-            "equipment-loadout.cost-maximum-times-action", "equipment-loadout.global-multi-buy-action",
-            "equipment-loadout.int-as-int-action", "equipment-loadout.manager-equip-action",
+            "equipment-loadout.cost-maximum-times-action", "equipment-loadout.manager-equip-action",
             "equipment-loadout.manager-unequip-action",
         };
         Assert.All(expected, id => Assert.Single(manifest.Contracts, contract => contract.Id == id));

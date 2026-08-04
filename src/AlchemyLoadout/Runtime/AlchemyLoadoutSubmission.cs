@@ -6,7 +6,7 @@ internal enum AlchemyLoadoutPreflight
 {
     Proceeded = 0, LifecycleReplaced, ContractUnavailable, WrongThread,
     IdentityUnavailable, WrongDomain, NotDiscovered, AlreadyInRequestedState,
-    LoadoutFull, UsageUnavailable, MultiBuyUnavailable, DestinationOutOfRange,
+    LoadoutFull, UsageUnavailable, DestinationOutOfRange,
     MutationPermitUnavailable, PostCommitFault, VerificationFailed,
 }
 

@@ -20734,18 +20734,6 @@
       "usages": ["reflection"], "place": "action"
     },
     {
-      "id": "equipment-loadout.int-variable.type-action", "assembly": "assembly-csharp",
-      "type": "IntVariable", "typeVisibility": "public", "kind": "type",
-      "owners": ["Automata equipment loadout GameAction", "Common equipment decision world collection"],
-      "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "equipment-loadout.global-variables.type-action", "assembly": "assembly-csharp",
-      "type": "GlobalVariables", "typeVisibility": "public", "kind": "type",
-      "owners": ["Automata equipment loadout GameAction", "Common equipment decision world collection"],
-      "usages": ["reflection"], "place": "action"
-    },
-    {
       "id": "equipment-loadout.manager-instance-action", "assembly": "assembly-csharp",
       "type": "EquipmentManager", "typeVisibility": "public", "kind": "field",
       "member": "instance", "visibility": "public", "static": true, "valueType": "EquipmentManager",
@@ -20839,20 +20827,6 @@
       "id": "equipment-loadout.cost-maximum-times-action", "assembly": "assembly-csharp",
       "type": "ResourceCostList", "typeVisibility": "public", "kind": "method", "member": "MaximumCostTimes",
       "visibility": "public", "static": false, "returnType": "BigDouble", "parameters": [],
-      "owners": ["Automata equipment loadout GameAction", "Common equipment decision world collection"],
-      "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "equipment-loadout.global-multi-buy-action", "assembly": "assembly-csharp",
-      "type": "GlobalVariables", "typeVisibility": "public", "kind": "method", "member": "GetMultiBuy",
-      "visibility": "public", "static": true, "returnType": "IntVariable", "parameters": [],
-      "owners": ["Automata equipment loadout GameAction", "Common equipment decision world collection"],
-      "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "equipment-loadout.int-as-int-action", "assembly": "assembly-csharp",
-      "type": "IntVariable", "typeVisibility": "public", "kind": "method", "member": "AsInt",
-      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
       "owners": ["Automata equipment loadout GameAction", "Common equipment decision world collection"],
       "usages": ["reflection"], "place": "action"
     },
@@ -22176,18 +22150,6 @@
       "usages": ["reflection"], "place": "action"
     },
     {
-      "id": "alchemy-loadout.int-variable.type-action", "assembly": "assembly-csharp",
-      "type": "IntVariable", "typeVisibility": "public", "kind": "type",
-      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
-      "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "alchemy-loadout.global-variables.type-action", "assembly": "assembly-csharp",
-      "type": "GlobalVariables", "typeVisibility": "public", "kind": "type",
-      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
-      "usages": ["reflection"], "place": "action"
-    },
-    {
       "id": "alchemy-loadout.manager-instance-action", "assembly": "assembly-csharp",
       "type": "AlchemyManager", "typeVisibility": "public", "kind": "field", "member": "instance",
       "visibility": "public", "static": true, "valueType": "AlchemyManager",
@@ -22286,29 +22248,15 @@
       "usages": ["reflection"], "place": "action"
     },
     {
-      "id": "alchemy-loadout.global-multi-buy-action", "assembly": "assembly-csharp",
-      "type": "GlobalVariables", "typeVisibility": "public", "kind": "method", "member": "GetMultiBuy",
-      "visibility": "public", "static": true, "returnType": "IntVariable", "parameters": [],
-      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
-      "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "alchemy-loadout.int-as-int-action", "assembly": "assembly-csharp",
-      "type": "IntVariable", "typeVisibility": "public", "kind": "method", "member": "AsInt",
-      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [],
-      "owners": ["Automata ordinary Alchemy GameAction", "Common ordinary Alchemy loadout world collection"],
-      "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "alchemy-loadout.list-engage-action", "assembly": "assembly-csharp",
-      "type": "AlchemyInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "EngageAlchemy",
-      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["AlchemyRecipeSO"],
+      "id": "alchemy-loadout.list-add-count-action", "assembly": "assembly-csharp",
+      "type": "AlchemyInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "AddAlchemyInstances",
+      "visibility": "private", "static": false, "returnType": "System.Void", "parameters": ["AlchemyRecipeSO", "System.Int32"],
       "owners": ["Automata ordinary Alchemy GameAction"], "usages": ["reflection"], "place": "action"
     },
     {
-      "id": "alchemy-loadout.list-disengage-action", "assembly": "assembly-csharp",
-      "type": "AlchemyInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "DisengageAlchemy",
-      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": ["AlchemyRecipeSO"],
+      "id": "alchemy-loadout.list-remove-count-action", "assembly": "assembly-csharp",
+      "type": "AlchemyInstanceListVariable", "typeVisibility": "public", "kind": "method", "member": "RemoveAlchemyInstances",
+      "visibility": "private", "static": false, "returnType": "System.Void", "parameters": ["AlchemyRecipeSO", "System.Int32"],
       "owners": ["Automata ordinary Alchemy GameAction"], "usages": ["reflection"], "place": "action"
     },
     {

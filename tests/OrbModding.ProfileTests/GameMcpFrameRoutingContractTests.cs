@@ -202,11 +202,13 @@ public sealed class GameMcpFrameRoutingContractTests
         {
             ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "equip",
+            ["amount"] = 1,
         },
         "game_alchemy" => new JObject
         {
             ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "add",
+            ["amount"] = 1,
         },
         "game_ritual" => new JObject
         {
@@ -217,6 +219,7 @@ public sealed class GameMcpFrameRoutingContractTests
         {
             ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "purchase",
+            ["amount"] = 1,
         },
         "game_loadout" => new JObject
         {
@@ -235,6 +238,7 @@ public sealed class GameMcpFrameRoutingContractTests
         {
             ["uuid"] = Guid.NewGuid().ToString("D"),
             ["mode"] = "develop",
+            ["amount"] = 1,
         },
         "game_consumable" => new JObject
         {

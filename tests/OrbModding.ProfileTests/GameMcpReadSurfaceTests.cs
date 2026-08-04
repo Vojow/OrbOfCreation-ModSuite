@@ -1040,6 +1040,9 @@ public sealed class GameMcpWorldEnvelopeTests
                 "concept-instances",
                 "consumable-inventory",
                 "loadouts",
+                "harvest-elements",
+                "plot-actions",
+                "action-queue-slots",
             })
             .Distinct(StringComparer.Ordinal)
             .Select(category => string.Equals(
@@ -1156,6 +1159,9 @@ public sealed class GameMcpWorldEnvelopeTests
                 "crafting-decisions",
                 "concept-instances",
                 "consumable-inventory",
+                "harvest-elements",
+                "plot-actions",
+                "action-queue-slots",
                 "loadouts",
             })
             .Distinct(StringComparer.Ordinal)
@@ -1208,6 +1214,9 @@ public sealed class GameMcpWorldEnvelopeTests
                 "crafting-decisions",
                 "concept-instances",
                 "consumable-inventory",
+                "harvest-elements",
+                "plot-actions",
+                "action-queue-slots",
                 "loadouts",
             })
             .Distinct(StringComparer.Ordinal)

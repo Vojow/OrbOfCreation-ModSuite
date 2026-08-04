@@ -14,6 +14,7 @@ internal readonly struct GenericLevelAction
         GenericLevelActionKind kind,
         Guid targetId,
         string nativeType,
+        int amount,
         long lifecycleEpoch)
     {
         if (targetId == Guid.Empty)
@@ -23,11 +24,13 @@ internal readonly struct GenericLevelAction
         Kind = kind;
         TargetId = targetId;
         NativeType = nativeType;
+        Amount = amount > 0 ? amount : throw new ArgumentOutOfRangeException(nameof(amount));
         LifecycleEpoch = lifecycleEpoch;
     }
 
     internal GenericLevelActionKind Kind { get; }
     internal Guid TargetId { get; }
     internal string NativeType { get; }
+    internal int Amount { get; }
     internal long LifecycleEpoch { get; }
 }

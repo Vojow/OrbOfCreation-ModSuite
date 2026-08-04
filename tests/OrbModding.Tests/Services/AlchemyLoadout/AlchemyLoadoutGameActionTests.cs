@@ -15,33 +15,48 @@ public sealed class AlchemyLoadoutGameActionTests : IDisposable
     public AlchemyLoadoutGameActionTests()
     {
         AlchemyManager.instance = new AlchemyManager();
-        GlobalVariables.MultiBuy = new IntVariable { Value = 2 };
         RegisterConceptCatalog();
     }
 
     public void Dispose()
     {
         AlchemyManager.instance = null;
-        GlobalVariables.MultiBuy = new IntVariable { Value = 1 };
     }
 
     [Fact]
-    public void Add_and_remove_use_the_native_multi_buy_click_and_directional_target_sentinel()
+    public void Add_and_remove_use_the_explicit_amount_and_directional_target_sentinel()
     {
         var recipe = OrdinaryRecipe(5);
         Register(recipe);
         AlchemyManager.instance!.allAlchemy.value.Add(recipe);
         using var boundary = Boundary();
 
-        var added = Submit(boundary, recipe, AlchemyLoadoutActionKind.Add);
+        var added = Submit(boundary, recipe, AlchemyLoadoutActionKind.Add, amount: 2);
         var instance = Assert.Single(AlchemyManager.instance.activeAlchemy.value);
         var addedAmount = instance.GetQueuedQuantity();
-        var removed = Submit(boundary, recipe, AlchemyLoadoutActionKind.Remove);
+        var removed = Submit(boundary, recipe, AlchemyLoadoutActionKind.Remove, amount: 2);
 
         Assert.True(added.Verified, added.Reason);
         Assert.Equal(2, addedAmount);
         Assert.True(removed.Verified, removed.Reason);
         Assert.Empty(AlchemyManager.instance.activeAlchemy.value);
+    }
+
+    [Fact]
+    public void Add_and_remove_refuse_amounts_beyond_live_capacity_or_holdings()
+    {
+        var recipe = OrdinaryRecipe(3);
+        Register(recipe);
+        using var boundary = Boundary();
+
+        var tooMany = Submit(boundary, recipe, AlchemyLoadoutActionKind.Add, amount: 4);
+        var added = Submit(boundary, recipe, AlchemyLoadoutActionKind.Add, amount: 2);
+        var removeTooMany = Submit(boundary, recipe, AlchemyLoadoutActionKind.Remove, amount: 3);
+
+        Assert.Equal(AlchemyLoadoutPreflight.UsageUnavailable, tooMany.Preflight);
+        Assert.True(added.Verified, added.Reason);
+        Assert.Equal(AlchemyLoadoutPreflight.UsageUnavailable, removeTooMany.Preflight);
+        Assert.Equal(2, Assert.Single(AlchemyManager.instance!.activeAlchemy.value).queuedQuantity);
     }
 
     [Fact]
@@ -124,9 +139,9 @@ public sealed class AlchemyLoadoutGameActionTests : IDisposable
     }
 
     private static AlchemyLoadoutSubmission Submit(AlchemyLoadoutGameAction boundary,
-        AlchemyRecipeSO recipe, AlchemyLoadoutActionKind kind, int destination = -1)
+        AlchemyRecipeSO recipe, AlchemyLoadoutActionKind kind, int destination = -1, int amount = 1)
     {
-        var action = new AlchemyLoadoutAction(kind, recipe.GetGuid(), destination, Epoch);
+        var action = new AlchemyLoadoutAction(kind, recipe.GetGuid(), destination, amount, Epoch);
         return boundary.Submit(in action);
     }
 

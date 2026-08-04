@@ -162,7 +162,7 @@ public sealed class GenericLevelGameActionTests
         string nativeType,
         GenericLevelActionKind kind)
     {
-        var action = new GenericLevelAction(kind, target.GetGuid(), nativeType, Epoch);
+        var action = new GenericLevelAction(kind, target.GetGuid(), nativeType, 1, Epoch);
         return boundary.Submit(in action);
     }
 

@@ -363,10 +363,13 @@ internal sealed class GameMcpProtocolRouter
             case "game_equipment":
                 builder.Mode = RequireOneOf(arguments, "mode", "equip", "unequip");
                 builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.Amount = RequiredInt(arguments, "amount", 1, int.MaxValue);
                 break;
             case "game_alchemy":
                 builder.Mode = RequireOneOf(arguments, "mode", "add", "remove", "move");
                 builder.Uuid = RequireUuid(arguments, "uuid");
+                if (builder.Mode is "add" or "remove")
+                    builder.Amount = RequiredInt(arguments, "amount", 1, int.MaxValue);
                 if (builder.Mode == "move")
                     builder.SlotIndex = RequiredInt(arguments, "destination", 0, int.MaxValue);
                 break;
@@ -380,6 +383,7 @@ internal sealed class GameMcpProtocolRouter
             case "game_level":
                 builder.Mode = RequireOneOf(arguments, "mode", "purchase", "bonus");
                 builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.Amount = RequiredInt(arguments, "amount", 1, 1000);
                 break;
             case "game_loadout":
                 builder.Mode = RequireOneOf(arguments, "mode", "select", "set_section",
@@ -418,6 +422,9 @@ internal sealed class GameMcpProtocolRouter
                 builder.Mode = RequireOneOf(arguments, "mode",
                     "develop", "pause", "resume", "cancel", "bonus");
                 builder.Uuid = RequireUuid(arguments, "uuid");
+                builder.Amount = builder.Mode == "develop"
+                    ? RequiredInt(arguments, "amount", 1, int.MaxValue)
+                    : 1;
                 break;
             case "suite_config_set":
                 builder.Section = RequireString(arguments, "section");
@@ -827,31 +834,33 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_equipment",
                 "Equip or unequip an artifact",
-                "Apply one native equipment click using the live multi-buy, slot, type-slot, stack, and usage-cost decision. Success returns the stack count before and after.",
+                "Equip or unequip an explicit artifact amount through the native slot, type-slot, stack, and usage-cost decision. Success returns the stack count before and after.",
                 ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema("equip", "unequip"),
                         ["uuid"] = StringSchema("Published EquipmentSO UUID."),
+                        ["amount"] = IntegerSchema(1, int.MaxValue),
                     },
-                    "mode", "uuid"),
+                    "mode", "uuid", "amount"),
                 readOnly: false,
                 idempotent: false),
             Tool(
                 "game_alchemy",
                 "Change the ordinary Alchemy loadout",
-                "Add, remove, or move one discovered ordinary Alchemy recipe using the live multi-buy and native usage-capacity decision. Concept assignments stay on game_concept.",
+                "Add or remove an explicit number of uses, or move one discovered ordinary Alchemy recipe through the native usage-capacity decision. Concept assignments stay on game_concept.",
                 ModeSchema(ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema("add", "remove", "move"),
                         ["uuid"] = StringSchema("Published ordinary AlchemyRecipeSO UUID."),
+                        ["amount"] = IntegerSchema(1, int.MaxValue),
                         ["destination"] = IntegerSchema(0, int.MaxValue),
                     },
                     "mode", "uuid"),
-                    ModeRule("add", forbidden: new[] { "destination" }),
-                    ModeRule("remove", forbidden: new[] { "destination" }),
-                    ModeRule("move", new[] { "destination" })),
+                    ModeRule("add", new[] { "amount" }, new[] { "destination" }),
+                    ModeRule("remove", new[] { "amount" }, new[] { "destination" }),
+                    ModeRule("move", new[] { "destination" }, new[] { "amount" })),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -877,15 +886,16 @@ internal sealed class GameMcpProtocolRouter
                 idempotent: false),
             Tool(
                 "game_level",
-                "Buy one paid or bonus level",
+                "Buy paid or bonus levels",
                 "Use the native level-list controls for artifact types, glyphs, resource types, and Time Runes. Research and spells keep their dedicated tools.",
                 ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema("purchase", "bonus"),
                         ["uuid"] = StringSchema("Published levelable entity UUID."),
+                        ["amount"] = IntegerSchema(1, 1000),
                     },
-                    "mode", "uuid"),
+                    "mode", "uuid", "amount"),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -948,13 +958,19 @@ internal sealed class GameMcpProtocolRouter
                 "game_research",
                 "Develop or manage research",
                 "Develop, queue, pause, resume, cancel, or apply a free bonus level to one exact research. Success returns the changed level or state.",
-                ActionSchema(
+                ModeSchema(ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema("develop", "pause", "resume", "cancel", "bonus"),
                         ["uuid"] = StringSchema("Published ResearchSO UUID."),
+                        ["amount"] = IntegerSchema(1, int.MaxValue),
                     },
                     "mode", "uuid"),
+                    ModeRule("develop", new[] { "amount" }),
+                    ModeRule("pause", forbidden: new[] { "amount" }),
+                    ModeRule("resume", forbidden: new[] { "amount" }),
+                    ModeRule("cancel", forbidden: new[] { "amount" }),
+                    ModeRule("bonus", forbidden: new[] { "amount" })),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -1195,6 +1211,13 @@ internal sealed class GameMcpProtocolRouter
         {
             var mode = (string?)arguments["mode"];
             var destination = arguments.ContainsKey("destination");
+            var amount = arguments.ContainsKey("amount");
+            if (mode is "add" or "remove" && !amount)
+                errors.Add(ValidationError("missing_required", "amount",
+                    "required field 'amount' is missing for mode '" + mode + "'"));
+            else if (mode == "move" && amount)
+                errors.Add(ValidationError("unexpected_for_mode", "amount",
+                    "field 'amount' is not accepted for mode 'move'"));
             if (mode == "move" && !destination)
                 errors.Add(ValidationError("missing_required", "destination",
                     "required field 'destination' is missing for mode 'move'"));

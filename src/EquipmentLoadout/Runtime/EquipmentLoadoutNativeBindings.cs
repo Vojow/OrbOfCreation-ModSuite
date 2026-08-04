@@ -16,16 +16,14 @@ internal sealed class EquipmentLoadoutNativeBindings
     {
         "equipment-loadout.equipment.type-action", "equipment-loadout.manager.type-action",
         "equipment-loadout.list.type-action", "equipment-loadout.equipment-type.type-action",
-        "equipment-loadout.cost.type-action", "equipment-loadout.int-variable.type-action",
-        "equipment-loadout.global-variables.type-action", "equipment-loadout.manager-instance-action",
+        "equipment-loadout.cost.type-action", "equipment-loadout.manager-instance-action",
         "equipment-loadout.manager-equipped-list-action", "equipment-loadout.equipment-created-action",
         "equipment-loadout.equipment-type-field-action", "equipment-loadout.equipment-maximum-action",
         "equipment-loadout.equipment-cost-action", "equipment-loadout.list-stacks-action",
         "equipment-loadout.list-maximum-action", "equipment-loadout.list-at-maximum-action",
         "equipment-loadout.list-values-action", "equipment-loadout.list-type-count-action",
         "equipment-loadout.type-maximum-action", "equipment-loadout.cost-enough-action",
-        "equipment-loadout.cost-maximum-times-action", "equipment-loadout.global-multi-buy-action",
-        "equipment-loadout.int-as-int-action", "equipment-loadout.manager-equip-action",
+        "equipment-loadout.cost-maximum-times-action", "equipment-loadout.manager-equip-action",
         "equipment-loadout.manager-unequip-action",
     };
 
@@ -36,7 +34,6 @@ internal sealed class EquipmentLoadoutNativeBindings
         Func<object, int> maximumSlots, Func<object, bool> atMaximum, Func<object, IList?> values,
         Func<object, object, int> typeCount, Func<object, int> typeMaximum,
         Func<object, bool> hasEnough, Func<object, BigDouble> maximumTimes,
-        Func<object?> multiBuy, Func<object, int> asInt,
         Action<object, object> equip, Action<object, object> unequip)
     {
         EquipmentType = equipmentType; ManagerType = managerType; Manager = manager;
@@ -44,7 +41,7 @@ internal sealed class EquipmentLoadoutNativeBindings
         MaximumStacks = maximumStacks; UsageCost = usageCost; Stacks = stacks;
         MaximumSlots = maximumSlots; AtMaximum = atMaximum; Values = values;
         TypeCount = typeCount; TypeMaximum = typeMaximum; HasEnough = hasEnough;
-        MaximumTimes = maximumTimes; MultiBuy = multiBuy; AsInt = asInt;
+        MaximumTimes = maximumTimes;
         Equip = equip; Unequip = unequip;
     }
 
@@ -64,8 +61,6 @@ internal sealed class EquipmentLoadoutNativeBindings
     internal Func<object, int> TypeMaximum { get; }
     internal Func<object, bool> HasEnough { get; }
     internal Func<object, BigDouble> MaximumTimes { get; }
-    internal Func<object?> MultiBuy { get; }
-    internal Func<object, int> AsInt { get; }
     internal Action<object, object> Equip { get; }
     internal Action<object, object> Unequip { get; }
 
@@ -87,34 +82,29 @@ internal sealed class EquipmentLoadoutNativeBindings
             var list = T(2, "EquipmentListVariable");
             var equipmentKind = T(3, "EquipmentTypeSO");
             var cost = T(4, "ResourceCostList");
-            var integer = T(5, "IntVariable");
-            var globals = T(6, "GlobalVariables");
             var big = resolveType("BigDouble") ?? typeof(BigDouble);
-            var manager = StaticField(7, managerType, "instance", managerType, includeContract);
-            var equipped = Field(8, managerType, "equippedEquipment", list, includeContract);
-            var created = Method(9, equipment, "IsCreated", typeof(bool), includeContract);
-            var kind = Field(10, equipment, "equipmentType", equipmentKind, includeContract);
-            var maxStacks = Method(11, equipment, "GetMaxLevel", typeof(int), includeContract);
-            var usage = Method(12, equipment, "GetUsageCost", cost, includeContract);
-            var getStacks = Method(13, list, "GetStacks", typeof(int), includeContract, equipment);
-            var maxSlots = Method(14, list, "GetMax", typeof(int), includeContract);
-            var atMax = Method(15, list, "IsAtMax", typeof(bool), includeContract);
-            var values = Field(16, list, "value", typeof(System.Collections.Generic.List<>).MakeGenericType(equipment), includeContract);
-            var typeCount = Method(17, list, "GetTypesEquipped", typeof(int), includeContract, equipmentKind);
-            var typeMax = Method(18, equipmentKind, "GetMaxTypeSlots", typeof(int), includeContract);
-            var enough = Method(19, cost, "HasEnough", typeof(bool), includeContract);
-            var maximumTimes = Method(20, cost, "MaximumCostTimes", big, includeContract);
-            var getMultiBuy = StaticMethod(21, globals, "GetMultiBuy", integer, includeContract);
-            var asInt = Method(22, integer, "AsInt", typeof(int), includeContract);
-            var equip = Method(23, managerType, "EquipItem", typeof(void), includeContract, equipment);
-            var unequip = Method(24, managerType, "UnEquipItem", typeof(void), includeContract, equipment);
+            var manager = StaticField(5, managerType, "instance", managerType, includeContract);
+            var equipped = Field(6, managerType, "equippedEquipment", list, includeContract);
+            var created = Method(7, equipment, "IsCreated", typeof(bool), includeContract);
+            var kind = Field(8, equipment, "equipmentType", equipmentKind, includeContract);
+            var maxStacks = Method(9, equipment, "GetMaxLevel", typeof(int), includeContract);
+            var usage = Method(10, equipment, "GetUsageCost", cost, includeContract);
+            var getStacks = Method(11, list, "GetStacks", typeof(int), includeContract, equipment);
+            var maxSlots = Method(12, list, "GetMax", typeof(int), includeContract);
+            var atMax = Method(13, list, "IsAtMax", typeof(bool), includeContract);
+            var values = Field(14, list, "value", typeof(System.Collections.Generic.List<>).MakeGenericType(equipment), includeContract);
+            var typeCount = Method(15, list, "GetTypesEquipped", typeof(int), includeContract, equipmentKind);
+            var typeMax = Method(16, equipmentKind, "GetMaxTypeSlots", typeof(int), includeContract);
+            var enough = Method(17, cost, "HasEnough", typeof(bool), includeContract);
+            var maximumTimes = Method(18, cost, "MaximumCostTimes", big, includeContract);
+            var equip = Method(19, managerType, "EquipItem", typeof(void), includeContract, equipment);
+            var unequip = Method(20, managerType, "UnEquipItem", typeof(void), includeContract, equipment);
 
             bindings = new EquipmentLoadoutNativeBindings(equipment, managerType,
                 StaticObject(manager), ObjectField(equipped), Func<bool>(created), ObjectField(kind),
                 Func<int>(maxStacks), ObjectFunc(usage), Func2<int>(getStacks), Func<int>(maxSlots),
                 Func<bool>(atMax), ListField(values), Func2<int>(typeCount), Func<int>(typeMax),
-                Func<bool>(enough), Func<BigDouble>(maximumTimes), StaticObject(getMultiBuy),
-                Func<int>(asInt), Action2(equip), Action2(unequip));
+                Func<bool>(enough), Func<BigDouble>(maximumTimes), Action2(equip), Action2(unequip));
             reason = string.Empty;
             return true;
         }
@@ -135,15 +125,6 @@ internal sealed class EquipmentLoadoutNativeBindings
         var method = owner.GetMethod(name, Instance, null, parameters, null);
         if (method is null || method.IsStatic || method.ReturnType != result)
             throw new InvalidOperationException(owner.Name + "." + name + " did not match the audited signature");
-        return method;
-    }
-
-    private static MethodInfo StaticMethod(int index, Type owner, string name, Type result, Func<string, bool> include)
-    {
-        Require(ContractIds[index], include);
-        var method = owner.GetMethod(name, Static, null, Type.EmptyTypes, null);
-        if (method is null || !method.IsStatic || method.ReturnType != result)
-            throw new InvalidOperationException(owner.Name + "." + name + " did not match the audited static signature");
         return method;
     }
 

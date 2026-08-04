@@ -17,18 +17,18 @@ public sealed class GameMcpEquipmentLoadoutTests
     private static readonly Guid ResourceId = Guid.Parse("f4000000-0000-0000-0000-000000000003");
 
     [Fact]
-    public void Tool_requires_only_mode_and_published_equipment_uuid()
+    public void Tool_requires_mode_identity_and_explicit_amount()
     {
         var tool = Assert.Single(GameMcpAcceptanceFixture.Tools(),
             candidate => (string?)candidate["name"] == "game_equipment");
 
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         var schema = tool["inputSchema"]!;
-        Assert.Equal(new[] { "mode", "uuid" }, schema["required"]!.Values<string>());
+        Assert.Equal(new[] { "mode", "uuid", "amount" }, schema["required"]!.Values<string>());
         Assert.Equal(new[] { "equip", "unequip" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>());
         Assert.Null(schema["properties"]!["worldGeneration"]);
-        Assert.Null(schema["properties"]!["amount"]);
+        Assert.NotNull(schema["properties"]!["amount"]);
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public sealed class GameMcpEquipmentLoadoutTests
             new JObject
             {
                 ["name"] = "game_equipment",
-                ["arguments"] = new JObject { ["mode"] = "equip", ["uuid"] = id, ["worldGeneration"] = 9 },
+                ["arguments"] = new JObject { ["mode"] = "equip", ["uuid"] = id, ["amount"] = 1, ["worldGeneration"] = 9 },
             }));
 
         var missingErrors = Assert.IsType<JArray>(missing.Body!["error"]!["data"]!["validationErrors"]);
@@ -88,9 +88,8 @@ public sealed class GameMcpEquipmentLoadoutTests
         Assert.Equal("Focus", (string?)row["equipmentType"]!["name"]);
         Assert.Equal(1, (int)row["equippedStacks"]!);
         Assert.Equal(4, (int)row["maximumStacks"]!);
-        Assert.Equal(2, (int)row["multiBuy"]!);
-        Assert.Equal(2, (int)row["equip"]!["stacks"]!);
-        Assert.Equal(1, (int)row["unequip"]!["stacks"]!);
+        Assert.Equal(2, (int)row["equip"]!["maximumAmount"]!);
+        Assert.Equal(1, (int)row["unequip"]!["maximumAmount"]!);
         var cost = Assert.Single(row["equip"]!["usageCosts"]!).Value<JObject>()!;
         Assert.Equal("Focus", (string?)cost["resource"]!["name"]);
         Assert.Equal("20", (string?)cost["cost"]);
@@ -111,7 +110,7 @@ public sealed class GameMcpEquipmentLoadoutTests
         var resource = new WorldResource(in reading, true, new BigDouble(20), 0.8, false,
             new BigDouble(80), BigDouble.Zero);
         var decision = new WorldEquipmentDecision(true, string.Empty, TypeId, 1, 4, 1, 3,
-            1, 2, 2, 2, 1, true,
+            1, 2, 2, 1, true,
             PublicationTable<WorldEquipmentUsageCost>.Create(new[]
             {
                 new WorldEquipmentUsageCost(ResourceId, new BigDouble(20)),

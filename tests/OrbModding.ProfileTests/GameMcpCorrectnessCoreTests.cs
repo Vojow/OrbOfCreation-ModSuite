@@ -76,7 +76,7 @@ public sealed class GameMcpCorrectnessCoreTests
             GameMcpCommandKind.Harvest,
             expectedLifecycleGeneration: 9,
             expectedConfigurationGeneration: 3,
-            mode: "add",
+            mode: "add_plot_action",
             targetId: plotId,
             secondaryId: actionId,
             derivedNativeType: "PlotNodeSO",

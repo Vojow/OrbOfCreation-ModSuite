@@ -17,7 +17,7 @@ public sealed class GameMcpResearchTests
     private static readonly Guid TypeId = Guid.Parse("f8000000-0000-0000-0000-000000000003");
 
     [Fact]
-    public void Tool_requires_mode_and_published_research_uuid_only()
+    public void Tool_requires_an_explicit_amount_for_develop_only()
     {
         var tool = Assert.Single(GameMcpAcceptanceFixture.Tools(),
             candidate => (string?)candidate["name"] == "game_research");
@@ -28,7 +28,7 @@ public sealed class GameMcpResearchTests
         Assert.Equal(new[] { "develop", "pause", "resume", "cancel", "bonus" },
             schema["properties"]!["mode"]!["enum"]!.Values<string>());
         Assert.Null(schema["properties"]!["worldGeneration"]);
-        Assert.Null(schema["properties"]!["amount"]);
+        Assert.NotNull(schema["properties"]!["amount"]);
     }
 
     [Fact]
@@ -50,6 +50,7 @@ public sealed class GameMcpResearchTests
                 {
                     ["mode"] = "develop",
                     ["uuid"] = ResearchId.ToString("D"),
+                    ["amount"] = 1,
                     ["worldGeneration"] = 9,
                 },
             }));

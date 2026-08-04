@@ -16,17 +16,15 @@ internal sealed class AlchemyLoadoutNativeBindings
     {
         "alchemy-loadout.recipe.type-action", "alchemy-loadout.manager.type-action",
         "alchemy-loadout.list.type-action", "alchemy-loadout.instance.type-action",
-        "alchemy-loadout.cost.type-action", "alchemy-loadout.int-variable.type-action",
-        "alchemy-loadout.global-variables.type-action", "alchemy-loadout.manager-instance-action",
+        "alchemy-loadout.cost.type-action", "alchemy-loadout.manager-instance-action",
         "alchemy-loadout.manager-active-action", "alchemy-loadout.recipe-discovered-action",
         "alchemy-loadout.recipe-usage-cost-action", "alchemy-loadout.recipe-free-uses-action",
         "alchemy-loadout.recipe-maximum-uses-action", "alchemy-loadout.list-can-add-action",
         "alchemy-loadout.list-values-action", "alchemy-loadout.instance-reference-action",
         "alchemy-loadout.instance-queued-action", "alchemy-loadout.instance-remaining-free-action",
         "alchemy-loadout.instance-remaining-maximum-action", "alchemy-loadout.cost-maximum-times-action",
-        "alchemy-loadout.cost-empty-action", "alchemy-loadout.global-multi-buy-action",
-        "alchemy-loadout.int-as-int-action", "alchemy-loadout.list-engage-action",
-        "alchemy-loadout.list-disengage-action", "alchemy-loadout.list-swap-action",
+        "alchemy-loadout.cost-empty-action", "alchemy-loadout.list-add-count-action",
+        "alchemy-loadout.list-remove-count-action", "alchemy-loadout.list-swap-action",
         "alchemy-loadout.list-update-action",
     };
 
@@ -37,15 +35,16 @@ internal sealed class AlchemyLoadoutNativeBindings
         Func<object, object?> instanceRecipe, Func<object, int> queued,
         Func<object, int> remainingFree, Func<object, int> remainingMaximum,
         Func<object, BigDouble> maximumTimes, Func<object, bool> costEmpty,
-        Func<object?> multiBuy, Func<object, int> asInt, Action<object, object> engage,
-        Action<object, object> disengage, Action<object, int, int> swap, Action<object> update)
+        Action<object, object, int> addInstances,
+        Action<object, object, int> removeInstances,
+        Action<object, int, int> swap, Action<object> update)
     {
         RecipeType = recipeType; ManagerType = managerType; Manager = manager;
         ActiveList = activeList; Discovered = discovered; UsageCost = usageCost;
         FreeUses = freeUses; MaximumUses = maximumUses; CanAdd = canAdd; Values = values;
         InstanceRecipe = instanceRecipe; Queued = queued; RemainingFree = remainingFree;
         RemainingMaximum = remainingMaximum; MaximumTimes = maximumTimes; CostEmpty = costEmpty;
-        MultiBuy = multiBuy; AsInt = asInt; Engage = engage; Disengage = disengage;
+        AddInstances = addInstances; RemoveInstances = removeInstances;
         Swap = swap; Update = update;
     }
 
@@ -65,10 +64,8 @@ internal sealed class AlchemyLoadoutNativeBindings
     internal Func<object, int> RemainingMaximum { get; }
     internal Func<object, BigDouble> MaximumTimes { get; }
     internal Func<object, bool> CostEmpty { get; }
-    internal Func<object?> MultiBuy { get; }
-    internal Func<object, int> AsInt { get; }
-    internal Action<object, object> Engage { get; }
-    internal Action<object, object> Disengage { get; }
+    internal Action<object, object, int> AddInstances { get; }
+    internal Action<object, object, int> RemoveInstances { get; }
     internal Action<object, int, int> Swap { get; }
     internal Action<object> Update { get; }
 
@@ -90,38 +87,36 @@ internal sealed class AlchemyLoadoutNativeBindings
             var list = T(2, "AlchemyInstanceListVariable");
             var instance = T(3, "AlchemyInstance");
             var cost = T(4, "ResourceCostList");
-            var integer = T(5, "IntVariable");
-            var globals = T(6, "GlobalVariables");
             var big = resolveType("BigDouble") ?? typeof(BigDouble);
-            var manager = StaticField(7, managerType, "instance", managerType, includeContract);
-            var active = Field(8, managerType, "activeAlchemy", list, includeContract);
-            var discovered = Method(9, recipe, "IsDiscovered", typeof(bool), includeContract);
-            var usage = Method(10, recipe, "GetUsageCost", cost, includeContract);
-            var free = Method(11, recipe, "GetFreeUsageSlots", typeof(int), includeContract);
-            var maximum = Method(12, recipe, "GetMaxUsageSlots", typeof(int), includeContract);
-            var canAdd = Method(13, list, "CanAddInstance", typeof(bool), includeContract, recipe);
-            var values = Field(14, list, "value",
+            var manager = StaticField(5, managerType, "instance", managerType, includeContract);
+            var active = Field(6, managerType, "activeAlchemy", list, includeContract);
+            var discovered = Method(7, recipe, "IsDiscovered", typeof(bool), includeContract);
+            var usage = Method(8, recipe, "GetUsageCost", cost, includeContract);
+            var free = Method(9, recipe, "GetFreeUsageSlots", typeof(int), includeContract);
+            var maximum = Method(10, recipe, "GetMaxUsageSlots", typeof(int), includeContract);
+            var canAdd = Method(11, list, "CanAddInstance", typeof(bool), includeContract, recipe);
+            var values = Field(12, list, "value",
                 typeof(System.Collections.Generic.List<>).MakeGenericType(instance), includeContract);
-            var reference = Method(15, instance, "get_reference", recipe, includeContract);
-            var queued = Method(16, instance, "GetQueuedQuantity", typeof(int), includeContract);
-            var remainingFree = Method(17, instance, "GetRemainingFreeUsageSlots", typeof(int), includeContract);
-            var remainingMax = Method(18, instance, "GetRemainingMaxUsageSlots", typeof(int), includeContract);
-            var maximumTimes = Method(19, cost, "MaximumCostTimes", big, includeContract);
-            var empty = Method(20, cost, "IsEmpty", typeof(bool), includeContract);
-            var getMultiBuy = StaticMethod(21, globals, "GetMultiBuy", integer, includeContract);
-            var asInt = Method(22, integer, "AsInt", typeof(int), includeContract);
-            var engage = Method(23, list, "EngageAlchemy", typeof(void), includeContract, recipe);
-            var disengage = Method(24, list, "DisengageAlchemy", typeof(void), includeContract, recipe);
-            var swap = Method(25, list, "SwapPositions", typeof(void), includeContract,
+            var reference = Method(13, instance, "get_reference", recipe, includeContract);
+            var queued = Method(14, instance, "GetQueuedQuantity", typeof(int), includeContract);
+            var remainingFree = Method(15, instance, "GetRemainingFreeUsageSlots", typeof(int), includeContract);
+            var remainingMax = Method(16, instance, "GetRemainingMaxUsageSlots", typeof(int), includeContract);
+            var maximumTimes = Method(17, cost, "MaximumCostTimes", big, includeContract);
+            var empty = Method(18, cost, "IsEmpty", typeof(bool), includeContract);
+            var add = Method(19, list, "AddAlchemyInstances", typeof(void), includeContract,
+                recipe, typeof(int));
+            var remove = Method(20, list, "RemoveAlchemyInstances", typeof(void), includeContract,
+                recipe, typeof(int));
+            var swap = Method(21, list, "SwapPositions", typeof(void), includeContract,
                 typeof(int), typeof(int));
-            var update = Method(26, list, "UpdateObservable", typeof(void), includeContract);
+            var update = Method(22, list, "UpdateObservable", typeof(void), includeContract);
 
             bindings = new AlchemyLoadoutNativeBindings(recipe, managerType,
                 StaticObject(manager), ObjectField(active), Func<bool>(discovered),
                 ObjectFunc(usage), Func<int>(free), Func<int>(maximum), Func2<bool>(canAdd),
                 ListField(values), ObjectFunc(reference), Func<int>(queued), Func<int>(remainingFree),
                 Func<int>(remainingMax), Func<BigDouble>(maximumTimes), Func<bool>(empty),
-                StaticObject(getMultiBuy), Func<int>(asInt), Action2(engage), Action2(disengage),
+                ActionObjectInt(add), ActionObjectInt(remove),
                 Action3(swap), Action1(update));
             reason = string.Empty;
             return true;
@@ -147,16 +142,6 @@ internal sealed class AlchemyLoadoutNativeBindings
         var method = owner.GetMethod(name, Instance, null, parameters, null);
         if (method is null || method.IsStatic || method.ReturnType != result)
             throw new InvalidOperationException(owner.Name + "." + name + " did not match the audited signature");
-        return method;
-    }
-
-    private static MethodInfo StaticMethod(int index, Type owner, string name, Type result,
-        Func<string, bool> include)
-    {
-        Require(index, include);
-        var method = owner.GetMethod(name, Static, null, Type.EmptyTypes, null);
-        if (method is null || !method.IsStatic || method.ReturnType != result)
-            throw new InvalidOperationException(owner.Name + "." + name + " did not match the audited static signature");
         return method;
     }
 
@@ -204,13 +189,15 @@ internal sealed class AlchemyLoadoutNativeBindings
             target, argument).Compile();
     }
 
-    private static Action<object, object> Action2(MethodInfo method)
+    private static Action<object, object, int> ActionObjectInt(MethodInfo method)
     {
         var target = Expression.Parameter(typeof(object), "target");
         var argument = Expression.Parameter(typeof(object), "argument");
-        return Expression.Lambda<Action<object, object>>(Expression.Call(
+        var amount = Expression.Parameter(typeof(int), "amount");
+        return Expression.Lambda<Action<object, object, int>>(Expression.Call(
             Expression.Convert(target, method.DeclaringType!), method,
-            Expression.Convert(argument, method.GetParameters()[0].ParameterType)), target, argument).Compile();
+            Expression.Convert(argument, method.GetParameters()[0].ParameterType), amount),
+            target, argument, amount).Compile();
     }
 
     private static Action<object, int, int> Action3(MethodInfo method)
