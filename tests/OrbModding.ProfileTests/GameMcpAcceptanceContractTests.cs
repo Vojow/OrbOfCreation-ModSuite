@@ -115,6 +115,15 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(row["modifiers"]);
         Assert.Equal(239, System.Text.Encoding.UTF8.GetByteCount(
             response.ToString(Newtonsoft.Json.Formatting.None)));
+
+        var list = GameMcpTestHarness.Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(world, generation: 1003),
+            "resources",
+            0,
+            10));
+        var listed = Assert.Single(list["rows"]!.Values<JObject>())!;
+        Assert.Equal((string?)row["amount"], (string?)listed["amount"]);
+        Assert.Equal("5e24", (string?)listed["amount"]);
     }
 
     [Fact]

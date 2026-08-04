@@ -245,6 +245,8 @@ internal static class GameMcpWorldQuery
                 ["slots"] = snapshotLoadout.Slots,
             }.Freeze();
         }
+        if (row is WorldResource resource)
+            return ProjectResource(in resource);
         if (row is WorldPlotAction plotAction)
             return ProjectPlotAction(world, in plotAction);
         return new GameMcpProjectedDomainValue(
