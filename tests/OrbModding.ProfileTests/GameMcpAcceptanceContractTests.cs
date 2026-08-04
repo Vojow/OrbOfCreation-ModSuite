@@ -478,6 +478,7 @@ public sealed class GameMcpProtocolSurfaceTests
             "game_purchase", "game_cast", "game_concept", "game_agromancy",
             "game_structure",
             "game_return_to_menu",
+            "game_modal",
             "game_spell_level", "game_casting_dial", "game_spell_loadout", "game_discover",
             "game_equipment", "game_alchemy", "game_ritual", "suite_config_set",
             "game_loadout",

@@ -12,6 +12,7 @@ internal enum GameMcpGadgetAccess
     TooltipCatalog = 5,
     TooltipRead = 6,
     ContinueRun = 7,
+    Modal = 8,
 }
 
 /// <summary>Closed-world names for native probes whose implementations are fixed in the mod.</summary>
@@ -26,6 +27,7 @@ internal static class GameMcpGadgetPolicy
         GameMcpCommandKind.TooltipCatalog => GameMcpGadgetAccess.TooltipCatalog,
         GameMcpCommandKind.TooltipRead => GameMcpGadgetAccess.TooltipRead,
         GameMcpCommandKind.ContinueRun => GameMcpGadgetAccess.ContinueRun,
+        GameMcpCommandKind.Modal => GameMcpGadgetAccess.Modal,
         _ => throw new ArgumentException(
             "the command does not name a request-time MCP gadget",
             nameof(kind)),

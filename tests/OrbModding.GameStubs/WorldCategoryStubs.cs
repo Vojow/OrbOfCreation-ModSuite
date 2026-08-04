@@ -1083,6 +1083,27 @@ public sealed class BattleManager
     }
 }
 
+public sealed class UIModal : UnityEngine.Object
+{
+    private bool isOpen;
+    private bool isClosing;
+    private float graceTime;
+    public bool SuppressClose { get; set; }
+    public bool IsOpen() => isOpen;
+    public void OpenForTest(float grace = 0f)
+    {
+        isOpen = true;
+        isClosing = false;
+        graceTime = grace;
+    }
+    public void FinishCloseForTest() => isOpen = false;
+    public void CloseModal()
+    {
+        if (!isOpen || isClosing || graceTime > 0f || SuppressClose) return;
+        isClosing = true;
+    }
+}
+
 public sealed class AchievementSO : IdScriptableObject
 {
     public static List<AchievementSO> All = new List<AchievementSO>();

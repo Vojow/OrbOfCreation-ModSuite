@@ -12,7 +12,7 @@ public sealed class GameMcpFrameRoutingContractTests
     public void EveryAdvertisedToolBuildsOneImmutableOperationForTheSoleInbox()
     {
         var tools = GameMcpAcceptanceFixture.Tools();
-        Assert.Equal(40, tools.Count);
+        Assert.Equal(41, tools.Count);
         var inbox = new GameMcpFrameInbox();
         var operations = tools
             .Select(tool => GameMcpProtocolRouter.BuildOperation(
@@ -150,6 +150,7 @@ public sealed class GameMcpFrameRoutingContractTests
         "world_overview" or "world_categories" or "suite_configuration" or
             "trace_health" or "game_screenshot" or "game_screen_catalog" or
             "game_continue" or "game_return_to_menu" => new JObject(),
+            "game_modal" => new JObject { ["mode"] = "dismiss" },
         "world_list" => new JObject { ["category"] = "resources" },
         "world_get" => new JObject
         {

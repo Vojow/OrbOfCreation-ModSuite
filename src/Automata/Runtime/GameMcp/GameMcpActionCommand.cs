@@ -43,6 +43,7 @@ internal enum GameMcpCommandKind
     HarvestLifecycle = 32,
     StructureLifecycle = 33,
     ReturnToMenu = 34,
+    Modal = 35,
 }
 
 internal static class GameMcpCommandKinds
@@ -89,6 +90,7 @@ internal static class GameMcpCommandKinds
         "game_loadout" => GameMcpCommandKind.Loadout,
         "game_structure" => GameMcpCommandKind.StructureLifecycle,
         "game_return_to_menu" => GameMcpCommandKind.ReturnToMenu,
+        "game_modal" => GameMcpCommandKind.Modal,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
         "suite_emergency_stop" => GameMcpCommandKind.EmergencyStop,
         "game_screenshot" => GameMcpCommandKind.Screenshot,
@@ -148,6 +150,7 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.HarvestLifecycle => "game_agromancy",
         GameMcpCommandKind.StructureLifecycle => "game_structure",
         GameMcpCommandKind.ReturnToMenu => "game_return_to_menu",
+        GameMcpCommandKind.Modal => "game_modal",
         _ => string.Empty,
     };
 }

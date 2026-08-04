@@ -54,6 +54,7 @@ public sealed class Plugin : BaseUnityPlugin
     private GameMcpWritableSettingDescriptor[] _gameMcpWritableConfiguration =
         Array.Empty<GameMcpWritableSettingDescriptor>();
     private GameMcpTooltipNativeAccess? _gameMcpTooltipNativeAccess;
+    private ModalDismissGameAction? _modalDismissGameAction;
     private string _gameMcpTooltipContractFailure =
         "tooltip native layout has not been bound";
 #else
@@ -297,6 +298,7 @@ public sealed class Plugin : BaseUnityPlugin
                 _gameMcpTooltipContractFailure);
         }
         _gameMcpWritableConfiguration = _automataConfig.CreateGameMcpWritableSchema();
+        _modalDismissGameAction = new ModalDismissGameAction(() => _lifecycleGeneration);
         _gameMcpOperations = new GameMcpFrameInbox();
         _gameMcpServer = GameMcpHttpServer.TryStart(
             _gameMcpOperations,
@@ -1142,6 +1144,8 @@ public sealed class Plugin : BaseUnityPlugin
         _gameMcpOperations = null;
         _gameMcpWritableConfiguration = Array.Empty<GameMcpWritableSettingDescriptor>();
         _gameMcpTooltipNativeAccess = null;
+        _modalDismissGameAction?.Dispose();
+        _modalDismissGameAction = null;
         _gameMcpTooltipContractFailure = "tooltip native layout has been released";
 #endif
         _startStatusView?.Dispose();
@@ -1357,6 +1361,9 @@ public sealed class Plugin : BaseUnityPlugin
         _lifecycleGeneration = transition.Current.Generation;
         EntityIdentityCatalog.Shared.Reset(_lifecycleGeneration);
         _serviceCycleActivation?.InvalidateLifecycle();
+#if SERVICE_CYCLE_PROFILE
+        _modalDismissGameAction?.InvalidateLifecycle();
+#endif
         _automataActionFamilyOwnership?.ReleaseLifecycleClaims();
         if (_configurationStore is not null)
             _featureStatuses?.ObserveLifecycleNotReady(
@@ -1645,7 +1652,7 @@ public sealed class Plugin : BaseUnityPlugin
             return true;
         }
         if (command.Kind is >= GameMcpCommandKind.Screenshot and
-            <= GameMcpCommandKind.ContinueRun)
+            <= GameMcpCommandKind.ContinueRun or GameMcpCommandKind.Modal)
         {
             if (!TryExecuteGameMcpGadget(command, out var gadgetResult))
             {
@@ -2408,6 +2415,24 @@ public sealed class Plugin : BaseUnityPlugin
             }
             return true;
         }
+        if (access == GameMcpGadgetAccess.Modal)
+        {
+            if (_modalDismissGameAction is null)
+            {
+                result = GadgetRejected("contract_unavailable",
+                    "The native modal close control is unavailable.");
+                return true;
+            }
+            var submission = _modalDismissGameAction.Submit(command.ExpectedLifecycleGeneration);
+            if (!submission.Committed)
+            {
+                result = GadgetRejected(submission.Code, submission.Reason);
+                return true;
+            }
+            StartCoroutine(CompleteModalDismissGameMcp(command));
+            result = null!;
+            return false;
+        }
 
         result = access switch
         {
@@ -2427,6 +2452,36 @@ public sealed class Plugin : BaseUnityPlugin
             return false;
         }
         return true;
+    }
+
+    private IEnumerator CompleteModalDismissGameMcp(GameMcpCommand command)
+    {
+        var deadline = Time.realtimeSinceStartup + GameMcpPostStateSettlement.MaximumWaitSeconds;
+        while (Time.realtimeSinceStartup < deadline)
+        {
+            yield return null;
+            var dismissed = false;
+            var reason = string.Empty;
+            if (_modalDismissGameAction is null ||
+                !_modalDismissGameAction.TryObserveDismissed(
+                    command.ExpectedLifecycleGeneration,
+                    out dismissed,
+                    out reason))
+            {
+                CompleteGameMcpCommand(command, GameMcpCommandResult.Faulted(
+                    "modal_state_unavailable",
+                    reason.Length == 0 ? "The modal settled state is unavailable." : reason));
+                yield break;
+            }
+            if (!dismissed) continue;
+            CompleteGameMcpCommand(command, GadgetCommitted(
+                "modal_dismissed",
+                new GameMcpObjectBuilder { ["open"] = false }));
+            yield break;
+        }
+        CompleteGameMcpCommand(command, GameMcpCommandResult.Faulted(
+            "requested_state_not_reached",
+            "The modal began closing but remained open after settlement."));
     }
 
     private GameMcpCommandResult ContinueRunGameMcp()

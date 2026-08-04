@@ -224,6 +224,9 @@ internal sealed class GameMcpProtocolRouter
             case "game_return_to_menu":
             case "game_screen_catalog":
                 break;
+            case "game_modal":
+                builder.Mode = RequireOneOf(arguments, "mode", "dismiss");
+                break;
             case "world_list":
                 builder.Category = RequireString(arguments, "category");
                 builder.Offset = OptionalInt(arguments, "offset", 0);
@@ -495,7 +498,7 @@ internal sealed class GameMcpProtocolRouter
                 !(name == "game_discover" && request.Mode == "preview") &&
                 !(name == "game_spell_loadout" && request.Mode is "preview" or "staged") =>
                 GameMcpOperationClass.Gameplay,
-        "game_navigate" or "game_continue" => GameMcpOperationClass.UiState,
+        "game_navigate" or "game_continue" or "game_modal" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
         "game_screenshot" when request.SaveCapture => GameMcpOperationClass.SuiteAdministration,
         "suite_config_set" or "suite_emergency_stop" =>
@@ -526,7 +529,7 @@ internal sealed class GameMcpProtocolRouter
             "game_ritual" or "game_level" or "game_loadout" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
         "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
-        "game_navigate" or "game_continue" =>
+        "game_navigate" or "game_continue" or "game_modal" =>
             GameMcpFrameData.World | GameMcpFrameData.Scene,
         "game_screenshot" or "game_probe" or
             "game_screen_catalog" or "game_tooltips" or "game_tooltip" =>
@@ -1003,6 +1006,16 @@ internal sealed class GameMcpProtocolRouter
                 "Return to the Start screen",
                 "While playing, invoke the game's Back to Menu button, including its authored manual-save event, and acknowledge after the native screen transition starts but before scene teardown.",
                 ObjectSchema(),
+                readOnly: false,
+                idempotent: false),
+            Tool(
+                "game_modal",
+                "Use the current modal",
+                "Dismiss the one unambiguous open native modal through its visible close control.",
+                ObjectSchema(new JObject
+                {
+                    ["mode"] = EnumSchema("dismiss"),
+                }, "mode"),
                 readOnly: false,
                 idempotent: false),
             Tool(

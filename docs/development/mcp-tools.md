@@ -149,6 +149,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
 | `game_continue` | Continue the already-selected save from the Start scene |
 | `game_return_to_menu` | Raise the native manual-save event and return from play to the Start scene |
+| `game_modal` | Dismiss the one unambiguous open native modal through its close control |
 | `game_screen_catalog` | Read compact named tabs with the active tab/subtab marked and grouped |
 | `game_navigate` | Navigate a catalog tab/subtab and optional published plot UUID |
 | `game_tooltips` | Page through active tooltip-bearing elements by exact indexed path |
@@ -1011,6 +1012,13 @@ There is deliberately no process-exit tool. Both installed quit entry points cal
 `UnityEngine.Application.Quit` directly and expose no game-written state that can be verified while
 the process remains able to deliver an MCP response. See
 `docs/reverse-engineering/clean-exit-boundary.md` for the audited drop.
+
+`game_modal(mode="dismiss")` drives the visible close control on the one open native `UIModal`.
+It refuses when there is no modal, when more than one modal makes the target ambiguous, or while
+the native grace period still disables closing. The action invokes `UIModal.CloseModal()`, verifies
+the game-owned closing flag, then waits up to the shared one-second settlement bound for no open
+modal before returning `open: false`. It does not click modal-specific confirm, purchase, reset, or
+destructive buttons.
 
 `game_screen_catalog` reads the live Main-scene UI. Top tabs retain native rail order. Current
 subtabs are active `UIViewRadioButton` controls under the current native content area. Inactive

@@ -23744,6 +23744,38 @@
     {
       "id": "return-to-menu.screen-flash-active-action", "assembly": "assembly-csharp", "type": "UIScreenFlash", "typeVisibility": "public", "kind": "field", "member": "isActive",
       "visibility": "private", "static": false, "valueType": "System.Boolean", "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "modal-dismiss.resources.type-action", "assembly": "unity-engine-core-module", "type": "UnityEngine.Resources", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "modal-dismiss.unity-object.type-action", "assembly": "unity-engine-core-module", "type": "UnityEngine.Object", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "modal-dismiss.modal.type-action", "assembly": "assembly-csharp", "type": "UIModal", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "modal-dismiss.find-all-action", "assembly": "unity-engine-core-module", "type": "UnityEngine.Resources", "typeVisibility": "public", "kind": "method", "member": "FindObjectsOfTypeAll",
+      "visibility": "public", "static": true, "returnType": "UnityEngine.Object[]", "parameters": ["System.Type"], "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "modal-dismiss.modal-open-action", "assembly": "assembly-csharp", "type": "UIModal", "typeVisibility": "public", "kind": "method", "member": "IsOpen",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "modal-dismiss.modal-closing-action", "assembly": "assembly-csharp", "type": "UIModal", "typeVisibility": "public", "kind": "field", "member": "isClosing",
+      "visibility": "private", "static": false, "valueType": "System.Boolean", "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "modal-dismiss.modal-grace-action", "assembly": "assembly-csharp", "type": "UIModal", "typeVisibility": "public", "kind": "field", "member": "graceTime",
+      "visibility": "private", "static": false, "valueType": "System.Single", "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "modal-dismiss.modal-close-action", "assembly": "assembly-csharp", "type": "UIModal", "typeVisibility": "public", "kind": "method", "member": "CloseModal",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [], "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
     }
   ],
   "sourceAudit": {
