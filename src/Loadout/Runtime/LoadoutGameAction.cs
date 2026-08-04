@@ -109,14 +109,14 @@ internal sealed class LoadoutGameAction : IDisposable
                     return Reject(LoadoutPreflight.SlotEmpty,
                         "Snapshot slot " + action.Slot + " is empty.");
                 if (action.Kind == LoadoutActionKind.SnapshotSave &&
+                    !TryValidateActive(native, manager, snapshotIsAlchemy, out reason))
+                    return Reject(LoadoutPreflight.EntryUnavailable, reason);
+                if (action.Kind == LoadoutActionKind.SnapshotSave &&
                     IsActiveSectionEmpty(native, manager, snapshotIsAlchemy))
                     return Reject(LoadoutPreflight.ActiveSectionEmpty,
                         "There is nothing staged in the active " +
                         (snapshotIsAlchemy ? "Alchemy" : "Equipment") +
                         " section to save.");
-                if (action.Kind == LoadoutActionKind.SnapshotSave &&
-                    !TryValidateActive(native, manager, snapshotIsAlchemy, out reason))
-                    return Reject(LoadoutPreflight.EntryUnavailable, reason);
                 if (action.Kind == LoadoutActionKind.SnapshotLoad)
                 {
                     if (!TryValidateSnapshot(native, manager, target!, snapshotIsAlchemy, out reason))

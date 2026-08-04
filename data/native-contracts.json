@@ -8279,25 +8279,6 @@
       "place": "capture"
     },
     {
-      "id": "resource-drain.ratio",
-      "assembly": "assembly-csharp",
-      "type": "ResourceDrain",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetRatio",
-      "visibility": "public",
-      "static": false,
-      "returnType": "BigDouble",
-      "parameters": [],
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
       "id": "resource-drain.current-ratio",
       "assembly": "assembly-csharp",
       "type": "ResourceDrain",
@@ -14098,25 +14079,6 @@
       "place": "capture"
     },
     {
-      "id": "tooltipable-object.get-name-picker",
-      "assembly": "assembly-csharp",
-      "type": "TooltipableObject",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetName",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.String",
-      "parameters": [],
-      "owners": [
-        "Auto Items temporary-item picker"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
       "id": "tooltipable-object.get-name",
       "assembly": "assembly-csharp",
       "type": "TooltipableObject",
@@ -15264,25 +15226,6 @@
       "visibility": "public",
       "static": false,
       "valueType": "ResourceCostList",
-      "owners": [
-        "Automata world collection"
-      ],
-      "usages": [
-        "reflection"
-      ],
-      "place": "capture"
-    },
-    {
-      "id": "consumable.get-maximum-carry-load",
-      "assembly": "assembly-csharp",
-      "type": "ConsumableSO",
-      "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetMaximumCarryLoad",
-      "visibility": "public",
-      "static": false,
-      "returnType": "System.Int32",
-      "parameters": [],
       "owners": [
         "Automata world collection"
       ],
@@ -19814,16 +19757,15 @@
       "place": "capture"
     },
     {
-      "id": "consumable.cost-get-value-capture",
+      "id": "consumable.cost-value-capture",
       "assembly": "assembly-csharp",
       "type": "ResourceTuple",
       "typeVisibility": "public",
-      "kind": "method",
-      "member": "GetValue",
+      "kind": "field",
+      "member": "valueBig",
       "visibility": "public",
       "static": false,
-      "returnType": "BigDouble",
-      "parameters": [],
+      "valueType": "BigDouble",
       "owners": ["Automata consumable world collection"],
       "usages": ["reflection"],
       "place": "capture"

@@ -120,7 +120,7 @@ public sealed class ConsumablePlayerContractTests
             "consumable-inventory.can-use-capture",
             "consumable.can-fire-capture",
             "consumable.cost-has-enough-capture",
-            "consumable.cost-get-value-capture",
+            "consumable.cost-value-capture",
         };
 
         Assert.All(expected, id =>

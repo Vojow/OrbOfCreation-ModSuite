@@ -525,7 +525,7 @@ internal sealed class WorldConsumableReader : IWorldCategoryReader
         var costEntry = NativeAccessorBinder.CollectionElementType(consumeCostType, "costs");
         var costBind = bind.Elements(costEntry, "ResourceCostList.costs[]");
         _costResourceId = costBind.ReferenceGuid("resource");
-        _costAmount = costBind.Call<BigDouble>("GetValue");
+        _costAmount = costBind.Field<BigDouble>("valueBig");
 
         _usages = bind.CollectionField("consumableUsages");
         _usageType = bind.CollectionElementType("consumableUsages");
