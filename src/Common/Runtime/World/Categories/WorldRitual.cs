@@ -417,7 +417,10 @@ internal sealed class WorldRitualDecisionBinding
     private readonly Func<object, int>? _maximumStartingLevel;
     private readonly Func<object, bool>? _usageRequirementsMet;
     private readonly Func<object, object?>? _activationCost;
-    private readonly Func<object, object?>? _completionCost;
+    private readonly Func<object, object?>? _fillList;
+    private readonly Func<object, IList?>? _fillEntries;
+    private readonly Func<object, object?>? _fillResource;
+    private readonly Func<object, BigDouble>? _fillCapacity;
     private readonly Func<object, bool>? _hasEnough;
     private readonly Func<object, IList?>? _costEntries;
     private readonly Func<object, object?>? _costResource;
@@ -431,8 +434,10 @@ internal sealed class WorldRitualDecisionBinding
         var costType = resolveType("ResourceCostList");
         var tupleType = resolveType("ResourceTuple");
         var resourceType = resolveType("ResourceSO");
+        var fillType = resolveType("ResourceFillList");
+        var fillEntryType = resolveType("ResourceFillList+ResourceFillEntry");
         if (_managerType is null || variableType is null || costType is null ||
-            tupleType is null || resourceType is null)
+            tupleType is null || resourceType is null || fillType is null || fillEntryType is null)
         {
             Failure = "Ritual decision types were unavailable";
             return;
@@ -445,7 +450,7 @@ internal sealed class WorldRitualDecisionBinding
         _maximumStartingLevel = ritual.Call<int>("GetMaxSelectedLevel");
         _usageRequirementsMet = ritual.Call<bool>("HasMetUsageRequirements");
         _activationCost = ritual.CallObject("GetActivationCost", costType);
-        _completionCost = ritual.CallObject("GetSelectedCompletionCost", costType);
+        _fillList = ritual.Reference("resourceFillList", fillType);
 
         var cost = new WorldMemberBinding(costType, "ResourceCostList");
         _hasEnough = cost.Call<bool>("HasEnough");
@@ -458,6 +463,9 @@ internal sealed class WorldRitualDecisionBinding
         var tuple = new WorldMemberBinding(tupleType, "ResourceTuple");
         _costResource = tuple.Reference("resource", resourceType);
         _costValue = tuple.Call<BigDouble>("GetValue");
+        _fillEntries = NativeAccessorBinder.CollectionField(fillType, "entries");
+        _fillResource = NativeAccessorBinder.CallObject(fillEntryType, "get_resource", resourceType);
+        _fillCapacity = NativeAccessorBinder.Call<BigDouble>(fillEntryType, "GetCapacity");
         var resource = new WorldMemberBinding(resourceType, "ResourceSO");
         _resourceId = resource.Call<Guid>("GetGuid");
 
@@ -465,6 +473,9 @@ internal sealed class WorldRitualDecisionBinding
             _manager is null ? "RitualManager.instance was unavailable" : string.Empty,
             _selectedVariable is null ? "RitualManager.selectedRitual was unavailable" : string.Empty,
             _isSelected is null ? "RitualVariable.IsItem was unavailable" : string.Empty,
+            _fillEntries is null || _fillResource is null || _fillCapacity is null
+                ? "Ritual completion fill bindings were unavailable"
+                : string.Empty,
             ritual.Failure,
             cost.Failure,
             tuple.Failure,
@@ -489,15 +500,15 @@ internal sealed class WorldRitualDecisionBinding
 
         var activation = _activationCost!(ritual) ??
             throw new InvalidOperationException("RitualSO.GetActivationCost returned null");
-        var completion = _completionCost!(ritual) ??
-            throw new InvalidOperationException("RitualSO.GetSelectedCompletionCost returned null");
+        var completion = _fillList!(ritual) ??
+            throw new InvalidOperationException("RitualSO.resourceFillList was unavailable");
         return new WorldRitualDecision(
             true,
             _maximumStartingLevel!(ritual),
             _usageRequirementsMet!(ritual),
             _hasEnough!(activation),
             ReadCosts(activation),
-            ReadCosts(completion));
+            ReadFillCapacities(completion));
     }
 
     private PublicationTable<WorldRitualCost> ReadCosts(object cost)
@@ -513,6 +524,23 @@ internal sealed class WorldRitualDecisionBinding
                 throw new InvalidOperationException("Ritual cost row " + index + " had no resource");
             rows[index] = new WorldRitualCost(
                 _resourceId!(resource), _costValue!(entry));
+        }
+        return PublicationTable<WorldRitualCost>.Create(rows);
+    }
+
+    private PublicationTable<WorldRitualCost> ReadFillCapacities(object fill)
+    {
+        var entries = _fillEntries!(fill) ??
+            throw new InvalidOperationException("ResourceFillList.entries was unavailable");
+        var rows = new WorldRitualCost[entries.Count];
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var entry = entries[index] ??
+                throw new InvalidOperationException("Ritual completion fill row " + index + " was null");
+            var resource = _fillResource!(entry) ??
+                throw new InvalidOperationException("Ritual completion fill row " + index + " had no resource");
+            rows[index] = new WorldRitualCost(
+                _resourceId!(resource), _fillCapacity!(entry));
         }
         return PublicationTable<WorldRitualCost>.Create(rows);
     }

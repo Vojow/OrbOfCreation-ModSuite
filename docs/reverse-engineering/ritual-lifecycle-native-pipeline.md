@@ -29,6 +29,15 @@ level. `GetMaxSelectedLevel()` (`0x06001393`) is
 `max(reachedLevel + 1, Player.GetCeremonialLevel())`. A `forceLevel` ritual displays the forced
 value and disables the selector, so the action refuses rather than pretending the dial moved.
 
+`GetSelectedCompletionCost()` (`0x06001383`) derives a fresh list from the authored base,
+per-level modifier, current level, and the current `completionCostMod`. `ChangeStartingLevel`
+passes that result to `resourceFillList.ApplyCostList()`, whose `ResourceFillEntry.GetCapacity()`
+values become the staged obligation consumed by the battle. `UIRitual.RenderCompletionCost()`
+also calls the derived method, but rerenders only when the selected-level observer changes; a
+later modifier change can therefore make a fresh call disagree with the still-visible and
+still-consumed staged capacities. World publication reads the raw fill capacities, not a repeated
+derived call, so its preview describes the cost the current run will actually fill.
+
 The outcome sentinels are the selected variable's membership and the game-written
 `RitualSO.selectedLevel`. No cost or fill-list delta is verified.
 

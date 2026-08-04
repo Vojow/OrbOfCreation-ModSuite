@@ -2034,7 +2034,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         public int GetMaxInvestmentLevel() => MaxInvestmentLevel;
     }
 
-    private sealed class FakeResearchFillList
+    internal sealed class FakeResearchFillList
     {
         public List<ResourceFillEntry> entries = new();
         public BigDouble GetAverageRatio() => entries.Count == 0
@@ -2542,8 +2542,14 @@ public sealed class GameWorldCollectorTests : IDisposable
             activationCost = new FakeCraftingResourceCostList()
                 .With(knowledge, new BigDouble(5)),
             completionCost = new FakeCraftingResourceCostList()
-                .With(knowledge, new BigDouble(2)),
+                .With(knowledge, new BigDouble(999)),
         };
+        selected.resourceFillList.entries.Add(new FakeResearchFillList.ResourceFillEntry
+        {
+            resource = knowledge,
+            Quantity = BigDouble.One,
+            Capacity = new BigDouble(2),
+        });
         FakeRitual.All.Add(selected);
         FakeRitualManager.instance.selectedRitual.value = selected;
 

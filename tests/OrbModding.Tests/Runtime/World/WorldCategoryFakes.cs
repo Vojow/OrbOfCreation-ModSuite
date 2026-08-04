@@ -2049,6 +2049,7 @@ internal sealed class FakeRitual : global::IDiscoverable
     public bool usageRequirementsMet = true;
     public FakeCraftingResourceCostList activationCost = new();
     public FakeCraftingResourceCostList completionCost = new();
+    public GameWorldCollectorTests.FakeResearchFillList resourceFillList = new();
 
     public int GetMaxSelectedLevel() => maximumSelectedLevel;
     public bool HasMetUsageRequirements() => usageRequirementsMet;
