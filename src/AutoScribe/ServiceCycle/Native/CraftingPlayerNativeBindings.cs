@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Reflection;
 using OrbModding.Common;
+using UnityEngine;
 
 namespace OrbAutomata;
 
@@ -268,8 +269,8 @@ internal sealed class CraftingPlayerNativeBindings
             var big = Type("BigDouble");
             var passiveChannel = Type("PassiveObservable+Channel");
             var passiveObservable = Type("IPassiveObservable");
-            var resources = Type("UnityEngine.Resources");
-            var unityObject = Type("UnityEngine.Object");
+            var resources = typeof(Resources);
+            var unityObject = typeof(UnityEngine.Object);
 
             bindings = new CraftingPlayerNativeBindings(
                 page,

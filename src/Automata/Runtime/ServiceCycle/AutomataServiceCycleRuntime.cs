@@ -193,10 +193,22 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
     public AutomataRuntimeFrameFacts CaptureFrameFacts(bool includeServices)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(AutomataServiceCycleRuntime));
+        var playerCraftingAvailable = false;
+        var playerCraftingUnavailableReason =
+            "the player crafting action boundary was not composed";
+        for (var index = 0; index < _features.Length; index++)
+        {
+            if (_features[index] is not AutoScribeServiceCycleFeature.Runtime scribe) continue;
+            playerCraftingAvailable = scribe.PlayerCraftingBindingsAvailable;
+            playerCraftingUnavailableReason = scribe.PlayerCraftingBindingFailure;
+            break;
+        }
         return AutomataRuntimeFrameFacts.Capture(
             _host,
             _configurationPublication,
-            includeServices);
+            includeServices,
+            playerCraftingAvailable,
+            playerCraftingUnavailableReason);
     }
 
     public GameMcpCommandResult ExecuteGameMcp(GameMcpCommand command)

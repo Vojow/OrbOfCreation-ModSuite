@@ -558,6 +558,7 @@ public sealed class GameMcpProtocolSurfaceTests
         Assert.StartsWith("available\n", compact, StringComparison.Ordinal);
         Assert.Contains("features configuration_disabled: Auto Buy", compact, StringComparison.Ordinal);
         Assert.Contains("features operational: Mentor", compact, StringComparison.Ordinal);
+        Assert.Contains("game_craft: unavailable", compact, StringComparison.Ordinal);
         Assert.DoesNotContain("Orb Mentor", compact, StringComparison.Ordinal);
         Assert.DoesNotContain("mailbox", compact, StringComparison.Ordinal);
 

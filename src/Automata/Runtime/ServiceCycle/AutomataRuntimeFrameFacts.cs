@@ -19,7 +19,9 @@ internal sealed class AutomataRuntimeFrameFacts
         bool emergencyStopEngaged,
         long acceptedFrameCount,
         long currentLifecycle,
-        AutomataServiceFrameFacts[] services)
+        AutomataServiceFrameFacts[] services,
+        bool playerCraftingAvailable,
+        string playerCraftingUnavailableReason)
     {
         World = world;
         Configuration = configuration;
@@ -27,6 +29,8 @@ internal sealed class AutomataRuntimeFrameFacts
         AcceptedFrameCount = acceptedFrameCount;
         CurrentLifecycle = currentLifecycle;
         Services = services;
+        PlayerCraftingAvailable = playerCraftingAvailable;
+        PlayerCraftingUnavailableReason = playerCraftingUnavailableReason ?? string.Empty;
     }
 
     internal WorldPublication<GameWorldState> World { get; }
@@ -35,11 +39,15 @@ internal sealed class AutomataRuntimeFrameFacts
     internal long AcceptedFrameCount { get; }
     internal long CurrentLifecycle { get; }
     internal AutomataServiceFrameFacts[] Services { get; }
+    internal bool PlayerCraftingAvailable { get; }
+    internal string PlayerCraftingUnavailableReason { get; }
 
     internal static AutomataRuntimeFrameFacts Capture(
         AutomataServiceCycleHost host,
         ServiceConfigurationPublisher configuration,
-        bool includeServices)
+        bool includeServices,
+        bool playerCraftingAvailable,
+        string playerCraftingUnavailableReason)
     {
         if (host is null) throw new ArgumentNullException(nameof(host));
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
@@ -55,7 +63,9 @@ internal sealed class AutomataRuntimeFrameFacts
             host.EmergencyStopEngaged,
             diagnostics.AcceptedFrameCount,
             checked((long)host.CurrentLifecycle.Value),
-            services);
+            services,
+            playerCraftingAvailable,
+            playerCraftingUnavailableReason);
     }
 
     private static AutomataServiceFrameFacts[] CaptureServices(

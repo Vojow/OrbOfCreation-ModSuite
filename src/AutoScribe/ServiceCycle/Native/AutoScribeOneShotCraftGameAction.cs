@@ -44,6 +44,8 @@ internal sealed partial class AutoScribeOneShotCraftGameAction : IDisposable
 
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
+    internal bool PlayerCraftingBindingsAvailable => _playerBindings is not null;
+    internal string PlayerCraftingBindingFailure => _playerBindingFailure;
     internal bool IsQuarantined => _quarantineReason.Length != 0;
     internal string QuarantineReason => _quarantineReason;
 

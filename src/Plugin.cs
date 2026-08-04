@@ -1816,10 +1816,16 @@ public sealed class Plugin : BaseUnityPlugin
             .Append("runtime: ").AppendLine(context.RuntimeAvailable ? "available" : "unavailable")
             .Append("native contracts: ").AppendLine(
                 context.NativeContractsAvailable ? "available" : "unavailable")
+            .Append("game_craft: ").AppendLine(
+                context.Runtime?.PlayerCraftingAvailable == true ? "available" : "unavailable")
             .Append("emergency stop: ").AppendLine(stopped ? "engaged" : "clear");
         if (!context.RuntimeAvailable && context.RuntimeNotAvailableReason.Length > 0)
             result.Append("runtime reason: ").AppendLine(
                 GameMcpTextFormatter.Plain(context.RuntimeNotAvailableReason));
+        else if (context.Runtime is { PlayerCraftingAvailable: false } runtime &&
+                 runtime.PlayerCraftingUnavailableReason.Length > 0)
+            result.Append("game_craft reason: ").AppendLine(
+                GameMcpTextFormatter.Plain(runtime.PlayerCraftingUnavailableReason));
 
         var featureGroups = context.FeatureStatuses
             .GroupBy(feature => new { feature.State, feature.Reason.Code })

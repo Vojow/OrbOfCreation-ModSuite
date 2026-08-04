@@ -84,6 +84,12 @@ internal sealed class AutoScribeServiceCycleFeature : IAutomataServiceCycleFeatu
         internal CraftingPlayerSubmission TryExecuteGameMcp(in CraftingPlayerAction action) =>
             _gameAction.Submit(in action);
 
+        internal bool PlayerCraftingBindingsAvailable =>
+            _gameAction.PlayerCraftingBindingsAvailable;
+
+        internal string PlayerCraftingBindingFailure =>
+            _gameAction.PlayerCraftingBindingFailure;
+
         public void DisposeRegistration()
         {
             _registration.Dispose();
