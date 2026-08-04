@@ -140,7 +140,6 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_alchemy` | Add, remove, or reorder one ordinary Alchemy recipe through its visible list |
 | `game_ritual` | Select a Ritual, set its starting level, activate it, or cancel its duration reward |
 | `game_level` | Buy one paid or bonus level from an ordinary level-list control |
-| `game_brewing_station` | Select Brewing Station ingredients/output, set level, or start/stop brewing |
 | `game_loadout` | Switch or edit the active player loadout, or save/load/clear an Equipment or Alchemy snapshot slot |
 | `game_challenge` | Select, activate, abandon, or fetch the Time/prestige challenge offers |
 | `game_prestige` | Confirm and perform the irreversible persistent reset |
@@ -434,24 +433,18 @@ main thread, then invokes the screen's `ToggleDisabled()` route. Success returns
 reaching the requested state; `ApplyEffects` and `RemoveEffects` remain native consequences of
 that callback and are not independently replayed or audited by the suite.
 
-### Brewing Station lifecycle
+### Alchemy screen ownership
 
-The `crafting-stations` category is the complete pre-decision surface for the Brewing Station
-screen. A detail row names the runtime station and its selected ingredients/output, loaded and
-active state, selected/native level range, the two ordered ingredient-option lists, visible output
-options, and the current named per-second resource drain with spendable holdings. The internal
-matched-recipe UUID is not a player choice and is not part of the wire surface.
+Alchemy's Learn side uses `game_discover(surface="alchemy")`. Its Loadout side uses
+`game_alchemy` with the published recipe pool, ordered capacity-bounded slots, six type-capacity
+counters, and the same type identity the screen filter displays. Recipe mastery and Alchemy-type
+levels are game-driven progression displays, not direct purchase buttons on this screen.
 
-Call `game_brewing_station(mode="set_ingredient", uuid=...)` with `slot` 0 or 1 and a
-`selectionUuid` from that slot's options. `set_output` takes a visible output `selectionUuid`;
-`set_level` takes a level inside the published range; `start` and `stop` take no mode-specific
-fields. Every other field combination is rejected at schema validation.
-
-The action resolves the exact runtime station and repeats selector availability, output visibility,
-level range, recipe-loaded, and active-state admission on Unity's main thread. Success returns the
-observed selected value, level, or active transition and the full settled next-decision station
-state, because native selector changes can rebuild the other selections and stop brewing. Drain
-rows are planning facts, never accounting postconditions.
+There is deliberately no Brewing Station tool or category. The v1.0.5 data contains one unnamed
+legacy `CraftingStructureSO` asset, but its runtime instance list is authored empty and the entire
+data graph has no unlock/effect edge that creates one. The assembly still contains the unused
+`UIBrewingStation` renderer, but no player-facing label or live screen owns it. Publishing its
+native selectors as a verb would expose developer-era machinery the shipped UI does not offer.
 
 ### Player loadouts and snapshots
 

@@ -480,7 +480,7 @@ public sealed class GameMcpProtocolSurfaceTests
             "game_return_to_menu",
             "game_spell_level", "game_casting_dial", "game_spell_loadout", "game_discover",
             "game_equipment", "game_alchemy", "game_ritual", "suite_config_set",
-            "game_brewing_station", "game_loadout",
+            "game_loadout",
             "suite_emergency_stop", "game_screenshot", "game_continue",
             "game_navigate", "game_tooltip",
             "game_targeting",

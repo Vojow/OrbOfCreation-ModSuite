@@ -56,7 +56,7 @@ internal static class GameMcpCommandKinds
             GameMcpCommandKind.EquipmentLoadout or GameMcpCommandKind.Challenge or
             GameMcpCommandKind.Prestige or GameMcpCommandKind.Research or
             GameMcpCommandKind.AlchemyLoadout or GameMcpCommandKind.RitualLifecycle or
-            GameMcpCommandKind.GenericLevel or GameMcpCommandKind.CraftingStation or
+            GameMcpCommandKind.GenericLevel or
             GameMcpCommandKind.Loadout or GameMcpCommandKind.HarvestLifecycle or
             GameMcpCommandKind.StructureLifecycle or GameMcpCommandKind.ReturnToMenu;
 
@@ -86,7 +86,6 @@ internal static class GameMcpCommandKinds
         "game_alchemy" => GameMcpCommandKind.AlchemyLoadout,
         "game_ritual" => GameMcpCommandKind.RitualLifecycle,
         "game_level" => GameMcpCommandKind.GenericLevel,
-        "game_brewing_station" => GameMcpCommandKind.CraftingStation,
         "game_loadout" => GameMcpCommandKind.Loadout,
         "game_structure" => GameMcpCommandKind.StructureLifecycle,
         "game_return_to_menu" => GameMcpCommandKind.ReturnToMenu,
@@ -145,7 +144,6 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.AlchemyLoadout => "game_alchemy",
         GameMcpCommandKind.RitualLifecycle => "game_ritual",
         GameMcpCommandKind.GenericLevel => "game_level",
-        GameMcpCommandKind.CraftingStation => "game_brewing_station",
         GameMcpCommandKind.Loadout => "game_loadout",
         GameMcpCommandKind.HarvestLifecycle => "game_agromancy",
         GameMcpCommandKind.StructureLifecycle => "game_structure",

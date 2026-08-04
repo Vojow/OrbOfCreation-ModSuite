@@ -5171,9 +5171,6 @@ internal static class GameMcpWorldQuery
             Composite(
                 nameof(GameWorldState.CraftingQueueEntries),
                 world => world.CraftingQueueEntries),
-            Entity(nameof(GameWorldState.CraftingStations), world => world.CraftingStations),
-            Composite(nameof(GameWorldState.CraftingStationOptions), world => world.CraftingStationOptions),
-            Composite(nameof(GameWorldState.CraftingStationDrains), world => world.CraftingStationDrains),
             Entity(nameof(GameWorldState.PlayerLoadouts), world => world.PlayerLoadouts),
             Composite(nameof(GameWorldState.PlayerLoadoutEntries), world => world.PlayerLoadoutEntries),
             Entity(nameof(GameWorldState.SnapshotLoadouts), world => world.SnapshotLoadouts),
