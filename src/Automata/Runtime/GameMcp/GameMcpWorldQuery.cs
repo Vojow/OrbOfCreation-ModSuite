@@ -618,15 +618,6 @@ internal static class GameMcpWorldQuery
         GameMcpCommand command)
     {
         var slotIndex = command.Amount - 1;
-        if (!string.Equals(command.Mode, "toggle_off", StringComparison.Ordinal))
-        {
-            return new JObject
-            {
-                ["uuid"] = command.TargetId.ToString("D"),
-                ["slot"] = slotIndex,
-                ["cast"] = command.Mode == "fire" ? "fired" : "released",
-            }.Freeze();
-        }
         if (state.World is null ||
             !WorldSpellSlotLookup.TryFind(
                 state.World.Snapshot.SpellSlots,
@@ -639,19 +630,40 @@ internal static class GameMcpWorldQuery
                 "post_state_not_published",
                 "the settled loadout no longer contains that spell in the requested slot");
         }
-        var beforeCasting = Before(command) is { } before &&
-            WorldSpellSlotLookup.TryFind(before.SpellSlots, slotIndex, out var prior) &&
-            prior.Occupied && prior.SpellRecipeId == command.TargetId && prior.Casting;
-        return new JObject
+        var prior = default(WorldSpellSlot);
+        var hasBefore = Before(command) is { } before &&
+            WorldSpellSlotLookup.TryFind(before.SpellSlots, slotIndex, out prior) &&
+            prior.Occupied && prior.SpellRecipeId == command.TargetId;
+        var result = new JObject
         {
             ["uuid"] = command.TargetId.ToString("D"),
             ["slot"] = slotIndex,
-            ["active"] = new JObject
+        };
+        if (string.Equals(command.Mode, "fire", StringComparison.Ordinal))
+        {
+            var costs = ProjectEquippedSpellCosts(
+                state.World.Snapshot, slotIndex, WorldSpellCostKind.Immediate);
+            if (costs.Count > 0) result["costs"] = costs;
+        }
+        if (hasBefore && prior.Casting != after.Casting)
+        {
+            result["active"] = new JObject
             {
-                ["before"] = beforeCasting,
+                ["before"] = prior.Casting,
                 ["after"] = after.Casting,
-            },
-        }.Freeze();
+            };
+        }
+        if (hasBefore && prior.CurrentCharges != after.CurrentCharges)
+        {
+            result["charges"] = new JObject
+            {
+                ["before"] = prior.CurrentCharges,
+                ["after"] = after.CurrentCharges,
+            };
+        }
+        result["ready"] = after.CastReady;
+        result["cooldown"] = new GameMcpDomainValue(after.CooldownRemaining);
+        return result.Freeze();
     }
 
     private static GameMcpValue ProjectCastingDialDelta(

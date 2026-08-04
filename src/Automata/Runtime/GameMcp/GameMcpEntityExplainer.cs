@@ -701,7 +701,6 @@ internal static class GameMcpEntityExplainer
                     !actionQueue.Consistent
                         ? "queue_reading_inconsistent"
                         : actionQueue.HasEmptySlot ? "queue_room_available" : "queue_full");
-                queue["evidence"] = new GameMcpDomainValue(actionQueue);
             }
             else
             {

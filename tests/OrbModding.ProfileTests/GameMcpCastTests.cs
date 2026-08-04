@@ -92,6 +92,34 @@ public sealed class GameMcpCastTests
             command));
     }
 
+    [Fact]
+    public void Fire_returns_the_published_price_and_observed_slot_change()
+    {
+        var resourceId = Guid.Parse("19999999-9999-4999-8999-999999999999");
+        var before = World(casting: false, cancellationEnabled: true, charges: 2);
+        var after = World(
+            casting: true,
+            cancellationEnabled: true,
+            charges: 1,
+            immediateCostResource: resourceId,
+            immediateCost: new BigDouble(25));
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Cast, 9, 3, "fire", RecipeId, Guid.Empty,
+            "SpellRecipeSO", 1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 51));
+
+        var delta = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after, generation: 52),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3)));
+
+        Assert.Equal("25", (string?)delta["costs"]![0]!["cost"]);
+        Assert.False((bool)delta["active"]!["before"]!);
+        Assert.True((bool)delta["active"]!["after"]!);
+        Assert.Equal(2, (int)delta["charges"]!["before"]!);
+        Assert.Equal(1, (int)delta["charges"]!["after"]!);
+    }
+
     private static GameMcpCommand Command(GameMcpFrameContext before) => new(
         1,
         GameMcpCommandKind.Cast,
@@ -111,7 +139,10 @@ public sealed class GameMcpCastTests
     private static GameWorldState World(
         bool casting,
         bool cancellationEnabled,
-        long collectedAtUtcTicks = 0) => new()
+        long collectedAtUtcTicks = 0,
+        int charges = 1,
+        Guid immediateCostResource = default,
+        BigDouble immediateCost = default) => new()
     {
         CollectedAtEpoch = 9,
         CollectedAtUtcTicks = collectedAtUtcTicks,
@@ -132,7 +163,7 @@ public sealed class GameMcpCastTests
                 chargeAvailable: true,
                 canRemove: false,
                 resourcesCovered: true,
-                currentCharges: 1,
+                currentCharges: charges,
                 maximumCharges: 1,
                 cooldownRemaining: BigDouble.Zero,
                 outputLevel: 1,
@@ -144,5 +175,12 @@ public sealed class GameMcpCastTests
                 augmentGlyphs: PublicationTable<WorldSpellSlotGlyph>.Empty,
                 cancellationEnabled: cancellationEnabled),
         }),
+        SpellCosts = immediateCostResource == Guid.Empty
+            ? PublicationTable<WorldSpellCost>.Empty
+            : PublicationTable<WorldSpellCost>.Create(new[]
+            {
+                new WorldSpellCost(
+                    0, WorldSpellCostKind.Immediate, immediateCostResource, immediateCost),
+            }),
     };
 }

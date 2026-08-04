@@ -582,6 +582,7 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
             (string?)upgradeResult["predicates"]!["canPurchase"]!["reasonCode"]);
         Assert.Null(upgradeResult["purchase"]);
         Assert.True((bool)upgradeResult["blockers"]!["queue"]!["blocked"]!);
+        Assert.Null(upgradeResult["blockers"]!["queue"]!["evidence"]);
         Assert.True((bool)upgradeResult["blockers"]!["cap"]!["blocked"]!);
 
         var thresholds = researchResult["researchThresholds"]!;
