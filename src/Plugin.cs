@@ -2708,27 +2708,33 @@ public sealed class Plugin : BaseUnityPlugin
                 projectedTabs.Add(projectedTab);
                 continue;
             }
-            var projectedStrips = new GameMcpArrayBuilder();
-            var strips = subtabs.GroupBy(subtab => subtab.Strip, StringComparer.Ordinal);
-            foreach (var strip in strips)
-            {
-                var labels = new GameMcpArrayBuilder();
-                var projectedStrip = new GameMcpObjectBuilder();
-                foreach (var subtab in strip)
-                {
-                    labels.Add(subtab.Label);
-                    if (subtab.Active) projectedStrip["active"] = subtab.Label;
-                }
-                var first = strip.FirstOrDefault().Label ?? string.Empty;
-                projectedStrip["id"] = GameMcpEntityWireNormalizer.Snake(first) + "_strip";
-                projectedStrip["labels"] = labels;
-                projectedStrips.Add(projectedStrip);
-            }
-            projectedTab["subtabStrips"] = projectedStrips;
+            projectedTab["subtabStrips"] = ProjectGameMcpSubtabStrips(subtabs);
             projectedTabs.Add(projectedTab);
         }
         result["tabs"] = projectedTabs;
         return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectGameMcpSubtabStrips(
+        IEnumerable<(string Strip, string Label, bool Active)> subtabs)
+    {
+        var projectedStrips = new GameMcpArrayBuilder();
+        var strips = subtabs.GroupBy(subtab => subtab.Strip, StringComparer.Ordinal);
+        foreach (var strip in strips)
+        {
+            var labels = new GameMcpArrayBuilder();
+            var projectedStrip = new GameMcpObjectBuilder();
+            foreach (var subtab in strip)
+            {
+                labels.Add(subtab.Label);
+                if (subtab.Active) projectedStrip["active"] = subtab.Label;
+            }
+            var first = strip.FirstOrDefault().Label ?? string.Empty;
+            projectedStrip["id"] = GameMcpEntityWireNormalizer.Snake(first) + "_strip";
+            projectedStrip["labels"] = labels;
+            projectedStrips.Add(projectedStrip);
+        }
+        return projectedStrips.Freeze();
     }
 
     private bool TryBeginNavigateGameMcp(
@@ -2837,7 +2843,6 @@ public sealed class Plugin : BaseUnityPlugin
                     capture: false);
                 yield break;
             }
-            details["activeSubtab"] = subtab.Label;
             yield return null;
         }
         if (command.TargetId != Guid.Empty)
@@ -2855,6 +2860,10 @@ public sealed class Plugin : BaseUnityPlugin
             }
             details["plotNodeUuid"] = command.TargetId.ToString("D");
         }
+        var settledSubtabs = CaptureSubtabs();
+        details["subtabStrips"] = ProjectGameMcpSubtabStrips(
+            settledSubtabs.Select(
+                subtab => (subtab.StripKey, subtab.Label, subtab.Active)));
         var result = GadgetCommitted(
             "navigation_arrived",
             details);
@@ -3213,7 +3222,6 @@ public sealed class Plugin : BaseUnityPlugin
                 "projecting the exact tooltip document threw: " +
                 exception.GetBaseException().Message);
         }
-        if (command.Capture) hover.OpenTooltip();
         var result = GadgetCommitted(
             "tooltip_read",
             details);
@@ -3226,8 +3234,17 @@ public sealed class Plugin : BaseUnityPlugin
             .Where(hover =>
                 hover.enabled &&
                 hover.gameObject.activeInHierarchy)
-            .OrderBy(hover => NativeObjectPath.BuildIndexed(hover), StringComparer.Ordinal)
+            .OrderBy(hover => ScreenOrderKey(hover.transform), StringComparer.Ordinal)
             .ToArray();
+
+    private static string ScreenOrderKey(Transform transform)
+    {
+        var segments = new Stack<int>();
+        for (var current = transform; current is not null; current = current.parent)
+            segments.Push(current.GetSiblingIndex());
+        return string.Join("/", segments.Select(
+            index => index.ToString("D6", CultureInfo.InvariantCulture)));
+    }
 
     private GameMcpCommandResult ProbeGameMcp(GameMcpCommand command)
     {

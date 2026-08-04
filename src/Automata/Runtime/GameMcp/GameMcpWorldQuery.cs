@@ -1084,6 +1084,8 @@ internal static class GameMcpWorldQuery
             ["kind"] = SnapshotKind(owner.Kind),
             ["snapshot"] = snapshot,
         };
+        var internalName = SnapshotOwnerInternalName(world, in owner);
+        if (internalName.Length > 0) response["internalName"] = internalName;
         if (command.Mode == "snapshot_load")
             response["active"] = ProjectActiveLoadoutSection(world, owner.Kind);
         return response.Freeze();
@@ -1151,7 +1153,7 @@ internal static class GameMcpWorldQuery
             var row = ProjectSnapshotSlot(world, in owner, slot);
             if (row is not null) slots.Add(row);
         }
-        return new JObject
+        var result = new JObject
         {
             ["uuid"] = owner.EntityId.ToString("D"),
             ["name"] = SnapshotOwnerName(world, in owner),
@@ -1161,7 +1163,10 @@ internal static class GameMcpWorldQuery
                 : "EquipmentSnapshotListVariable",
             ["kind"] = SnapshotKind(owner.Kind),
             ["slots"] = slots,
-        }.Freeze();
+        };
+        var internalName = SnapshotOwnerInternalName(world, in owner);
+        if (internalName.Length > 0) result["internalName"] = internalName;
+        return result.Freeze();
     }
 
     private static GameMcpValue? ProjectSnapshotSlot(
@@ -1249,7 +1254,20 @@ internal static class GameMcpWorldQuery
         in WorldSnapshotLoadout owner)
     {
         var identity = EntityIdentityFormatter.Describe(owner.EntityId, world.EntityIdentities);
-        return identity.HasName ? identity.Name : SnapshotKind(owner.Kind) + " snapshots";
+        return identity.Source is EntityIdentityNameSource.LiveDisplayName or
+            EntityIdentityNameSource.KnownEntityBootstrap
+            ? identity.Name
+            : SnapshotKind(owner.Kind) + " snapshots";
+    }
+
+    private static string SnapshotOwnerInternalName(
+        GameWorldState world,
+        in WorldSnapshotLoadout owner)
+    {
+        var identity = EntityIdentityFormatter.Describe(owner.EntityId, world.EntityIdentities);
+        return identity.Source == EntityIdentityNameSource.LiveAssetName
+            ? identity.Name
+            : identity.AssetName;
     }
 
     private static string SnapshotKind(WorldSnapshotLoadoutKind kind) =>
