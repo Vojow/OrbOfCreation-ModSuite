@@ -21,16 +21,16 @@ public sealed class GameMcpPlotLifecycleTests
     public void Tool_requires_the_exact_plot_action_pair_and_visible_ui_modes()
     {
         var tool = Assert.Single(GameMcpAcceptanceFixture.Tools(),
-            candidate => (string?)candidate["name"] == "game_harvest");
+            candidate => (string?)candidate["name"] == "game_agromancy");
 
-        Assert.Equal(new[] { "mode", "uuid", "actionUuid" },
+        Assert.Equal(new[] { "mode", "uuid" },
             tool["inputSchema"]!["required"]!.Values<string>());
-        Assert.Equal(new[] { "add", "remove" },
+        Assert.Contains("add_plot_action",
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
         Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
-        var operation = GameMcpProtocolRouter.BuildOperation("game_harvest", new JObject
+        var operation = GameMcpProtocolRouter.BuildOperation("game_agromancy", new JObject
         {
-            ["mode"] = "add",
+            ["mode"] = "add_plot_action",
             ["uuid"] = PlotId.ToString("D"),
             ["actionUuid"] = ActionId.ToString("D"),
             ["amount"] = 2,
@@ -45,7 +45,7 @@ public sealed class GameMcpPlotLifecycleTests
         var world = World(prerequisitesReady: true, active: 2);
         var response = Json(GameMcpWorldQuery.ListRows(
             GameMcpTestHarness.Context(world, generation: 911),
-            "plot-actions", 0, 10).Freeze(), world);
+            "agromancy-plot-actions", 0, 10).Freeze(), world);
 
         var row = Assert.Single(response["rows"]!.Values<JObject>());
         Assert.Equal("Moon Garden", (string?)row["plot"]!["name"]);
@@ -55,17 +55,19 @@ public sealed class GameMcpPlotLifecycleTests
         Assert.Equal(3, (int)row["add"]!["plotQuantityCost"]!);
         Assert.True((bool)row["remove"]!["available"]!);
 
-        var instance = Assert.Single(Json(GameMcpWorldQuery.ListRows(
+        var processing = Assert.Single(Json(GameMcpWorldQuery.ListRows(
             GameMcpTestHarness.Context(world, generation: 911),
-            "plot-action-instances", 0, 10).Freeze(), world)["rows"]!.Values<JObject>());
-        Assert.Equal("Moon Garden", (string?)instance["plot"]!["name"]);
-        Assert.Equal("Plant Moondust", (string?)instance["action"]!["name"]);
-        Assert.Equal(2, (int)instance["amount"]!);
+            "agromancy-processing", 0, 10).Freeze(), world)["rows"]!.Values<JObject>());
+        Assert.Equal("Moon Garden", (string?)processing["plot"]!["name"]);
+        Assert.Equal("Plant Moondust", (string?)processing["action"]!["name"]);
+        Assert.Equal(2, (int)processing["amount"]!);
+        Assert.Equal(4, (int)processing["capacity"]!);
+        Assert.Equal(1, (int)processing["used"]!);
 
         var blockedWorld = World(prerequisitesReady: false, active: 0);
         var blocked = Assert.Single(Json(GameMcpWorldQuery.ListRows(
             GameMcpTestHarness.Context(blockedWorld, generation: 912),
-            "plot-actions", 0, 10).Freeze(), blockedWorld)["rows"]!.Values<JObject>());
+            "agromancy-plot-actions", 0, 10).Freeze(), blockedWorld)["rows"]!.Values<JObject>());
         Assert.False((bool)blocked["add"]!["available"]!);
         Assert.Equal("needs_live_prerequisite_check",
             (string?)blocked["add"]!["reasonCode"]);
@@ -119,6 +121,8 @@ public sealed class GameMcpPlotLifecycleTests
                 new WorldCollectionCategoryStatus("plot node actions", WorldCategoryOutcome.Collected,
                     1, 0, string.Empty),
                 new WorldCollectionCategoryStatus("plot actions", WorldCategoryOutcome.Collected,
+                    1, 0, string.Empty),
+                new WorldCollectionCategoryStatus("action queues", WorldCategoryOutcome.Collected,
                     1, 0, string.Empty),
             }),
         };

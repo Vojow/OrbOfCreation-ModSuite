@@ -49,16 +49,15 @@ public sealed class GameMcpEntityCapabilityMapTests
             .Select(name => (Name: name, Kind: GameMcpCommandKinds.FromToolName(name)))
             .ToArray();
 
-        Assert.Equal(32, mappings.Length);
-        Assert.Equal(32, mappings.Select(mapping => mapping.Kind).Distinct().Count());
+        Assert.Equal(31, mappings.Length);
+        Assert.Equal(31, mappings.Select(mapping => mapping.Kind).Distinct().Count());
         Assert.Equal(
             new[]
             {
                 "game_purchase",
                 "game_cast",
                 "game_concept",
-                "game_harvest",
-                "game_harvest_setup",
+                "game_agromancy",
                 "game_structure",
                 "game_spell_level",
                 "game_discover",
@@ -90,6 +89,12 @@ public sealed class GameMcpEntityCapabilityMapTests
             GameMcpCommandKinds.ToolName(GameMcpCommandKind.DiscoveryTreeOffer));
         Assert.Equal("game_discover",
             GameMcpCommandKinds.ToolName(GameMcpCommandKind.SpellWorkbench));
+        Assert.Equal(GameMcpCommandKind.Harvest,
+            GameMcpCommandKinds.FromRequest(
+                "game_agromancy", "add_plot_action", string.Empty));
+        Assert.Equal(GameMcpCommandKind.HarvestLifecycle,
+            GameMcpCommandKinds.FromRequest(
+                "game_agromancy", "add_element", string.Empty));
         Assert.Throws<ArgumentException>(() =>
             GameMcpCommandKinds.FromToolName("game_arbitrary_reflection"));
     }

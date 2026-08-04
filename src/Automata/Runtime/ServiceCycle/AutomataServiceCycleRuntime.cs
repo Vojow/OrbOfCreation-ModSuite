@@ -716,9 +716,9 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         {
             "add_element" => HarvestLifecycleActionKind.AddElement,
             "remove_element" => HarvestLifecycleActionKind.RemoveElement,
-            "add_action" => HarvestLifecycleActionKind.AddAction,
-            "remove_action" => HarvestLifecycleActionKind.RemoveAction,
-            _ => throw new ArgumentException("unsupported harvest-list mode " + command.Mode),
+            "add_element_action" => HarvestLifecycleActionKind.AddAction,
+            "remove_element_action" => HarvestLifecycleActionKind.RemoveAction,
+            _ => throw new ArgumentException("unsupported Agromancy element mode " + command.Mode),
         };
         var action = new HarvestLifecycleAction(kind, command.TargetId,
             command.SecondaryId, command.Amount, command.ExpectedLifecycleGeneration);
@@ -741,9 +741,9 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         GameMcpNativeActionAdmission.AssertNativeType(command, "PlotNodeSO");
         var kind = command.Mode switch
         {
-            "add" => PlotLifecycleActionKind.Add,
-            "remove" => PlotLifecycleActionKind.Remove,
-            _ => throw new ArgumentException("unsupported plot-action mode " + command.Mode),
+            "add_plot_action" => PlotLifecycleActionKind.Add,
+            "remove_plot_action" => PlotLifecycleActionKind.Remove,
+            _ => throw new ArgumentException("unsupported Agromancy plot mode " + command.Mode),
         };
         var action = new PlotLifecycleAction(kind, command.TargetId,
             command.SecondaryId, command.Amount, command.ExpectedLifecycleGeneration);

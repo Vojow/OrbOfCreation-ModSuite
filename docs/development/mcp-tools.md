@@ -127,8 +127,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_purchase` | Buy an Attribute (`StructureSO`) or Upgrade derived from its UUID |
 | `game_cast` | Fire, release charge, or turn off one equipped toggle spell |
 | `game_concept` | Add or remove one owned concept assignment |
-| `game_harvest` | Add, increase, decrease, or cancel any action offered by a plot |
-| `game_harvest_setup` | Add or remove active harvest elements and their offered actions |
+| `game_agromancy` | Use the Agromancy screen's plot actions, harvest elements, and processing slots |
 | `game_structure` | Enable or disable one available attribute |
 | `game_spell_level` | Buy one spell mastery level or invoke level-all |
 | `game_casting_dial` | Set the global Output Level or Reserve Level shown on the Casting screen |
@@ -378,17 +377,18 @@ checks the game's persistent usage cost but does not perform a one-time payment;
 native level callback applies its own usage/effects. Research development and spell mastery stay
 on `game_research` and `game_spell_level`, respectively.
 
-### Harvest element and action lifecycle
+### Agromancy
 
-Every `harvest-elements` detail row joins the exact active-element count, the next visible
-add/remove decision, and the element's offered harvest actions. An available element add includes
+Every `agromancy-elements` detail row joins the exact active-element count, the next visible
+add/remove decision, its stored output and rate, and the element's offered harvest actions. An available element add includes
 its named standing usage costs and current spendable amounts. Each offered action reports its
 active/maximum count, add/remove availability, and the named resource drain for the **next**
 instance. An unavailable control carries only the reason that binds the next decision; no priced
 ledger is computed for an action the screen cannot run.
 
-Call `game_harvest_setup(mode="add_element"|"remove_element", uuid=...)` for one exact
-`HarvestElementSO`. Action modes additionally require `actionUuid` naming an action actually
+Call `game_agromancy(mode="add_element"|"remove_element", uuid=...)` for one exact
+`HarvestElementSO`. The `add_element_action` and `remove_element_action` modes additionally require
+`actionUuid` naming an action actually
 offered by that element. `amount` defaults to one and reproduces the visible multi-instance list
 change without depending on the screen's hidden selector state.
 
@@ -398,27 +398,28 @@ only the active count before and after plus the settled next decision for the af
 pair. The one mutation sentinel is that game-written active count moving in the requested
 direction; resource reservations and drain math are planning facts, never postcondition ledgers.
 
-World / Aspects uses this exact `harvest-elements` plus `harvest-actions` surface; it is not a
-separate MCP category. World / Dimensional uses the complete `plot-nodes` plus `plot-actions`
-surface below. These mappings follow the UI's concrete interaction archetypes, keeping one reader
-and one vocabulary for the same native element/action or plot/action concepts.
-
-### Plot action lifecycle
-
-The `plot-actions` category enumerates every `PlotNodeSO` / `PlotNodeActionSO` pair authored by
-the game, not only Auto Harvest's fruit and treasure collect pairs. Each row names both handles,
+The `plot-nodes` category is the tile catalog. `agromancy-plot-actions` enumerates every
+`PlotNodeSO` / `PlotNodeActionSO` pair authored by the game, not only Auto Harvest's fruit and
+treasure collect pairs. Each row names both handles,
 shows the active quantity, and carries add/remove decisions. An available add includes the plot
 quantity consumed by one instance and the current maximum additional count. A prerequisite latch
 that has not been evaluated is reported as `needs_live_prerequisite_check`; the action boundary
 performs the exact native check instead of a read mutating the latch.
 
-Call `game_harvest(mode="add"|"remove", uuid=..., actionUuid=...)`. `amount` defaults to one.
+Call `game_agromancy(mode="add_plot_action"|"remove_plot_action", uuid=..., actionUuid=...)`.
+`amount` defaults to one.
 Add uses the same active plot-action list control as `UIPlotNodeActionList.OnActionClick`.
 Remove decrements an existing quantity; at the native minimum it uses that UI handler's distinct
 `Cancel()` path, so crossing from several instances through the last one requires two calls.
 Success returns the observed active quantity change and the settled next decision. The only
 postcondition is the exact pair's game-written active quantity moving in the requested direction;
 refund behavior on cancellation is neither recomputed nor verified.
+
+`agromancy-processing` is the screen's top processing strip in screen order. Each row reports its
+slot, whether it is empty, the strip capacity and occupancy, and—when occupied—the named plot,
+named action, amount, and whether it is processing. The former helper categories for harvest
+controls/resources, plot instances, and raw action-queue internals are not public MCP categories;
+their facts are joined into these three player-facing surfaces.
 
 ### Structure enable and disable
 
@@ -796,10 +797,10 @@ where components are supplied, it derives the target from the live resolver inst
 ```sh
 tools/game-mcp-client.py call game_purchase --arguments \
   '{"uuid":"ATTRIBUTE_OR_UPGRADE_UUID","count":1}'
-tools/game-mcp-client.py call game_harvest --arguments \
-  '{"mode":"add","uuid":"PLOT_UUID","actionUuid":"PLOT_ACTION_UUID","amount":1}'
-tools/game-mcp-client.py call game_harvest_setup --arguments \
-  '{"mode":"add_action","uuid":"HARVEST_ELEMENT_UUID","actionUuid":"HARVEST_ACTION_UUID","amount":1}'
+tools/game-mcp-client.py call game_agromancy --arguments \
+  '{"mode":"add_plot_action","uuid":"PLOT_UUID","actionUuid":"PLOT_ACTION_UUID","amount":1}'
+tools/game-mcp-client.py call game_agromancy --arguments \
+  '{"mode":"add_element_action","uuid":"HARVEST_ELEMENT_UUID","actionUuid":"HARVEST_ACTION_UUID","amount":1}'
 tools/game-mcp-client.py call game_cast --arguments \
   '{"mode":"fire","slotIndex":0,"uuid":"SPELL_UUID"}'
 tools/game-mcp-client.py call game_cast --arguments \

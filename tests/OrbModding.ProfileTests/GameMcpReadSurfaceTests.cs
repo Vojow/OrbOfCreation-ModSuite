@@ -385,7 +385,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Contains("game_purchase", toolNames);
         Assert.Contains("game_cast", toolNames);
         Assert.Contains("game_concept", toolNames);
-        Assert.Contains("game_harvest", toolNames);
+        Assert.Contains("game_agromancy", toolNames);
         Assert.Contains("game_spell_level", toolNames);
         Assert.DoesNotContain("action_receipt", toolNames);
         Assert.Contains("game_screenshot", toolNames);
@@ -1365,7 +1365,7 @@ public sealed class GameMcpWorldEnvelopeTests
                         sampled: 0,
                         skipped: 0,
                         firstFailure: "plot node actions failed"),
-                    Clean("plot-actions"),
+                    Clean("agromancy-plot-actions"),
                 },
                 10),
             CollectedAtEpoch = 22,
@@ -1382,7 +1382,7 @@ public sealed class GameMcpWorldEnvelopeTests
             .Single(item => (string?)item!["category"] == "purchase-costs")!;
         var plotActions = categories["categories"]!
             .Values<JObject>()
-            .Single(item => (string?)item!["category"] == "plot-actions")!;
+            .Single(item => (string?)item!["category"] == "agromancy-plot-actions")!;
 
         Assert.False((bool)purchaseCosts["available"]!);
         Assert.Equal("modifier variables failed", (string?)purchaseCosts["reason"]);
@@ -1399,7 +1399,6 @@ public sealed class GameMcpWorldEnvelopeTests
                 new[]
                 {
                     Clean("resources"),
-                    Clean("harvest-resources"),
                     Clean("structures"),
                     Clean("upgrades"),
                     Clean("modifier-variables"),
@@ -1413,7 +1412,7 @@ public sealed class GameMcpWorldEnvelopeTests
                         skipped: 0,
                         firstFailure: "frame-global modifier reconstruction failed"),
                 },
-                9),
+                8),
             CollectedAtEpoch = 23,
             CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
         };
@@ -1423,7 +1422,7 @@ public sealed class GameMcpWorldEnvelopeTests
         var state = Snapshot(publisher.ReadLatest());
 
         var categories = GameMcpTestHarness.Json(GameMcpWorldQuery.ListCategories(state));
-        foreach (var name in new[] { "resources", "harvest-resources", "purchase-costs" })
+        foreach (var name in new[] { "resources", "purchase-costs" })
         {
             var category = categories["categories"]!
                 .Values<JObject>()

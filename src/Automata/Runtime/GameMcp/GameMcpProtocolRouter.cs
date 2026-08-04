@@ -265,22 +265,19 @@ internal sealed class GameMcpProtocolRouter
                 builder.Amount = OptionalIntInRange(
                     arguments, "amount", 1, 1, 1_000_000);
                 break;
-            case "game_harvest":
-                builder.Mode = RequireOneOf(arguments, "mode", "add", "remove");
-                builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.SecondaryUuid = RequireUuid(arguments, "actionUuid");
-                builder.Amount = OptionalIntInRange(
-                    arguments, "amount", 1, 1, 10_000);
-                break;
-            case "game_harvest_setup":
+            case "game_agromancy":
                 builder.Mode = RequireOneOf(arguments, "mode",
-                    "add_element", "remove_element", "add_action", "remove_action");
+                    "add_plot_action", "remove_plot_action",
+                    "add_element", "remove_element", "add_element_action",
+                    "remove_element_action");
                 builder.Uuid = RequireUuid(arguments, "uuid");
-                builder.SecondaryUuid = builder.Mode is "add_action" or "remove_action"
+                builder.SecondaryUuid = builder.Mode is "add_plot_action" or
+                    "remove_plot_action" or "add_element_action" or
+                    "remove_element_action"
                     ? RequireUuid(arguments, "actionUuid")
                     : Guid.Empty;
                 builder.Amount = OptionalIntInRange(
-                    arguments, "amount", 1, 1, int.MaxValue);
+                    arguments, "amount", 1, 1, 10_000);
                 break;
             case "game_structure":
                 builder.Mode = RequireOneOf(arguments, "mode", "enable", "disable");
@@ -500,8 +497,8 @@ internal sealed class GameMcpProtocolRouter
         string name,
         GameMcpOperationRequestBuilder request) => name switch
     {
-        "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_harvest_setup" or "game_structure" or "game_return_to_menu" or
+        "game_purchase" or "game_cast" or "game_concept" or "game_agromancy" or
+            "game_agromancy" or "game_structure" or "game_return_to_menu" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
@@ -532,8 +529,8 @@ internal sealed class GameMcpProtocolRouter
         "trace_health" => GameMcpFrameData.TraceWriterHealth,
         "suite_emergency_stop" => GameMcpFrameData.Configuration,
         "game_spell_loadout" when request?.Mode == "staged" => GameMcpFrameData.None,
-        "game_purchase" or "game_cast" or "game_concept" or "game_harvest" or
-            "game_harvest_setup" or "game_structure" or "game_return_to_menu" or
+        "game_purchase" or "game_cast" or "game_concept" or "game_agromancy" or
+            "game_agromancy" or "game_structure" or "game_return_to_menu" or
             "game_spell_level" or "game_casting_dial" or "game_spell_loadout" or "game_targeting" or
             "game_consumable" or "game_craft" or "game_discover" or "game_equipment" or
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
@@ -659,41 +656,28 @@ internal sealed class GameMcpProtocolRouter
                     },
                     "mode", "uuid")),
             Tool(
-                "game_harvest",
-                "Configure a plot action",
-                "Add, increase, decrease, or cancel any exact plot/action pair exposed by the Agromancy plot-action screen.",
-                ModeSchema(ActionSchema(
-                    new JObject
-                    {
-                        ["mode"] = EnumSchema("add", "remove"),
-                        ["uuid"] = StringSchema("Published plot-node UUID."),
-                        ["actionUuid"] = StringSchema("PlotNodeActionSO UUID offered by that plot."),
-                        ["amount"] = IntegerSchema(1, 10_000),
-                    },
-                    "mode", "uuid", "actionUuid"),
-                    ModeRule("add"),
-                    ModeRule("remove")),
-                readOnly: false,
-                idempotent: false),
-            Tool(
-                "game_harvest_setup",
-                "Configure active harvest elements and actions",
-                "Add or remove active instances through the same element and action list controls shown on the Agromancy, Aspects, and Druidry screens.",
+                "game_agromancy",
+                "Use the Agromancy screen",
+                "Add or remove a plot action, harvest element, or element action shown on World > Agromancy.",
                 ModeSchema(ActionSchema(
                     new JObject
                     {
                         ["mode"] = EnumSchema(
-                            "add_element", "remove_element", "add_action", "remove_action"),
-                        ["uuid"] = StringSchema("Published HarvestElementSO UUID."),
+                            "add_plot_action", "remove_plot_action",
+                            "add_element", "remove_element", "add_element_action",
+                            "remove_element_action"),
+                        ["uuid"] = StringSchema("Published plot or harvest-element UUID."),
                         ["actionUuid"] = StringSchema(
-                            "Published HarvestActionSO UUID offered by that element."),
-                        ["amount"] = IntegerSchema(1, int.MaxValue),
+                            "Published action UUID offered by that plot or element."),
+                        ["amount"] = IntegerSchema(1, 10_000),
                     },
                     "mode", "uuid"),
+                    ModeRule("add_plot_action", new[] { "actionUuid" }),
+                    ModeRule("remove_plot_action", new[] { "actionUuid" }),
                     ModeRule("add_element", forbidden: new[] { "actionUuid" }),
                     ModeRule("remove_element", forbidden: new[] { "actionUuid" }),
-                    ModeRule("add_action", new[] { "actionUuid" }),
-                    ModeRule("remove_action", new[] { "actionUuid" })),
+                    ModeRule("add_element_action", new[] { "actionUuid" }),
+                    ModeRule("remove_element_action", new[] { "actionUuid" })),
                 readOnly: false,
                 idempotent: false),
             Tool(
@@ -1312,12 +1296,13 @@ internal sealed class GameMcpProtocolRouter
                     "field 'slot' is accepted only for snapshot modes"));
         }
 
-        if (string.Equals(name, "game_harvest_setup", StringComparison.Ordinal) &&
+        if (string.Equals(name, "game_agromancy", StringComparison.Ordinal) &&
             arguments["mode"]?.Type == JTokenType.String)
         {
             var mode = (string?)arguments["mode"];
             var action = arguments.ContainsKey("actionUuid");
-            if (mode is "add_action" or "remove_action" && !action)
+            if (mode is "add_plot_action" or "remove_plot_action" or
+                "add_element_action" or "remove_element_action" && !action)
                 errors.Add(ValidationError("missing_required", "actionUuid",
                     "required field 'actionUuid' is missing for mode '" + mode + "'"));
             else if (mode is "add_element" or "remove_element" && action)

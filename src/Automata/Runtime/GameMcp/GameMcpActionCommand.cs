@@ -71,7 +71,7 @@ internal static class GameMcpCommandKinds
         "game_purchase" => GameMcpCommandKind.Purchase,
         "game_cast" => GameMcpCommandKind.Cast,
         "game_concept" => GameMcpCommandKind.Concept,
-        "game_harvest" => GameMcpCommandKind.Harvest,
+        "game_agromancy" => GameMcpCommandKind.HarvestLifecycle,
         "game_spell_level" => GameMcpCommandKind.SpellLevel,
         "game_casting_dial" => GameMcpCommandKind.SpellComposition,
         "game_spell_loadout" => GameMcpCommandKind.SpellLoadout,
@@ -88,7 +88,6 @@ internal static class GameMcpCommandKinds
         "game_level" => GameMcpCommandKind.GenericLevel,
         "game_brewing_station" => GameMcpCommandKind.CraftingStation,
         "game_loadout" => GameMcpCommandKind.Loadout,
-        "game_harvest_setup" => GameMcpCommandKind.HarvestLifecycle,
         "game_structure" => GameMcpCommandKind.StructureLifecycle,
         "game_return_to_menu" => GameMcpCommandKind.ReturnToMenu,
         "suite_config_set" => GameMcpCommandKind.ConfigurationSet,
@@ -118,6 +117,9 @@ internal static class GameMcpCommandKinds
             return GameMcpCommandKind.SpellWorkbench;
         if (toolName == "game_spell_loadout" && mode == "add")
             return GameMcpCommandKind.SpellWorkbench;
+        if (toolName == "game_agromancy" &&
+            mode is "add_plot_action" or "remove_plot_action")
+            return GameMcpCommandKind.Harvest;
         return kind;
     }
 
@@ -126,7 +128,7 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.Purchase => "game_purchase",
         GameMcpCommandKind.Cast => "game_cast",
         GameMcpCommandKind.Concept => "game_concept",
-        GameMcpCommandKind.Harvest => "game_harvest",
+        GameMcpCommandKind.Harvest => "game_agromancy",
         GameMcpCommandKind.SpellLevel => "game_spell_level",
         GameMcpCommandKind.DiscoveryTreeOffer => "game_discover",
         GameMcpCommandKind.SpellWorkbench => "game_discover",
@@ -145,7 +147,7 @@ internal static class GameMcpCommandKinds
         GameMcpCommandKind.GenericLevel => "game_level",
         GameMcpCommandKind.CraftingStation => "game_brewing_station",
         GameMcpCommandKind.Loadout => "game_loadout",
-        GameMcpCommandKind.HarvestLifecycle => "game_harvest_setup",
+        GameMcpCommandKind.HarvestLifecycle => "game_agromancy",
         GameMcpCommandKind.StructureLifecycle => "game_structure",
         GameMcpCommandKind.ReturnToMenu => "game_return_to_menu",
         _ => string.Empty,

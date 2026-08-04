@@ -247,8 +247,8 @@ internal static class GameMcpWorldQuery
         }
         if (row is WorldResource resource)
             return ProjectResource(in resource);
-        if (row is WorldPlotActionInstance plotActionInstance)
-            return ProjectPlotActionInstance(world, in plotActionInstance);
+        if (row is WorldActionQueueSlot processingSlot)
+            return ProjectAgromancyProcessing(world, in processingSlot);
         if (row is WorldPlotAction plotAction)
             return ProjectPlotAction(world, in plotAction);
         return new GameMcpProjectedDomainValue(
@@ -1288,7 +1288,7 @@ internal static class GameMcpWorldQuery
             oldWorld.ActionQueueSlots, command.TargetId, command.SecondaryId);
         var after = PlotActionQuantity(
             world.ActionQueueSlots, command.TargetId, command.SecondaryId);
-        if (command.Mode == "add" ? after <= before : after >= before)
+        if (command.Mode == "add_plot_action" ? after <= before : after >= before)
         {
             var observed = Property(committed.Details, "active");
             if (observed is null)
@@ -2292,6 +2292,8 @@ internal static class GameMcpWorldQuery
             ? ProjectHarvestElement(world, in harvestElement)
             : row is WorldPlotAction plotAction
             ? ProjectPlotAction(world, in plotAction)
+            : row is WorldActionQueueSlot processingSlot
+            ? ProjectAgromancyProcessing(world, in processingSlot)
             : new GameMcpProjectedDomainValue(
                 row,
                 category.ScanFields,
@@ -2327,11 +2329,29 @@ internal static class GameMcpWorldQuery
         var result = new JObject
         {
             ["entityId"] = element.EntityId.ToString("D"),
-            ["category"] = "harvest-elements",
+            ["category"] = "agromancy-elements",
             ["nativeType"] = "HarvestElementSO",
             ["masteryLevel"] = element.MasteryLevel,
             ["masteryXp"] = new GameMcpDomainValue(element.MasteryXp),
         };
+        for (var index = 0; index < world.HarvestResources.Count; index++)
+        {
+            var harvestResource = world.HarvestResources[index];
+            if (harvestResource.ElementId != element.EntityId) continue;
+            var resource = harvestResource.Resource;
+            var output = new JObject
+            {
+                ["amount"] = new GameMcpDomainValue(resource.Reading.Quantity),
+                ["netRatePerSecond"] = new GameMcpDomainValue(resource.TrueRate),
+            };
+            if (resource.IsCapped)
+            {
+                output["capacity"] = new GameMcpDomainValue(resource.Reading.Capacity);
+                output["atCapacity"] = resource.IsAtCapacity;
+            }
+            result["output"] = output;
+            break;
+        }
         if (!TryFindHarvestElementControl(
                 world.HarvestElementControls, element.EntityId, out var control))
             return result.Freeze();
@@ -2390,16 +2410,29 @@ internal static class GameMcpWorldQuery
         }.Freeze();
     }
 
-    private static GameMcpValue ProjectPlotActionInstance(
+    private static GameMcpValue ProjectAgromancyProcessing(
         GameWorldState world,
-        in WorldPlotActionInstance instance) =>
-        new JObject
+        in WorldActionQueueSlot slot)
+    {
+        var result = new JObject
         {
-            ["plot"] = EntityReference(world, instance.PlotNodeId),
-            ["action"] = EntityReference(world, instance.PlotNodeActionId),
-            ["amount"] = PlotActionQuantity(
-                world.ActionQueueSlots, instance.PlotNodeId, instance.PlotNodeActionId),
-        }.Freeze();
+            ["slot"] = slot.Index,
+            ["empty"] = slot.Empty,
+        };
+        if (WorldLookup.TryFind(world.ActionQueues, slot.QueueId, out var queue))
+        {
+            result["capacity"] = queue.SlotCount;
+            result["used"] = queue.UsedSlots;
+        }
+        if (!slot.Empty)
+        {
+            result["plot"] = EntityReference(world, slot.PlotNodeId);
+            result["action"] = EntityReference(world, slot.PlotNodeActionId);
+            result["amount"] = slot.Quantity;
+            result["processing"] = slot.Engaged;
+        }
+        return result.Freeze();
+    }
 
     private static GameMcpValue ProjectPlotActionDecision(
         GameWorldState world,
@@ -5146,11 +5179,8 @@ internal static class GameMcpWorldQuery
             Entity(nameof(GameWorldState.SnapshotLoadouts), world => world.SnapshotLoadouts),
             Composite(nameof(GameWorldState.SnapshotSlots), world => world.SnapshotSlots),
             Composite(nameof(GameWorldState.SnapshotEntries), world => world.SnapshotEntries),
-            Entity(nameof(GameWorldState.HarvestElements), world => world.HarvestElements),
-            Entity(nameof(GameWorldState.HarvestResources), world => world.HarvestResources),
-            Composite(nameof(GameWorldState.HarvestElementControls), world => world.HarvestElementControls),
-            Composite(nameof(GameWorldState.HarvestActionControls), world => world.HarvestActionControls),
-            Composite(nameof(GameWorldState.HarvestLifecycleCosts), world => world.HarvestLifecycleCosts),
+            Entity("agromancy-elements", nameof(GameWorldState.HarvestElements),
+                world => world.HarvestElements),
             Entity(nameof(GameWorldState.TimeRunes), world => world.TimeRunes),
             Entity(nameof(GameWorldState.Glyphs), world => world.Glyphs),
             Entity(nameof(GameWorldState.Consumables), world => world.Consumables),
@@ -5167,10 +5197,10 @@ internal static class GameMcpWorldQuery
             Entity(nameof(GameWorldState.DiscoveryTrees), world => world.DiscoveryTrees),
             Entity(nameof(GameWorldState.RecipeBooks), world => world.RecipeBooks),
             Entity(nameof(GameWorldState.PlotNodes), world => world.PlotNodes),
-            Composite(nameof(GameWorldState.PlotActions), world => world.PlotActions),
-            Composite(nameof(GameWorldState.PlotActionInstances), world => world.PlotActionInstances),
-            Entity(nameof(GameWorldState.ActionQueues), world => world.ActionQueues),
-            Composite(nameof(GameWorldState.ActionQueueSlots), world => world.ActionQueueSlots),
+            Composite("agromancy-plot-actions", nameof(GameWorldState.PlotActions),
+                world => world.PlotActions),
+            Composite("agromancy-processing", nameof(GameWorldState.ActionQueueSlots),
+                world => world.ActionQueueSlots),
             Composite(nameof(GameWorldState.SpellSlots), world => world.SpellSlots),
             Composite(nameof(GameWorldState.SpellCosts), world => world.SpellCosts),
             Composite(nameof(GameWorldState.Targeting), world => world.Targeting),
@@ -5198,10 +5228,18 @@ internal static class GameMcpWorldQuery
         string propertyName,
         Func<GameWorldState, PublicationTable<TRow>> table)
         where TRow : struct, IWorldEntity =>
+        Entity(Normalize(propertyName), propertyName, table);
+
+    private static GameMcpWorldCategory Entity<TRow>(
+        string publicName,
+        string propertyName,
+        Func<GameWorldState, PublicationTable<TRow>> table)
+        where TRow : struct, IWorldEntity =>
         new GameMcpEntityCategory<TRow>(
+            publicName,
             propertyName,
             table,
-            ExpectedNativeType(Normalize(propertyName)),
+            ExpectedNativeType(Normalize(publicName)),
             RequiredReportCategories(Normalize(propertyName)),
             FailureOnlyReportCategories(Normalize(propertyName)),
             ScanFields(Normalize(propertyName)));
@@ -5210,10 +5248,18 @@ internal static class GameMcpWorldQuery
         string propertyName,
         Func<GameWorldState, PublicationTable<TRow>> table)
         where TRow : struct =>
+        Composite(Normalize(propertyName), propertyName, table);
+
+    private static GameMcpWorldCategory Composite<TRow>(
+        string publicName,
+        string propertyName,
+        Func<GameWorldState, PublicationTable<TRow>> table)
+        where TRow : struct =>
         new GameMcpCompositeCategory<TRow>(
+            publicName,
             propertyName,
             table,
-            ExpectedNativeType(Normalize(propertyName)),
+            ExpectedNativeType(Normalize(publicName)),
             RequiredReportCategories(Normalize(propertyName)),
             FailureOnlyReportCategories(Normalize(propertyName)),
             ScanFields(Normalize(propertyName)));
@@ -5594,6 +5640,7 @@ internal static class GameMcpWorldQuery
     private abstract class GameMcpWorldCategory
     {
         protected GameMcpWorldCategory(
+            string publicName,
             string propertyName,
             string rowTypeName,
             string expectedNativeType,
@@ -5603,7 +5650,7 @@ internal static class GameMcpWorldQuery
             string identityMode)
         {
             WorldPropertyName = propertyName;
-            Name = Normalize(propertyName);
+            Name = Normalize(publicName);
             RowTypeName = rowTypeName;
             ExpectedNativeType = expectedNativeType;
             ReportCategories = reportCategories ??
@@ -5642,6 +5689,7 @@ internal static class GameMcpWorldQuery
         private readonly Func<GameWorldState, PublicationTable<TRow>> _table;
 
         internal GameMcpEntityCategory(
+            string publicName,
             string propertyName,
             Func<GameWorldState, PublicationTable<TRow>> table,
             string expectedNativeType,
@@ -5649,6 +5697,7 @@ internal static class GameMcpWorldQuery
             string[] failureOnlyReportCategories,
             string[] scanFields)
             : base(
+                publicName,
                 propertyName,
                 typeof(TRow).Name,
                 expectedNativeType,
@@ -5680,6 +5729,7 @@ internal static class GameMcpWorldQuery
         private readonly Func<GameWorldState, PublicationTable<TRow>> _table;
 
         internal GameMcpCompositeCategory(
+            string publicName,
             string propertyName,
             Func<GameWorldState, PublicationTable<TRow>> table,
             string expectedNativeType,
@@ -5687,6 +5737,7 @@ internal static class GameMcpWorldQuery
             string[] failureOnlyReportCategories,
             string[] scanFields)
             : base(
+                publicName,
                 propertyName,
                 typeof(TRow).Name,
                 expectedNativeType,

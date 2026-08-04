@@ -63,7 +63,7 @@ public sealed class GameMcpFrameInboxTests
     public void CancellationAfterClaimCannotHideLaterTerminalResult()
     {
         var inbox = new GameMcpFrameInbox();
-        var operation = Submit(inbox, "game_harvest");
+        var operation = Submit(inbox, "game_agromancy");
         Assert.Equal(new[] { operation }, inbox.ClaimPending());
 
         Assert.False(operation.Completion.TryCancelBeforeClaim(Failure("timeout")));
@@ -105,7 +105,7 @@ public sealed class GameMcpFrameInboxTests
     public void GameplayAndEmergencyOperationsRetainSubmissionOrderWithoutPriorityQueues()
     {
         var inbox = new GameMcpFrameInbox();
-        var gameplay = Submit(inbox, "game_harvest", GameMcpOperationClass.Gameplay);
+        var gameplay = Submit(inbox, "game_agromancy", GameMcpOperationClass.Gameplay);
         var stop = Submit(
             inbox,
             "suite_emergency_stop",
@@ -118,9 +118,9 @@ public sealed class GameMcpFrameInboxTests
     public void EmergencyStopTakesEffectAtItsSubmittedPositionInsideOneClaimedBatch()
     {
         var inbox = new GameMcpFrameInbox();
-        Submit(inbox, "game_harvest", GameMcpOperationClass.Gameplay);
+        Submit(inbox, "game_agromancy", GameMcpOperationClass.Gameplay);
         Submit(inbox, "suite_emergency_stop", GameMcpOperationClass.SuiteAdministration);
-        Submit(inbox, "game_harvest", GameMcpOperationClass.Gameplay);
+        Submit(inbox, "game_agromancy", GameMcpOperationClass.Gameplay);
         var stopped = false;
         var outcomes = new List<string>();
 

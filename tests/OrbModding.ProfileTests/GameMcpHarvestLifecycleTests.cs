@@ -22,17 +22,21 @@ public sealed class GameMcpHarvestLifecycleTests
     public void Tool_exposes_only_element_and_action_list_controls()
     {
         var tool = Assert.Single(GameMcpAcceptanceFixture.Tools(),
-            candidate => (string?)candidate["name"] == "game_harvest_setup");
+            candidate => (string?)candidate["name"] == "game_agromancy");
 
         Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
         Assert.Equal(new[] { "mode", "uuid" },
             tool["inputSchema"]!["required"]!.Values<string>());
-        Assert.Equal(new[] { "add_element", "remove_element", "add_action", "remove_action" },
+        Assert.Equal(new[]
+        {
+            "add_plot_action", "remove_plot_action", "add_element", "remove_element",
+            "add_element_action", "remove_element_action",
+        },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
         Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
-        var operation = GameMcpProtocolRouter.BuildOperation("game_harvest_setup", new JObject
+        var operation = GameMcpProtocolRouter.BuildOperation("game_agromancy", new JObject
         {
-            ["mode"] = "add_action",
+            ["mode"] = "add_element_action",
             ["uuid"] = ElementId.ToString("D"),
             ["actionUuid"] = ActionId.ToString("D"),
         });
@@ -46,17 +50,17 @@ public sealed class GameMcpHarvestLifecycleTests
         var missing = router.Handle(GameMcpAcceptanceFixture.Request(1, "tools/call",
             new JObject
             {
-                ["name"] = "game_harvest_setup",
+                ["name"] = "game_agromancy",
                 ["arguments"] = new JObject
                 {
-                    ["mode"] = "add_action",
+                    ["mode"] = "add_element_action",
                     ["uuid"] = ElementId.ToString("D"),
                 },
             }));
         var extra = router.Handle(GameMcpAcceptanceFixture.Request(2, "tools/call",
             new JObject
             {
-                ["name"] = "game_harvest_setup",
+                ["name"] = "game_agromancy",
                 ["arguments"] = new JObject
                 {
                     ["mode"] = "add_element",
@@ -79,7 +83,7 @@ public sealed class GameMcpHarvestLifecycleTests
         var world = World(elementActive: 2, actionActive: 1);
         var response = Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(world, generation: 901),
-            "harvest-elements", ElementId.ToString("D")).Freeze(), world);
+            "agromancy-elements", ElementId.ToString("D")).Freeze(), world);
 
         var row = response["row"]!;
         Assert.Equal("Fire", (string?)row["name"]);
@@ -98,7 +102,7 @@ public sealed class GameMcpHarvestLifecycleTests
             elementAddAvailable: false);
         var blocked = Json(GameMcpWorldQuery.GetRow(
             GameMcpTestHarness.Context(blockedWorld, generation: 902),
-            "harvest-elements", ElementId.ToString("D")).Freeze(),
+            "agromancy-elements", ElementId.ToString("D")).Freeze(),
             blockedWorld)["row"]!;
         Assert.False((bool)blocked["addElement"]!["available"]!);
         Assert.Null(blocked["addElement"]!["costs"]);
@@ -114,7 +118,7 @@ public sealed class GameMcpHarvestLifecycleTests
         var before = World(elementActive: 2, actionActive: 1);
         var after = World(elementActive: 2, actionActive: 2);
         var command = new GameMcpCommand(1, GameMcpCommandKind.HarvestLifecycle,
-            9, 3, "add_action", ElementId, ActionId, "HarvestElementSO",
+            9, 3, "add_element_action", ElementId, ActionId, "HarvestElementSO",
             1, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before, generation: 91));
 
