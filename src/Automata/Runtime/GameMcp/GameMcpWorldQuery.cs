@@ -30,7 +30,6 @@ internal static class GameMcpWorldQuery
         var world = publication.Snapshot;
         var result = Envelope(publication);
         result["status"] = "available";
-        result["collection"] = CompactCollectionStatus(world);
         result["economy"] = new JObject
         {
             ["resourceRows"] = world.Resources.Count,
@@ -66,6 +65,7 @@ internal static class GameMcpWorldQuery
                     ["maximum"] = world.SpellWorkbench.MaximumReserveLevel,
                 },
             };
+        result["collection"] = CompactCollectionStatus(world);
         return result;
     }
 
@@ -86,20 +86,9 @@ internal static class GameMcpWorldQuery
         var result = Envelope(publication);
         result["status"] = "available";
         var categories = new JArray();
-        var stable = new JArray();
-        var composite = new JArray();
         for (var index = 0; index < Categories.Length; index++)
-        {
             categories.Add(DescribeCategory(publication.Snapshot, Categories[index]));
-            (Categories[index].IdentityMode == "stable_entity_uuid" ? stable : composite)
-                .Add(Categories[index].Name);
-        }
         result["categories"] = categories;
-        result["identityModes"] = new JObject
-        {
-            ["stableEntityUuid"] = stable,
-            ["compositeFields"] = composite,
-        };
         return result;
     }
 
@@ -471,6 +460,7 @@ internal static class GameMcpWorldQuery
         }
 
         var results = new JArray();
+        var complete = true;
         for (var inputIndex = 0; inputIndex < uuidTexts.Count; inputIndex++)
         {
             var uuidText = uuidTexts[inputIndex] ?? string.Empty;
@@ -482,6 +472,7 @@ internal static class GameMcpWorldQuery
                 item["reason"] = "uuid must be a non-empty canonical D-format GUID";
                 item["uuid"] = uuidText;
                 results.Add(item);
+                complete = false;
                 continue;
             }
 
@@ -502,6 +493,7 @@ internal static class GameMcpWorldQuery
                 item["reason"] = "category " + category.Name +
                     " has no row with stable identity " + uuid.ToString("D");
                 item["uuid"] = uuid.ToString("D");
+                complete = false;
             }
             else
             {
@@ -529,13 +521,14 @@ internal static class GameMcpWorldQuery
                     item["partialRow"] = ProjectRow(publication.Snapshot, category, matched);
                     if (implicated.Count > 0) item["implicatedSkippedRows"] = implicated;
                     if (implicatedOffers.Count > 0) item["implicatedOffers"] = implicatedOffers;
+                    complete = false;
                 }
             }
             results.Add(item);
         }
 
         var result = Envelope(publication);
-        result["status"] = "available";
+        result["status"] = complete ? "available" : "not_available";
         result["results"] = results;
         if (string.Equals(category.Name, "challenges", StringComparison.Ordinal))
             result["challengeState"] = ProjectChallengeState(publication.Snapshot);

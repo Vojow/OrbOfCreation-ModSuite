@@ -852,6 +852,7 @@ public sealed class GameMcpWorldEnvelopeTests
             operation => GameMcpTestHarness.ExecuteRead(operation, pinned));
         var result = (JObject)response.Body!["result"]!["structuredContent"]!;
 
+        Assert.Equal("unavailable", (string?)result["status"]);
         Assert.Null(result["worldGeneration"]);
         Assert.Null(result["requested"]);
         Assert.Null(result["found"]);
@@ -904,6 +905,7 @@ public sealed class GameMcpWorldEnvelopeTests
         Assert.Null(categories["collectedEpoch"]);
         Assert.Null(categories["collectedAtUtc"]);
         Assert.Null(categories["respondedAtUtc"]);
+        Assert.Null(categories["identityModes"]);
 
         var resource = categories["categories"]!
             .Values<JObject>()
@@ -1120,7 +1122,7 @@ public sealed class GameMcpWorldEnvelopeTests
             state,
             "upgrades",
             new[] { unaffectedId.ToString("D"), affectedId.ToString("D") }));
-        Assert.Equal("available", (string?)batch["status"]);
+        Assert.Equal("unavailable", (string?)batch["status"]);
         Assert.Null(batch["found"]);
         Assert.Null(batch["incomplete"]);
         var batchRows = batch["results"]!.OfType<JObject>().ToArray();

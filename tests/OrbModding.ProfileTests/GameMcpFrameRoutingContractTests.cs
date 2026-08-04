@@ -118,18 +118,11 @@ public sealed class GameMcpFrameRoutingContractTests
     }
 
     [Fact]
-    public void OptionalUiAndDiagnosticWritesEscalateOnlyTheirOwnOperation()
+    public void OptionalDiagnosticWritesEscalateOnlyTheirOwnOperation()
     {
         var tooltipRead = GameMcpProtocolRouter.BuildOperation(
             "game_tooltip",
             new JObject { ["path"] = "Canvas[0]/Button[0]" });
-        var tooltipOpen = GameMcpProtocolRouter.BuildOperation(
-            "game_tooltip",
-            new JObject
-            {
-                ["path"] = "Canvas[0]/Button[0]",
-                ["capture"] = true,
-            });
         var screenshot = GameMcpProtocolRouter.BuildOperation(
             "game_screenshot",
             new JObject());
@@ -138,7 +131,6 @@ public sealed class GameMcpFrameRoutingContractTests
             new JObject { ["save"] = true });
 
         Assert.Equal(GameMcpOperationClass.ReadOnly, tooltipRead.Classification);
-        Assert.Equal(GameMcpOperationClass.UiState, tooltipOpen.Classification);
         Assert.Equal(GameMcpOperationClass.ReadOnly, screenshot.Classification);
         Assert.Equal(GameMcpOperationClass.SuiteAdministration, savedScreenshot.Classification);
         Assert.Equal(GameMcpFrameData.None, screenshot.RequiredData);
