@@ -37,6 +37,12 @@ public sealed class PlotLifecycleGameActionTests
         Assert.True(added.Verified, added.Reason);
         Assert.True(decremented.Verified, decremented.Reason);
         Assert.True(canceled.Verified, canceled.Reason);
+        Assert.Equal(0, added.BeforeQuantity);
+        Assert.Equal(2, added.AfterQuantity);
+        Assert.Equal(2, decremented.BeforeQuantity);
+        Assert.Equal(1, decremented.AfterQuantity);
+        Assert.Equal(1, canceled.BeforeQuantity);
+        Assert.Equal(0, canceled.AfterQuantity);
         Assert.Equal(0, active.GetActualQuantity());
         Assert.False(active.IsEngaged());
     }

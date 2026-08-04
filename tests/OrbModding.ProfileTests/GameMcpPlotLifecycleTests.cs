@@ -55,6 +55,13 @@ public sealed class GameMcpPlotLifecycleTests
         Assert.Equal(3, (int)row["add"]!["plotQuantityCost"]!);
         Assert.True((bool)row["remove"]!["available"]!);
 
+        var instance = Assert.Single(Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(world, generation: 911),
+            "plot-action-instances", 0, 10).Freeze(), world)["rows"]!.Values<JObject>());
+        Assert.Equal("Moon Garden", (string?)instance["plot"]!["name"]);
+        Assert.Equal("Plant Moondust", (string?)instance["action"]!["name"]);
+        Assert.Equal(2, (int)instance["amount"]!);
+
         var blockedWorld = World(prerequisitesReady: false, active: 0);
         var blocked = Assert.Single(Json(GameMcpWorldQuery.ListRows(
             GameMcpTestHarness.Context(blockedWorld, generation: 912),
@@ -76,12 +83,10 @@ public sealed class GameMcpPlotLifecycleTests
             elementCostKnown: true,
             hasEnoughForOneInstance: true,
             maximumRemainingInstances: 8);
-        var instances = active > 0
-            ? PublicationTable<WorldPlotActionInstance>.Create(new[]
-            {
-                new WorldPlotActionInstance(PlotId, ActionId, 0, active, true, false, true),
-            })
-            : PublicationTable<WorldPlotActionInstance>.Empty;
+        var instances = PublicationTable<WorldPlotActionInstance>.Create(new[]
+        {
+            new WorldPlotActionInstance(PlotId, ActionId, 0, 0, false, false, true),
+        });
         var identities = GameMcpTestHarness.EntityCatalog.Rows.AsSpan().ToArray().Concat(new[]
         {
             new EntityIdentityName(PlotId, "PlotNodeSO", "Moon Garden", "moonGarden"),
@@ -94,6 +99,13 @@ public sealed class GameMcpPlotLifecycleTests
             EntityIdentities = EntityIdentityCatalogSnapshot.Bound(9, identities),
             PlotActions = PublicationTable<WorldPlotAction>.Create(new[] { pair }),
             PlotActionInstances = instances,
+            ActionQueueSlots = active > 0
+                ? PublicationTable<WorldActionQueueSlot>.Create(new[]
+                {
+                    new WorldActionQueueSlot(PlotLifecycleNativeBindings.ActiveActionsId,
+                        0, false, PlotId, ActionId, active, true),
+                })
+                : PublicationTable<WorldActionQueueSlot>.Empty,
             ActionQueues = PublicationTable<WorldActionQueue>.Create(new[]
             {
                 new WorldActionQueue(PlotLifecycleNativeBindings.ActiveActionsId,

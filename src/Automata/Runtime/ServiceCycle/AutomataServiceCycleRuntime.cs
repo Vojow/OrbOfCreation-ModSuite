@@ -737,8 +737,18 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             command.SecondaryId, command.Amount, command.ExpectedLifecycleGeneration);
         var submission = _plotLifecycle.Submit(in action);
         var result = PlotLifecycleActionResultMapper.Map(in submission);
+        GameMcpValue? details = submission.Verified
+            ? new GameMcpObjectBuilder
+            {
+                ["active"] = new GameMcpObjectBuilder
+                {
+                    ["before"] = submission.BeforeQuantity,
+                    ["after"] = submission.AfterQuantity,
+                },
+            }.Freeze()
+            : null;
         return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
-            configurationGeneration, submission.Reason);
+            configurationGeneration, submission.Reason, details);
     }
 
     private GameMcpCommandResult ExecuteStructureLifecycle(

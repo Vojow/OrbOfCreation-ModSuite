@@ -247,6 +247,8 @@ internal static class GameMcpWorldQuery
         }
         if (row is WorldResource resource)
             return ProjectResource(in resource);
+        if (row is WorldPlotActionInstance plotActionInstance)
+            return ProjectPlotActionInstance(world, in plotActionInstance);
         if (row is WorldPlotAction plotAction)
             return ProjectPlotAction(world, in plotAction);
         return new GameMcpProjectedDomainValue(
@@ -587,7 +589,7 @@ internal static class GameMcpWorldQuery
             GameMcpCommandKind.Purchase => ProjectPurchaseDelta(state, command),
             GameMcpCommandKind.Cast => ProjectCastDelta(state, command),
             GameMcpCommandKind.Concept => ProjectConceptDelta(state, command),
-            GameMcpCommandKind.Harvest => ProjectHarvestDelta(state, command),
+            GameMcpCommandKind.Harvest => ProjectHarvestDelta(state, command, committed),
             GameMcpCommandKind.SpellLevel => ProjectSpellLevelDelta(state, command),
             GameMcpCommandKind.Crafting => ProjectCraftingDelta(state, command),
             GameMcpCommandKind.EquipmentLoadout => ProjectEquipmentDelta(state, command),
@@ -1272,7 +1274,8 @@ internal static class GameMcpWorldQuery
 
     private static GameMcpValue ProjectHarvestDelta(
         GameMcpFrameContext state,
-        GameMcpCommand command)
+        GameMcpCommand command,
+        GameMcpCommandResult committed)
     {
         if (state.World is null ||
             !WorldPlotActionLookup.TryFind(state.World.Snapshot.PlotActions,
@@ -1282,12 +1285,23 @@ internal static class GameMcpWorldQuery
         var world = state.World.Snapshot;
         var oldWorld = Before(command);
         var before = oldWorld is null ? 0 : PlotActionQuantity(
-            oldWorld.PlotActionInstances, command.TargetId, command.SecondaryId);
+            oldWorld.ActionQueueSlots, command.TargetId, command.SecondaryId);
         var after = PlotActionQuantity(
-            world.PlotActionInstances, command.TargetId, command.SecondaryId);
+            world.ActionQueueSlots, command.TargetId, command.SecondaryId);
         if (command.Mode == "add" ? after <= before : after >= before)
-            return PostStateUnavailable("requested_state_not_reached",
-                "the settled world does not show the requested plot-action quantity change");
+        {
+            var observed = Property(committed.Details, "active");
+            if (observed is null)
+                return PostStateUnavailable("post_state_not_published",
+                    "the plot action changed before the next world could publish it");
+            return new JObject
+            {
+                ["plot"] = EntityReference(world, command.TargetId),
+                ["action"] = EntityReference(world, command.SecondaryId),
+                ["active"] = observed,
+                ["next"] = ProjectPlotActionDecision(world, in current, after),
+            }.Freeze();
+        }
         return new JObject
         {
             ["plot"] = EntityReference(world, command.TargetId),
@@ -1301,19 +1315,29 @@ internal static class GameMcpWorldQuery
         }.Freeze();
     }
 
+    private static GameMcpValue? Property(GameMcpValue? value, string name)
+    {
+        if (value is not GameMcpObject instance) return null;
+        for (var index = 0; index < instance.Properties.Count; index++)
+        {
+            var property = instance.Properties[index];
+            if (string.Equals(property.Name, name, StringComparison.Ordinal))
+                return property.Value;
+        }
+        return null;
+    }
+
     private static int PlotActionQuantity(
-        PublicationTable<WorldPlotActionInstance> instances,
+        PublicationTable<WorldActionQueueSlot> instances,
         Guid plotId,
         Guid actionId)
     {
         var quantity = 0;
-        if (!WorldPlotActionInstanceLookup.TryFindRange(
-            instances, plotId, actionId, out var start, out var count))
-            return 0;
-        for (var index = start; index < start + count; index++)
+        for (var index = 0; index < instances.Count; index++)
         {
             var instance = instances[index];
-            if (!instance.Empty && instance.ReferenceResolved)
+            if (!instance.Empty && instance.PlotNodeId == plotId &&
+                instance.PlotNodeActionId == actionId)
                 quantity += Math.Max(instance.Quantity, 0);
         }
         return quantity;
@@ -2355,7 +2379,7 @@ internal static class GameMcpWorldQuery
         in WorldPlotAction action)
     {
         var active = PlotActionQuantity(
-            world.PlotActionInstances, action.PlotNodeId, action.PlotNodeActionId);
+            world.ActionQueueSlots, action.PlotNodeId, action.PlotNodeActionId);
         return new JObject
         {
             ["plot"] = EntityReference(world, action.PlotNodeId),
@@ -2365,6 +2389,17 @@ internal static class GameMcpWorldQuery
             ["remove"] = new JObject { ["available"] = active > 0 },
         }.Freeze();
     }
+
+    private static GameMcpValue ProjectPlotActionInstance(
+        GameWorldState world,
+        in WorldPlotActionInstance instance) =>
+        new JObject
+        {
+            ["plot"] = EntityReference(world, instance.PlotNodeId),
+            ["action"] = EntityReference(world, instance.PlotNodeActionId),
+            ["amount"] = PlotActionQuantity(
+                world.ActionQueueSlots, instance.PlotNodeId, instance.PlotNodeActionId),
+        }.Freeze();
 
     private static GameMcpValue ProjectPlotActionDecision(
         GameWorldState world,

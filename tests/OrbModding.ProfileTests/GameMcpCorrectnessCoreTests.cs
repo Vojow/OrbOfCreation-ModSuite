@@ -65,9 +65,10 @@ public sealed class GameMcpCorrectnessCoreTests
                 PlotAction(plotId, actionId, instanceCount: 1,
                     maximumRemainingInstances: 4),
             }),
-            PlotActionInstances = PublicationTable<WorldPlotActionInstance>.Create(new[]
+            ActionQueueSlots = PublicationTable<WorldActionQueueSlot>.Create(new[]
             {
-                new WorldPlotActionInstance(plotId, actionId, 0, 2, true, false, true),
+                new WorldActionQueueSlot(PlotLifecycleNativeBindings.ActiveActionsId,
+                    0, false, plotId, actionId, 2, true),
             }),
         };
         var command = new GameMcpCommand(
@@ -93,16 +94,10 @@ public sealed class GameMcpCorrectnessCoreTests
                 PlotAction(plotId, actionId, instanceCount: 1,
                     maximumRemainingInstances: 3),
             }),
-            PlotActionInstances = PublicationTable<WorldPlotActionInstance>.Create(new[]
+            ActionQueueSlots = PublicationTable<WorldActionQueueSlot>.Create(new[]
             {
-                new WorldPlotActionInstance(
-                    plotId,
-                    actionId,
-                    ordinal: 0,
-                    quantity: 3,
-                    engaged: true,
-                    empty: false,
-                    referenceResolved: true),
+                new WorldActionQueueSlot(PlotLifecycleNativeBindings.ActiveActionsId,
+                    0, false, plotId, actionId, 3, true),
             }),
         };
 
@@ -115,6 +110,29 @@ public sealed class GameMcpCorrectnessCoreTests
         Assert.Equal(actionId.ToString("D"), (string?)active["action"]!["uuid"]);
         Assert.False(string.IsNullOrWhiteSpace((string?)active["action"]!["name"]));
         Assert.True((bool)active["next"]!["available"]!);
+
+        var fastActionDetails = new GameMcpObjectBuilder
+        {
+            ["active"] = new GameMcpObjectBuilder
+            {
+                ["before"] = 0,
+                ["after"] = 1,
+            }.Freeze(),
+        }.Freeze();
+        var fastAction = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(new GameWorldState
+            {
+                PlotActions = activeWorld.PlotActions,
+            }),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3, fastActionDetails)));
+        Assert.Equal(0, (int)fastAction["active"]!["before"]!);
+        Assert.Equal(1, (int)fastAction["active"]!["after"]!);
+        Assert.Equal(plotId.ToString("D"), (string?)fastAction["plot"]!["uuid"]);
+        Assert.False(string.IsNullOrWhiteSpace((string?)fastAction["plot"]!["name"]));
+        Assert.Equal(actionId.ToString("D"), (string?)fastAction["action"]!["uuid"]);
+        Assert.False(string.IsNullOrWhiteSpace((string?)fastAction["action"]!["name"]));
+        Assert.Null(fastAction["postStateUnavailable"]);
     }
 
     [Fact]

@@ -162,15 +162,17 @@ internal sealed class PlotLifecycleGameAction : IDisposable
             else
                 native.RemoveInstance(list, current!, action.Amount);
             stage = PlotLifecycleNativeStage.Verification;
-            return OutcomeObserved(in action, native, list, prototype, before)
-                ? Verified()
+            var after = Quantity(native, native.FindInstance(list, prototype));
+            return OutcomeObserved(in action, before, after)
+                ? Verified(before, after)
                 : Fault(in action, PlotLifecyclePreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed,
                     "The requested plot-action quantity change was not observable.");
         }
         catch (Exception exception) when (IsExpected(exception))
         {
-            if (OutcomeObserved(in action, native, list, prototype, before)) return Verified();
+            var after = Quantity(native, native.FindInstance(list, prototype));
+            if (OutcomeObserved(in action, before, after)) return Verified(before, after);
             return Fault(in action, PlotLifecyclePreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew,
                 "The native plot callback threw before the requested quantity change was observable: " +
@@ -180,14 +182,9 @@ internal sealed class PlotLifecycleGameAction : IDisposable
 
     private static bool OutcomeObserved(
         in PlotLifecycleAction action,
-        PlotLifecycleNativeBindings native,
-        object list,
-        object prototype,
-        int before)
-    {
-        var after = Quantity(native, native.FindInstance(list, prototype));
-        return action.Kind == PlotLifecycleActionKind.Add ? after > before : after < before;
-    }
+        int before,
+        int after) =>
+        action.Kind == PlotLifecycleActionKind.Add ? after > before : after < before;
 
     private static int Quantity(PlotLifecycleNativeBindings native, object? instance) =>
         instance is null ? 0 : Math.Max(native.InstanceQuantity(instance), 0);
@@ -231,10 +228,10 @@ internal sealed class PlotLifecycleGameAction : IDisposable
         PlotLifecyclePreflight preflight,
         string reason) => PlotLifecycleSubmission.Reject(preflight, reason);
 
-    private static PlotLifecycleSubmission Verified() =>
+    private static PlotLifecycleSubmission Verified(int before, int after) =>
         new(PlotLifecyclePreflight.Proceeded, PlotLifecycleNativeStage.Verification,
             NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1),
-            "The requested plot-action quantity change is visible.");
+            "The requested plot-action quantity change is visible.", before, after);
 
     private static PlotLifecycleSubmission Fault(
         in PlotLifecycleAction action,
