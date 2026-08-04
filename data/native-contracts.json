@@ -22812,6 +22812,72 @@
       "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
     },
     {
+      "id": "generic-level.equipment-visible-action", "assembly": "assembly-csharp",
+      "type": "EquipmentTypeSO", "typeVisibility": "public", "kind": "method", "member": "IsVisible",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.equipment-available-action", "assembly": "assembly-csharp",
+      "type": "EquipmentTypeSO", "typeVisibility": "public", "kind": "method", "member": "IsAvailable",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph-visible-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "IsVisible",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph-available-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "IsAvailable",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.glyph-discovered-action", "assembly": "assembly-csharp",
+      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "IsDiscovered",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type-visible-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "method", "member": "IsVisible",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type-available-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "method", "member": "IsAvailable",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.resource-type-hidden-action", "assembly": "assembly-csharp",
+      "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "field", "member": "specialHidden",
+      "visibility": "public", "static": false, "valueType": "System.Boolean",
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.time-rune-visible-action", "assembly": "assembly-csharp",
+      "type": "TimeRuneSO", "typeVisibility": "public", "kind": "method", "member": "IsVisible",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.time-rune-available-action", "assembly": "assembly-csharp",
+      "type": "TimeRuneSO", "typeVisibility": "public", "kind": "method", "member": "IsAvailable",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "generic-level.time-rune-discovered-action", "assembly": "assembly-csharp",
+      "type": "TimeRuneSO", "typeVisibility": "public", "kind": "method", "member": "IsDiscovered",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
+      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
       "id": "crafting-instance.page-automation-action", "assembly": "assembly-csharp",
       "type": "UICraftingPage", "typeVisibility": "public", "kind": "field", "member": "craftingAutomationInstances",
       "visibility": "public", "static": false, "valueType": "CraftingInstanceListVariable",

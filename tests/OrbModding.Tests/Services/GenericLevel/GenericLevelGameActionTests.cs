@@ -95,6 +95,34 @@ public sealed class GenericLevelGameActionTests
     }
 
     [Fact]
+    public void Undiscovered_glyph_is_refused_before_purchase()
+    {
+        var target = (GlyphSO)Target("GlyphSO");
+        target.discovered = false;
+        Register(target);
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, target, "GlyphSO", GenericLevelActionKind.Purchase);
+
+        Assert.Equal(GenericLevelPreflight.Undiscovered, result.Preflight);
+        Assert.Equal(0, target.GetLevel());
+    }
+
+    [Fact]
+    public void Hidden_resource_type_is_refused_before_purchase()
+    {
+        var target = (ResourceTypeSO)Target("ResourceTypeSO");
+        target.specialHidden = true;
+        Register(target);
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, target, "ResourceTypeSO", GenericLevelActionKind.Purchase);
+
+        Assert.Equal(GenericLevelPreflight.Hidden, result.Preflight);
+        Assert.Equal(0, target.GetLevel());
+    }
+
+    [Fact]
     public async Task Unity_thread_is_refused_before_identity_or_native_state()
     {
         var target = Target("GlyphSO");
@@ -151,6 +179,8 @@ public sealed class GenericLevelGameActionTests
             _ => throw new ArgumentOutOfRangeException(nameof(nativeType)),
         };
         result.SetGuid(Guid.NewGuid());
+        if (result is GlyphSO glyph) glyph.discovered = true;
+        if (result is TimeRuneSO rune) rune.discovered = true;
         return result;
     }
 

@@ -757,6 +757,9 @@ internal static class GameMcpActionResultCodeNames
             if (code == GenericLevelActionResultCodes.WrongThread) return "wrong_thread";
             if (code == GenericLevelActionResultCodes.IdentityUnavailable) return "identity_unavailable";
             if (code == GenericLevelActionResultCodes.WrongDomain) return "wrong_level_surface";
+            if (code == GenericLevelActionResultCodes.Undiscovered) return "undiscovered";
+            if (code == GenericLevelActionResultCodes.Hidden) return "hidden";
+            if (code == GenericLevelActionResultCodes.Unavailable) return "not_available";
             if (code == GenericLevelActionResultCodes.CannotLevel) return "cannot_level";
             if (code == GenericLevelActionResultCodes.BonusUnavailable) return "bonus_unavailable";
             if (code == GenericLevelActionResultCodes.ResourcesHidden) return "resources_hidden";

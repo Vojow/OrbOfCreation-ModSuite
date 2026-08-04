@@ -72,12 +72,16 @@ public sealed class EquipmentTypeSO : IdScriptableObject, ILevelable, ILevelable
     public ResourceCostList LevelCost = new ResourceCostList();
     public ResourceCostList BonusLevelCost = new ResourceCostList();
     public bool NativeCanLevel = true;
+    public bool NativeVisible = true;
+    public bool NativeAvailable = true;
     public bool SuppressLevelPurchase;
     public bool SuppressBonusPurchase;
     public int GetMaxTypeSlots() => maxTypeSlots.GetValue().ToInt();
     public int GetLevel() => level + freeLevels;
     public int GetFreeLevels() => freeLevels;
     public bool CanLevel() => NativeCanLevel;
+    public bool IsVisible() => NativeVisible;
+    public bool IsAvailable() => NativeAvailable;
     public ResourceCostList GetLevelCost() => LevelCost;
     public ResourceCostList GetFreeLevelCost() => BonusLevelCost;
     public void PurchaseLevel() { if (!SuppressLevelPurchase) level++; }
@@ -119,11 +123,15 @@ public sealed class ResourceTypeSO : IdScriptableObject, ILevelable, ILevelableH
     public ResourceCostList LevelCost = new ResourceCostList();
     public ResourceCostList BonusLevelCost = new ResourceCostList();
     public bool NativeCanLevel = true;
+    public bool NativeVisible = true;
+    public bool NativeAvailable = true;
     public bool SuppressLevelPurchase;
     public bool SuppressBonusPurchase;
     public int GetLevel() => level + freeLevels;
     public int GetFreeLevels() => freeLevels;
     public bool CanLevel() => NativeCanLevel;
+    public bool IsVisible() => NativeVisible && !specialHidden;
+    public bool IsAvailable() => NativeAvailable && IsVisible();
     public ResourceCostList GetLevelCost() => LevelCost;
     public ResourceCostList GetFreeLevelCost() => BonusLevelCost;
     public void PurchaseLevel() { if (!SuppressLevelPurchase) level++; }
@@ -563,6 +571,8 @@ public sealed class TimeRuneSO : IdScriptableObject, IDiscoverable, ILevelable
     public ValueModifierRecord masteryXpMod = new ValueModifierRecord(new BigDouble(0.0, 0));
     public ResourceCostList LevelCost = new ResourceCostList();
     public bool NativeCanLevel = true;
+    public bool NativeVisible = true;
+    public bool NativeAvailable = true;
     public bool SuppressLevelPurchase;
 
     public ResourceCostList GetDiscoverCost() => discoveryCost;
@@ -574,6 +584,8 @@ public sealed class TimeRuneSO : IdScriptableObject, IDiscoverable, ILevelable
     public bool IsDiscoverRequired() => isDiscoverRequired;
     public int GetLevel() => level;
     public bool CanLevel() => NativeCanLevel;
+    public bool IsVisible() => NativeVisible;
+    public bool IsAvailable() => NativeAvailable;
     public ResourceCostList GetLevelCost() => LevelCost;
     public void PurchaseLevel() { if (!SuppressLevelPurchase) level++; }
     public void Discover()
@@ -603,6 +615,7 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable, I
     public bool requiresDuration;
     public bool requiresToggleable;
     public bool NativeAvailable { get; set; } = true;
+    public bool NativeVisible { get; set; } = true;
     public ResourceCostList discoveryCost = new ResourceCostList();
     public List<GlyphSO> glyphRecipe = new List<GlyphSO>();
     public List<ResourceSO> resourceRecipe = new List<ResourceSO>();
@@ -625,6 +638,7 @@ public sealed class GlyphSO : IdScriptableObject, ITooltipable, IDiscoverable, I
 
     public string GetName() => DisplayName;
     public bool IsAvailable() => NativeAvailable;
+    public bool IsVisible() => NativeVisible;
     public ResourceCostList GetDiscoverCost() => discoveryCost;
     public List<GlyphSO> GetGlyphRecipe() => new List<GlyphSO>(glyphRecipe);
     public List<ResourceSO> GetResourceRecipe() => new List<ResourceSO>(resourceRecipe);

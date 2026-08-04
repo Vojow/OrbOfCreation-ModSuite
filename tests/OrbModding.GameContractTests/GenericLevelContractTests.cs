@@ -100,6 +100,12 @@ public sealed class GenericLevelContractTests
             "generic-level.cost-entries-action", "generic-level.tuple-resource-action",
             "generic-level.tuple-value-action", "generic-level.resource-guid-action",
             "generic-level.resource-has-amount-action",
+            "generic-level.equipment-visible-action", "generic-level.equipment-available-action",
+            "generic-level.glyph-visible-action", "generic-level.glyph-available-action",
+            "generic-level.glyph-discovered-action", "generic-level.resource-type-visible-action",
+            "generic-level.resource-type-available-action", "generic-level.resource-type-hidden-action",
+            "generic-level.time-rune-visible-action", "generic-level.time-rune-available-action",
+            "generic-level.time-rune-discovered-action",
         };
 
         Assert.All(expected, id => Assert.Single(

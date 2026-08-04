@@ -15,4 +15,7 @@ internal static class GenericLevelActionResultCodes
     internal static readonly ServiceActionResultCode MutationPermitUnavailable = new(2002);
     internal static readonly ServiceActionResultCode PostCommitFault = new(2003);
     internal static readonly ServiceActionResultCode VerificationFailed = new(2004);
+    internal static readonly ServiceActionResultCode Undiscovered = new(2081);
+    internal static readonly ServiceActionResultCode Hidden = new(2082);
+    internal static readonly ServiceActionResultCode Unavailable = new(2083);
 }

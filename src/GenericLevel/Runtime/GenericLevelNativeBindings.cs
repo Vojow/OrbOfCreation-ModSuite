@@ -58,6 +58,17 @@ internal sealed class GenericLevelNativeBindings
         "generic-level.tuple-value-action",
         "generic-level.resource-guid-action",
         "generic-level.resource-has-amount-action",
+        "generic-level.equipment-visible-action",
+        "generic-level.equipment-available-action",
+        "generic-level.glyph-visible-action",
+        "generic-level.glyph-available-action",
+        "generic-level.glyph-discovered-action",
+        "generic-level.resource-type-visible-action",
+        "generic-level.resource-type-available-action",
+        "generic-level.resource-type-hidden-action",
+        "generic-level.time-rune-visible-action",
+        "generic-level.time-rune-available-action",
+        "generic-level.time-rune-discovered-action",
     };
 
     private readonly Dictionary<string, GenericLevelTargetBinding> _targets;
@@ -129,10 +140,14 @@ internal sealed class GenericLevelNativeBindings
 
             var targets = new Dictionary<string, GenericLevelTargetBinding>(StringComparer.Ordinal)
             {
-                [equipment.Name] = BindTarget(equipment, cost, true, 11, 27, includeContract),
-                [glyph.Name] = BindTarget(glyph, cost, true, 15, 30, includeContract),
-                [resourceType.Name] = BindTarget(resourceType, cost, true, 19, 33, includeContract),
-                [timeRune.Name] = BindTarget(timeRune, cost, false, 23, -1, includeContract),
+                [equipment.Name] = BindTarget(equipment, cost, true, 11, 27,
+                    43, 44, includeContract),
+                [glyph.Name] = BindTarget(glyph, cost, true, 15, 30,
+                    45, 46, includeContract, discoveredIndex: 47),
+                [resourceType.Name] = BindTarget(resourceType, cost, true, 19, 33,
+                    48, 49, includeContract, hiddenIndex: 50),
+                [timeRune.Name] = BindTarget(timeRune, cost, false, 23, -1,
+                    51, 52, includeContract, discoveredIndex: 53),
             };
 
             var enough = Method(36, cost, "HasEnough", typeof(bool), Type.EmptyTypes, includeContract);
@@ -173,20 +188,34 @@ internal sealed class GenericLevelNativeBindings
         bool supportsBonus,
         int levelStart,
         int bonusStart,
-        Func<string, bool> include)
+        int visibleIndex,
+        int availableIndex,
+        Func<string, bool> include,
+        int discoveredIndex = -1,
+        int hiddenIndex = -1)
     {
         var getLevel = Method(levelStart, type, "GetLevel", typeof(int), Type.EmptyTypes, include);
         var canLevel = Method(levelStart + 1, type, "CanLevel", typeof(bool), Type.EmptyTypes, include);
         var getCost = Method(levelStart + 2, type, "GetLevelCost", cost, Type.EmptyTypes, include);
         var purchase = Method(levelStart + 3, type, "PurchaseLevel", typeof(void), Type.EmptyTypes, include);
+        var visible = Method(visibleIndex, type, "IsVisible", typeof(bool), Type.EmptyTypes, include);
+        var available = Method(availableIndex, type, "IsAvailable", typeof(bool), Type.EmptyTypes, include);
+        var discovered = discoveredIndex < 0 ? null :
+            Method(discoveredIndex, type, "IsDiscovered", typeof(bool), Type.EmptyTypes, include);
+        var hidden = hiddenIndex < 0 ? null :
+            Field(hiddenIndex, type, "specialHidden", typeof(bool), include);
         if (!supportsBonus)
             return new GenericLevelTargetBinding(type, Func<int>(getLevel), Func<bool>(canLevel),
-                ObjectFunc(getCost), Action1(purchase));
+                ObjectFunc(getCost), Action1(purchase), Func<bool>(visible), Func<bool>(available),
+                discovered is null ? null : Func<bool>(discovered),
+                hidden is null ? null : BoolField(hidden));
         var getBonus = Method(bonusStart, type, "GetFreeLevels", typeof(int), Type.EmptyTypes, include);
         var getBonusCost = Method(bonusStart + 1, type, "GetFreeLevelCost", cost, Type.EmptyTypes, include);
         var purchaseBonus = Method(bonusStart + 2, type, "PurchaseFreeLevel", typeof(void), Type.EmptyTypes, include);
         return new GenericLevelTargetBinding(type, Func<int>(getLevel), Func<bool>(canLevel),
-            ObjectFunc(getCost), Action1(purchase), Func<int>(getBonus),
+            ObjectFunc(getCost), Action1(purchase), Func<bool>(visible), Func<bool>(available),
+            discovered is null ? null : Func<bool>(discovered),
+            hidden is null ? null : BoolField(hidden), Func<int>(getBonus),
             ObjectFunc(getBonusCost), Action1(purchaseBonus));
     }
 
@@ -293,6 +322,13 @@ internal sealed class GenericLevelNativeBindings
                 Expression.Field(Expression.Convert(target, field.DeclaringType!), field),
                 typeof(object)), target).Compile();
     }
+
+    private static Func<object, bool> BoolField(FieldInfo field)
+    {
+        var target = Expression.Parameter(typeof(object), "target");
+        return Expression.Lambda<Func<object, bool>>(
+            Expression.Field(Expression.Convert(target, field.DeclaringType!), field), target).Compile();
+    }
 }
 
 internal sealed class GenericLevelTargetBinding
@@ -303,6 +339,10 @@ internal sealed class GenericLevelTargetBinding
         Func<object, bool> canLevel,
         Func<object, object?> getLevelCost,
         Action<object> purchaseLevel,
+        Func<object, bool> isVisible,
+        Func<object, bool> isAvailable,
+        Func<object, bool>? isDiscovered = null,
+        Func<object, bool>? isHidden = null,
         Func<object, int>? getBonusLevels = null,
         Func<object, object?>? getBonusCost = null,
         Action<object>? purchaseBonus = null)
@@ -312,6 +352,10 @@ internal sealed class GenericLevelTargetBinding
         CanLevel = canLevel;
         GetLevelCost = getLevelCost;
         PurchaseLevel = purchaseLevel;
+        IsVisible = isVisible;
+        IsAvailable = isAvailable;
+        IsDiscovered = isDiscovered;
+        IsHidden = isHidden;
         GetBonusLevels = getBonusLevels;
         GetBonusCost = getBonusCost;
         PurchaseBonus = purchaseBonus;
@@ -322,6 +366,10 @@ internal sealed class GenericLevelTargetBinding
     internal Func<object, bool> CanLevel { get; }
     internal Func<object, object?> GetLevelCost { get; }
     internal Action<object> PurchaseLevel { get; }
+    internal Func<object, bool> IsVisible { get; }
+    internal Func<object, bool> IsAvailable { get; }
+    internal Func<object, bool>? IsDiscovered { get; }
+    internal Func<object, bool>? IsHidden { get; }
     internal Func<object, int>? GetBonusLevels { get; }
     internal Func<object, object?>? GetBonusCost { get; }
     internal Action<object>? PurchaseBonus { get; }

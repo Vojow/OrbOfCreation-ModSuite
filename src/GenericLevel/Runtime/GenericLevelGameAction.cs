@@ -111,6 +111,19 @@ internal sealed class GenericLevelGameAction : IDisposable
         GenericLevelTargetBinding binding,
         object target)
     {
+        if (binding.IsHidden is not null && binding.IsHidden(target))
+            return Reject(GenericLevelPreflight.Hidden,
+                "This level target is hidden from the player.");
+        if (binding.IsDiscovered is not null && !binding.IsDiscovered(target))
+            return Reject(GenericLevelPreflight.Undiscovered,
+                "This level target has not been discovered.");
+        if (!binding.IsVisible(target))
+            return Reject(GenericLevelPreflight.Hidden,
+                "This level target is not visible on its level screen.");
+        if (!binding.IsAvailable(target))
+            return Reject(GenericLevelPreflight.Unavailable,
+                "This level target is not available on its level screen.");
+
         if (action.Kind == GenericLevelActionKind.Purchase)
         {
             if (!binding.CanLevel(target))

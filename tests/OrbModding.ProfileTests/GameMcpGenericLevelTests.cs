@@ -80,6 +80,21 @@ public sealed class GameMcpGenericLevelTests
         Assert.Equal(6, (int)bonusDelta["totalLevel"]!["after"]!);
     }
 
+    [Fact]
+    public void Hidden_or_undiscovered_rows_never_advertise_level_purchase()
+    {
+        var world = World(5, 2, purchaseAffordable: true,
+            glyphDiscovered: false, glyphAvailable: false, resourceTypeHidden: true);
+
+        var glyph = Row(world, "glyphs", GlyphId);
+        var resourceType = Row(world, "resource-types", ResourceTypeId);
+
+        Assert.False((bool)glyph["purchase"]!["available"]!);
+        Assert.Equal("undiscovered", (string?)glyph["purchase"]!["reasonCode"]);
+        Assert.False((bool)resourceType["purchase"]!["available"]!);
+        Assert.Equal("hidden", (string?)resourceType["purchase"]!["reasonCode"]);
+    }
+
     private static JObject Row(
         GameWorldState world,
         string category,
@@ -114,7 +129,13 @@ public sealed class GameMcpGenericLevelTests
             1, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before, generation: 901));
 
-    private static GameWorldState World(int total, int bonus, bool purchaseAffordable)
+    private static GameWorldState World(
+        int total,
+        int bonus,
+        bool purchaseAffordable,
+        bool glyphDiscovered = true,
+        bool glyphAvailable = true,
+        bool resourceTypeHidden = false)
     {
         var paidCosts = PublicationTable<WorldLevelableCost>.Create(new[]
             { new WorldLevelableCost(CostResourceId, new BigDouble(5)) });
@@ -128,14 +149,14 @@ public sealed class GameMcpGenericLevelTests
         var equipmentType = new WorldEquipmentType(
             EquipmentTypeId, total - bonus, bonus, 1, new BigDouble(4),
             new BigDouble(8), 0, 0, withBonus);
-        var glyph = new WorldGlyph(GlyphId, total - bonus, bonus, 0, true,
+        var glyph = new WorldGlyph(GlyphId, total - bonus, bonus, 0, glyphDiscovered,
             true, false, false, false, false, 0, BigDouble.Zero,
-            BigDouble.Zero, BigDouble.Zero, true, 3, levelDecision: withBonus);
+            BigDouble.Zero, BigDouble.Zero, glyphAvailable, 3, levelDecision: withBonus);
         var resourceType = new WorldResourceType(
             resourceTypeId: ResourceTypeId,
             level: total - bonus,
             freeLevels: bonus,
-            specialHidden: false,
+            specialHidden: resourceTypeHidden,
             ignoreAudit: false,
             ignoreEffects: false,
             auditHasMaxQuantity: false,

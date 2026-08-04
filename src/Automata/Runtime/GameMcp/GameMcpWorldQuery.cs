@@ -4313,7 +4313,9 @@ internal static class GameMcpWorldQuery
             ["available"] = glyph.Available,
             ["usableCount"] = glyph.MaximumUsages,
         };
-        AddLevelDecision(world, result, glyph.LevelDecision);
+        AddLevelDecision(world, result, glyph.LevelDecision,
+            glyph.Discovered && glyph.Available,
+            !glyph.Discovered ? "undiscovered" : "not_available");
         AddDiscoveryDecision(world, result, glyph.Discovery);
         return result.Freeze();
     }
@@ -4346,7 +4348,8 @@ internal static class GameMcpWorldQuery
             ["nativeType"] = "ResourceTypeSO",
             ["hidden"] = resourceType.SpecialHidden,
         };
-        AddLevelDecision(world, result, resourceType.LevelDecision);
+        AddLevelDecision(world, result, resourceType.LevelDecision,
+            !resourceType.SpecialHidden, "hidden");
         return result.Freeze();
     }
 
@@ -4551,7 +4554,8 @@ internal static class GameMcpWorldQuery
             ["masteryLevel"] = rune.MasteryLevel,
             ["seen"] = rune.Seen,
         };
-        AddLevelDecision(world, result, rune.LevelDecision);
+        AddLevelDecision(world, result, rune.LevelDecision,
+            rune.Discovered, "undiscovered");
         AddDiscoveryDecision(world, result, rune.Discovery);
         return result.Freeze();
     }
@@ -4559,7 +4563,9 @@ internal static class GameMcpWorldQuery
     private static void AddLevelDecision(
         GameWorldState world,
         JObject result,
-        WorldLevelableDecision decision)
+        WorldLevelableDecision decision,
+        bool targetAvailable = true,
+        string targetReasonCode = "not_available")
     {
         result["paidLevel"] = decision.TotalLevel - decision.BonusLevels;
         if (decision.SupportsBonus) result["bonusLevel"] = decision.BonusLevels;
@@ -4567,9 +4573,10 @@ internal static class GameMcpWorldQuery
 
         var purchase = new JObject
         {
-            ["available"] = decision.CanPurchase && decision.PurchaseAffordable,
+            ["available"] = targetAvailable && decision.CanPurchase && decision.PurchaseAffordable,
         };
-        if (!decision.CanPurchase) purchase["reasonCode"] = "native_level_refused";
+        if (!targetAvailable) purchase["reasonCode"] = targetReasonCode;
+        else if (!decision.CanPurchase) purchase["reasonCode"] = "native_level_refused";
         else
         {
             purchase["affordable"] = decision.PurchaseAffordable;
@@ -4582,9 +4589,11 @@ internal static class GameMcpWorldQuery
         if (!decision.SupportsBonus) return;
         var bonus = new JObject
         {
-            ["available"] = decision.BonusResourcesVisible && decision.BonusAffordable,
+            ["available"] = targetAvailable &&
+                decision.BonusResourcesVisible && decision.BonusAffordable,
         };
-        if (!decision.BonusResourcesVisible) bonus["reasonCode"] = "resources_hidden";
+        if (!targetAvailable) bonus["reasonCode"] = targetReasonCode;
+        else if (!decision.BonusResourcesVisible) bonus["reasonCode"] = "resources_hidden";
         else
         {
             bonus["affordable"] = decision.BonusAffordable;
