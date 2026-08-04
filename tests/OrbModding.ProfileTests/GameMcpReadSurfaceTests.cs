@@ -334,6 +334,19 @@ public sealed class GameMcpStreamableHttpProtocolTests
     }
 
     [Fact]
+    public void WorldGetAlwaysReturnsTheOrderedResultsCollection()
+    {
+        var result = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRows(
+            GameMcpTestHarness.Context(),
+            "resources",
+            new[] { Guid.NewGuid().ToString("D") }));
+
+        Assert.Equal("unavailable", (string?)result["status"]);
+        Assert.Equal("world_not_published", (string?)result["reasonCode"]);
+        Assert.Empty(result["results"]!);
+    }
+
+    [Fact]
     public void RecordEqualityMetadataProjectsAsBoundedTypeName()
     {
         var projected = GameMcpObjectProjector.Project(new SuiteRuntimeConfiguration());

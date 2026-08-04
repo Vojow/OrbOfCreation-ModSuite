@@ -425,38 +425,38 @@ internal static class GameMcpWorldQuery
         IReadOnlyList<string> uuidTexts)
     {
         if (!TryWorld(state, out var publication, out var unavailable))
-            return unavailable;
+            return BatchUnavailable(unavailable);
         if (!TryCategory(categoryName, out var category, out var reason))
-            return NotAvailable(publication, "unknown_category", reason);
+            return BatchUnavailable(NotAvailable(publication, "unknown_category", reason));
         if (uuidTexts is null || uuidTexts.Count == 0 || uuidTexts.Count > MaximumBatchSize)
         {
-            return NotAvailable(
+            return BatchUnavailable(NotAvailable(
                 publication,
                 "invalid_batch_size",
                 "uuids must contain between 1 and " +
-                MaximumBatchSize.ToString(CultureInfo.InvariantCulture) + " entries");
+                MaximumBatchSize.ToString(CultureInfo.InvariantCulture) + " entries"));
         }
         if (!string.Equals(
                 category.IdentityMode,
                 "stable_entity_uuid",
                 StringComparison.Ordinal))
         {
-            return NotAvailable(
+            return BatchUnavailable(NotAvailable(
                 publication,
                 "composite_identity_required",
                 "category " + category.Name + " has composite identity fields and cannot " +
-                "be addressed by UUID; use world_list to read its exact rows");
+                "be addressed by UUID; use world_list to read its exact rows"));
         }
 
         var availability = Availability(publication.Snapshot, category);
         if (!availability.Available)
         {
-            return NotAvailable(
+            return BatchUnavailable(NotAvailable(
                 publication,
                 "category_not_collected",
                 availability.Reason.Length == 0
                     ? "the category was not collected"
-                    : availability.Reason);
+                    : availability.Reason));
         }
 
         var results = new JArray();
@@ -532,6 +532,12 @@ internal static class GameMcpWorldQuery
         result["results"] = results;
         if (string.Equals(category.Name, "challenges", StringComparison.Ordinal))
             result["challengeState"] = ProjectChallengeState(publication.Snapshot);
+        return result;
+    }
+
+    private static JObject BatchUnavailable(JObject result)
+    {
+        result["results"] = new JArray();
         return result;
     }
 
