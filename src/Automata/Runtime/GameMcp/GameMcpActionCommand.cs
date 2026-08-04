@@ -828,6 +828,8 @@ internal static class GameMcpActionResultCodeNames
         {
             if (code == RitualLifecycleActionResultCodes.LevelOutOfRange) return "level_out_of_range";
             if (code == RitualLifecycleActionResultCodes.BattleAlreadyActive) return "ritual_battle_active";
+            if (code == RitualLifecycleActionResultCodes.NoBattleActive) return "no_ritual_battle_active";
+            if (code == RitualLifecycleActionResultCodes.WrongActiveRitual) return "wrong_active_ritual";
         }
         if (commandKind == GameMcpCommandKind.HarvestLifecycle)
         {

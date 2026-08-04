@@ -14,6 +14,8 @@ public sealed class GameMcpSemanticCodeTests
         {
             (GameMcpCommandKind.RitualLifecycle, RitualLifecycleActionResultCodes.LevelOutOfRange, "level_out_of_range"),
             (GameMcpCommandKind.RitualLifecycle, RitualLifecycleActionResultCodes.BattleAlreadyActive, "ritual_battle_active"),
+            (GameMcpCommandKind.RitualLifecycle, RitualLifecycleActionResultCodes.NoBattleActive, "no_ritual_battle_active"),
+            (GameMcpCommandKind.RitualLifecycle, RitualLifecycleActionResultCodes.WrongActiveRitual, "wrong_active_ritual"),
             (GameMcpCommandKind.HarvestLifecycle, HarvestLifecycleActionResultCodes.ElementUsageUnavailable, "element_capacity_unavailable"),
             (GameMcpCommandKind.HarvestLifecycle, HarvestLifecycleActionResultCodes.ActionUnavailable, "action_not_available"),
             (GameMcpCommandKind.HarvestLifecycle, HarvestLifecycleActionResultCodes.AmountUnavailable, "amount_not_available"),
