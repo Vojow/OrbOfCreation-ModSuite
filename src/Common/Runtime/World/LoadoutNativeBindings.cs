@@ -44,7 +44,7 @@ internal sealed class LoadoutNativeBindings
         "loadout.manager-can-swap-action",
         "loadout.manager-set-loadout-action",
         "loadout.manager-save-active-action",
-        "loadout.player-list-all-action",
+        "loadout.list-values-action",
         "loadout.player-guid-action",
         "loadout.player-name-action",
         "loadout.player-selected-action",
@@ -72,8 +72,6 @@ internal sealed class LoadoutNativeBindings
         "loadout.spell-list-maximum-action",
         "loadout.alchemy-list-maximum-action",
         "loadout.equipment-list-maximum-action",
-        "loadout.alchemy-snapshot-list-all-action",
-        "loadout.equipment-snapshot-list-all-action",
         "loadout.alchemy-snapshot-empty-action",
         "loadout.equipment-snapshot-empty-action",
         "loadout.alchemy-snapshot-clear-action",
@@ -356,7 +354,7 @@ internal sealed class LoadoutNativeBindings
             var canSwap = Method(manager, "CanSwapLoadouts", typeof(bool));
             var setLoadout = Method(manager, "SetLoadout", typeof(void), player);
             var saveActive = Method(manager, "SaveActiveLoadout", typeof(void));
-            var playerAll = Method(playerList, "GetAll", playerCollection);
+            var playerAll = Field(playerList, "value", playerCollection, false);
             var playerGuid = Method(player, "GetGuid", typeof(Guid));
             var playerName = Method(player, "GetName", typeof(string));
             var selected = Method(player, "IsSelected", typeof(bool));
@@ -384,8 +382,8 @@ internal sealed class LoadoutNativeBindings
             var spellMaximum = Method(spellList, "GetMax", typeof(int));
             var alchemyMaximum = Method(alchemyList, "GetMax", typeof(int));
             var equipmentMaximum = Method(equipmentList, "GetMax", typeof(int));
-            var alchemySnapshots = Method(alchemySnapshotList, "GetAll", alchemySnapshotCollection);
-            var equipmentSnapshots = Method(equipmentSnapshotList, "GetAll", equipmentSnapshotCollection);
+            var alchemySnapshots = Field(alchemySnapshotList, "value", alchemySnapshotCollection, false);
+            var equipmentSnapshots = Field(equipmentSnapshotList, "value", equipmentSnapshotCollection, false);
             var alchemyEmpty = Method(alchemySnapshot, "IsEmpty", typeof(bool));
             var equipmentEmpty = Method(equipmentSnapshot, "IsEmpty", typeof(bool));
             var clearAlchemy = Method(alchemySnapshot, "Clear", typeof(void));
@@ -414,7 +412,7 @@ internal sealed class LoadoutNativeBindings
                 ObjectField(managerAlchemySnapshots), ObjectField(managerEquipmentSnapshots),
                 ObjectField(managerAlchemy), ObjectField(managerEquipment), ObjectField(managerSpells),
                 Func<bool>(canSwap), ActionObject(setLoadout), ActionVoid(saveActive),
-                ListFunc(playerAll), Func<Guid>(playerGuid),
+                ListField(playerAll), Func<Guid>(playerGuid),
                 Func<string>(playerName), Func<bool>(selected), Func<bool>(equipmentEnabled),
                 Func<bool>(alchemyEnabled), ListFunc(spells), ObjectField(equipmentField),
                 ObjectField(alchemyField), ObjectFunc(getLabel), ActionBool(setEquipment),
@@ -424,7 +422,7 @@ internal sealed class LoadoutNativeBindings
                 Func<Guid>(getIdentity), Func<Guid>(spellId), ObjectFunc(spellReference),
                 Func<bool>(spellEmpty), ListFunc(activeSpells), Func<int>(spellMaximum),
                 Func<int>(alchemyMaximum), Func<int>(equipmentMaximum),
-                ListFunc(alchemySnapshots), ListFunc(equipmentSnapshots), Func<bool>(alchemyEmpty),
+                ListField(alchemySnapshots), ListField(equipmentSnapshots), Func<bool>(alchemyEmpty),
                 Func<bool>(equipmentEmpty), ActionVoid(clearAlchemy), ActionVoid(clearEquipment),
                 ObjectFunc(alchemySnapshotRecord), ObjectFunc(equipmentSnapshotRecord),
                 ActionObject(saveAlchemySnapshot), ActionObject(saveEquipmentSnapshot),
@@ -485,6 +483,8 @@ internal sealed class LoadoutNativeBindings
 
     private static Func<object?> StaticObject(FieldInfo field) => () => field.GetValue(null);
     private static Func<object, object?> ObjectField(FieldInfo field) => target => field.GetValue(target);
+    private static Func<object, IList?> ListField(FieldInfo field) =>
+        target => field.GetValue(target) as IList;
 
     private static Func<object, TResult> Func<TResult>(MethodInfo method)
     {

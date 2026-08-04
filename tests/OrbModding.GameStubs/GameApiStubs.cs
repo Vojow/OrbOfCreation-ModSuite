@@ -2375,10 +2375,9 @@ public sealed class PlayerLoadout
     }
 }
 
-public sealed class PlayerLoadoutListVariable : IdScriptableObject
+public sealed class PlayerLoadoutListVariable : AbstractListVariable<PlayerLoadout>
 {
-    public List<PlayerLoadout> value = new List<PlayerLoadout>();
-    public List<PlayerLoadout> GetAll() => new List<PlayerLoadout>(value);
+    public List<PlayerLoadout> GetAll() => new List<PlayerLoadout>();
     public PlayerLoadout? GetActiveLoadout() => value.FirstOrDefault(loadout => loadout.isSelected);
 }
 
@@ -2408,16 +2407,14 @@ public sealed class EquipmentSnapshot : SnapshotLoadout<EquipmentSO>
 {
 }
 
-public sealed class AlchemySnapshotListVariable : IdScriptableObject
+public sealed class AlchemySnapshotListVariable : AbstractListVariable<AlchemySnapshot>
 {
-    public List<AlchemySnapshot> value = new List<AlchemySnapshot>();
-    public List<AlchemySnapshot> GetAll() => new List<AlchemySnapshot>(value);
+    public List<AlchemySnapshot> GetAll() => new List<AlchemySnapshot>();
 }
 
-public sealed class EquipmentSnapshotListVariable : IdScriptableObject
+public sealed class EquipmentSnapshotListVariable : AbstractListVariable<EquipmentSnapshot>
 {
-    public List<EquipmentSnapshot> value = new List<EquipmentSnapshot>();
-    public List<EquipmentSnapshot> GetAll() => new List<EquipmentSnapshot>(value);
+    public List<EquipmentSnapshot> GetAll() => new List<EquipmentSnapshot>();
 }
 
 public sealed class LoadoutManager

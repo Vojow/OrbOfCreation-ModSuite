@@ -553,8 +553,10 @@ internal sealed class LoadoutGameAction : IDisposable
         {
             snapshot = null;
             preflight = LoadoutPreflight.SlotOutOfRange;
-            reason = "The snapshot slot must be between 0 and " +
-                Math.Max((values?.Count ?? 0) - 1, 0) + ".";
+            reason = (values?.Count ?? 0) == 0
+                ? "This save owns zero snapshot slots."
+                : "The snapshot slot must be between 0 and " +
+                    ((values?.Count ?? 0) - 1) + ".";
             return false;
         }
         snapshot = values![slot];

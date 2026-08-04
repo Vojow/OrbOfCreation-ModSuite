@@ -27,7 +27,6 @@ internal sealed class FakePlayerLoadoutListVariable
 {
     public List<FakePlayerLoadout> value = new();
 
-    public List<FakePlayerLoadout> GetAll() => value;
 }
 
 internal sealed class FakePlayerLoadout : FakeIdRegistry
@@ -94,14 +93,12 @@ internal sealed class FakeAlchemySnapshotListVariable : FakeIdRegistry
 {
     public List<FakeAlchemySnapshot> value = new();
 
-    public List<FakeAlchemySnapshot> GetAll() => value;
 }
 
 internal sealed class FakeEquipmentSnapshotListVariable : FakeIdRegistry
 {
     public List<FakeEquipmentSnapshot> value = new();
 
-    public List<FakeEquipmentSnapshot> GetAll() => value;
 }
 
 internal sealed class FakeLoadoutManager

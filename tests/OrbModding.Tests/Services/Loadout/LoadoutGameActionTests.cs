@@ -148,6 +148,21 @@ public sealed class LoadoutGameActionTests : IDisposable
     }
 
     [Fact]
+    public void SnapshotActionNamesAZeroSlotSaveInsteadOfInventingAValidRange()
+    {
+        var owner = new EquipmentSnapshotListVariable();
+        owner.SetGuid(Guid.NewGuid());
+        LoadoutManager.instance.equipmentLoadouts = owner;
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, owner.GetGuid(), LoadoutActionKind.SnapshotSave, slot: 0);
+
+        Assert.Equal(LoadoutPreflight.SlotOutOfRange, result.Preflight);
+        Assert.Equal("This save owns zero snapshot slots.", result.Reason);
+        Assert.Equal(0, result.CallOutcome.MutationAttempts);
+    }
+
+    [Fact]
     public async Task OffThreadSubmissionRefusesBeforeNativeState()
     {
         var target = Player("Current", selected: true);

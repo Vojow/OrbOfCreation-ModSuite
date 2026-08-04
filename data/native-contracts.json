@@ -23239,8 +23239,8 @@
       "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [], "owners": ["Automata player loadout GameAction"], "usages": ["reflection"], "place": "action"
     },
     {
-      "id": "loadout.player-list-all-action", "assembly": "assembly-csharp", "type": "PlayerLoadoutListVariable", "typeVisibility": "public", "kind": "method", "member": "GetAll",
-      "visibility": "public", "static": false, "returnType": "System.Collections.Generic.List`1<PlayerLoadout>", "parameters": [], "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
+      "id": "loadout.list-values-action", "assembly": "assembly-csharp", "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "field", "member": "value",
+      "visibility": "public", "static": false, "valueType": "System.Collections.Generic.List`1<!0>", "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
     },
     {
       "id": "loadout.player-guid-action", "assembly": "assembly-csharp", "type": "PlayerLoadout", "typeVisibility": "public", "kind": "method", "member": "GetGuid",
@@ -23349,14 +23349,6 @@
     {
       "id": "loadout.equipment-list-maximum-action", "assembly": "assembly-csharp", "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "method", "member": "GetMax",
       "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [], "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "loadout.alchemy-snapshot-list-all-action", "assembly": "assembly-csharp", "type": "AlchemySnapshotListVariable", "typeVisibility": "public", "kind": "method", "member": "GetAll",
-      "visibility": "public", "static": false, "returnType": "System.Collections.Generic.List`1<AlchemySnapshot>", "parameters": [], "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "loadout.equipment-snapshot-list-all-action", "assembly": "assembly-csharp", "type": "EquipmentSnapshotListVariable", "typeVisibility": "public", "kind": "method", "member": "GetAll",
-      "visibility": "public", "static": false, "returnType": "System.Collections.Generic.List`1<EquipmentSnapshot>", "parameters": [], "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
     },
     {
       "id": "loadout.alchemy-snapshot-empty-action", "assembly": "assembly-csharp", "type": "SnapshotLoadout`1", "typeVisibility": "public", "kind": "method", "member": "IsEmpty",
