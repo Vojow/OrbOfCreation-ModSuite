@@ -114,6 +114,21 @@ public sealed class GameMcpGadgetTests
         Assert.False((bool)navigation["annotations"]!["readOnlyHint"]!);
     }
 
+    [Theory]
+    [InlineData("World", "Agromancy", true)]
+    [InlineData("World", "Aspects", false)]
+    [InlineData("Magic", "Agromancy", false)]
+    [InlineData("World", null, false)]
+    public void PlotSelectionIsAdmittedOnlyOnItsOwningScreen(
+        string screen,
+        string? subtab,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            GameMcpGadgetPolicy.IsPlotDestination(screen, subtab));
+    }
+
     [Fact]
     public void NavigationReturnsPerStripDestinationStateWithoutMutationCeremony()
     {

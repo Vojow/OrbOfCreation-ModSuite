@@ -2702,6 +2702,19 @@ public sealed class Plugin : BaseUnityPlugin
                 "the immutable navigation request has no tab selector");
             return false;
         }
+        if (command.TargetId != Guid.Empty &&
+            !GameMcpGadgetPolicy.IsPlotDestination(
+                request.Tab.Label,
+                request.Subtab?.Label))
+        {
+            var requestedDestination = request.Tab.Label + " > " +
+                (request.Subtab?.Label ?? "no subtab");
+            failure = GadgetRejected(
+                "plot_destination_mismatch",
+                "Agromancy plots can be selected only on World > Agromancy, not " +
+                requestedDestination);
+            return false;
+        }
         subtabSelector = request.Subtab;
         var tabs = _uiShell.CaptureNativeTabsForGameMcp();
         if (!TryResolveTabSelector(request.Tab, tabs, out var tab, out var tabReason))

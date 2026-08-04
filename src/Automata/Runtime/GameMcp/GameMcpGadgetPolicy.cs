@@ -37,5 +37,9 @@ internal static class GameMcpGadgetPolicy
     internal static bool IsCurrentContentSubtabPath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
         path.StartsWith("Canvas[0]/ContentArea[", StringComparison.Ordinal);
+
+    internal static bool IsPlotDestination(string screen, string? subtab) =>
+        string.Equals(screen, "World", StringComparison.Ordinal) &&
+        string.Equals(subtab, "Agromancy", StringComparison.Ordinal);
 }
 #endif
