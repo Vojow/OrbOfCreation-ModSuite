@@ -1974,7 +1974,7 @@ public sealed class Plugin : BaseUnityPlugin
         }
     }
 
-    private static bool TryPrepareGameMcpCommand(
+    internal static bool TryPrepareGameMcpCommand(
         GameMcpFrameOperation operation,
         GameMcpFrameContext context,
         out GameMcpCommand command,
@@ -2229,11 +2229,12 @@ public sealed class Plugin : BaseUnityPlugin
             return false;
         }
         var reason = string.Empty;
-        if (nativeType.Length == 0 || !GameMcpEntityCapabilityMap.Contains(
+        if (GameMcpCommandKinds.IsEntityGameplayAction(kind) &&
+            (nativeType.Length == 0 || !GameMcpEntityCapabilityMap.Contains(
                 context.World.Snapshot,
                 targetId,
                 kind,
-                out reason))
+                out reason)))
         {
             var code = "unsupported_action_target";
             if (GameMcpEntityCapabilityMap.TryOwningTool(

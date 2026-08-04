@@ -11,6 +11,7 @@ using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.ServiceCycle.Observation.Journal.Outcomes;
+using OrbModding.Common.Runtime.World;
 using Xunit;
 
 namespace OrbModding.ProfileTests;
@@ -43,6 +44,15 @@ public sealed class GameMcpReturnToMenuTests
             GameMcpCommandKinds.FromToolName("game_return_to_menu"));
         Assert.Equal("game_return_to_menu",
             GameMcpCommandKinds.ToolName(GameMcpCommandKind.ReturnToMenu));
+
+        Assert.True(Plugin.TryPrepareGameMcpCommand(
+            new GameMcpFrameOperation(1, operation),
+            GameMcpTestHarness.Context(GameWorldStateDefaults.Empty),
+            out var command,
+            out var failure), failure?.Reason);
+        Assert.Equal(GameMcpCommandKind.ReturnToMenu, command.Kind);
+        Assert.Equal(Guid.Empty, command.TargetId);
+        Assert.Equal("UIBackToMenuButton", command.DerivedNativeType);
     }
 
     [Fact]
