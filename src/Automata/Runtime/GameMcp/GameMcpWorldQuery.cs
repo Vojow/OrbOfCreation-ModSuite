@@ -198,7 +198,19 @@ internal static class GameMcpWorldQuery
         object row)
     {
         if (row is WorldStructure structure)
-            return PurchaseListRow(world, structure.EntityId, structure.CommittedLevel);
+        {
+            var projected = new JObject
+            {
+                ["entityId"] = structure.EntityId.ToString("D"),
+                ["committedLevel"] = structure.CommittedLevel,
+                ["enabled"] = !structure.Reading.Disabled,
+            };
+            if (WorldPurchaseCostLookup.TryFindRange(
+                    world.PurchaseCosts, structure.EntityId, out var start, out var count) &&
+                count > 0 && world.PurchaseCosts[start].AffordabilityEvaluated)
+                projected["affordable"] = world.PurchaseCosts[start].Affordable;
+            return projected.Freeze();
+        }
         if (row is WorldUpgrade upgrade)
             return PurchaseListRow(world, upgrade.EntityId, upgrade.CommittedLevel);
         if (row is WorldTargetingRequest targeting)
@@ -295,7 +307,7 @@ internal static class GameMcpWorldQuery
     private static string[] ListFields(GameMcpWorldCategory category) => category.Name switch
     {
         "resources" => new[] { "entityId", "trueQuantity" },
-        "structures" => new[] { "entityId", "committedLevel" },
+        "structures" => new[] { "entityId", "committedLevel", "reading.disabled" },
         "upgrades" => new[] { "entityId", "committedLevel" },
         "research" => new[] { "entityId", "totalLevel", "complete" },
         "spell-recipes" => new[] { "entityId", "masteryLevel", "discovered" },

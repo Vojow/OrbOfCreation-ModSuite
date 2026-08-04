@@ -824,6 +824,22 @@ internal static class GameMcpActionResultCodeNames
             if (code == LoadoutActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == LoadoutActionResultCodes.VerificationFailed) return "verification_failed";
         }
+        if (commandKind == GameMcpCommandKind.RitualLifecycle)
+        {
+            if (code == RitualLifecycleActionResultCodes.LevelOutOfRange) return "level_out_of_range";
+            if (code == RitualLifecycleActionResultCodes.BattleAlreadyActive) return "ritual_battle_active";
+        }
+        if (commandKind == GameMcpCommandKind.HarvestLifecycle)
+        {
+            if (code == HarvestLifecycleActionResultCodes.ElementUsageUnavailable) return "element_capacity_unavailable";
+            if (code == HarvestLifecycleActionResultCodes.ActionUnavailable) return "action_not_available";
+            if (code == HarvestLifecycleActionResultCodes.AmountUnavailable) return "amount_not_available";
+        }
+        if (commandKind == GameMcpCommandKind.Harvest)
+        {
+            if (code == PlotLifecycleActionResultCodes.ActionUnavailable) return "action_not_available";
+            if (code == PlotLifecycleActionResultCodes.QuantityUnavailable) return "amount_not_available";
+        }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";
         if (code == AutoConceptActionResultCodes.ActionFamilyUnavailable)

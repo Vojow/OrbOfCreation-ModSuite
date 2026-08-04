@@ -53,6 +53,19 @@ public sealed class GameMcpStructureLifecycleTests
     }
 
     [Fact]
+    public void Structure_list_exposes_the_same_enabled_state_as_detail()
+    {
+        var world = World(disabled: true, available: true);
+        var detail = Row(world);
+        var list = Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(world, generation: 902),
+            "structures", 0, 10).Freeze(), world);
+        var listed = Assert.Single((JArray)list["rows"]!);
+
+        Assert.Equal((bool)detail["enabled"]!, (bool)listed["enabled"]!);
+    }
+
+    [Fact]
     public void Settled_delta_is_observed_from_the_new_world_and_settlement_requires_it()
     {
         var before = World(disabled: false, available: true);

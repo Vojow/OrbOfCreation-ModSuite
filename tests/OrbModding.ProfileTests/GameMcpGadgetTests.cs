@@ -91,6 +91,10 @@ public sealed class GameMcpGadgetTests
 
         Assert.Contains("plain screen text", description, System.StringComparison.Ordinal);
         Assert.Contains("current game_tooltips catalog", description, System.StringComparison.Ordinal);
+        Assert.Equal(new[] { "path" },
+            tooltip["inputSchema"]!["properties"]!.Children<JProperty>()
+                .Select(property => property.Name));
+        Assert.Null(tooltip["inputSchema"]!["properties"]!["capture"]);
     }
 
     [Fact]

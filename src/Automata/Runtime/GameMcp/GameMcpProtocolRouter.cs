@@ -459,7 +459,6 @@ internal sealed class GameMcpProtocolRouter
                 break;
             case "game_tooltip":
                 builder.Path = RequireString(arguments, "path");
-                builder.Capture = OptionalBool(arguments, "capture", false);
                 break;
             case "game_probe":
                 builder.Probe = RequireOneOf(
@@ -1068,12 +1067,11 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_tooltip",
                 "Read a visible tooltip",
-                "Read compact plain screen text for one path from the current game_tooltips catalog; paths are volatile screen-state handles, so refresh the catalog after navigation or mutation. Optionally capture the opened tooltip.",
+                "Read compact plain screen text for one path from the current game_tooltips catalog; paths are volatile screen-state handles, so refresh the catalog after navigation or mutation.",
                 ObjectSchema(
                     new JObject
                     {
                         ["path"] = StringSchema("Exact path returned by game_tooltips."),
-                        ["capture"] = BooleanSchema("Return an inline PNG with the tooltip open."),
                     },
                     "path"),
                 readOnly: false,
