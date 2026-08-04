@@ -19763,7 +19763,7 @@
       "typeVisibility": "public",
       "kind": "field",
       "member": "valueBig",
-      "visibility": "public",
+      "visibility": "private",
       "static": false,
       "valueType": "BigDouble",
       "owners": ["Automata consumable world collection"],
