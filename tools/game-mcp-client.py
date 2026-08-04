@@ -232,25 +232,37 @@ def build_parser() -> argparse.ArgumentParser:
     screenshot.add_argument("--output", type=pathlib.Path, required=True)
 
     navigate = commands.add_parser("navigate")
-    navigate.add_argument("tab")
+    navigate.add_argument("screen")
     navigate.add_argument("--subtab")
-    navigate.add_argument("--plot-node-uuid")
+    navigate.add_argument("--uuid")
     navigate.add_argument("--capture", type=pathlib.Path)
 
     tooltip = commands.add_parser("tooltip")
     tooltip.add_argument("path")
-    tooltip.add_argument("--capture", type=pathlib.Path)
 
     purchase = commands.add_parser("purchase")
     purchase.add_argument("uuid")
-    purchase.add_argument("--count", type=int, default=1)
+    purchase.add_argument("--amount", type=int, default=1)
 
     cast = commands.add_parser("cast")
     cast.add_argument("slot_index", type=int)
-    cast.add_argument("--mode", choices=("fire", "release"), default="fire")
+    cast.add_argument("--mode", choices=("fire", "release", "toggle_off"), default="fire")
 
-    harvest = commands.add_parser("harvest")
-    harvest.add_argument("plot_node_uuid")
+    agromancy = commands.add_parser("agromancy")
+    agromancy.add_argument(
+        "mode",
+        choices=(
+            "add_plot_action",
+            "remove_plot_action",
+            "add_element",
+            "remove_element",
+            "add_element_action",
+            "remove_element_action",
+        ),
+    )
+    agromancy.add_argument("uuid")
+    agromancy.add_argument("--action-uuid")
+    agromancy.add_argument("--amount", type=int, default=1)
 
     concept = commands.add_parser("concept-add")
     concept.add_argument("uuid")
@@ -273,7 +285,7 @@ def doctor(client: GameMcpClient, initialized: dict[str, Any]) -> dict[str, Any]
         "trace_health",
         "game_purchase",
         "game_cast",
-        "game_harvest",
+        "game_agromancy",
         "game_screenshot",
         "game_continue",
         "game_screen_catalog",
@@ -337,7 +349,7 @@ def observe_and_purchase(client: GameMcpClient, args: argparse.Namespace) -> dic
     )
     if explanation.get("status") != "available":
         raise RuntimeError(f"purchase explanation is unavailable: {explanation}")
-    action = {"uuid": args.uuid, "count": args.count}
+    action = {"uuid": args.uuid, "amount": args.amount}
     terminal = structured(client.call_tool("game_purchase", action))
     return {
         "observed": {"target": target, "explanation": explanation},
@@ -364,7 +376,7 @@ def observe_and_cast(client: GameMcpClient, args: argparse.Namespace) -> dict[st
     action = {
         "mode": args.mode,
         "slotIndex": args.slot_index,
-        "spellRecipeUuid": recipe,
+        "uuid": recipe,
     }
     return {
         "observed": slot,
@@ -372,23 +384,21 @@ def observe_and_cast(client: GameMcpClient, args: argparse.Namespace) -> dict[st
     }
 
 
-def observe_and_harvest(client: GameMcpClient, args: argparse.Namespace) -> dict[str, Any]:
-    observed = structured(
-        client.call_tool(
-            "world_get",
-            {"category": "plot-nodes", "uuids": [args.plot_node_uuid]},
-        )
-    )
-    results = observed.get("results")
-    row_result = results[0] if isinstance(results, list) and results else None
-    if observed.get("status") != "available" or not isinstance(row_result, dict) or \
-            row_result.get("status") != "available":
-        raise RuntimeError(f"plot node is unavailable: {observed}")
-    action = {"plotNodeUuid": args.plot_node_uuid}
-    return {
-        "observed": row_result["row"],
-        "terminal": structured(client.call_tool("game_harvest", action)),
+def run_agromancy(client: GameMcpClient, args: argparse.Namespace) -> dict[str, Any]:
+    action = {"mode": args.mode, "uuid": args.uuid, "amount": args.amount}
+    action_modes = {
+        "add_plot_action",
+        "remove_plot_action",
+        "add_element_action",
+        "remove_element_action",
     }
+    if args.mode in action_modes:
+        if not args.action_uuid:
+            raise RuntimeError(f"agromancy {args.mode} requires --action-uuid")
+        action["actionUuid"] = args.action_uuid
+    elif args.action_uuid:
+        raise RuntimeError(f"agromancy {args.mode} does not accept --action-uuid")
+    return structured(client.call_tool("game_agromancy", action))
 
 
 def observe_and_concept(client: GameMcpClient, args: argparse.Namespace) -> dict[str, Any]:
@@ -398,14 +408,13 @@ def observe_and_concept(client: GameMcpClient, args: argparse.Namespace) -> dict
             row
             for row in observed["rows"]
             if isinstance(row, dict)
-            and isinstance(row.get("recipe"), dict)
-            and row["recipe"].get("uuid") == args.uuid
+            and row.get("uuid") == args.uuid
         ),
         None,
     )
-    if not isinstance(recipe, dict) or recipe.get("canAddNow") is not True:
+    if not isinstance(recipe, dict) or recipe.get("canAdd") is not True:
         raise RuntimeError(f"concept {args.uuid} is not addable")
-    action = {"mode": "add", "recipeUuid": args.uuid, "amount": 1}
+    action = {"mode": "add", "uuid": args.uuid, "amount": 1}
     return {
         "observed": recipe,
         "terminal": structured(client.call_tool("game_concept", action)),
@@ -422,9 +431,9 @@ def observe_and_spell_level(client: GameMcpClient, args: argparse.Namespace) -> 
     results = observed.get("results")
     row_result = results[0] if isinstance(results, list) and results else None
     if observed.get("status") != "available" or not isinstance(row_result, dict) or \
-            row_result.get("status") != "available":
+            not isinstance(row_result.get("row"), dict):
         raise RuntimeError(f"spell recipe is unavailable: {observed}")
-    action = {"mode": "single", "spellRecipeUuid": args.uuid}
+    action = {"mode": "single", "uuid": args.uuid}
     return {
         "observed": row_result["row"],
         "terminal": structured(client.call_tool("game_spell_level", action)),
@@ -474,12 +483,12 @@ def measure_reads(client: GameMcpClient) -> dict[str, Any]:
     if isinstance(tooltip_rows, list) and tooltip_rows and isinstance(tooltip_rows[0], dict):
         path = tooltip_rows[0].get("path")
         if isinstance(path, str):
-            result = client.call_tool("game_tooltip", {"path": path, "capture": False})
+            result = client.call_tool("game_tooltip", {"path": path})
             encoded = json.dumps(result, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
             measurements.append(
                 {
                     "tool": "game_tooltip",
-                    "arguments": {"path": path, "capture": False},
+                    "arguments": {"path": path},
                     "bytes": len(encoded),
                     "approxTokens": math.ceil(len(encoded) / 4),
                     "status": structured(result).get("status"),
@@ -524,11 +533,11 @@ def main() -> int:
                 args.output,
             )
         elif args.command == "navigate":
-            arguments: dict[str, Any] = {"tab": args.tab}
+            arguments: dict[str, Any] = {"screen": args.screen}
             if args.subtab is not None:
                 arguments["subtab"] = args.subtab
-            if args.plot_node_uuid:
-                arguments["plotNodeUuid"] = args.plot_node_uuid
+            if args.uuid:
+                arguments["uuid"] = args.uuid
             if args.capture is not None:
                 arguments["capture"] = True
             result = save_inline_image(
@@ -536,17 +545,13 @@ def main() -> int:
                 args.capture,
             )
         elif args.command == "tooltip":
-            arguments = {"path": args.path, "capture": args.capture is not None}
-            result = save_inline_image(
-                client.call_tool("game_tooltip", arguments),
-                args.capture,
-            )
+            result = client.call_tool("game_tooltip", {"path": args.path})
         elif args.command == "purchase":
             result = observe_and_purchase(client, args)
         elif args.command == "cast":
             result = observe_and_cast(client, args)
-        elif args.command == "harvest":
-            result = observe_and_harvest(client, args)
+        elif args.command == "agromancy":
+            result = run_agromancy(client, args)
         elif args.command == "concept-add":
             result = observe_and_concept(client, args)
         elif args.command == "spell-level":
