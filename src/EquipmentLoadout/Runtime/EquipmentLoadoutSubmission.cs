@@ -8,7 +8,7 @@ internal enum EquipmentLoadoutPreflight
     LifecycleReplaced = 4, IdentityUnavailable = 5, NotCreated = 6,
     AlreadyInRequestedState = 7, LoadoutFull = 8, EquipmentTypeFull = 9,
     UsageUnaffordable = 10, MultiBuyUnavailable = 11, MutationPermitUnavailable = 12,
-    PostCommitFault = 13, VerificationFailed = 14,
+    PostCommitFault = 13, VerificationFailed = 14, AmountUnavailable = 15,
 }
 
 internal enum EquipmentLoadoutNativeStage { None = 0, NativeCallback = 1, Verification = 2 }

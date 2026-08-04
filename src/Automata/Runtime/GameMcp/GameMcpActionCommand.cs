@@ -698,6 +698,7 @@ internal static class GameMcpActionResultCodeNames
             if (code == EquipmentLoadoutActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == EquipmentLoadoutActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == EquipmentLoadoutActionResultCodes.VerificationFailed) return "verification_failed";
+            if (code == EquipmentLoadoutActionResultCodes.AmountUnavailable) return "amount_unavailable";
         }
         if (commandKind == GameMcpCommandKind.Challenge)
         {

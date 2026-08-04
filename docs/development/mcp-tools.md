@@ -907,8 +907,10 @@ discovery outcome. A composition that resolves differently than the caller expec
 preview or refusal evidence, never a wrong-target mutation.
 
 `game_equipment` requires `mode` and one published equipment `uuid`. On Unity's main thread it re-resolves
-the exact artifact and repeats creation, current stacks, global and primary-type slot room, live
-multi-buy, maximum stacks, and native usage-affordability checks before taking the family permit.
+the exact artifact and repeats creation, current stacks, global and primary-type slot room, maximum
+stacks, and native usage-affordability checks before taking the family permit. The caller's explicit
+`amount` must fit that live maximum exactly; an oversized equip or unequip refuses with the maximum
+the current state permits and never clamps to a different mutation.
 Success is only the exact requested target-stack transition. It returns the target's stack count
 before and after, with no receipt or payment/usage stanza. A missing transition
 faults that attempt; a throw after the exact transition commits.

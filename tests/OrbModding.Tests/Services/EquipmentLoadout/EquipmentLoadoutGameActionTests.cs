@@ -97,6 +97,26 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
     }
 
     [Fact]
+    public void Amounts_beyond_live_capacity_refuse_without_clamping_or_native_calls()
+    {
+        var target = Equipment();
+        Register(target);
+        using var boundary = Boundary();
+
+        var equip = Submit(boundary, target, EquipmentLoadoutActionKind.Equip, amount: 5);
+        EquipmentManager.instance.equippedEquipment.Stack(target, 2);
+        target.Equip(2);
+        var unequip = Submit(boundary, target, EquipmentLoadoutActionKind.Unequip, amount: 3);
+
+        Assert.Equal(EquipmentLoadoutPreflight.AmountUnavailable, equip.Preflight);
+        Assert.Contains("at most 4", equip.Reason, StringComparison.Ordinal);
+        Assert.Equal(EquipmentLoadoutPreflight.AmountUnavailable, unequip.Preflight);
+        Assert.Contains("only 2", unequip.Reason, StringComparison.Ordinal);
+        Assert.Equal(0, EquipmentManager.instance.EquipCalls);
+        Assert.Equal(0, EquipmentManager.instance.UnEquipCalls);
+    }
+
+    [Fact]
     public void Missing_outcome_revalidates_on_the_next_call()
     {
         var target = Equipment();
@@ -182,9 +202,9 @@ public sealed class EquipmentLoadoutGameActionTests : IDisposable
     }
 
     private static EquipmentLoadoutSubmission Submit(EquipmentLoadoutGameAction boundary,
-        EquipmentSO target, EquipmentLoadoutActionKind kind, long epoch = Epoch)
+        EquipmentSO target, EquipmentLoadoutActionKind kind, long epoch = Epoch, int amount = 2)
     {
-        var action = new EquipmentLoadoutAction(kind, target.GetGuid(), 2, epoch);
+        var action = new EquipmentLoadoutAction(kind, target.GetGuid(), amount, epoch);
         return boundary.Submit(in action);
     }
 

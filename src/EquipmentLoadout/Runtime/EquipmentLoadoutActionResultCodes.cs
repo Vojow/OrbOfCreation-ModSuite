@@ -16,4 +16,5 @@ internal static class EquipmentLoadoutActionResultCodes
     internal static ServiceActionResultCode MutationPermitUnavailable => new(5110);
     internal static ServiceActionResultCode PostCommitFault => new(5111);
     internal static ServiceActionResultCode VerificationFailed => new(5112);
+    internal static ServiceActionResultCode AmountUnavailable => new(5113);
 }

@@ -32,6 +32,7 @@ internal static class EquipmentLoadoutActionResultMapper
         EquipmentLoadoutPreflight.MutationPermitUnavailable => EquipmentLoadoutActionResultCodes.MutationPermitUnavailable,
         EquipmentLoadoutPreflight.PostCommitFault => EquipmentLoadoutActionResultCodes.PostCommitFault,
         EquipmentLoadoutPreflight.VerificationFailed => EquipmentLoadoutActionResultCodes.VerificationFailed,
+        EquipmentLoadoutPreflight.AmountUnavailable => EquipmentLoadoutActionResultCodes.AmountUnavailable,
         _ => EquipmentLoadoutActionResultCodes.ContractUnavailable,
     };
 }
