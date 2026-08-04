@@ -792,7 +792,7 @@ where components are supplied, it derives the target from the live resolver inst
 
 ```sh
 tools/game-mcp-client.py call game_purchase --arguments \
-  '{"uuid":"ATTRIBUTE_OR_UPGRADE_UUID","count":1}'
+  '{"uuid":"ATTRIBUTE_OR_UPGRADE_UUID","amount":1}'
 tools/game-mcp-client.py call game_agromancy --arguments \
   '{"mode":"add_plot_action","uuid":"PLOT_UUID","actionUuid":"PLOT_ACTION_UUID","amount":1}'
 tools/game-mcp-client.py call game_agromancy --arguments \
@@ -1042,7 +1042,7 @@ an idempotent tab reselect and leaves its page open; the MCP does not carry a Mo
 ```sh
 tools/game-mcp-client.py catalog
 tools/game-mcp-client.py navigate World --subtab Agromancy \
-  --plot-node-uuid PLOT_UUID --capture artifacts/agromancy.png
+  --uuid PLOT_UUID --capture artifacts/agromancy.png
 ```
 
 When `capture` is true, the server waits until the destination frame has rendered and returns the
@@ -1064,13 +1064,11 @@ on Unity's main thread, but its node structure, repeated paint, empty arrays, du
 text, and identical alternate tree are wire-internal ceremony and never ship. A cycle or hard
 depth/node bound is rendered as one explanatory line rather than recursively expanding forever.
 Unity rich-text markup is stripped. Computed text delegates run inline; the reader never clicks a
-node or renders a panel. The tool can return an inline screenshot with the tooltip open.
+node, renders a panel, or captures the framebuffer.
 
 ```sh
 tools/game-mcp-client.py tooltips --limit 25
 tools/game-mcp-client.py tooltip 'EXACT/PATH/FROM/CATALOG'
-tools/game-mcp-client.py tooltip 'EXACT/PATH/FROM/CATALOG' \
-  --capture artifacts/tooltip.png
 ```
 
 The audited manifest covers the native tooltip carrier/open/nesting shape, while the real-reference

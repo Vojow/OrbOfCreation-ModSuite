@@ -43,12 +43,14 @@ that can actually run. A purchasable decision includes its named native cost row
 spendable amounts; an unavailable decision carries its binding reason without a speculative
 ledger. Bonus controls are absent for time runes.
 
-`game_level(mode="purchase"|"bonus", uuid=...)` resolves stable UUID plus the exact published
-native type on Unity's main thread. Mutable admission is repeated immediately before the one
-native callback. The single postcondition sentinel is directional: `GetLevel` rises for a paid
-level, or `GetFreeLevels` rises for a bonus level. Success returns the settled level delta; a
-native no-op is verification failure. Resource balances and effect-record counts are neither
-captured nor reconciled.
+`game_level(mode="purchase"|"bonus", uuid=..., amount=...)` resolves stable UUID plus the exact
+published native type on Unity's main thread. `amount` is between 1 and 1000. Before each requested
+level the action re-reads `CanLevel`, the applicable native cost, resource visibility where needed,
+and `HasEnough`; it invokes the matching native callback only while those checks continue to pass
+and stops early when one no longer does. The single postcondition sentinel is directional:
+`GetLevel` rises for a paid level, or `GetFreeLevels` rises for a bonus level. Success returns the
+settled level delta; a complete native no-op is verification failure. Resource balances and
+effect-record counts are neither captured nor reconciled.
 
 ## Disposable-save live checklist
 
