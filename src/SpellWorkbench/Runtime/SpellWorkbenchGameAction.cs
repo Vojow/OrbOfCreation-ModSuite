@@ -297,7 +297,7 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 return SpellWorkbenchPricePreview.Refused(
                     SpellWorkbenchPreflight.SelectionUnavailable,
                     augmentReason);
-            if (!TryReadUsableCore(native, recipe, out var core, out var coreReason))
+            if (!TryReadAuthoredCore(native, recipe, out var core, out var coreReason))
                 return SpellWorkbenchPricePreview.Refused(
                     SpellWorkbenchPreflight.RecipeUnavailable,
                     coreReason);
@@ -480,7 +480,7 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 out var augments, out var augmentReason))
             return SpellWorkbenchSubmission.Reject(
                 SpellWorkbenchPreflight.SelectionUnavailable, augmentReason);
-        if (!TryReadUsableCore(native, recipe, out var core, out var coreReason))
+        if (!TryReadAuthoredCore(native, recipe, out var core, out var coreReason))
             return SpellWorkbenchSubmission.Reject(
                 SpellWorkbenchPreflight.RecipeUnavailable, coreReason);
         if (!TryAdmitCreate(native, manager, recipe, core, augments,
@@ -556,7 +556,7 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         }
     }
 
-    private static bool TryReadUsableCore(
+    private static bool TryReadAuthoredCore(
         SpellWorkbenchNativeBindings native,
         object recipe,
         out List<object> core,
@@ -572,13 +572,9 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 reason = "The recipe's authored core glyphs are not currently usable.";
                 return false;
             }
-            if (!TryValidateGlyph(
-                    native,
-                    glyph,
-                    native.ReadIdentity(glyph),
-                    expectAugment: false,
-                    out reason))
+            if (glyph.GetType() != native.GlyphType || native.IsGlyphAugment(glyph))
             {
+                reason = "The recipe's authored core glyph composition is invalid.";
                 return false;
             }
             core.Add(glyph);

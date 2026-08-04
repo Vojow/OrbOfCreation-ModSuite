@@ -1,5 +1,6 @@
 using System;
 using OrbModding.Common.Runtime.Configuration;
+using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime;
@@ -294,6 +295,10 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 world.Snapshot,
                 in context,
                 ordinal);
+            var purchaseRefusal = ProjectPurchaseRefusal(
+                command, world.Snapshot, in result, lifecycle,
+                configuration.Generation.Value);
+            if (purchaseRefusal is not null) return purchaseRefusal;
             var exactReason = ExactGameMcpReason(command, world.Snapshot, in result);
             return GameMcpCommandResult.FromAction(
                 in result,
@@ -1025,6 +1030,36 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         }
 
         return "This upgrade's live price is still refreshing; open its game screen and retry.";
+    }
+
+    internal static GameMcpCommandResult? ProjectPurchaseRefusal(
+        GameMcpCommand command,
+        GameWorldState world,
+        in ServiceActionResult result,
+        long lifecycle,
+        ulong configurationGeneration)
+    {
+        if (command.Kind != GameMcpCommandKind.Purchase ||
+            result.Disposition != ServiceActionDisposition.Skipped ||
+            !WorldPurchaseCostLookup.TryFindRange(
+                world.PurchaseCosts, command.TargetId, out var start, out var count))
+            return null;
+        for (var index = start; index < start + count; index++)
+        {
+            var cost = world.PurchaseCosts[index];
+            if (!cost.AffordabilityEvaluated || cost.ResourceAffordable) continue;
+            var resource = EntityIdentityFormatter.Describe(
+                cost.ResourceId, world.EntityIdentities);
+            var name = resource.HasName ? resource.Name : cost.ResourceId.ToString("D");
+            return GameMcpCommandResult.Rejected(
+                "unaffordable",
+                "Needs " + GameMcpNumberFormatter.Format(cost.CombinedEffectiveAmount) +
+                " " + name + ", but only " +
+                GameMcpNumberFormatter.Format(cost.AvailableAmount) + " is spendable.",
+                lifecycle,
+                configurationGeneration);
+        }
+        return null;
     }
 
     private sealed class GameMcpActionUnavailableException : Exception

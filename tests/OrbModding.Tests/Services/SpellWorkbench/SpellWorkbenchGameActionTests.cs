@@ -263,7 +263,7 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
     }
 
     [Fact]
-    public void EveryCoreAndDiscoveryComponentRequiresAnOwnedLevel()
+    public void RequestedDiscoveryComponentsRequireOwnershipButDiscoveredRecipeCoresAreBaked()
     {
         var (undiscovered, first, second) = Recipe();
         first.level = 0;
@@ -292,9 +292,8 @@ public sealed class SpellWorkbenchGameActionTests : IDisposable
 
         Assert.Equal(SpellWorkbenchPreflight.SelectionUnavailable, discovery.Preflight);
         Assert.Contains("not owned", discovery.Reason);
-        Assert.Equal(SpellWorkbenchPreflight.RecipeUnavailable, loadout.Preflight);
-        Assert.Contains("not owned", loadout.Reason);
-        Assert.Empty(SpellManager.instance.activeSpells.value);
+        Assert.True(loadout.Verified, loadout.Reason);
+        Assert.Single(SpellManager.instance.activeSpells.value);
     }
 
     [Fact]

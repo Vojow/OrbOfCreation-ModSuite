@@ -11,6 +11,45 @@ namespace OrbModding.ProfileTests;
 public sealed class GameMcpCorrectnessCoreTests
 {
     [Fact]
+    public void Skipped_unaffordable_purchase_names_the_short_resource_and_amounts()
+    {
+        var target = Guid.Parse("31111111-1111-4111-8111-111111111111");
+        var resource = Guid.Parse("32222222-2222-4222-8222-222222222222");
+        var world = new GameWorldState
+        {
+            EntityIdentities = EntityIdentityCatalogSnapshot.Bound(1, new[]
+            {
+                new EntityIdentityName(resource, "ResourceSO", "Knowledge", "knowledge"),
+            }),
+            PurchaseCosts = PublicationTable<WorldPurchaseCost>.Create(new[]
+            {
+                new WorldPurchaseCost(
+                    target, resource, new BigDouble(100), new BigDouble(100), 1,
+                    new BigDouble(100),
+                    PublicationTable<WorldPurchaseCostModifierSource>.Empty,
+                    affordabilityEvaluated: true,
+                    availableAmount: new BigDouble(2),
+                    combinedEffectiveAmount: new BigDouble(100),
+                    resourceAffordable: false,
+                    resourceAffordabilityReasonCode: "insufficient_resource",
+                    affordable: false,
+                    affordabilityReasonCode: "unaffordable"),
+            }),
+        };
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Purchase, 1, 1, "upgrade", target, Guid.Empty,
+            "UpgradeSO", 1, string.Empty, string.Empty, false, false);
+        var action = ServiceActionResult.Skipped(CommonActionResultCodes.Skipped);
+
+        var result = AutomataServiceCycleRuntime.ProjectPurchaseRefusal(
+            command, world, in action, 1, 1);
+
+        Assert.NotNull(result);
+        Assert.Equal("unaffordable", result!.Code);
+        Assert.Equal("Needs 100 Knowledge, but only 2 is spendable.", result.Reason);
+    }
+
+    [Fact]
     public void ActionRegistrationDependsOnlyOnRuntimeAdmission()
     {
         Assert.True(GameMcpActionRegistrationPolicy.ShouldCompose(
