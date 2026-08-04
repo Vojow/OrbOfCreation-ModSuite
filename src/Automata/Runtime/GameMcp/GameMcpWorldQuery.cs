@@ -784,7 +784,7 @@ internal static class GameMcpWorldQuery
         WorldRitual previous = default;
         var hadBefore = oldWorld is not null &&
             WorldLookup.TryFind(oldWorld.Rituals, command.TargetId, out previous);
-        if (command.Mode == "activate")
+        if (command.Mode is "activate" or "end")
             return Change(command.TargetId,
                 hadBefore ? (object)previous.InBattle : null,
                 current.InBattle,

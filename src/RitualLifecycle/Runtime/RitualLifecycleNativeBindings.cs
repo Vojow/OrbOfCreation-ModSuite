@@ -46,6 +46,8 @@ internal sealed class RitualLifecycleNativeBindings
         "ritual-lifecycle.ritual-duration-kind-action",
         "ritual-lifecycle.ritual-duration-active-action",
         "ritual-lifecycle.ritual-cancel-action",
+        "ritual-lifecycle.battle-active-ritual-action",
+        "ritual-lifecycle.battle-end-ritual-action",
     };
 
     private RitualLifecycleNativeBindings(
@@ -76,7 +78,9 @@ internal sealed class RitualLifecycleNativeBindings
         Func<object, bool> inBattle,
         Func<object, bool> isDurationRitual,
         Func<object, bool> isDurationActive,
-        Action<object> cancel)
+        Action<object> cancel,
+        Func<object, object?> activeRitual,
+        Action<object> endRitual)
     {
         RitualType = ritualType;
         ManagerType = managerType;
@@ -106,6 +110,8 @@ internal sealed class RitualLifecycleNativeBindings
         IsDurationRitual = isDurationRitual;
         IsDurationActive = isDurationActive;
         Cancel = cancel;
+        ActiveRitual = activeRitual;
+        EndRitual = endRitual;
     }
 
     internal Type RitualType { get; }
@@ -136,6 +142,8 @@ internal sealed class RitualLifecycleNativeBindings
     internal Func<object, bool> IsDurationRitual { get; }
     internal Func<object, bool> IsDurationActive { get; }
     internal Action<object> Cancel { get; }
+    internal Func<object, object?> ActiveRitual { get; }
+    internal Action<object> EndRitual { get; }
 
     internal static bool TryCreate(
         out RitualLifecycleNativeBindings? bindings,
@@ -190,6 +198,8 @@ internal sealed class RitualLifecycleNativeBindings
             var durationKind = Method(29, ritual, "IsDurationRitual", typeof(bool), Type.EmptyTypes, includeContract);
             var durationActive = Method(30, ritual, "IsDurationActive", typeof(bool), Type.EmptyTypes, includeContract);
             var cancel = Method(31, ritual, "Cancel", typeof(void), Type.EmptyTypes, includeContract);
+            var activeRitual = Field(32, battleType, "activeRitual", variable, includeContract);
+            var endRitual = Method(33, battleType, "EndRitual", typeof(void), Type.EmptyTypes, includeContract);
 
             bindings = new RitualLifecycleNativeBindings(
                 ritual,
@@ -219,7 +229,9 @@ internal sealed class RitualLifecycleNativeBindings
                 FieldFunc<bool>(active),
                 Func<bool>(durationKind),
                 Func<bool>(durationActive),
-                Action1(cancel));
+                Action1(cancel),
+                ObjectField(activeRitual),
+                Action1(endRitual));
             reason = string.Empty;
             return true;
         }

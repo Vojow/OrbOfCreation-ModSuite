@@ -87,14 +87,29 @@ internal sealed class RitualLifecycleGameAction : IDisposable
             if (selected is null)
                 return Reject(RitualLifecyclePreflight.ContractUnavailable,
                     "The Ritual selection is not available in this scene.");
-            if (native.IsInCombat(battle))
+            var inCombat = native.IsInCombat(battle);
+            if (action.Kind == RitualLifecycleActionKind.EndBattle)
+            {
+                if (!inCombat)
+                    return Reject(RitualLifecyclePreflight.NoBattleActive,
+                        "There is no active ritual battle to end.");
+                var activeRitual = native.ActiveRitual(battle);
+                if (activeRitual is null || !native.IsSelected(activeRitual, ritual))
+                    return Reject(RitualLifecyclePreflight.WrongActiveRitual,
+                        EntityIdentityFormatter.Format(action.RitualId) +
+                        " is not the ritual currently in battle.");
+            }
+            else if (inCombat)
+            {
                 return Reject(RitualLifecyclePreflight.BattleAlreadyActive,
                     "Ritual controls are unavailable while a ritual battle is active.");
+            }
             if (action.Kind is not RitualLifecycleActionKind.Select and
                 not RitualLifecycleActionKind.Deselect and
                 not RitualLifecycleActionKind.SetLevel and
                 not RitualLifecycleActionKind.Activate and
-                not RitualLifecycleActionKind.CancelDuration)
+                not RitualLifecycleActionKind.CancelDuration and
+                not RitualLifecycleActionKind.EndBattle)
                 return Reject(RitualLifecyclePreflight.ContractUnavailable,
                     "That ritual control is not available.");
 
@@ -144,7 +159,7 @@ internal sealed class RitualLifecycleGameAction : IDisposable
             if (!_tryCaptureMutationPermit())
                 return Reject(RitualLifecyclePreflight.MutationPermitUnavailable,
                     _readOwnershipFailure());
-            return Execute(in action, native, manager, selected, ritual);
+            return Execute(in action, native, manager, battle, selected, ritual);
         }
         catch (Exception exception) when (IsExpected(exception))
         {
@@ -171,6 +186,7 @@ internal sealed class RitualLifecycleGameAction : IDisposable
         in RitualLifecycleAction action,
         RitualLifecycleNativeBindings native,
         object manager,
+        object battle,
         object selected,
         object ritual)
     {
@@ -204,13 +220,25 @@ internal sealed class RitualLifecycleGameAction : IDisposable
             {
                 native.Cancel(ritual);
             }
+            else if (action.Kind == RitualLifecycleActionKind.EndBattle)
+            {
+                if (!native.IsInCombat(battle))
+                    return Reject(RitualLifecyclePreflight.NoBattleActive,
+                        "The ritual battle ended before this control ran.");
+                var activeRitual = native.ActiveRitual(battle);
+                if (activeRitual is null || !native.IsSelected(activeRitual, ritual))
+                    return Reject(RitualLifecyclePreflight.WrongActiveRitual,
+                        EntityIdentityFormatter.Format(action.RitualId) +
+                        " is no longer the ritual in battle.");
+                native.EndRitual(battle);
+            }
             else
             {
                 throw new InvalidOperationException("Unsupported ritual control.");
             }
 
             stage = RitualLifecycleNativeStage.Verification;
-            return OutcomeObserved(in action, native, selected, ritual)
+            return OutcomeObserved(in action, native, battle, selected, ritual)
                 ? Verified()
                 : Fault(in action, RitualLifecyclePreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed,
@@ -218,7 +246,7 @@ internal sealed class RitualLifecycleGameAction : IDisposable
         }
         catch (Exception exception) when (IsExpected(exception))
         {
-            if (OutcomeObserved(in action, native, selected, ritual)) return Verified();
+            if (OutcomeObserved(in action, native, battle, selected, ritual)) return Verified();
             return Fault(in action, RitualLifecyclePreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew,
                 "The native Ritual callback threw before the requested transition was observable: " +
@@ -229,6 +257,7 @@ internal sealed class RitualLifecycleGameAction : IDisposable
     private static bool OutcomeObserved(
         in RitualLifecycleAction action,
         RitualLifecycleNativeBindings native,
+        object battle,
         object selected,
         object ritual) =>
         action.Kind switch
@@ -238,6 +267,7 @@ internal sealed class RitualLifecycleGameAction : IDisposable
             RitualLifecycleActionKind.SetLevel => native.SelectedLevel(ritual) == action.Level,
             RitualLifecycleActionKind.Activate => native.InBattle(ritual),
             RitualLifecycleActionKind.CancelDuration => !native.IsDurationActive(ritual),
+            RitualLifecycleActionKind.EndBattle => !native.IsInCombat(battle),
             _ => false,
         };
 

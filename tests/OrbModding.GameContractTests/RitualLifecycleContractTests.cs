@@ -77,6 +77,21 @@ public sealed class RitualLifecycleContractTests
         Assert.Equal(0x06001369, assembly.GetMethodToken("RitualSO", "Cancel"));
     }
 
+    [GameAssemblyFact]
+    public void EndRitualClearsTheActiveBattleAfterOwningTheNativeOutcome()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.True(assembly.MethodReferencesMethod(
+            "BattleManager", "EndRitual", "RitualSO", "End"));
+        Assert.Contains(References(assembly, "BattleManager", "EndRitual"),
+            reference => reference.DeclaringType == "AbstractVariable`1<RitualSO>" &&
+                         reference.MemberName == "Clear");
+        Assert.Contains(References(assembly, "BattleManager", "IsInCombat"),
+            reference => reference.DeclaringType == "UntypedAbstractVariable" &&
+                         reference.MemberName == "HasValue");
+    }
+
     [Fact]
     public void ManifestNamesTheCompleteRitualLifecycleBindingSet()
     {
@@ -99,6 +114,7 @@ public sealed class RitualLifecycleContractTests
             "ritual-lifecycle.battle-manager-instance-action", "ritual-lifecycle.battle-active-action",
             "ritual-lifecycle.ritual-in-battle-action", "ritual-lifecycle.ritual-duration-kind-action",
             "ritual-lifecycle.ritual-duration-active-action", "ritual-lifecycle.ritual-cancel-action",
+            "ritual-lifecycle.battle-active-ritual-action", "ritual-lifecycle.battle-end-ritual-action",
             "ritual-lifecycle.ritual-usage-requirements-capture",
             "ritual-lifecycle.ritual-fill-list-capture", "ritual-lifecycle.fill-entries-capture",
             "ritual-lifecycle.fill-resource-capture", "ritual-lifecycle.fill-capacity-capture",

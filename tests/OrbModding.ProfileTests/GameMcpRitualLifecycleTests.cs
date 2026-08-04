@@ -26,7 +26,7 @@ public sealed class GameMcpRitualLifecycleTests
         Assert.Equal(new[] { "mode", "uuid" },
             tool["inputSchema"]!["required"]!.Values<string>());
         Assert.Equal(
-            new[] { "select", "deselect", "set_level", "activate", "cancel_duration" },
+            new[] { "select", "deselect", "set_level", "activate", "cancel_duration", "end" },
             tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
         Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
         var operation = GameMcpProtocolRouter.BuildOperation("game_ritual", new JObject
@@ -128,7 +128,30 @@ public sealed class GameMcpRitualLifecycleTests
         Assert.Equal("5", (string?)delta["next"]!["activate"]!["costs"]![0]!["amount"]);
     }
 
-    private static GameWorldState World(bool selected, int level, int activeInstances)
+    [Fact]
+    public void Settled_end_delta_reports_the_observed_active_battle_clear()
+    {
+        var before = World(selected: true, level: 4, activeInstances: 0, inBattle: true);
+        var after = World(selected: true, level: 4, activeInstances: 0, inBattle: false);
+        var command = new GameMcpCommand(1, GameMcpCommandKind.RitualLifecycle,
+            9, 3, "end", RitualId, Guid.Empty, "RitualSO",
+            1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 93));
+
+        var delta = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after, generation: 94), command,
+            GameMcpCommandResult.Committed("committed", 9, 3)), after);
+
+        Assert.Equal(RitualId.ToString("D"), (string?)delta["uuid"]);
+        Assert.True((bool)delta["activeBattle"]!["before"]!);
+        Assert.False((bool)delta["activeBattle"]!["after"]!);
+    }
+
+    private static GameWorldState World(
+        bool selected,
+        int level,
+        int activeInstances,
+        bool inBattle = false)
     {
         var activation = selected
             ? PublicationTable<WorldRitualCost>.Create(new[]
@@ -141,7 +164,7 @@ public sealed class GameMcpRitualLifecycleTests
         var decision = new WorldRitualDecision(selected, 8, true, true,
             activation, completion);
         var modifiers = default(RawRitualModifiers);
-        var ritual = new WorldRitual(RitualId, true, false, activeInstances,
+        var ritual = new WorldRitual(RitualId, true, inBattle, activeInstances,
             6, 5, level, 0, 0, 0, 0, 0, 1, BigDouble.Zero, in modifiers,
             false, false, false, 0, 1, 20, 1d, 0, decision: decision);
         var rateInputs = default(RawResourceRateInputs);

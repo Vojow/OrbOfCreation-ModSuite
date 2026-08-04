@@ -18,4 +18,6 @@ internal static class RitualLifecycleActionResultCodes
     internal static readonly ServiceActionResultCode MutationPermitUnavailable = new(1991);
     internal static readonly ServiceActionResultCode PostCommitFault = new(1992);
     internal static readonly ServiceActionResultCode VerificationFailed = new(1993);
+    internal static readonly ServiceActionResultCode NoBattleActive = new(1994);
+    internal static readonly ServiceActionResultCode WrongActiveRitual = new(1995);
 }

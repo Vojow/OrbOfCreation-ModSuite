@@ -22501,6 +22501,18 @@
       "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
     },
     {
+      "id": "ritual-lifecycle.battle-active-ritual-action", "assembly": "assembly-csharp",
+      "type": "BattleManager", "typeVisibility": "public", "kind": "field", "member": "activeRitual",
+      "visibility": "public", "static": false, "valueType": "RitualVariable",
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "ritual-lifecycle.battle-end-ritual-action", "assembly": "assembly-csharp",
+      "type": "BattleManager", "typeVisibility": "public", "kind": "method", "member": "EndRitual",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [],
+      "owners": ["Automata Ritual lifecycle GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
       "id": "ritual-lifecycle.ritual-in-battle-action", "assembly": "assembly-csharp",
       "type": "RitualSO", "typeVisibility": "public", "kind": "field", "member": "inBattle",
       "visibility": "public", "static": false, "valueType": "System.Boolean",

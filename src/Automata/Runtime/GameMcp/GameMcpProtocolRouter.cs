@@ -369,7 +369,7 @@ internal sealed class GameMcpProtocolRouter
                 break;
             case "game_ritual":
                 builder.Mode = RequireOneOf(arguments, "mode",
-                    "select", "deselect", "set_level", "activate", "cancel_duration");
+                    "select", "deselect", "set_level", "activate", "cancel_duration", "end");
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 if (builder.Mode == "set_level")
                     builder.Amount = checked(RequiredInt(arguments, "level", 0, int.MaxValue - 1) + 1);
@@ -859,7 +859,7 @@ internal sealed class GameMcpProtocolRouter
                     new JObject
                     {
                         ["mode"] = EnumSchema(
-                            "select", "deselect", "set_level", "activate", "cancel_duration"),
+                            "select", "deselect", "set_level", "activate", "cancel_duration", "end"),
                         ["uuid"] = StringSchema("Published RitualSO UUID."),
                         ["level"] = IntegerSchema(0, int.MaxValue - 1),
                     },
@@ -868,7 +868,8 @@ internal sealed class GameMcpProtocolRouter
                     ModeRule("deselect", forbidden: new[] { "level" }),
                     ModeRule("set_level", new[] { "level" }),
                     ModeRule("activate", forbidden: new[] { "level" }),
-                    ModeRule("cancel_duration", forbidden: new[] { "level" })),
+                    ModeRule("cancel_duration", forbidden: new[] { "level" }),
+                    ModeRule("end", forbidden: new[] { "level" })),
                 readOnly: false,
                 idempotent: false),
             Tool(

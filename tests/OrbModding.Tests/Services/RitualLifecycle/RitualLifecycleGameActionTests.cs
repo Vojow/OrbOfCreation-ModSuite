@@ -110,6 +110,42 @@ public sealed class RitualLifecycleGameActionTests : IDisposable
     }
 
     [Fact]
+    public void End_battle_targets_the_active_ritual_and_observes_the_native_clear()
+    {
+        var ritual = Ritual();
+        Register(ritual);
+        ritual.inBattle = true;
+        BattleManager.instance!.activeRitual.ToggleValue(ritual);
+        using var boundary = Boundary();
+
+        var ended = Submit(boundary, ritual, RitualLifecycleActionKind.EndBattle);
+
+        Assert.True(ended.Verified, ended.Reason);
+        Assert.False(BattleManager.instance.IsInCombat());
+        Assert.False(ritual.inBattle);
+    }
+
+    [Fact]
+    public void End_battle_refuses_the_wrong_target_and_no_op_fails_the_active_sentinel()
+    {
+        var active = Ritual();
+        var requested = Ritual();
+        Register(active);
+        Register(requested);
+        BattleManager.instance!.activeRitual.ToggleValue(active);
+        using var boundary = Boundary();
+
+        var wrong = Submit(boundary, requested, RitualLifecycleActionKind.EndBattle);
+        Assert.Equal(RitualLifecyclePreflight.WrongActiveRitual, wrong.Preflight);
+
+        BattleManager.instance.activeRitual.ToggleValue(active);
+        BattleManager.instance.activeRitual.ToggleValue(requested);
+        BattleManager.instance.SuppressEndRitual = true;
+        var noOp = Submit(boundary, requested, RitualLifecycleActionKind.EndBattle);
+        Assert.Equal(RitualLifecyclePreflight.VerificationFailed, noOp.Preflight);
+    }
+
+    [Fact]
     public async Task Unity_thread_is_refused_before_identity_or_native_state()
     {
         var ritual = Ritual();

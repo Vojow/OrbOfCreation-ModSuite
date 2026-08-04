@@ -32,6 +32,8 @@ internal static class RitualLifecycleActionResultMapper
             RitualLifecyclePreflight.LevelLocked => RitualLifecycleActionResultCodes.LevelLocked,
             RitualLifecyclePreflight.LevelOutOfRange => RitualLifecycleActionResultCodes.LevelOutOfRange,
             RitualLifecyclePreflight.BattleAlreadyActive => RitualLifecycleActionResultCodes.BattleAlreadyActive,
+            RitualLifecyclePreflight.NoBattleActive => RitualLifecycleActionResultCodes.NoBattleActive,
+            RitualLifecyclePreflight.WrongActiveRitual => RitualLifecycleActionResultCodes.WrongActiveRitual,
             RitualLifecyclePreflight.Unaffordable => RitualLifecycleActionResultCodes.Unaffordable,
             RitualLifecyclePreflight.NoDurationEffect => RitualLifecycleActionResultCodes.NoDurationEffect,
             RitualLifecyclePreflight.MutationPermitUnavailable => RitualLifecycleActionResultCodes.MutationPermitUnavailable,

@@ -690,6 +690,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             "set_level" => RitualLifecycleActionKind.SetLevel,
             "activate" => RitualLifecycleActionKind.Activate,
             "cancel_duration" => RitualLifecycleActionKind.CancelDuration,
+            "end" => RitualLifecycleActionKind.EndBattle,
             _ => throw new ArgumentException("unsupported Ritual mode " + command.Mode),
         };
         var action = new RitualLifecycleAction(kind, command.TargetId,

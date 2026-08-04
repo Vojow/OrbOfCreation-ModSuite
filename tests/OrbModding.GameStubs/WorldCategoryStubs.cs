@@ -1061,15 +1061,26 @@ public sealed class RitualManager
     public void ActivateSelectedRitual()
     {
         if (!SuppressActivation && selectedRitual.Value is { } ritual)
+        {
             ritual.inBattle = true;
+            if (BattleManager.instance?.activeRitual.Value is null)
+                BattleManager.instance?.activeRitual.ToggleValue(ritual);
+        }
     }
 }
 
 public sealed class BattleManager
 {
     public static BattleManager? instance;
-    public bool InCombat { get; set; }
-    public bool IsInCombat() => InCombat;
+    public RitualVariable activeRitual = new RitualVariable();
+    public bool SuppressEndRitual { get; set; }
+    public bool IsInCombat() => activeRitual.Value is not null;
+    public void EndRitual()
+    {
+        if (SuppressEndRitual || activeRitual.Value is not { } ritual) return;
+        ritual.inBattle = false;
+        activeRitual.ToggleValue(ritual);
+    }
 }
 
 public sealed class AchievementSO : IdScriptableObject

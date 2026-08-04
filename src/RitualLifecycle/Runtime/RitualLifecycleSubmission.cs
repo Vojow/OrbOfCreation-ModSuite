@@ -15,6 +15,8 @@ internal enum RitualLifecyclePreflight
     LevelLocked,
     LevelOutOfRange,
     BattleAlreadyActive,
+    NoBattleActive,
+    WrongActiveRitual,
     Unaffordable,
     NoDurationEffect,
     MutationPermitUnavailable,

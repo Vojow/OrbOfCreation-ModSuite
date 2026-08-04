@@ -1,7 +1,7 @@
 # Ritual lifecycle native pipeline
 
 This dossier audits the player-visible Ritual list controls in Orb of Creation v1.0.5. It covers
-selection, starting-level staging, battle activation, and cancellation of an active duration
+selection, starting-level staging, battle activation and ending, and cancellation of an active duration
 reward. Composed Ritual discovery belongs to the shared Devote surface documented for
 `game_discover`; ordinary Alchemy and Concept assignment are separate capability families.
 
@@ -65,16 +65,27 @@ the `ritualInstances` list, ends each duration effect, and republishes the activ
 It does **not** cancel an in-progress battle. The MCP verb is therefore named `cancel_duration`,
 and its sentinel is the game-written duration-active predicate becoming false.
 
+## Ending an active battle
+
+The battle screen's **End Ritual** control invokes `BattleManager.EndRitual()` directly. The
+method closes the battle view, ends the active `RitualSO`, opens the results modal unless that
+ritual hides it, and finally clears `BattleManager.activeRitual`. Native
+`BattleManager.IsInCombat()` is exactly `activeRitual.HasValue()`, so the action admits only the
+UUID currently stored in that variable and verifies the single game-written outcome
+`IsInCombat() == false`. The results modal is a native consequence, not a second postcondition.
+
 ## Preconditions and risk
 
 Every mutation resolves UUID plus exact `RitualSO`, requires discovery, a current lifecycle, the
-Unity main thread, a live `RitualManager` and `BattleManager`, and no ritual battle already in
-progress. Level staging additionally requires selection, an unlocked dial, and an in-range level.
+Unity main thread, and live `RitualManager` and `BattleManager` instances. Ordinary list controls
+require no active battle; `end` instead requires the named ritual to be the active battle. Level
+staging additionally requires selection, an unlocked dial, and an in-range level.
 Activation revalidates selection and the exact native activation cost immediately before payment.
 Duration cancellation requires the exact active-duration predicates.
 
 Selection and level staging are reversible UI-backed state changes. Activation spends resources
-and enters combat; it is the high-risk transition. Duration cancellation ends ongoing rewards and
+and enters combat; ending a battle finalizes its outcome and can open results, so both are
+high-risk transitions. Duration cancellation ends ongoing rewards and
 is irreversible for that effect instance. Wrong identity/type or an absent requested transition
 fails closed; no accounting receipt or refund inference is assembled.
 
@@ -90,7 +101,9 @@ fails closed; no accounting receipt or refund inference is assembled.
    battle nor balances change.
 6. Activate an affordable ritual; verify the payment shown on screen, battle entry, enemy wave,
    and settled `inBattle` transition. Payment is observed live but is not a verifier gate.
-7. While the battle is active, verify all Ritual controls refuse with the battle constraint.
+7. While the battle is active, call `end` with another ritual and verify it refuses; then call it
+   with the active ritual and verify the battle ends, results open, and settled `inBattle` becomes
+   false.
 8. Complete a duration ritual, confirm its Cancel button is visible, call `cancel_duration`, and
    verify the effect disappears and the settled duration state becomes inactive.
 9. Attempt `cancel_duration` on a non-duration or inactive ritual and verify an ordinary refusal.

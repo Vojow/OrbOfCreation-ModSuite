@@ -138,7 +138,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_discover` | Preview or confirm one composed discovery on seven surfaces, or drive one Discovery Tree offer lifecycle |
 | `game_equipment` | Equip/increase or unequip/decrease one created artifact using live native multi-buy |
 | `game_alchemy` | Add, remove, or reorder one ordinary Alchemy recipe through its visible list |
-| `game_ritual` | Select a Ritual, set its starting level, activate it, or cancel its duration reward |
+| `game_ritual` | Select a Ritual, set its starting level, activate or end its battle, or cancel its duration reward |
 | `game_level` | Buy one paid or bonus level from an ordinary level-list control |
 | `game_loadout` | Switch or edit the active player loadout, or save/load/clear an Equipment or Alchemy snapshot slot |
 | `game_challenge` | Select, activate, abandon, or fetch the Time/prestige challenge offers |
@@ -352,7 +352,7 @@ unselected rows do not publish a speculative ledger. `setLevel`, `activate`, and
 `cancelDuration` each carry only the binding availability or refusal reason that affects the next
 decision.
 
-`game_ritual(mode="select"|"deselect"|"activate"|"cancel_duration", uuid=...)` reproduces the
+`game_ritual(mode="select"|"deselect"|"activate"|"end"|"cancel_duration", uuid=...)` reproduces the
 corresponding visible Ritual control. `mode="set_level"` also requires the zero-based `level`
 shown by the Ritual screen. The old runestone-selection manager methods are empty/null-returning in
 v1.0.5 and are deliberately absent. Activation revalidates the selected Ritual and the screen's

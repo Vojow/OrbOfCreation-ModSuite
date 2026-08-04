@@ -9,6 +9,7 @@ internal enum RitualLifecycleActionKind
     SetLevel = 3,
     Activate = 4,
     CancelDuration = 5,
+    EndBattle = 6,
 }
 
 internal readonly struct RitualLifecycleAction
