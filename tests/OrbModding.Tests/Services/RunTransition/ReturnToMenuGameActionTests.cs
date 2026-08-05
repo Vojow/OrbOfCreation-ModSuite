@@ -49,6 +49,26 @@ public sealed class ReturnToMenuGameActionTests
     }
 
     [Fact]
+    public void OnlyTheVisibleInteractableControlParticipatesInAdmission()
+    {
+        var hidden = new UIBackToMenuButton { name = "Hidden template" };
+        hidden.SetLiveForTest(false);
+        using var oneLive = Boundary(buttons: new object[] { hidden, _button });
+
+        var accepted = Submit(oneLive);
+
+        Assert.True(accepted.Verified, accepted.Reason);
+
+        UIScreenFlash.ResetForTests();
+        var second = new UIBackToMenuButton { name = "Second live control" };
+        using var ambiguous = Boundary(buttons: new object[] { _button, second });
+        var refused = Submit(ambiguous);
+        Assert.Equal(ReturnToMenuPreflight.ControlUnavailable, refused.Preflight);
+        Assert.Contains("Back to Menu", refused.Reason, StringComparison.Ordinal);
+        Assert.Contains("Second live control", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NativeNoOpFailsTheSingleScreenTransitionSentinel()
     {
         UIScreenFlash.SuppressFade = true;

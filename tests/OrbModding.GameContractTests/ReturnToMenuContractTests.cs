@@ -5,12 +5,36 @@ namespace OrbModding.GameContractTests;
 
 public sealed class ReturnToMenuContractTests
 {
+    [Fact]
+    public void ManifestNamesTheCompleteLiveControlBindingSet()
+    {
+        var manifest = NativeContractManifest.Load();
+        var expected = new[]
+        {
+            "return-to-menu.button.type-action",
+            "return-to-menu.button-action",
+            "return-to-menu.screen-flash.type-action",
+            "return-to-menu.screen-flash-instance-action",
+            "return-to-menu.screen-flash-active-action",
+            "return-to-menu.button-component-action",
+            "return-to-menu.component-game-object-action",
+            "return-to-menu.behaviour-enabled-action",
+            "return-to-menu.game-object-active-action",
+            "return-to-menu.selectable-interactable-action",
+            "return-to-menu.object-name-action",
+        };
+
+        Assert.All(expected, id => Assert.Single(
+            manifest.Contracts, contract => contract.Id == id));
+    }
+
     [GameAssemblyFact]
     public void BackToMenuBindingsAndStartDestinationStayTokenExact()
     {
         using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
 
         Assert.Equal(0x0600280d, assembly.GetMethodToken("UIBackToMenuButton", "BackToMenu"));
+        Assert.Equal("UnityEngine.UI.Button", assembly.GetFieldType("UIBackToMenuButton", "button"));
         Assert.Equal(0x0400148c, assembly.GetFieldToken("UIBackToMenuButton", "manualSave"));
         Assert.Equal(0x060006ff, assembly.GetMethodToken("SaveStateManager", "BackToMainMenu"));
         Assert.Equal(0x06000700, assembly.GetMethodToken("SaveStateManager", "AnimateChangeScene",

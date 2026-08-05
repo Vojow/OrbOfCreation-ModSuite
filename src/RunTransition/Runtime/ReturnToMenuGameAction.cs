@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using OrbModding.Common;
 
@@ -73,18 +74,26 @@ internal sealed class ReturnToMenuGameAction : IDisposable
                 return Reject(ReturnToMenuPreflight.TransitionInProgress,
                     "The game is already changing screens.");
             var buttons = _findLoadedObjects(native.ButtonType) ?? Array.Empty<object>();
-            if (buttons.Length != 1 || buttons[0] is null ||
-                !native.ButtonType.IsInstanceOfType(buttons[0]))
+            var live = new List<object>(buttons.Length);
+            for (var index = 0; index < buttons.Length; index++)
+            {
+                var candidate = buttons[index];
+                if (candidate is not null && native.ButtonType.IsInstanceOfType(candidate) &&
+                    native.ControlLive(candidate))
+                    live.Add(candidate);
+            }
+            if (live.Count != 1)
             {
                 return Reject(ReturnToMenuPreflight.ControlUnavailable,
-                    buttons.Length == 0
-                        ? "The Back to Menu control is not loaded."
-                        : "The game exposed more than one Back to Menu control.");
+                    live.Count == 0
+                        ? "The game has no visible, interactable Back to Menu control."
+                        : "The game has more than one visible, interactable Back to Menu control: " +
+                          string.Join(", ", live.ConvertAll(value => native.ControlName(value))) + ".");
             }
             if (!_tryCaptureMutationPermit())
                 return Reject(ReturnToMenuPreflight.MutationPermitUnavailable,
                     _readOwnershipFailure());
-            return Execute(native, buttons[0], flash);
+            return Execute(native, live[0], flash);
         }
         catch (Exception exception) when (IsExpected(exception))
         {

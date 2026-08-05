@@ -1070,7 +1070,23 @@ public class UIScreenFlash : UnityEngine.MonoBehaviour
 
 public class UIBackToMenuButton : UnityEngine.MonoBehaviour
 {
+    private readonly UnityEngine.UI.Button button;
     public VoidEventChannel manualSave = new();
+
+    public UIBackToMenuButton()
+    {
+        var root = new UnityEngine.GameObject("Back to Menu");
+        gameObject = root;
+        transform = root.transform;
+        name = root.name;
+        button = root.AddComponent<UnityEngine.UI.Button>();
+    }
+
+    public void SetLiveForTest(bool value)
+    {
+        gameObject.SetActive(value);
+        button.interactable = value;
+    }
 
     public void BackToMenu()
     {
@@ -3692,7 +3708,7 @@ namespace UnityEngine
 {
     public class Object
     {
-        public string name = string.Empty;
+        public string name { get; set; } = string.Empty;
 
         public static T Instantiate<T>(T original, Transform parent, bool worldPositionStays) where T : Object, new()
         {
@@ -4125,6 +4141,8 @@ namespace UnityEngine.UI
     public class Selectable : UnityEngine.Behaviour
     {
         public bool interactable { get; set; } = true;
+
+        public bool IsInteractable() => interactable;
 
         public Graphic? targetGraphic { get; set; }
     }

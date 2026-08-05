@@ -15,6 +15,10 @@
     {
       "id": "unity-engine-core-module",
       "file": "UnityEngine.CoreModule.dll"
+    },
+    {
+      "id": "unity-engine-ui",
+      "file": "UnityEngine.UI.dll"
     }
   ],
   "baselines": [
@@ -77,6 +81,11 @@
           "assembly": "unity-engine-core-module",
           "sha256": "026CDD86C17F6E2243C642570CA94ECE089B7B3FD1018850BE9F66E5E31F9E8E",
           "provenance": "artifacts/game-v105/Orb Of Creation_Data/Managed/UnityEngine.CoreModule.dll"
+        },
+        {
+          "assembly": "unity-engine-ui",
+          "sha256": "EC935B2B3085D20B817791DF7262BCB165967A870F08BA346B883FE141334EAD",
+          "provenance": "artifacts/game-v105/Orb Of Creation_Data/Managed/UnityEngine.UI.dll"
         }
       ]
     },
@@ -23631,6 +23640,30 @@
     {
       "id": "return-to-menu.button-action", "assembly": "assembly-csharp", "type": "UIBackToMenuButton", "typeVisibility": "public", "kind": "method", "member": "BackToMenu",
       "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.button-component-action", "assembly": "assembly-csharp", "type": "UIBackToMenuButton", "typeVisibility": "public", "kind": "field", "member": "button",
+      "visibility": "private", "static": false, "valueType": "UnityEngine.UI.Button", "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.component-game-object-action", "assembly": "unity-engine-core-module", "type": "UnityEngine.Component", "typeVisibility": "public", "kind": "method", "member": "get_gameObject",
+      "visibility": "public", "static": false, "returnType": "UnityEngine.GameObject", "parameters": [], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.behaviour-enabled-action", "assembly": "unity-engine-core-module", "type": "UnityEngine.Behaviour", "typeVisibility": "public", "kind": "method", "member": "get_enabled",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.game-object-active-action", "assembly": "unity-engine-core-module", "type": "UnityEngine.GameObject", "typeVisibility": "public", "kind": "method", "member": "get_activeInHierarchy",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.selectable-interactable-action", "assembly": "unity-engine-ui", "type": "UnityEngine.UI.Selectable", "typeVisibility": "public", "kind": "method", "member": "IsInteractable",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.object-name-action", "assembly": "unity-engine-core-module", "type": "UnityEngine.Object", "typeVisibility": "public", "kind": "method", "member": "get_name",
+      "visibility": "public", "static": false, "returnType": "System.String", "parameters": [], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
     },
     {
       "id": "return-to-menu.screen-flash.type-action", "assembly": "assembly-csharp", "type": "UIScreenFlash", "typeVisibility": "public", "kind": "type",
