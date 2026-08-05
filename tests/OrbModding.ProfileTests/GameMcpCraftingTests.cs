@@ -169,6 +169,23 @@ public sealed class GameMcpCraftingTests
         Assert.Null(postState["worldGeneration"]);
     }
 
+    [Fact]
+    public void VerifiedInstantCraftReportsCompletionWhenNoQueueQuantityCanPersist()
+    {
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Crafting, 15, 8, "craft", RecipeId, Guid.Empty,
+            "CraftingRecipeSO", 1, string.Empty, string.Empty,
+            false, false, frameContext: Context(queuedAmount: 0));
+        var committed = GameMcpCommandResult.Committed("committed", 15, 8);
+
+        var postState = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            Context(queuedAmount: 0), command, committed));
+
+        Assert.Equal("Craft Sigils", (string?)postState["name"]);
+        Assert.True((bool)postState["completed"]!);
+        Assert.Null(postState["queued"]);
+    }
+
     [Theory]
     [InlineData("automate", 3, 5)]
     [InlineData("cancel_automation", 5, 2)]

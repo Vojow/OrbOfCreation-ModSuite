@@ -1619,6 +1619,14 @@ internal static class GameMcpWorldQuery
         }
         if (current.Pipeline != WorldCraftingPipeline.Direct)
         {
+            if (hasBefore && current.QueuedAmount == previous.QueuedAmount)
+            {
+                return new JObject
+                {
+                    ["uuid"] = command.TargetId.ToString("D"),
+                    ["completed"] = true,
+                }.Freeze();
+            }
             return Change(
                 command.TargetId,
                 hasBefore ? new GameMcpDomainValue(previous.QueuedAmount) : null,
