@@ -61,6 +61,13 @@ internal static class GameMcpEntityWireNormalizer
         Rename(item, "availableAmount", "amount");
         Rename(item, "trueQuantity", "amount");
         Rename(item, "trueRate", "netRatePerSecond");
+        Rename(item, "equippedLevel", "equippedCount");
+        Rename(item, "equippedStacks", "equippedCount");
+        Rename(item, "activeAmount", "activeCount");
+        if (item["position"] is JValue position &&
+            position.Type == JTokenType.Integer && (long)position < 0)
+            item.Remove("position");
+        NormalizeCostRow(item);
 
         if (item["status"] is JValue statusValue)
         {
@@ -71,12 +78,13 @@ internal static class GameMcpEntityWireNormalizer
                 "rejected" or "skipped" => "refused",
                 _ => status,
             };
-            if (status == "available") item.Remove("code");
+            if (status is "available" or "committed") item.Remove("code");
             else if (status is "committed" or "refused" or "rejected" or "skipped" or "faulted")
             {
                 if (item["code"] is JValue mutationCode)
                 {
-                    var normalizedCode = Snake((string?)mutationCode ?? string.Empty);
+                    var normalizedCode = CanonicalCode(
+                        Snake((string?)mutationCode ?? string.Empty));
                     if (string.Equals(normalizedCode, (string?)item["status"],
                             StringComparison.Ordinal))
                         item.Remove("code");
@@ -86,12 +94,19 @@ internal static class GameMcpEntityWireNormalizer
             }
             else if (item["code"] is JToken readCode)
             {
-                item["reasonCode"] = Snake((string?)readCode ?? string.Empty);
+                item["reasonCode"] = CanonicalCode(Snake((string?)readCode ?? string.Empty));
                 item.Remove("code");
             }
         }
+        if (item["status"] is JValue arrayStatus &&
+            ((string?)arrayStatus is "available" or "committed") &&
+            IsArrayReadResult(item))
+        {
+            item.Remove("status");
+            item.Remove("code");
+        }
         if (item["reasonCode"] is JValue reasonCode)
-            item["reasonCode"] = Snake((string?)reasonCode ?? string.Empty);
+            item["reasonCode"] = CanonicalCode(Snake((string?)reasonCode ?? string.Empty));
         if (item["kind"] is JValue { Type: JTokenType.String } kind)
             item["kind"] = Snake((string?)kind ?? string.Empty);
         NormalizeCode(item, "outcome");
@@ -131,6 +146,7 @@ internal static class GameMcpEntityWireNormalizer
                 IsPlayerMagnitude(property.Name) &&
                 number.Type is JTokenType.Integer or JTokenType.Float)
             {
+                if (IsBoundedInContext(item, property.Name)) continue;
                 number.Value = GameMcpNumberFormatter.Format(
                     Convert.ToDouble(number.Value, CultureInfo.InvariantCulture));
                 continue;
@@ -140,7 +156,71 @@ internal static class GameMcpEntityWireNormalizer
 
         RemovePassingPredicates(item);
         DeduplicateChildIdentity(item, "state");
+        PromoteNestedPrimaryIdentity(item);
         PromoteIdentity(item);
+    }
+
+    private static void PromoteNestedPrimaryIdentity(JObject item)
+    {
+        if (item["uuid"] is not null) return;
+        var roles = new[]
+        {
+            "action", "recipe", "plotNode", "plot", "target", "owner", "reference",
+            "spellRecipe", "coreType", "entry", "partialRow",
+        };
+        for (var index = 0; index < roles.Length; index++)
+        {
+            if (item[roles[index]] is not JObject identity || identity["uuid"] is null)
+                continue;
+            CopyIfPresent(identity, item, "uuid");
+            CopyIfPresent(identity, item, "name");
+            CopyIfPresent(identity, item, "internalName");
+            CopyIfPresent(identity, item, "category");
+            CopyIfPresent(identity, item, "nativeType");
+            return;
+        }
+    }
+
+    private static void CopyIfPresent(JObject source, JObject target, string field)
+    {
+        if (source[field] is JToken value) target[field] = value.DeepClone();
+    }
+
+    private static void NormalizeCostRow(JObject item)
+    {
+        if (item["resource"] is null && item["resourceId"] is null) return;
+        if (item["cost"] is not null && item["amount"] is JToken held &&
+            item["spendableAmount"] is null)
+        {
+            item["spendableAmount"] = held;
+            item.Remove("amount");
+            return;
+        }
+        if (item["cost"] is null && item["spendableAmount"] is not null &&
+            item["amount"] is JToken price)
+        {
+            item["cost"] = price;
+            item.Remove("amount");
+            return;
+        }
+        if (item["cost"] is null && item["required"] is JToken required &&
+            item["availableToInvest"] is JToken available)
+        {
+            item["cost"] = required;
+            item["spendableAmount"] = available;
+            item.Remove("required");
+            item.Remove("availableToInvest");
+            return;
+        }
+        if (item["cost"] is null && item["effectiveCost"] is JToken effective &&
+            item["amount"] is JToken spendable)
+        {
+            item["cost"] = effective;
+            item["spendableAmount"] = spendable;
+            item.Remove("effectiveCost");
+            item.Remove("totalCost");
+            item.Remove("amount");
+        }
     }
 
     private static void NormalizeIdentity(
@@ -317,6 +397,14 @@ internal static class GameMcpEntityWireNormalizer
         _ => false,
     };
 
+    private static bool IsBoundedInContext(JObject item, string field) =>
+        field == "capacity" && item["slot"] is not null && item["empty"] is not null;
+
+    private static bool IsArrayReadResult(JObject item) =>
+        item["rows"] is JArray || item["results"] is JArray ||
+        item["matches"] is JArray || item["categories"] is JArray ||
+        item["tooltips"] is JArray;
+
     private static bool IsBoundedCardinal(string field) => field switch
     {
         "level" or "levels" or "committedLevel" or "effectiveLevel" or
@@ -324,7 +412,7 @@ internal static class GameMcpEntityWireNormalizer
         "bonusLevel" or "totalLevel" or "purchasedLevel" or "purchasedLevels" or
         "freeLevels" or "baseLevelExcludingBonus" or "effectiveCap" or "artificialCap" or
         "equippedStacks" or "maximumStacks" or "multiBuy" or "queued" or
-        "queuedAmount" or "purchaseAmount" or "maximumAmount" or "currentCharges" or
+        "queuedAmount" or "queuedQuantity" or "purchaseAmount" or "maximumAmount" or "currentCharges" or
         "maximumCharges" or "requestedAmount" or "rerollsLeft" or "selectionMaximum" or
         "resetCount" or "persistenceCurrent" or "remainingBonusLevels" or
         "maximumBatch" => true,
@@ -351,5 +439,11 @@ internal static class GameMcpEntityWireNormalizer
         }
         return result.ToString();
     }
+
+    private static string CanonicalCode(string value) => value switch
+    {
+        "amount_not_available" or "usage_unavailable" => "amount_unavailable",
+        _ => value,
+    };
 }
 #endif

@@ -115,7 +115,7 @@ public sealed class GameMcpCraftingTests
         var cost = Assert.Single(row["nextCosts"]!).Value<JObject>()!;
         Assert.Equal("Arcane Dust", (string?)cost["resource"]!["name"]);
         Assert.Equal("75", (string?)cost["cost"]);
-        Assert.Equal("900", (string?)cost["amount"]);
+        Assert.Equal("900", (string?)cost["spendableAmount"]);
         Assert.True((bool)cost["affordable"]!);
         Assert.True((bool)row["cancelManual"]!["available"]!);
         Assert.Equal(3, (int)row["automation"]!["amount"]!);
@@ -132,7 +132,7 @@ public sealed class GameMcpCraftingTests
             0,
             10));
 
-        Assert.Equal("available", (string?)result["status"]);
+        Assert.Null(result["status"]);
         var rows = result["rows"]!.Values<JObject>().ToArray();
         Assert.Equal(2, rows.Length);
         Assert.Equal("Sigil Queue", (string?)rows[0]?["queue"]?["name"]);
@@ -160,8 +160,8 @@ public sealed class GameMcpCraftingTests
             Context(queuedAmount: 6), command, committed));
 
         Assert.Equal("Craft Sigils", (string?)postState["name"]);
-        Assert.Equal("4", (string?)postState["queued"]!["before"]!);
-        Assert.Equal("6", (string?)postState["queued"]!["after"]!);
+        Assert.Equal(4, (int)postState["queued"]!["before"]!);
+        Assert.Equal(6, (int)postState["queued"]!["after"]!);
         Assert.Null(postState["nextCosts"]);
         Assert.Null(postState["queue"]);
         Assert.Null(postState["receipt"]);

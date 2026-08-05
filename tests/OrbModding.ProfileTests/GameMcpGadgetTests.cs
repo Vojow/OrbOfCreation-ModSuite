@@ -8,6 +8,21 @@ namespace OrbModding.ProfileTests;
 public sealed class GameMcpGadgetTests
 {
     [Fact]
+    public void Array_read_success_has_no_aggregate_status_or_code()
+    {
+        var result = GameMcpTestHarness.Json(new GameMcpObjectBuilder
+        {
+            ["status"] = "committed",
+            ["code"] = "tooltip_catalog_read",
+            ["tooltips"] = new GameMcpArrayBuilder(),
+        });
+
+        Assert.Null(result["status"]);
+        Assert.Null(result["code"]);
+        Assert.Empty(result["tooltips"]!);
+    }
+
+    [Fact]
     public void EveryRequestTimeGadgetHasOneDistinctAccessorAndGameplayHasNone()
     {
         var mappings = new[]
@@ -233,8 +248,7 @@ public sealed class GameMcpGadgetTests
         var scholar = tabs[1];
         Assert.True((bool)scholar["active"]!);
         var strips = scholar["subtabStrips"]!.Values<JObject>().ToArray();
-        Assert.Equal(new[] { "loadout_strip", "inventory_strip" },
-            strips.Select(strip => (string)strip["id"]!).ToArray());
+        Assert.All(strips, strip => Assert.Null(strip["id"]));
         Assert.Equal("Discover", (string?)strips[0]["active"]);
         Assert.Equal("Inventory", (string?)strips[1]["active"]);
         var encoded = json.ToString(Newtonsoft.Json.Formatting.None);
@@ -270,10 +284,10 @@ public sealed class GameMcpGadgetTests
 
         var projected = GameMcpTestHarness.Json(terminal.Project(command));
 
-        Assert.Equal(new[] { "status", "code", "scene", "runtimeAvailable" },
+        Assert.Equal(new[] { "status", "scene", "runtimeAvailable" },
             projected.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)projected["status"]);
-        Assert.Equal("continue_invoked", (string?)projected["code"]);
+        Assert.Null(projected["code"]);
         Assert.Equal("Main", (string?)projected["scene"]);
         Assert.True((bool)projected["runtimeAvailable"]!);
     }

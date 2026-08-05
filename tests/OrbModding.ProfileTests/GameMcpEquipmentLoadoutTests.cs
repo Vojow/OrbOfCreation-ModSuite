@@ -86,14 +86,14 @@ public sealed class GameMcpEquipmentLoadoutTests
         Assert.Equal("Prismatic Lens", (string?)row["name"]);
         Assert.Equal(TypeId.ToString("D"), (string?)row["equipmentType"]!["uuid"]);
         Assert.Equal("Focus", (string?)row["equipmentType"]!["name"]);
-        Assert.Equal(1, (int)row["equippedStacks"]!);
+        Assert.Equal(1, (int)row["equippedCount"]!);
         Assert.Equal(4, (int)row["maximumStacks"]!);
         Assert.Equal(2, (int)row["equip"]!["maximumAmount"]!);
         Assert.Equal(1, (int)row["unequip"]!["maximumAmount"]!);
         var cost = Assert.Single(row["equip"]!["usageCosts"]!).Value<JObject>()!;
         Assert.Equal("Focus", (string?)cost["resource"]!["name"]);
         Assert.Equal("20", (string?)cost["cost"]);
-        Assert.Equal("80", (string?)cost["amount"]);
+        Assert.Equal("80", (string?)cost["spendableAmount"]);
         Assert.Null(row["receipt"]);
         Assert.Null(row["payment"]);
     }

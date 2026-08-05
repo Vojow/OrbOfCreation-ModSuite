@@ -51,7 +51,7 @@ public sealed class GameMcpPlotLifecycleTests
         Assert.Equal("Moon Garden", (string?)row["plot"]!["name"]);
         Assert.Equal("Plant Moondust", (string?)row["action"]!["name"]);
         Assert.Equal(2, (int)row["active"]!);
-        Assert.True((bool)row["add"]!["available"]!);
+        Assert.Equal("available", (string?)row["add"]!["availability"]);
         Assert.Equal(3, (int)row["add"]!["plotQuantityCost"]!);
         Assert.True((bool)row["remove"]!["available"]!);
 
@@ -68,8 +68,8 @@ public sealed class GameMcpPlotLifecycleTests
         var blocked = Assert.Single(Json(GameMcpWorldQuery.ListRows(
             GameMcpTestHarness.Context(blockedWorld, generation: 912),
             "agromancy-plot-actions", 0, 10).Freeze(), blockedWorld)["rows"]!.Values<JObject>());
-        Assert.Null(blocked["add"]!["available"]);
-        Assert.True((bool)blocked["add"]!["requiresLiveCheck"]!);
+        Assert.Equal("unknown", (string?)blocked["add"]!["availability"]);
+        Assert.Equal("game_agromancy add_plot_action", (string?)blocked["add"]!["checkWith"]);
         Assert.Null(blocked["add"]!["reasonCode"]);
         Assert.Null(blocked["add"]!["plotQuantityCost"]);
     }

@@ -236,7 +236,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         Assert.Equal(currencyId.ToString("D"), (string?)cost["resource"]!["uuid"]);
         Assert.NotNull(cost["resource"]!["name"]);
         Assert.Equal("1.1e24", (string?)cost["cost"]);
-        Assert.Equal("5.63e24", (string?)cost["amount"]);
+        Assert.Equal("5.63e24", (string?)cost["spendableAmount"]);
         Assert.Null(row["reroll"]);
         Assert.DoesNotContain("debugMode", response.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("override", response.ToString(), StringComparison.Ordinal);
@@ -265,7 +265,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         Assert.Equal("1.1e24",
             (string?)unaffordable["row"]!["initiate"]!["costs"]![0]!["cost"]);
         Assert.Equal("100",
-            (string?)unaffordable["row"]!["initiate"]!["costs"]![0]!["amount"]);
+            (string?)unaffordable["row"]!["initiate"]!["costs"]![0]!["spendableAmount"]);
     }
 
     [Fact]
@@ -565,7 +565,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
             var nextCost = Assert.Single(confirmResponse["initiate"]!["costs"]!.Values<JObject>())!;
             Assert.Equal("Knowledge", (string?)nextCost["resource"]!["name"]);
             Assert.Equal("1.4e4", (string?)nextCost["cost"]);
-            Assert.Equal("2e25", (string?)nextCost["amount"]);
+            Assert.Equal("2e25", (string?)nextCost["spendableAmount"]);
             Assert.True((bool)nextCost["affordable"]!);
 
             static int CommittedBytes(JObject postState)
@@ -576,7 +576,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                     response.ToString(Newtonsoft.Json.Formatting.None));
             }
             Assert.Equal(
-                new[] { 573, 662, 441 },
+                new[] { 573, 662, 450 },
                 new[]
                 {
                     CommittedBytes(rerollResponse),
@@ -677,7 +677,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         var cost = Assert.Single(projected["initiate"]!["costs"]!.Values<JObject>())!;
         Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
         Assert.Equal("7.5e6", (string?)cost["cost"]);
-        Assert.Equal("2.43e25", (string?)cost["amount"]);
+        Assert.Equal("2.43e25", (string?)cost["spendableAmount"]);
         Assert.Null(projected["discovered"]);
         Assert.Null(projected["totalDiscovered"]);
         Assert.Null(projected["mutationScope"]);

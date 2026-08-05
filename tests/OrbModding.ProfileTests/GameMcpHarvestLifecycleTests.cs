@@ -95,7 +95,7 @@ public sealed class GameMcpHarvestLifecycleTests
         var usage = Assert.Single(row["addElement"]!["costs"]!.Values<JObject>());
         Assert.Equal("Mana", (string?)usage["resource"]!["name"]);
         Assert.Equal("4", (string?)usage["cost"]);
-        Assert.Equal("20", (string?)usage["amount"]);
+        Assert.Equal("20", (string?)usage["spendableAmount"]);
         var action = Assert.Single(row["actions"]!.Values<JObject>());
         Assert.Equal("Grow", (string?)action["name"]);
         Assert.Equal(1, (int)action["active"]!);

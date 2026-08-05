@@ -113,11 +113,11 @@ public sealed class GameMcpSpellCompositionTests
         var cast = Assert.Single(equipped["castCosts"]!.Values<JObject>())!;
         Assert.Equal("Knowledge", (string?)cast["resource"]!["name"]);
         Assert.Equal("4.4e3", (string?)cast["cost"]);
-        Assert.Equal("9e6", (string?)cast["amount"]);
+        Assert.Equal("9e6", (string?)cast["spendableAmount"]);
         Assert.True((bool)cast["affordable"]!);
         var drain = Assert.Single(equipped["drainCostsPerSecond"]!.Values<JObject>())!;
         Assert.Equal("250", (string?)drain["cost"]);
-        Assert.Equal("9e6", (string?)drain["amount"]);
+        Assert.Equal("9e6", (string?)drain["spendableAmount"]);
     }
 
     [Fact]

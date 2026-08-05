@@ -136,7 +136,7 @@ public sealed class GameMcpGenericDiscoveryTests
         Assert.Equal(ResourceId.ToString("D"), (string?)cost["resource"]!["uuid"]);
         Assert.Equal("Arcane Dust", (string?)cost["resource"]!["name"]);
         Assert.Equal("5", (string?)cost["cost"]);
-        Assert.Equal("8", (string?)cost["amount"]);
+        Assert.Equal("8", (string?)cost["spendableAmount"]);
         Assert.True((bool)cost["affordable"]!);
 
         Assert.Equal("Amplify", (string?)postState["name"]);

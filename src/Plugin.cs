@@ -2593,6 +2593,12 @@ public sealed class Plugin : BaseUnityPlugin
             details["width"] = encodedTexture.width;
             details["height"] = encodedTexture.height;
             details["scene"] = SceneManager.GetActiveScene().name;
+            if (_uiShell is not null && _uiShell.IsAlive)
+            {
+                var tabs = _uiShell.CaptureNativeTabsForGameMcp();
+                var activeTab = tabs.FirstOrDefault(tab => tab.Active);
+                details["activeTab"] = activeTab.Label;
+            }
             if (command.SaveCapture)
             {
                 var directory = AutomataTraceRunRoot.Child("mcp-screenshots");
@@ -2753,8 +2759,6 @@ public sealed class Plugin : BaseUnityPlugin
                 labels.Add(subtab.Label);
                 if (subtab.Active) projectedStrip["active"] = subtab.Label;
             }
-            var first = strip.FirstOrDefault().Label ?? string.Empty;
-            projectedStrip["id"] = GameMcpEntityWireNormalizer.Snake(first) + "_strip";
             projectedStrip["labels"] = labels;
             projectedStrips.Add(projectedStrip);
         }
@@ -2902,13 +2906,68 @@ public sealed class Plugin : BaseUnityPlugin
         GameMcpCommandResult result,
         bool capture = false)
     {
-        yield return null;
+        var deadline = Time.realtimeSinceStartup + 1f;
+        var stableFrames = 0;
+        string? previous = null;
+        while (Time.realtimeSinceStartup < deadline && stableFrames < 2)
+        {
+            yield return null;
+            var current = NavigationSettlementSignature();
+            stableFrames = string.Equals(previous, current, StringComparison.Ordinal)
+                ? stableFrames + 1
+                : 0;
+            previous = current;
+        }
+        if (string.Equals(result.Status, "committed", StringComparison.Ordinal) &&
+            stableFrames < 2)
+        {
+            result = GadgetCommitted(
+                "navigation_arrived",
+                new GameMcpObjectBuilder
+                {
+                    ["postStateUnavailable"] = new GameMcpObjectBuilder
+                    {
+                        ["reasonCode"] = "post_state_timeout",
+                        ["reason"] = "the destination did not settle within one second",
+                    }.Freeze(),
+                });
+            capture = false;
+        }
+        else if (string.Equals(result.Status, "committed", StringComparison.Ordinal) &&
+                 _uiShell is not null && _uiShell.IsAlive)
+        {
+            var tabs = _uiShell.CaptureNativeTabsForGameMcp();
+            var activeTab = tabs.FirstOrDefault(tab => tab.Active);
+            var subtabs = CaptureSubtabs();
+            var details = new GameMcpObjectBuilder
+            {
+                ["scene"] = SceneManager.GetActiveScene().name,
+                ["activeTab"] = activeTab.Label,
+                ["subtabStrips"] = ProjectGameMcpSubtabStrips(
+                    subtabs.Select(value =>
+                        (value.StripKey, value.Label, value.Active))),
+            };
+            if (command.TargetId != Guid.Empty)
+                details["selectedPlot"] = command.TargetId.ToString("D");
+            result = GadgetCommitted("navigation_arrived", details);
+        }
         if (capture && string.Equals(result.Status, "committed", StringComparison.Ordinal))
         {
             yield return CaptureGameMcpAtEndOfFrame(command, result);
             yield break;
         }
         CompleteGameMcpCommand(command, result);
+    }
+
+    private string NavigationSettlementSignature()
+    {
+        var values = CaptureSubtabs();
+        var activeTab = _uiShell is not null && _uiShell.IsAlive
+            ? _uiShell.CaptureNativeTabsForGameMcp().FirstOrDefault(tab => tab.Active).Label
+            : string.Empty;
+        return SceneManager.GetActiveScene().name + "|" + activeTab + "|" +
+            string.Join("|", values.Select(value =>
+                value.StripKey + ":" + value.Label + ":" + (value.Active ? "1" : "0")));
     }
 
     private GameMcpCommandResult NavigateExactPlot(
@@ -3060,7 +3119,6 @@ public sealed class Plugin : BaseUnityPlugin
                 labels.Add(subtab.Label);
                 if (subtab.Active) strip["active"] = subtab.Label;
             }
-            strip["id"] = GameMcpEntityWireNormalizer.Snake(firstLabel) + "_strip";
             strip["labels"] = labels;
             strips.Add(strip);
         }
@@ -3149,7 +3207,9 @@ public sealed class Plugin : BaseUnityPlugin
                 "tooltip_contract_unavailable",
                 _gameMcpTooltipContractFailure);
         }
-        var entries = CaptureActiveHoverTooltips();
+        var entries = CaptureActiveHoverTooltips()
+            .Where(static entry => entry.tooltipItem is not null)
+            .ToArray();
         if (!int.TryParse(
                 command.PayloadValue,
                 System.Globalization.NumberStyles.None,
@@ -3161,31 +3221,32 @@ public sealed class Plugin : BaseUnityPlugin
                 "the immutable tooltip catalog offset could not be decoded");
         }
         var projected = new GameMcpArrayBuilder();
-        var end = (int)Math.Min(entries.Count, (long)offset + command.Amount);
+        var end = (int)Math.Min(entries.Length, (long)offset + command.Amount);
         for (var index = offset; index < end; index++)
         {
             var hover = entries[index];
-            var item = hover.tooltipItem;
-            if (item is null) continue;
+            var item = hover.tooltipItem!;
             if (!nativeAccess.TryReadSubTooltips(hover, out var children, out var readFailure))
             {
                 return GadgetRejected(
                     "tooltip_contract_unavailable",
                     readFailure);
             }
-            projected.Add(new GameMcpObjectBuilder
+            var tooltip = new GameMcpObjectBuilder
             {
                 ["path"] = NativeObjectPath.BuildIndexed(hover),
                 ["name"] = item.GetName(),
-            });
+            };
+            AddTooltipIdentity(tooltip, item);
+            projected.Add(tooltip);
         }
         var details = new GameMcpObjectBuilder
         {
             ["scene"] = SceneManager.GetActiveScene().name,
-            ["total"] = entries.Count,
+            ["total"] = entries.Length,
             ["tooltips"] = projected,
         };
-        if (end < entries.Count) details["nextOffset"] = end;
+        if (end < entries.Length) details["nextOffset"] = end;
         return GadgetCommitted(
             "tooltip_catalog_read",
             details);
@@ -3238,6 +3299,7 @@ public sealed class Plugin : BaseUnityPlugin
                 hover.tooltipItem,
                 children,
                 inspected);
+            AddTooltipIdentity(details, hover.tooltipItem);
         }
         catch (Exception exception)
         {
@@ -3260,6 +3322,15 @@ public sealed class Plugin : BaseUnityPlugin
                 hover.gameObject.activeInHierarchy)
             .OrderBy(hover => ScreenOrderKey(hover.transform), StringComparer.Ordinal)
             .ToArray();
+
+    private static void AddTooltipIdentity(
+        GameMcpObjectBuilder result,
+        ITooltipable item)
+    {
+        if (item is not IdScriptableObject entity) return;
+        var uuid = entity.GetGuid();
+        if (uuid != Guid.Empty) result["uuid"] = uuid.ToString("D");
+    }
 
     private static string ScreenOrderKey(Transform transform)
     {

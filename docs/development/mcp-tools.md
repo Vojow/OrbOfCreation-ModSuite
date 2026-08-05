@@ -172,12 +172,18 @@ Composite tables cannot be addressed by an arbitrary related UUID; use `world_li
 
 Supply `uuids` with 1–200 canonical UUIDs. Results preserve input order without repeating an index or UUID on
 successful rows. A typed not-found or invalid result repeats the implicated UUID because that is
-failure evidence. Every row comes from the same pinned publication; the server does not issue a
+failure evidence. Array reads have no aggregate status: each result owns its availability, while a
+category or schema failure that prevents the call from running remains a top-level refusal. Every
+row comes from the same pinned publication; the server does not issue a
 generation or retain a snapshot token across calls.
+Localized collection gaps mark only the implicated list/search/get row unavailable and attach the
+partial row plus exact evidence there; unaffected rows in the same call remain ordinary results.
 
-Paged list and catalog reads use one pagination vocabulary: `total` and — only when more rows remain —
-`nextOffset`. There is no redundant `returned` or `hasMore`; the collection length and
-`nextOffset` say both. The collection itself is always present, including when it is empty.
+Paged list and catalog reads use one pagination vocabulary: `total`, `nextOffset` when more rows
+remain, and `truncated:true` when a byte bound delivered fewer rows than requested. `nextOffset`
+always equals the input offset plus the rows actually delivered. There is no redundant `returned`
+or `hasMore`; the collection itself is always present, including when it is empty. Search has no
+cursor and therefore says `truncated:true` whenever its exact total exceeds the returned matches.
 
 `entity_catalog` complements `world_search` with the game's complete live runtime identity registry.
 At the first stable Playing world capture after `RuntimeReady`, the suite validates and copies that
@@ -195,9 +201,11 @@ reference; UUID-only joins are unnecessary. Catalog membership and naming do not
 visibility, availability, or a world-category row. Lifecycle replacement clears the catalog before
 the next bind, so no prior-save Unity reference or label survives.
 
-`world_list` and `world_get` use the same deliberate player-relevant row projection:
-stable identity plus the small set of availability, level, quantity, occupancy, readiness, or
-progress fields useful for comparing rows. Raw capture inputs, cached implementation fields,
+`world_list` and `world_get` use the same deliberate player-relevant row projection. Every entity
+row leads with its primary `uuid` and `name`; composite rows promote their actionable primary
+identity while retaining separately named secondary references. Rows then carry only the small set
+of availability, unambiguous paid/bonus/total level, quantity, occupancy, readiness, or progress
+fields useful for comparing rows. Raw capture inputs, cached implementation fields,
 resource traits, rate inputs, and modifier structs stay out of world rows. `explain_entity` owns
 deeper evaluated evidence. Purchase-cost rows are composite and therefore remain a `world_list`
 surface.
@@ -207,9 +215,9 @@ immediate/drain observations and are not mislabeled as purchase prices. Every di
 the screen's spend units: nominal native costs are divided by the resource quality percent through
 the audited `GetTrueSpend` formula before serialization. Each structure/upgrade cost row exposes
 `baseCost`, verified `effectiveCost`, optional `groupLevels`/`groupCost`, and named
-`costModifiers`. It also exposes the resource's same-publication canonical spendable `amount`, the
-`totalCost` after duplicate-resource rows are combined, `resourceAffordable`, and
-`purchaseAffordable`, with reason codes only when false. Ordinary resources spend true holdings;
+`costModifiers`. Every cost row uses `cost` for the screen price and `spendableAmount` for the
+same-publication player pool, with `affordable` and a reason only when the decision was evaluated.
+Ordinary resources spend true holdings;
 bandwidth resources spend headroom. These fields use the same exact combiner as Auto Buy and do not
 include Auto Buy's configurable reserve or excess policy.
 
@@ -228,9 +236,10 @@ the research tooltip and native availability evaluator apply the challenge adjus
 research modifiers are included in the native effective result but are not misattributed as direct
 members of the research row.
 
-The same detailed row is the complete pre-decision surface for `game_research`. It names the immediate or
+The same detailed row is the complete pre-decision surface for `game_research`. Uncapped research
+omits `maximumLevel` rather than serializing the game's zero sentinel. It names the immediate or
 queue route, live multi-buy maximum, exact number of levels the native cumulative loop will accept,
-and ordered named costs paired with each resource's canonical current `amount`. While development
+and ordered named costs paired with each resource's canonical `spendableAmount`. While development
 is active it includes elapsed/required/remaining progress and per-resource investment; associated
 research types carry their remaining free bonus levels and investment caps. Only currently
 UI-reachable next verbs appear: `develop`, `pause`, `resume`, `cancel`, and `bonus`. A committed
@@ -242,11 +251,11 @@ actual recipes and is the pre-decision surface for `game_craft`. A recipe row le
 visibility, purchase, queue, page-relation, or output-capacity axis. `execution` identifies the
 direct, existing-stack, or new-instance route. Page routes include current `queuedAmount` and the
 named queue's used/maximum slots. `purchaseAmount` and named `nextCosts` carry the exact next cost,
-canonical spendable resource `amount`, and affordability before any mutation. Direct costs use the
+canonical `spendableAmount`, and affordability before any mutation. Direct costs use the
 same `recipeCost.Multiply(purchaseAmount)` lineage as native `Execute`; page costs use the same
 `GetTotalCost(previous,purchaseAmount)` lineage as native `QueueCraft`. Named `types`, `inputs`,
 `outputs`, and `consumableOutputs` preserve authored order. An input
-uses `cost` for the recipe requirement and canonical `amount` for what is spendable now (bandwidth
+uses `cost` for the recipe requirement and canonical `spendableAmount` for what is spendable now (bandwidth
 headroom for a bandwidth resource); outputs use `yield`. Only failed engagement-drain evidence is
 emitted in `drainBlockers`. The category is unavailable unless both recipe and resource collectors
 are clean.
@@ -265,7 +274,7 @@ authoritative empty entity result; `world_list(entity-requirements)` retains the
 owner, ordinal, and runtime type evidence. If a searchable entity row itself is returned and that
 entity owns an unmodeled leaf, the search result is explicitly incomplete for that entity. Its
 `total` counts only stable-identity matches that the response can actually return. The tool accepts
-no offset, so a bounded result never advertises an unusable continuation cursor.
+no offset, so a bounded result carries `truncated:true` instead of advertising an unusable cursor.
 
 ### Discovery decision loop
 
@@ -277,7 +286,7 @@ The Discovery Tree is a transient in-game event rather than a standing page, whi
 lifecycle lives inside the one discovery tool instead of a permanent tool of its own.
 
 In Idle mode, `initiate` reports `available`, a stable false `reasonCode` when needed, and each exact
-cost line as a named `resource` plus `cost`, canonical spendable `amount`, and `affordable`. In
+cost line as a named `resource` plus `cost`, canonical `spendableAmount`, and `affordable`. In
 Choice mode, `offers` contains named UUID/category/native-type references in native order.
 `selectedOfferUuid` appears only after selection. `rerollAvailable` appears only in Choice mode. An
 empty offer set omits `offers`.
@@ -297,7 +306,7 @@ Every `alchemy-recipes`, `equipment`, `glyphs`, `rituals`, `spell-recipes`, and 
 has one `discover` decision from the native `IDiscoverable` evaluator. It names whether the entity
 is visible, already discovered, required for downstream play, currently discoverable, and
 affordable. Its ordered `costs` pair each named resource's screen-formatted `cost` with the same
-canonical spendable `amount` used everywhere else. Failed decision axes carry a stable reason;
+canonical `spendableAmount` used everywhere else. Failed decision axes carry a stable reason;
 attempting a mutation is never required to learn affordability.
 
 `game_discover` is the sole discovery namespace, and it is deliberately component-first. The game's
@@ -333,7 +342,7 @@ attunement are post-state evidence, never payment-verification gates.
 ### Ordinary Alchemy loadout loop
 
 An `alchemy-recipes` detail row carries `alchemyLoadout` only for the six ordinary Alchemy families.
-It reports the current and queued amount, ordered slot when active, and the next visible add, remove,
+It reports `activeCount`, the ordered slot when active, and the next visible add, remove,
 and move decisions. An available add includes the live click-sized maximum and named per-use resource
 costs with current spendable holdings; an unavailable add carries only its binding reason. Concept
 recipes remain on `game_concept`, composed Alchemy discovery remains on `game_discover`, and recipe
@@ -342,7 +351,7 @@ leveling belongs to the unified level surface rather than this list lifecycle.
 `game_alchemy(mode="add"|"remove", uuid=..., amount=...)` applies the caller's explicit positive
 amount through the list's native counted mutation after revalidating live usage capacity.
 `mode="move"` instead requires the zero-based
-`destination` exposed by the row. Success returns only the settled queued amount before and after, or
+`destination` exposed by the row. Success returns only the settled `activeCount` before and after, or
 the ordered slot before and after for a move. The action boundary revalidates exact recipe identity,
 ordinary-family classification, discovery, and capacity before invoking the explicit-count core
 used by the UI wrappers, or the same list-swap route as the UI. The global multi-buy strip is never
@@ -1036,14 +1045,18 @@ subtabs are active `UIViewRadioButton` controls under the current native content
 popup templates are excluded. The response is a structured `scene` plus ordered `tabs`, each with
 its `label` and `active` flag; the active tab additionally carries `subtabStrips`, where every
 independent strip names its `active` label and its ordered `labels`. Unity hierarchy paths and
-unstable numeric indexes are deliberately absent.
+unstable numeric indexes are deliberately absent. Inactive tab content is not instantiated, and the
+audited v1.0.5 data and scene assets do not carry an authoritative tab-to-subtab roster. The catalog
+therefore omits inactive subtabs rather than navigating speculatively or guessing labels.
 
 `game_navigate(screen, subtab?, uuid?, capture?, maxWidth?)` accepts exact labels only. Name matching is
 ordinal and closed-world: zero or multiple matches reject with the exact candidate labels. Plot selection resolves
 the supplied UUID as a published `PlotNodeSO` and invokes the one audited active
 `UIPlotNodeList.OnNodeClick(PlotNodeSO)`. It is not a hardcoded Fruit Tree command.
-For a compound request, the server selects the top tab, waits one Unity frame for its native
-content hierarchy, then resolves and selects the requested subtab or plot. The whole operation
+For a compound request, the server selects the top tab, resolves and selects the requested subtab
+or plot, then waits up to one second for the active tab and complete live strip set to remain stable
+across frames. A timeout stays committed but returns only `postStateUnavailable`; it never labels a
+mid-transition strip set or capture as settled. The whole operation
 still returns one terminal tool result; callers never split it into a retry sequence.
 Mods uses that identical catalog-indexed button path. Selecting Mods while it is already active is
 an idempotent tab reselect and leaves its page open; the MCP does not carry a Mods-only toggle case.
@@ -1054,7 +1067,7 @@ tools/game-mcp-client.py navigate World --subtab Agromancy \
   --uuid PLOT_UUID --capture artifacts/agromancy.png
 ```
 
-When `capture` is true, the server waits until the destination frame has rendered and returns the
+When `capture` is true, the server waits until the destination has settled and returns the
 PNG inline in the same terminal response. Compound navigation captures exactly once, after the
 final tab/subtab/plot selection; intermediate frames are never encoded. PNG size depends heavily on
 the destination's visual entropy: the mostly dark Start screen compresses far smaller than the
@@ -1068,6 +1081,8 @@ an `ITooltipable`, core name/type/description methods, and a private authored `s
 `OpenTooltip` renders the selected element. `game_tooltips` pages through current-screen elements by
 an exact native hierarchy path whose sibling indices disambiguate repeated Unity clone rows.
 `game_tooltip` requires one exact path and returns the tooltip as compact plain screen text. The
+catalog includes the owning UUID when the assigned tooltip item is itself an identity-bearing game
+entity; control-only rows retain the volatile current-screen path and name. The
 reader walks the native node, linked-tooltip, nested-tooltip, and currently inspected-panel graph
 on Unity's main thread, but its node structure, repeated paint, empty arrays, duplicate authored
 text, and identical alternate tree are wire-internal ceremony and never ship. A cycle or hard

@@ -40,7 +40,7 @@ internal static class GameMcpEntityExplainer
             var known = world.EntityIdentities.TryGet(uuid, out var identity);
             var code = known ? "not_world_projected" : "uuid_unknown";
             var reason = known
-                ? "this entity exists but has no detailed explanation; use world_search to find its category, then world_get"
+                ? "this entity exists but has no detailed explanation; read its published category with world_get"
                 : "nothing in this process knows this UUID; search entity_catalog by name";
             var remedy = new JObject { ["tool"] = "entity_catalog" };
             if (known && GameMcpEntityCapabilityMap.TryCategoryForNativeType(

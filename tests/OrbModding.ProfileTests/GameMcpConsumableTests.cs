@@ -90,7 +90,7 @@ public sealed class GameMcpConsumableTests
         var cost = Assert.Single(row["useCosts"]!).Value<JObject>()!;
         Assert.Equal("Toxicity", (string?)cost["resource"]!["name"]);
         Assert.Equal("250", (string?)cost["cost"]);
-        Assert.Equal("9e6", (string?)cost["amount"]);
+        Assert.Equal("9e6", (string?)cost["spendableAmount"]);
         Assert.True((bool)row["cancel"]!["available"]!);
         Assert.Equal(3, (int)row["discard"]!["maximumAmount"]!);
         Assert.False((bool)row["randomization"]!["enabled"]!);

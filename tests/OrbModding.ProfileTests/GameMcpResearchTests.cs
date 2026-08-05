@@ -84,7 +84,7 @@ public sealed class GameMcpResearchTests
         var cost = Assert.Single(row["develop"]!["costs"]!).Value<JObject>()!;
         Assert.Equal("Arcana", (string?)cost["resource"]!["name"]);
         Assert.Equal("20", (string?)cost["cost"]);
-        Assert.Equal("80", (string?)cost["amount"]);
+        Assert.Equal("80", (string?)cost["spendableAmount"]);
         Assert.Equal("40", (string?)row["investment"]![0]!["invested"]);
         Assert.Equal("Insight", (string?)row["researchTypes"]![0]!["researchType"]!["name"]);
         Assert.Equal(2, (int)row["researchTypes"]![0]!["remainingBonusLevels"]!);
@@ -102,7 +102,7 @@ public sealed class GameMcpResearchTests
         var develop = response["row"]!["develop"]!;
         var cost = Assert.Single(develop["costs"]!).Value<JObject>()!;
 
-        Assert.Equal("1", (string?)cost["amount"]);
+        Assert.Equal("1", (string?)cost["spendableAmount"]);
         Assert.False((bool)develop["affordable"]!);
         Assert.Equal("unaffordable", (string?)develop["reasonCode"]);
         Assert.Null(cost["lifetimeAmount"]);

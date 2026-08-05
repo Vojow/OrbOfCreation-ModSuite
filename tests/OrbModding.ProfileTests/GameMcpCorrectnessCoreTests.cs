@@ -288,7 +288,7 @@ public sealed class GameMcpCorrectnessCoreTests
         Assert.False(string.IsNullOrWhiteSpace((string?)active["plot"]!["name"]));
         Assert.Equal(actionId.ToString("D"), (string?)active["action"]!["uuid"]);
         Assert.False(string.IsNullOrWhiteSpace((string?)active["action"]!["name"]));
-        Assert.True((bool)active["next"]!["available"]!);
+        Assert.Equal("available", (string?)active["next"]!["availability"]);
 
         var fastActionDetails = new GameMcpObjectBuilder
         {
@@ -360,8 +360,8 @@ public sealed class GameMcpCorrectnessCoreTests
             GameMcpCommandResult.Committed("committed", 9, 3)));
 
         Assert.Equal(attributeId.ToString("D"), (string?)delta["uuid"]);
-        Assert.Equal("632", (string?)delta["level"]!["before"]);
-        Assert.Equal("633", (string?)delta["level"]!["after"]);
+        Assert.Equal("632", (string?)delta["committedLevel"]!["before"]);
+        Assert.Equal("633", (string?)delta["committedLevel"]!["after"]);
         Assert.Equal(2, delta.Count);
     }
 
@@ -404,7 +404,8 @@ public sealed class GameMcpCorrectnessCoreTests
         Assert.Equal("refused", (string?)response["status"]);
         Assert.Equal("native_rejected", (string?)response["code"]);
         Assert.Equal("live native admission refused", (string?)response["reason"]);
-        Assert.Equal(3, response.Count);
+        Assert.Equal(command.TargetId.ToString("D"), (string?)response["uuid"]);
+        Assert.Equal(4, response.Count);
         Assert.Null(response["worldGeneration"]);
         Assert.Null(response["readWith"]);
         Assert.Null(response["lifecycleGenerationMismatch"]);

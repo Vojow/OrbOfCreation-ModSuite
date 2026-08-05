@@ -95,8 +95,9 @@ public sealed class GameMcpAlchemyLoadoutTests
 
         var row = response["row"]!;
         Assert.Equal("Catalyze", (string?)row["name"]);
+        Assert.Equal(2, (int)row["activeCount"]!);
         var loadout = Assert.IsType<JObject>(row["alchemyLoadout"]);
-        Assert.Equal(2, (int)loadout["activeAmount"]!);
+        Assert.Equal(2, (int)loadout["activeCount"]!);
         Assert.Equal(1, (int)loadout["slot"]!);
         Assert.True((bool)loadout["add"]!["available"]!);
         Assert.Equal(4, (int)loadout["add"]!["maximumAmount"]!);
@@ -104,13 +105,21 @@ public sealed class GameMcpAlchemyLoadoutTests
         var costs = Assert.IsType<JArray>(add["usageCosts"]);
         var cost = Assert.IsType<JObject>(Assert.Single(costs));
         Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
-        Assert.Equal("5", (string?)cost["amount"]);
+        Assert.Equal("5", (string?)cost["cost"]);
         Assert.Equal("80", (string?)cost["spendableAmount"]);
         Assert.True((bool)Assert.IsType<JObject>(loadout["remove"])["available"]!);
         var move = Assert.IsType<JObject>(loadout["move"]);
         Assert.True((bool)move["available"]!);
         Assert.Equal(3, (int)move["maximumDestination"]!);
         Assert.Null(row["level"]);
+
+        var instance = Assert.Single(Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(World(targetAmount: 2, position: 1), generation: 701),
+            "alchemy-instances", 0, 10).Freeze())["rows"]!.Values<JObject>());
+        Assert.Equal(RecipeId.ToString("D"), (string?)instance["uuid"]);
+        Assert.Equal("Catalyze", (string?)instance["name"]);
+        Assert.Equal(2, (int)instance["activeCount"]!);
+        Assert.Equal(2, (int)instance["queuedCount"]!);
     }
 
     [Fact]
@@ -127,8 +136,8 @@ public sealed class GameMcpAlchemyLoadoutTests
             GameMcpTestHarness.Context(after, generation: 82), command,
             GameMcpCommandResult.Committed("committed", 9, 3)));
 
-        Assert.Equal(1, (int)delta["activeAmount"]!["before"]!);
-        Assert.Equal(3, (int)delta["activeAmount"]!["after"]!);
+        Assert.Equal(1, (int)delta["activeCount"]!["before"]!);
+        Assert.Equal(3, (int)delta["activeCount"]!["after"]!);
     }
 
     private static GameWorldState World(int targetAmount, int position)
@@ -170,6 +179,11 @@ public sealed class GameMcpAlchemyLoadoutTests
             EntityIdentities = EntityIdentityCatalogSnapshot.Bound(9, identities),
             Resources = PublicationTable<WorldResource>.Create(new[] { resource }),
             AlchemyRecipes = PublicationTable<WorldAlchemyRecipe>.Create(new[] { recipe }),
+            AlchemyInstances = PublicationTable<WorldAlchemyInstance>.Create(new[]
+            {
+                new WorldAlchemyInstance(
+                    RecipeId, targetAmount, targetAmount, true, BigDouble.One),
+            }),
             AlchemyLoadout = PublicationTable<WorldAlchemyLoadoutDecision>.Create(new[] { decision }),
             AlchemyUsageCosts = PublicationTable<WorldAlchemyUsageCost>.Create(new[]
             {
@@ -178,6 +192,7 @@ public sealed class GameMcpAlchemyLoadoutTests
             CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
             {
                 new WorldCollectionCategoryStatus("alchemy recipes", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
+                new WorldCollectionCategoryStatus("concept instances", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
                 new WorldCollectionCategoryStatus("ordinary alchemy loadout", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
                 new WorldCollectionCategoryStatus("resources", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
             }),

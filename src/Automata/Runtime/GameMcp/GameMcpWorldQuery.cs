@@ -131,7 +131,6 @@ internal static class GameMcpWorldQuery
         var world = publication.Snapshot;
         var count = category.Count(world);
         var rows = new JArray();
-        var touched = new HashSet<Guid>();
         var requestedEnd = Math.Min(count, checked(offset + limit));
         var end = offset;
         var estimatedBytes = 128;
@@ -141,41 +140,49 @@ internal static class GameMcpWorldQuery
             var rowBytes = EstimateListRowBytes(world, category, row);
             if (rows.Count > 0 && estimatedBytes + rowBytes > MaximumListResponseBytes)
                 break;
-            rows.Add(ProjectListRow(world, category, row));
+            var projected = ProjectListRow(world, category, row);
+            var identity = category.TryIdentity(row, out var stableIdentity)
+                ? stableIdentity
+                : row is WorldEntityRequirement requirement
+                    ? requirement.OwnerId
+                    : Guid.Empty;
+            var local = identity == Guid.Empty
+                ? new JArray()
+                : LocalizedRequirementImplications(
+                    world, new HashSet<Guid> { identity });
+            var localOffers = identity == Guid.Empty
+                ? new JArray()
+                : LocalizedDiscoveryOfferImplications(
+                    world, new HashSet<Guid> { identity });
+            if (local.Count == 0 && localOffers.Count == 0)
+            {
+                rows.Add(projected);
+            }
+            else
+            {
+                var incompleteRow = new JObject
+                {
+                    ["status"] = "not_available",
+                    ["code"] = local.Count > 0
+                        ? "entity_data_incomplete"
+                        : "discovery_offer_read_incomplete",
+                    ["reason"] = local.Count > 0
+                        ? "this row has incomplete published requirement evidence"
+                        : "this discovery tree has an offer absent from the published entity rows",
+                    ["partialRow"] = projected,
+                };
+                if (local.Count > 0) incompleteRow["implicatedSkippedRows"] = local;
+                if (localOffers.Count > 0) incompleteRow["implicatedOffers"] = localOffers;
+                rows.Add(incompleteRow);
+            }
             estimatedBytes += rowBytes;
             end = index + 1;
-            if (category.TryIdentity(row, out var identity)) touched.Add(identity);
-            else if (row is WorldEntityRequirement requirement)
-                touched.Add(requirement.OwnerId);
         }
-
-        var implicated = LocalizedRequirementImplications(world, touched);
-        var implicatedOffers = LocalizedDiscoveryOfferImplications(world, touched);
-        var incomplete = implicated.Count > 0 || implicatedOffers.Count > 0;
 
         var result = Envelope(publication);
-        result["status"] = incomplete ? "not_available" : "available";
+        result["rows"] = rows;
         result["total"] = count;
-        if (!incomplete)
-        {
-            result["rows"] = rows;
-        }
-        else
-        {
-            result["code"] = "world_list_incomplete";
-            result["reason"] =
-                implicated.Count > 0 && implicatedOffers.Count > 0
-                    ? "this page touches both an unmodeled requirement leaf and an unresolved " +
-                      "discovery offer; exact implications are reported"
-                    : implicated.Count > 0
-                        ? "this page touches an entity with an unmodeled requirement leaf; " +
-                          "the exact owner and leaf are reported in implicatedSkippedRows"
-                        : "this page contains a discovery offer UUID that is absent from the " +
-                          "published explainable entity categories";
-            result["partialRows"] = rows;
-            if (implicated.Count > 0) result["implicatedSkippedRows"] = implicated;
-            if (implicatedOffers.Count > 0) result["implicatedOffers"] = implicatedOffers;
-        }
+        if (end < requestedEnd) result["truncated"] = true;
         if (end < count) result["nextOffset"] = end;
         if (string.Equals(category.Name, "challenges", StringComparison.Ordinal))
             result["challengeState"] = ProjectChallengeState(world);
@@ -195,14 +202,50 @@ internal static class GameMcpWorldQuery
                 ["committedLevel"] = structure.CommittedLevel,
                 ["enabled"] = !structure.Reading.Disabled,
             };
-            if (WorldPurchaseCostLookup.TryFindRange(
-                    world.PurchaseCosts, structure.EntityId, out var start, out var count) &&
-                count > 0 && world.PurchaseCosts[start].AffordabilityEvaluated)
-                projected["affordable"] = world.PurchaseCosts[start].Affordable;
+            if (TryPurchaseAffordability(world, structure.EntityId, out var affordable))
+                projected["affordable"] = affordable;
             return projected.Freeze();
         }
         if (row is WorldUpgrade upgrade)
-            return PurchaseListRow(world, upgrade.EntityId, upgrade.CommittedLevel);
+        {
+            var projected = PurchaseListRow(world, upgrade.EntityId, upgrade.CommittedLevel);
+            projected["remainingLevels"] = upgrade.RemainingLevels;
+            projected["available"] = upgrade.Reading.Available && !upgrade.IsExhausted;
+            if (upgrade.IsExhausted) projected["reasonCode"] = "already_maxed";
+            return projected.Freeze();
+        }
+        if (row is WorldEquipment equipment)
+            return new JObject
+            {
+                ["entityId"] = equipment.EntityId.ToString("D"),
+                ["equippedCount"] = equipment.EquippedLevel,
+            }.Freeze();
+        if (row is WorldGlyph glyph)
+            return new JObject
+            {
+                ["entityId"] = glyph.EntityId.ToString("D"),
+                ["discovered"] = glyph.Discovered,
+                ["available"] = glyph.Discovered && glyph.Available,
+                ["paidLevel"] = glyph.Level - glyph.FreeLevels,
+                ["bonusLevel"] = glyph.FreeLevels,
+                ["totalLevel"] = glyph.Level,
+            }.Freeze();
+        if (row is WorldPlotNode plot)
+            return new JObject
+            {
+                ["entityId"] = plot.EntityId.ToString("D"),
+                ["visible"] = plot.Reading.Visible,
+                ["masteryLevel"] = plot.Reading.MasteryLevel,
+                ["quantity"] = plot.Reading.TotalQuantity,
+                ["idleQuantity"] = plot.Reading.IdleQuantity,
+                ["availableQuantity"] = plot.RemainingTotalQuantity,
+            }.Freeze();
+        if (row is WorldPurchaseCost purchaseCost)
+        {
+            var projected = ProjectPurchaseCost(world, in purchaseCost);
+            projected["targetId"] = purchaseCost.EntityId.ToString("D");
+            return projected.Freeze();
+        }
         if (row is WorldTargetingRequest targeting)
             return ProjectTargeting(world, in targeting);
         if (row is WorldChallenge challenge)
@@ -248,7 +291,9 @@ internal static class GameMcpWorldQuery
             }.Freeze();
         }
         if (row is WorldResource resource)
-            return ProjectResource(in resource);
+            return ProjectResource(world, in resource);
+        if (row is WorldAlchemyInstance alchemyInstance)
+            return ProjectAlchemyInstance(world, in alchemyInstance);
         if (row is WorldActionQueueSlot processingSlot)
             return ProjectAgromancyProcessing(world, in processingSlot);
         if (row is WorldPlotAction plotAction)
@@ -275,7 +320,7 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
-    private static GameMcpValue PurchaseListRow(
+    private static JObject PurchaseListRow(
         GameWorldState world,
         Guid entityId,
         object level)
@@ -285,13 +330,28 @@ internal static class GameMcpWorldQuery
             ["entityId"] = entityId.ToString("D"),
             ["committedLevel"] = level,
         };
-        if (WorldPurchaseCostLookup.TryFindRange(
-                world.PurchaseCosts, entityId, out var start, out var count) && count > 0)
+        if (TryPurchaseAffordability(world, entityId, out var affordable))
+            result["affordable"] = affordable;
+        return result;
+    }
+
+    private static bool TryPurchaseAffordability(
+        GameWorldState world,
+        Guid entityId,
+        out bool affordable)
+    {
+        affordable = false;
+        if (!WorldPurchaseCostLookup.TryFindRange(
+                world.PurchaseCosts, entityId, out var start, out var count) || count <= 0)
+            return false;
+        affordable = true;
+        for (var index = start; index < start + count; index++)
         {
-            var cost = world.PurchaseCosts[start];
-            if (cost.AffordabilityEvaluated) result["affordable"] = cost.Affordable;
+            var cost = world.PurchaseCosts[index];
+            if (!cost.AffordabilityEvaluated) return false;
+            if (!cost.Affordable) affordable = false;
         }
-        return result.Freeze();
+        return true;
     }
 
     private static string[] ListFields(GameMcpWorldCategory category) => category.Name switch
@@ -461,7 +521,6 @@ internal static class GameMcpWorldQuery
         }
 
         var results = new JArray();
-        var complete = true;
         for (var inputIndex = 0; inputIndex < uuidTexts.Count; inputIndex++)
         {
             var uuidText = uuidTexts[inputIndex] ?? string.Empty;
@@ -473,7 +532,6 @@ internal static class GameMcpWorldQuery
                 item["reason"] = "uuid must be a non-empty canonical D-format GUID";
                 item["uuid"] = uuidText;
                 results.Add(item);
-                complete = false;
                 continue;
             }
 
@@ -494,7 +552,6 @@ internal static class GameMcpWorldQuery
                 item["reason"] = "category " + category.Name +
                     " has no row with stable identity " + uuid.ToString("D");
                 item["uuid"] = uuid.ToString("D");
-                complete = false;
             }
             else
             {
@@ -522,14 +579,12 @@ internal static class GameMcpWorldQuery
                     item["partialRow"] = ProjectRow(publication.Snapshot, category, matched);
                     if (implicated.Count > 0) item["implicatedSkippedRows"] = implicated;
                     if (implicatedOffers.Count > 0) item["implicatedOffers"] = implicatedOffers;
-                    complete = false;
                 }
             }
             results.Add(item);
         }
 
         var result = Envelope(publication);
-        result["status"] = complete ? "available" : "not_available";
         result["results"] = results;
         if (string.Equals(category.Name, "challenges", StringComparison.Ordinal))
             result["challengeState"] = ProjectChallengeState(publication.Snapshot);
@@ -669,7 +724,8 @@ internal static class GameMcpWorldQuery
             };
         }
         result["ready"] = after.CastReady;
-        result["cooldown"] = new GameMcpDomainValue(after.CooldownRemaining);
+        result["cooldown"] = new GameMcpDomainValue(
+            BigDouble.Max(after.CooldownRemaining, BigDouble.Zero));
         return result.Freeze();
     }
 
@@ -707,7 +763,7 @@ internal static class GameMcpWorldQuery
                 ? (object)new GameMcpDomainValue(old.CommittedLevel)
                 : null;
             return Change(command.TargetId, beforeLevel,
-                new GameMcpDomainValue(afterStructure.CommittedLevel), "level");
+                new GameMcpDomainValue(afterStructure.CommittedLevel), "committedLevel");
         }
         if (WorldLookup.TryFind(after.Upgrades, command.TargetId, out var afterUpgrade))
         {
@@ -715,7 +771,8 @@ internal static class GameMcpWorldQuery
                 WorldLookup.TryFind(before.Upgrades, command.TargetId, out var old)
                 ? (object)old.CommittedLevel
                 : null;
-            return Change(command.TargetId, beforeLevel, afterUpgrade.CommittedLevel, "level");
+            return Change(command.TargetId, beforeLevel, afterUpgrade.CommittedLevel,
+                "committedLevel");
         }
         return PostStateUnavailable("post_state_not_published",
             "the settled world has no purchased target row");
@@ -756,7 +813,7 @@ internal static class GameMcpWorldQuery
             oldWorld.AlchemyInstances, command.TargetId, out var previous)
             ? previous.Quantity
             : 0;
-        return Change(command.TargetId, before, after, "stack");
+        return Change(command.TargetId, before, after, "activeCount");
     }
 
     private static GameMcpValue ProjectAlchemyLoadoutDelta(
@@ -791,7 +848,7 @@ internal static class GameMcpWorldQuery
         return Change(command.TargetId,
             hadBefore ? (object)previous.TargetAmount : null,
             current.TargetAmount,
-            "activeAmount");
+            "activeCount");
     }
 
     private static GameMcpValue ProjectRitualLifecycleDelta(
@@ -809,10 +866,25 @@ internal static class GameMcpWorldQuery
         var hadBefore = oldWorld is not null &&
             WorldLookup.TryFind(oldWorld.Rituals, command.TargetId, out previous);
         if (command.Mode is "activate" or "end")
-            return Change(command.TargetId,
-                hadBefore ? (object)previous.InBattle : null,
-                current.InBattle,
-                "activeBattle");
+        {
+            var postState = new JObject
+            {
+                ["uuid"] = command.TargetId.ToString("D"),
+                ["activeBattle"] = new JObject
+                {
+                    ["before"] = hadBefore ? previous.InBattle : (bool?)null,
+                    ["after"] = current.InBattle,
+                },
+                ["wavesCompleted"] = current.WavesCompleted,
+            };
+            if (current.InBattle)
+            {
+                postState["selectedLevel"] = current.SelectedLevel;
+                var drain = ProjectRitualCosts(world, current.Decision.CompletionCosts);
+                if (drain.Count > 0) postState["completionCosts"] = drain;
+            }
+            return postState.Freeze();
+        }
         if (command.Mode == "cancel_duration")
             return Change(command.TargetId,
                 hadBefore ? (object)(previous.ActiveInstances > 0) : null,
@@ -1414,7 +1486,7 @@ internal static class GameMcpWorldQuery
             oldWorld.Equipment, command.TargetId, out var previous)
             ? previous.EquippedLevel
             : (int?)null;
-        return Change(command.TargetId, before, current.EquippedLevel, "equipped");
+        return Change(command.TargetId, before, current.EquippedLevel, "equippedCount");
     }
 
     private static GameMcpValue ProjectResearchDelta(
@@ -1437,7 +1509,7 @@ internal static class GameMcpWorldQuery
         return new JObject
         {
             ["uuid"] = command.TargetId.ToString("D"),
-            ["level"] = new JObject
+            ["totalLevel"] = new JObject
             {
                 ["before"] = hasPrevious ? previous.Level : (int?)null,
                 ["after"] = current.Level,
@@ -1614,8 +1686,8 @@ internal static class GameMcpWorldQuery
         {
             return Change(
                 command.TargetId,
-                hasBefore ? new GameMcpDomainValue(previous.QueuedAmount) : null,
-                new GameMcpDomainValue(current.QueuedAmount),
+                hasBefore ? previous.QueuedAmount.ToInt() : null,
+                current.QueuedAmount.ToInt(),
                 "queued");
         }
         if (current.Pipeline != WorldCraftingPipeline.Direct)
@@ -1630,8 +1702,8 @@ internal static class GameMcpWorldQuery
             }
             return Change(
                 command.TargetId,
-                hasBefore ? new GameMcpDomainValue(previous.QueuedAmount) : null,
-                new GameMcpDomainValue(current.QueuedAmount),
+                hasBefore ? previous.QueuedAmount.ToInt() : null,
+                current.QueuedAmount.ToInt(),
                 "queued");
         }
         return new JObject
@@ -1922,7 +1994,6 @@ internal static class GameMcpWorldQuery
         var matches = new JArray();
         var totalMatches = 0;
         var unavailableCategories = new JArray();
-        var matchedIdentities = new HashSet<Guid>();
         for (var categoryIndex = 0; categoryIndex < Categories.Length; categoryIndex++)
         {
             var category = Categories[categoryIndex];
@@ -1949,7 +2020,6 @@ internal static class GameMcpWorldQuery
                 var row = category.Row(publication.Snapshot, rowIndex);
                 if (!Matches(publication.Snapshot, category, row, normalized)) continue;
                 if (!category.TryIdentity(row, out var identity)) continue;
-                matchedIdentities.Add(identity);
                 totalMatches++;
                 if (matches.Count >= limit) continue;
                 matches.Add(new JObject
@@ -1961,41 +2031,32 @@ internal static class GameMcpWorldQuery
             }
         }
 
-        var implicated = LocalizedRequirementImplications(
-            publication.Snapshot,
-            matchedIdentities);
-        var implicatedOffers = LocalizedDiscoveryOfferImplications(
-            publication.Snapshot,
-            matchedIdentities);
-        var incomplete = unavailableCategories.Count > 0 || implicated.Count > 0 ||
-            implicatedOffers.Count > 0;
-        var result = Envelope(publication);
-        result["status"] = incomplete ? "not_available" : "available";
-        result["total"] = totalMatches;
-        if (incomplete)
+        for (var index = 0; index < matches.Count; index++)
         {
-            result["code"] = "world_search_incomplete";
-            result["reason"] = unavailableCategories.Count > 0 &&
-                (implicated.Count > 0 || implicatedOffers.Count > 0)
-                ? "one or more searchable entity categories are incomplete, and returned entities " +
-                  "also carry localized incomplete evidence"
-                : unavailableCategories.Count > 0
-                    ? "one or more searchable entity categories are incomplete"
-                    : implicated.Count > 0 && implicatedOffers.Count > 0
-                        ? "returned entities touch both implicatedSkippedRows and implicatedOffers"
-                        : implicated.Count > 0
-                            ? "a returned entity has an unmodeled requirement leaf named in " +
-                              "implicatedSkippedRows"
-                            : "a returned discovery tree contains an unresolved UUID named in " +
-                              "implicatedOffers";
-            if (unavailableCategories.Count > 0)
-                result["unavailableCategories"] = unavailableCategories;
-            if (implicated.Count > 0)
-                result["implicatedSkippedRows"] = implicated;
-            if (implicatedOffers.Count > 0)
-                result["implicatedOffers"] = implicatedOffers;
+            if (matches[index] is not JObject match ||
+                !Guid.TryParseExact((string?)match["uuid"], "D", out var identity))
+                continue;
+            var local = LocalizedRequirementImplications(
+                publication.Snapshot, new HashSet<Guid> { identity });
+            var localOffers = LocalizedDiscoveryOfferImplications(
+                publication.Snapshot, new HashSet<Guid> { identity });
+            if (local.Count == 0 && localOffers.Count == 0) continue;
+            match["status"] = "not_available";
+            match["code"] = local.Count > 0
+                ? "entity_data_incomplete"
+                : "discovery_offer_read_incomplete";
+            match["reason"] = local.Count > 0
+                ? "this match has incomplete published requirement evidence"
+                : "this discovery tree has an offer absent from the published entity rows";
+            if (local.Count > 0) match["implicatedSkippedRows"] = local;
+            if (localOffers.Count > 0) match["implicatedOffers"] = localOffers;
         }
-        result[incomplete ? "partialMatches" : "matches"] = matches;
+        var result = Envelope(publication);
+        result["total"] = totalMatches;
+        if (unavailableCategories.Count > 0)
+            result["unavailableCategories"] = unavailableCategories;
+        result["matches"] = matches;
+        if (matches.Count < totalMatches) result["truncated"] = true;
         return result;
     }
 
@@ -2078,9 +2139,6 @@ internal static class GameMcpWorldQuery
 
     private static JObject CompactCollectionStatus(GameWorldState world)
     {
-        var categories = new JArray();
-        for (var index = 0; index < Categories.Length; index++)
-            categories.Add(Categories[index].Name);
         var unavailable = new JArray();
         var readRows = 0;
         var skippedRows = 0;
@@ -2103,7 +2161,6 @@ internal static class GameMcpWorldQuery
             ["complete"] = IsCollectionComplete(world),
             ["read"] = readRows,
             ["skipped"] = skippedRows,
-            ["categories"] = categories,
         };
         if (unavailable.Count > 0) result["unavailableCategories"] = unavailable;
         if (TryLocalizedRequirementFailures(world, out var implicated, out _))
@@ -2138,7 +2195,10 @@ internal static class GameMcpWorldQuery
         for (var index = 0; index < world.Upgrades.Count; index++)
         {
             var upgrade = world.Upgrades[index];
-            if (upgrade.Reading.Available && !upgrade.IsExhausted) count++;
+            if (upgrade.Reading.Available && !upgrade.IsExhausted &&
+                TryPurchaseAffordability(world, upgrade.EntityId, out var affordable) &&
+                affordable)
+                count++;
         }
         return count;
     }
@@ -2295,11 +2355,11 @@ internal static class GameMcpWorldQuery
         GameMcpWorldCategory category,
         object row) =>
         row is WorldResource resource
-            ? ProjectResource(in resource)
+            ? ProjectResource(world, in resource)
             : row is WorldStructure structure
             ? ProjectStructure(in structure)
             : row is WorldPurchaseCost purchaseCost
-            ? ProjectPurchaseCost(world, in purchaseCost)
+            ? ProjectPurchaseCost(world, in purchaseCost).Freeze()
             : row is WorldCraftingRecipe craftingRecipe
             ? ProjectCraftingRecipe(world, in craftingRecipe)
             : row is WorldDiscoveryTree tree
@@ -2310,6 +2370,8 @@ internal static class GameMcpWorldQuery
             ? ProjectAlchemyRecipe(world, in alchemyRecipe)
             : row is WorldEquipment equipment
             ? ProjectEquipment(world, in equipment)
+            : row is WorldAlchemyInstance alchemyInstance
+            ? ProjectAlchemyInstance(world, in alchemyInstance)
             : row is WorldEquipmentType equipmentType
             ? ProjectEquipmentType(world, in equipmentType)
             : row is WorldResourceType resourceType
@@ -2502,7 +2564,8 @@ internal static class GameMcpWorldQuery
         else if (action.Reading.PrerequisiteEvidence !=
                  PlotActionPrerequisiteEvidence.NativeLatchedTrue)
         {
-            result["requiresLiveCheck"] = true;
+            result["availability"] = "unknown";
+            result["checkWith"] = "game_agromancy add_plot_action";
             return result.Freeze();
         }
         else if (!action.ElementCostKnown)
@@ -2523,7 +2586,7 @@ internal static class GameMcpWorldQuery
             available = false;
             reason = "plot_action_list_full";
         }
-        result["available"] = available;
+        result["availability"] = available ? "available" : "unavailable";
         if (!available)
         {
             result["reasonCode"] = reason;
@@ -2784,7 +2847,7 @@ internal static class GameMcpWorldQuery
             ["effectiveRequirementLevel"] = Number(research.EffectiveRequirementLevel),
             ["requirementLevelAdjustment"] = Number(research.RequirementLevelAdjustment),
         };
-        if (research.MaxLevel >= 0) result["maximumLevel"] = Number(research.MaxLevel);
+        if (research.MaxLevel > 0) result["maximumLevel"] = Number(research.MaxLevel);
         if (research.ArtificialMaxLevel > 0)
             result["artificialMaximumLevel"] = Number(research.ArtificialMaxLevel);
         if (research.Flagged) result["flagged"] = true;
@@ -3003,7 +3066,8 @@ internal static class GameMcpWorldQuery
         if (consumable.CurrentPrepTime > BigDouble.Zero)
             result["preparationRemaining"] = new GameMcpDomainValue(consumable.CurrentPrepTime);
         if (consumable.CurrentCooldownTime > BigDouble.Zero)
-            result["cooldownRemaining"] = new GameMcpDomainValue(consumable.CurrentCooldownTime);
+            result["cooldownRemaining"] = new GameMcpDomainValue(
+                BigDouble.Max(consumable.CurrentCooldownTime, BigDouble.Zero));
 
         var types = new JArray();
         if (WorldConsumableTypeLookup.TryFindRange(
@@ -3120,9 +3184,26 @@ internal static class GameMcpWorldQuery
             ["entityId"] = recipe.RecipeId.ToString("D"),
             ["category"] = "concept-recipes",
             ["nativeType"] = "AlchemyRecipeSO",
-            ["amount"] = amount,
+            ["activeCount"] = amount,
             ["canAdd"] = recipe.CanAddNow,
         }.Freeze();
+    }
+
+    private static GameMcpValue ProjectAlchemyInstance(
+        GameWorldState world,
+        in WorldAlchemyInstance instance)
+    {
+        var result = new JObject
+        {
+            ["recipe"] = EntityReference(world, instance.RecipeId),
+            ["activeCount"] = instance.Quantity,
+            ["queuedCount"] = instance.QueuedQuantity,
+            ["settled"] = instance.IsSettled,
+            ["drainReadable"] = instance.DrainReadable,
+        };
+        if (instance.DrainReadable)
+            result["drainRatio"] = new GameMcpDomainValue(instance.DrainRatio);
+        return result.Freeze();
     }
 
     private static JArray ProjectConsumableCosts(
@@ -3982,19 +4063,26 @@ internal static class GameMcpWorldQuery
         return result;
     }
 
-    private static GameMcpValue ProjectResource(in WorldResource resource)
+    private static GameMcpValue ProjectResource(GameWorldState world, in WorldResource resource)
     {
+        var allocation = resource.Reading.Traits.BandwidthResource;
+        var amount = allocation
+            ? SpendableAmount(world, resource.EntityId, resource.Reading.Quantity)
+            : resource.TrueQuantity;
         var result = new JObject
         {
             ["entityId"] = resource.EntityId.ToString("D"),
             ["category"] = "resources",
             ["nativeType"] = "ResourceSO",
-            ["amount"] = new GameMcpDomainValue(resource.Reading.Quantity),
+            ["amount"] = new GameMcpDomainValue(amount),
         };
         if (resource.IsCapped)
             result["capacity"] = new GameMcpDomainValue(resource.Reading.Capacity);
         result["netRatePerSecond"] = new GameMcpDomainValue(resource.TrueRate);
-        if (resource.IsCapped) result["atCapacity"] = resource.IsAtCapacity;
+        if (resource.IsCapped)
+            result["atCapacity"] = allocation
+                ? amount.CompareTo(resource.Reading.Capacity) >= 0
+                : resource.IsAtCapacity;
         return result.Freeze();
     }
 
@@ -4036,6 +4124,12 @@ internal static class GameMcpWorldQuery
             ["masteryLevel"] = recipe.MasteryLevel,
         };
         if (recipe.MaxLevel >= 0) result["maximumLevel"] = recipe.MaxLevel;
+        if (WorldAlchemyInstanceLookup.TryFind(
+                world.AlchemyInstances, recipe.RecipeId, out var instance))
+        {
+            result["activeCount"] = instance.Quantity;
+            if (!instance.IsSettled) result["queuedCount"] = instance.QueuedQuantity;
+        }
         AddAlchemyLoadoutDecision(world, result, recipe.RecipeId);
         AddDiscoveryDecision(world, result, recipe.Discovery);
         return result.Freeze();
@@ -4050,7 +4144,7 @@ internal static class GameMcpWorldQuery
             return;
         var loadout = new JObject
         {
-            ["activeAmount"] = decision.Amount,
+            ["activeCount"] = decision.Amount,
             ["targetAmount"] = decision.TargetAmount,
         };
         if (decision.IsActive) loadout["slot"] = decision.Position;
@@ -4761,54 +4855,28 @@ internal static class GameMcpWorldQuery
         result["discover"] = discover;
     }
 
-    internal static GameMcpValue ProjectPurchaseCost(
+    internal static JObject ProjectPurchaseCost(
         GameWorldState world,
         in WorldPurchaseCost cost)
     {
         var result = new JObject
         {
-            ["targetId"] = cost.EntityId.ToString("D"),
             ["resourceId"] = cost.ResourceId.ToString("D"),
-            ["baseCost"] = new GameMcpDomainValue(
-                PlayerFacingCost(world, cost.ResourceId, cost.BaseExactAmount)),
-            ["effectiveCost"] = new GameMcpDomainValue(
-                PlayerFacingCost(world, cost.ResourceId, cost.EffectiveExactAmount)),
+            ["cost"] = new GameMcpDomainValue(PlayerFacingCost(
+                world,
+                cost.ResourceId,
+                cost.AffordabilityEvaluated
+                    ? cost.CombinedEffectiveAmount
+                    : cost.EffectiveExactAmount)),
         };
-        if (cost.ExactGroupedLevels > 1)
-        {
-            result["groupLevels"] = cost.ExactGroupedLevels;
-            result["groupCost"] = new GameMcpDomainValue(
-                PlayerFacingCost(world, cost.ResourceId, cost.ExactGroupedAmount));
-        }
-        if (cost.ModifierSources.Count > 0)
-        {
-            var modifiers = new JArray();
-            for (var index = 0; index < cost.ModifierSources.Count; index++)
-            {
-                var source = cost.ModifierSources[index];
-                modifiers.Add(new JObject
-                {
-                    ["sourceId"] = source.SourceId.ToString("D"),
-                    ["effect"] = source.ValueMeaning,
-                    ["value"] = new GameMcpDomainValue(source.Value),
-                });
-            }
-            result["costModifiers"] = modifiers;
-        }
         if (cost.AffordabilityEvaluated)
         {
-            result["amount"] = new GameMcpDomainValue(
+            result["spendableAmount"] = new GameMcpDomainValue(
                 SpendableAmount(world, cost.ResourceId, cost.AvailableAmount));
-            result["totalCost"] = new GameMcpDomainValue(
-                PlayerFacingCost(world, cost.ResourceId, cost.CombinedEffectiveAmount));
-            result["resourceAffordable"] = cost.ResourceAffordable;
-            result["purchaseAffordable"] = cost.Affordable;
-            if (!cost.ResourceAffordable)
-                result["resourceReasonCode"] = cost.ResourceAffordabilityReasonCode;
-            if (!cost.Affordable)
-                result["purchaseReasonCode"] = cost.AffordabilityReasonCode;
+            result["affordable"] = cost.Affordable;
+            if (!cost.Affordable) result["reasonCode"] = cost.AffordabilityReasonCode;
         }
-        return result.Freeze();
+        return result;
     }
 
     private static GameMcpValue ProjectCraftingRecipe(
@@ -4842,7 +4910,7 @@ internal static class GameMcpWorldQuery
             if (decision.Pipeline is WorldCraftingPipeline.QueueStack or
                 WorldCraftingPipeline.QueueNew)
             {
-                result["queuedAmount"] = new GameMcpDomainValue(decision.QueuedAmount);
+                result["queuedAmount"] = decision.QueuedAmount.ToInt();
                 result["queue"] = new JObject
                 {
                     ["queueId"] = decision.QueueId.ToString("D"),
@@ -5105,9 +5173,9 @@ internal static class GameMcpWorldQuery
         GameMcpWorldCategory category,
         object row) =>
         row is WorldResource resource
-            ? ProjectResource(in resource)
+            ? ProjectResource(world, in resource)
             : row is WorldPurchaseCost purchaseCost
-            ? ProjectPurchaseCost(world, in purchaseCost)
+            ? ProjectPurchaseCost(world, in purchaseCost).Freeze()
             : row is WorldCraftingRecipe craftingRecipe
             ? ProjectCraftingRecipe(world, in craftingRecipe)
             : row is WorldDiscoveryTree tree
@@ -5118,6 +5186,8 @@ internal static class GameMcpWorldQuery
             ? ProjectAlchemyRecipe(world, in alchemyRecipe)
             : row is WorldEquipment equipment
             ? ProjectEquipment(world, in equipment)
+            : row is WorldAlchemyInstance alchemyInstance
+            ? ProjectAlchemyInstance(world, in alchemyInstance)
             : row is WorldChallenge challenge
             ? ProjectChallenge(world, in challenge)
             : row is WorldGlyph glyph

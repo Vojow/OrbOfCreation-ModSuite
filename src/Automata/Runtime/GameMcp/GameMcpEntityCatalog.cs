@@ -43,11 +43,10 @@ internal static class GameMcpEntityCatalog
 
         var result = new JObject
         {
-            ["status"] = "available",
             ["total"] = totalMatches,
             ["matches"] = matches,
         };
-        if (totalMatches > matches.Count) result["nextOffset"] = matches.Count;
+        if (totalMatches > matches.Count) result["truncated"] = true;
         return result;
     }
 

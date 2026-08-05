@@ -106,7 +106,7 @@ public sealed class GameMcpSpellWorkbenchTests
         var cost = Assert.Single(exact["discover"]!["costs"]!.Values<JObject>())!;
         Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
         Assert.Equal("4.4e3", (string?)cost["cost"]);
-        Assert.Equal("9e6", (string?)cost["amount"]);
+        Assert.Equal("9e6", (string?)cost["spendableAmount"]);
     }
 
     [Fact]

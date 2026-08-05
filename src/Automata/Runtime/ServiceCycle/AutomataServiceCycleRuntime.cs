@@ -319,6 +319,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                     }.Freeze();
                 }
             }
+            details ??= ProjectAmountRefusal(command, world.Snapshot, in result);
             return GameMcpCommandResult.FromAction(
                 in result,
                 command.Kind,
@@ -345,6 +346,45 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 lifecycle,
                 configuration.Generation.Value);
         }
+    }
+
+    private static GameMcpValue? ProjectAmountRefusal(
+        GameMcpCommand command,
+        GameWorldState world,
+        in ServiceActionResult result)
+    {
+        if (result.Disposition == ServiceActionDisposition.Committed || command.Amount <= 0)
+            return null;
+        int? maximum = null;
+        if (command.Kind == GameMcpCommandKind.EquipmentLoadout &&
+            WorldLookup.TryFind(world.Equipment, command.TargetId, out var equipment))
+            maximum = command.Mode == "unequip"
+                ? equipment.Loadout.MaximumUnequipAmount
+                : equipment.Loadout.MaximumEquipAmount;
+        else if (command.Kind == GameMcpCommandKind.AlchemyLoadout &&
+                 WorldAlchemyLoadoutLookup.TryFind(
+                     world.AlchemyLoadout, command.TargetId, out var alchemy))
+            maximum = command.Mode == "remove" ? alchemy.TargetAmount : alchemy.MaximumAdd;
+        else if (command.Kind == GameMcpCommandKind.Research &&
+                 WorldLookup.TryFind(world.Research, command.TargetId, out var research) &&
+                 command.Mode == "develop")
+            maximum = research.Decision.LevelsAvailable;
+        else if (command.Kind == GameMcpCommandKind.HarvestLifecycle &&
+                 command.Mode == "remove_plot_action")
+        {
+            var active = 0;
+            for (var index = 0; index < world.ActionQueueSlots.Count; index++)
+            {
+                var slot = world.ActionQueueSlots[index];
+                if (!slot.Empty && slot.PlotNodeId == command.TargetId &&
+                    slot.PlotNodeActionId == command.SecondaryId)
+                    active += Math.Max(slot.Quantity, 0);
+            }
+            maximum = active;
+        }
+        return maximum.HasValue && command.Amount > maximum.Value
+            ? new GameMcpObjectBuilder { ["maximumAmount"] = maximum.Value }.Freeze()
+            : null;
     }
 
     public SpellWorkbenchPricePreview PreviewSpellWorkbench(
