@@ -108,6 +108,20 @@ public sealed class CraftingInstanceLifecycleGameActionTests : IDisposable
         }
     }
 
+    [Fact]
+    public void Unity_framework_types_do_not_depend_on_the_game_type_resolver()
+    {
+        using var boundary = new CraftingInstanceLifecycleGameAction(
+            () => Epoch,
+            static () => true,
+            static () => "Crafting ownership was revoked.",
+            resolveType: name => name.StartsWith("UnityEngine.", StringComparison.Ordinal)
+                ? null
+                : ReflectionUtil.FindLoadedType(name));
+
+        Assert.True(boundary.BindingsAvailable, boundary.BindingFailure);
+    }
+
     private CraftingInstanceLifecycleGameAction Boundary(
         CraftingRecipeSO? recipe,
         Func<string, bool>? includeContract = null)

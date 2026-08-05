@@ -1532,7 +1532,10 @@ public sealed class Plugin : BaseUnityPlugin
             features,
             trace,
             traceRevision,
-            writable);
+            writable,
+            _modalDismissGameAction?.BindingsAvailable == true,
+            _modalDismissGameAction?.BindingFailure ??
+                "the modal action boundary was not composed");
     }
 
     private bool TryExecuteGameMcpFrameOperation(
@@ -1824,15 +1827,29 @@ public sealed class Plugin : BaseUnityPlugin
             .Append("native contracts: ").AppendLine(
                 context.NativeContractsAvailable ? "available" : "unavailable")
             .Append("game_craft: ").AppendLine(
-                context.Runtime?.PlayerCraftingAvailable == true ? "available" : "unavailable")
+                context.Runtime is { PlayerCraftingAvailable: true, CraftingInstancesAvailable: true }
+                    ? "available"
+                    : "unavailable")
+            .Append("game_modal: ").AppendLine(
+                context.ModalDismissAvailable ? "available" : "unavailable")
             .Append("emergency stop: ").AppendLine(stopped ? "engaged" : "clear");
         if (!context.RuntimeAvailable && context.RuntimeNotAvailableReason.Length > 0)
             result.Append("runtime reason: ").AppendLine(
                 GameMcpTextFormatter.Plain(context.RuntimeNotAvailableReason));
-        else if (context.Runtime is { PlayerCraftingAvailable: false } runtime &&
-                 runtime.PlayerCraftingUnavailableReason.Length > 0)
-            result.Append("game_craft reason: ").AppendLine(
-                GameMcpTextFormatter.Plain(runtime.PlayerCraftingUnavailableReason));
+        else if (context.Runtime is { } runtime)
+        {
+            var craftingReason = !runtime.PlayerCraftingAvailable
+                ? runtime.PlayerCraftingUnavailableReason
+                : !runtime.CraftingInstancesAvailable
+                    ? runtime.CraftingInstancesUnavailableReason
+                    : string.Empty;
+            if (craftingReason.Length > 0)
+                result.Append("game_craft reason: ").AppendLine(
+                    GameMcpTextFormatter.Plain(craftingReason));
+        }
+        if (!context.ModalDismissAvailable && context.ModalDismissUnavailableReason.Length > 0)
+            result.Append("game_modal reason: ").AppendLine(
+                GameMcpTextFormatter.Plain(context.ModalDismissUnavailableReason));
 
         var featureGroups = context.FeatureStatuses
             .GroupBy(feature => new { feature.State, feature.Reason.Code })
@@ -2479,9 +2496,16 @@ public sealed class Plugin : BaseUnityPlugin
                 new GameMcpObjectBuilder { ["open"] = false }));
             yield break;
         }
-        CompleteGameMcpCommand(command, GameMcpCommandResult.Faulted(
-            "requested_state_not_reached",
-            "The modal began closing but remained open after settlement."));
+        CompleteGameMcpCommand(command, GadgetCommitted(
+            "modal_dismissed",
+            new GameMcpObjectBuilder
+            {
+                ["postStateUnavailable"] = new GameMcpObjectBuilder
+                {
+                    ["reasonCode"] = "post_state_timeout",
+                    ["reason"] = "the modal began closing but remained open after one second",
+                }.Freeze(),
+            }));
     }
 
     private GameMcpCommandResult ContinueRunGameMcp()

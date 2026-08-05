@@ -202,8 +202,10 @@ internal sealed class CraftingInstanceLifecycleNativeBindings
             var queue = T("CraftingInstanceListVariable");
             var instance = T("CraftingInstance");
             var integer = T("IntVariable");
-            var resources = T("UnityEngine.Resources");
-            var unityObject = T("UnityEngine.Object");
+            // UnityEngine.CoreModule is not the game's Assembly-CSharp module. Resolve the
+            // framework-owned types from the loaded Unity reference, just like player crafting.
+            var resources = typeof(Resources);
+            var unityObject = typeof(UnityEngine.Object);
             var global = T("GlobalVariables");
 
             for (var index = 0; index < ContractIds.Length; index++) Require(index);

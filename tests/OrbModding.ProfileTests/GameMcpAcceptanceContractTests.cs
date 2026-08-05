@@ -561,8 +561,24 @@ public sealed class GameMcpProtocolSurfaceTests
         Assert.Contains("features configuration_disabled: Auto Buy", compact, StringComparison.Ordinal);
         Assert.Contains("features operational: Mentor", compact, StringComparison.Ordinal);
         Assert.Contains("game_craft: unavailable", compact, StringComparison.Ordinal);
+        Assert.Contains("game_modal: unavailable", compact, StringComparison.Ordinal);
         Assert.DoesNotContain("Orb Mentor", compact, StringComparison.Ordinal);
         Assert.DoesNotContain("mailbox", compact, StringComparison.Ordinal);
+
+        var modalAvailable = new GameMcpFrameContext(
+            world: null,
+            runtime: null,
+            configuration: context.Configuration,
+            lifecycleGeneration: 9,
+            sceneName: "Main",
+            nativeContractsAvailable: true,
+            featureStatuses: Array.Empty<FeatureStatusSnapshot>(),
+            traceWriterStatus: DecisionJournalStatus.Unavailable,
+            traceWriterRevision: 0,
+            writableConfiguration: Array.Empty<GameMcpWritableSettingDescriptor>(),
+            modalDismissAvailable: true);
+        Assert.Contains("game_modal: available", Plugin.ProjectGameMcpHealthText(modalAvailable),
+            StringComparison.Ordinal);
 
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),

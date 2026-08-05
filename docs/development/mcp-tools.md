@@ -727,8 +727,9 @@ candidates it compared. It carries no static mutation-scope label or counter cer
 never authorizes a gameplay or save mutation.
 
 `suite_health` has no arguments or detail mode. It is compact text: scene, runtime availability,
-native-contract availability, emergency STOP, then feature and service names grouped by state and
-reason code. Seven identical NotReady features therefore occupy one line, not seven objects. It
+native-contract availability, the direct-craft plus crafting-instance binding health claimed by
+`game_craft`, modal-dismiss binding health, emergency STOP, then feature and service names grouped
+by state and reason code. Seven identical NotReady features therefore occupy one line, not seven objects. It
 returns no structured payload because none of those labels is a handle for another call. It reads
 those owners only for the requested operation and reports no MCP
 queue internals.
@@ -1023,8 +1024,9 @@ the process remains able to deliver an MCP response. See
 `game_modal(mode="dismiss")` drives the visible close control on the one open native `UIModal`.
 It refuses when there is no modal, when more than one modal makes the target ambiguous, or while
 the native grace period still disables closing. The action invokes `UIModal.CloseModal()`, verifies
-the game-owned closing flag, then waits up to the shared one-second settlement bound for no open
-modal before returning `open: false`. It does not click modal-specific confirm, purchase, reset, or
+the game-owned closing flag, then watches that exact modal for up to the shared one-second
+settlement bound. A completed close returns `open: false`; timeout remains committed and says the
+post-state is unavailable because the verified close already began. It does not click modal-specific confirm, purchase, reset, or
 destructive buttons.
 
 `game_screen_catalog` reads the live Main-scene UI. Top tabs retain native rail order. Current

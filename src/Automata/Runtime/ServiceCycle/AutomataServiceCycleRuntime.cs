@@ -209,7 +209,10 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             _configurationPublication,
             includeServices,
             playerCraftingAvailable,
-            playerCraftingUnavailableReason);
+            playerCraftingUnavailableReason,
+            _craftingInstances?.BindingsAvailable == true,
+            _craftingInstances?.BindingFailure ??
+                "the crafting-instance action boundary was not composed");
     }
 
     public GameMcpCommandResult ExecuteGameMcp(GameMcpCommand command)

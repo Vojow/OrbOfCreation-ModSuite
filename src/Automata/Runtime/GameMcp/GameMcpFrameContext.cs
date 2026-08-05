@@ -41,7 +41,9 @@ internal sealed class GameMcpFrameContext
         FeatureStatusSnapshot[] featureStatuses,
         DecisionJournalStatus traceWriterStatus,
         long traceWriterRevision,
-        GameMcpWritableSettingDescriptor[] writableConfiguration)
+        GameMcpWritableSettingDescriptor[] writableConfiguration,
+        bool modalDismissAvailable = false,
+        string modalDismissUnavailableReason = "the modal action boundary was not composed")
     {
         World = world;
         Runtime = runtime;
@@ -54,6 +56,8 @@ internal sealed class GameMcpFrameContext
         TraceWriterRevision = traceWriterRevision;
         WritableConfiguration = writableConfiguration ??
             Array.Empty<GameMcpWritableSettingDescriptor>();
+        ModalDismissAvailable = modalDismissAvailable;
+        ModalDismissUnavailableReason = modalDismissUnavailableReason ?? string.Empty;
     }
 
     internal WorldPublication<GameWorldState>? World { get; }
@@ -67,6 +71,8 @@ internal sealed class GameMcpFrameContext
     internal DecisionJournalStatus TraceWriterStatus { get; }
     internal long TraceWriterRevision { get; }
     internal GameMcpWritableSettingDescriptor[] WritableConfiguration { get; }
+    internal bool ModalDismissAvailable { get; }
+    internal string ModalDismissUnavailableReason { get; }
     internal bool RuntimeAvailable => Runtime is not null;
     internal string RuntimeNotAvailableReason => Runtime is null
         ? "the ServiceCycle runtime has not published a world in this scene"

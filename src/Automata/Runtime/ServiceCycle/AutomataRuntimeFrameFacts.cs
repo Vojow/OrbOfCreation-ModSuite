@@ -21,7 +21,9 @@ internal sealed class AutomataRuntimeFrameFacts
         long currentLifecycle,
         AutomataServiceFrameFacts[] services,
         bool playerCraftingAvailable,
-        string playerCraftingUnavailableReason)
+        string playerCraftingUnavailableReason,
+        bool craftingInstancesAvailable,
+        string craftingInstancesUnavailableReason)
     {
         World = world;
         Configuration = configuration;
@@ -31,6 +33,8 @@ internal sealed class AutomataRuntimeFrameFacts
         Services = services;
         PlayerCraftingAvailable = playerCraftingAvailable;
         PlayerCraftingUnavailableReason = playerCraftingUnavailableReason ?? string.Empty;
+        CraftingInstancesAvailable = craftingInstancesAvailable;
+        CraftingInstancesUnavailableReason = craftingInstancesUnavailableReason ?? string.Empty;
     }
 
     internal WorldPublication<GameWorldState> World { get; }
@@ -41,13 +45,17 @@ internal sealed class AutomataRuntimeFrameFacts
     internal AutomataServiceFrameFacts[] Services { get; }
     internal bool PlayerCraftingAvailable { get; }
     internal string PlayerCraftingUnavailableReason { get; }
+    internal bool CraftingInstancesAvailable { get; }
+    internal string CraftingInstancesUnavailableReason { get; }
 
     internal static AutomataRuntimeFrameFacts Capture(
         AutomataServiceCycleHost host,
         ServiceConfigurationPublisher configuration,
         bool includeServices,
         bool playerCraftingAvailable,
-        string playerCraftingUnavailableReason)
+        string playerCraftingUnavailableReason,
+        bool craftingInstancesAvailable,
+        string craftingInstancesUnavailableReason)
     {
         if (host is null) throw new ArgumentNullException(nameof(host));
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
@@ -65,7 +73,9 @@ internal sealed class AutomataRuntimeFrameFacts
             checked((long)host.CurrentLifecycle.Value),
             services,
             playerCraftingAvailable,
-            playerCraftingUnavailableReason);
+            playerCraftingUnavailableReason,
+            craftingInstancesAvailable,
+            craftingInstancesUnavailableReason);
     }
 
     private static AutomataServiceFrameFacts[] CaptureServices(

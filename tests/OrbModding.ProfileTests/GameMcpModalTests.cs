@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using OrbAutomata.GameMcp;
+using OrbModding.Common;
 using Xunit;
 
 namespace OrbModding.ProfileTests;
@@ -41,6 +42,9 @@ public sealed class GameMcpModalTests : IDisposable
 
         var result = action.Submit(Epoch);
         var observedBeforeAnimation = action.TryObserveDismissed(Epoch, out var before, out var reason);
+        var unrelated = new UIModal();
+        unrelated.OpenForTest();
+        UnityEngine.Resources.Objects.Add(unrelated);
         modal.FinishCloseForTest();
         var observedAfterAnimation = action.TryObserveDismissed(Epoch, out var after, out reason);
 
@@ -49,6 +53,18 @@ public sealed class GameMcpModalTests : IDisposable
         Assert.False(before);
         Assert.True(observedAfterAnimation, reason);
         Assert.True(after);
+    }
+
+    [Fact]
+    public void Unity_framework_types_do_not_depend_on_the_game_type_resolver()
+    {
+        using var action = new ModalDismissGameAction(
+            () => Epoch,
+            resolveType: name => name.StartsWith("UnityEngine.", StringComparison.Ordinal)
+                ? null
+                : ReflectionUtil.FindLoadedType(name));
+
+        Assert.True(action.BindingsAvailable, action.BindingFailure);
     }
 
     [Fact]

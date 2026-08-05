@@ -3,6 +3,7 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using OrbModding.Common;
+using UnityEngine;
 
 namespace OrbAutomata.GameMcp;
 
@@ -42,6 +43,7 @@ internal sealed class ModalDismissGameAction : IDisposable
     private readonly Func<string, bool> _includeContract;
     private readonly int _mainThreadId;
     private Bindings? _bindings;
+    private object? _pendingModal;
     private string _bindingFailure = string.Empty;
 
     internal ModalDismissGameAction(
@@ -90,9 +92,10 @@ internal sealed class ModalDismissGameAction : IDisposable
                 return Refused("modal_close_not_ready", "The modal close control is not ready yet.");
 
             native.Close(candidate!);
-            return native.IsClosing(candidate!)
-                ? new ModalDismissSubmission(true, "committed", string.Empty)
-                : Refused("requested_state_not_reached", "The modal did not begin closing.");
+            if (!native.IsClosing(candidate!))
+                return Refused("requested_state_not_reached", "The modal did not begin closing.");
+            _pendingModal = candidate;
+            return new ModalDismissSubmission(true, "committed", string.Empty);
         }
         catch (Exception exception) when (exception is InvalidOperationException or
             ArgumentException or TargetInvocationException)
@@ -114,12 +117,14 @@ internal sealed class ModalDismissGameAction : IDisposable
         }
         try
         {
-            foreach (var value in native.FindAll(native.ModalType))
+            var target = _pendingModal;
+            if (target is null || target.GetType() != native.ModalType)
             {
-                if (value is not null && value.GetType() == native.ModalType && native.IsOpen(value))
-                    return true;
+                reason = "The modal selected for dismissal is no longer available.";
+                return false;
             }
-            dismissed = true;
+            dismissed = !native.IsOpen(target);
+            if (dismissed) _pendingModal = null;
             return true;
         }
         catch (Exception exception) when (exception is InvalidOperationException or
@@ -134,6 +139,7 @@ internal sealed class ModalDismissGameAction : IDisposable
     internal void InvalidateLifecycle()
     {
         _bindings = null;
+        _pendingModal = null;
         _bindingFailure = string.Empty;
         BindLifecycle();
     }
@@ -141,6 +147,7 @@ internal sealed class ModalDismissGameAction : IDisposable
     public void Dispose()
     {
         _bindings = null;
+        _pendingModal = null;
         _bindingFailure = string.Empty;
     }
 
@@ -154,8 +161,10 @@ internal sealed class ModalDismissGameAction : IDisposable
                 return _resolveType(name) ?? throw new InvalidOperationException(name + " was unavailable");
             }
 
-            var resources = T(0, "UnityEngine.Resources");
-            var unityObject = T(1, "UnityEngine.Object");
+            Require(0);
+            Require(1);
+            var resources = typeof(Resources);
+            var unityObject = typeof(UnityEngine.Object);
             var modal = T(2, "UIModal");
             var findAll = Method(3, resources, "FindObjectsOfTypeAll", unityObject.MakeArrayType(),
                 new[] { typeof(Type) }, isStatic: true);
