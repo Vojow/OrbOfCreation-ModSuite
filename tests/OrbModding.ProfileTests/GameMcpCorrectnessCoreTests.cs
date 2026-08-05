@@ -93,6 +93,45 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
+    public void ConceptSettlementWaitsForTheExactRequestedAmount()
+    {
+        var recipe = Guid.Parse("39999999-9999-4999-8999-999999999999");
+        var completedAt = DateTime.UtcNow.Ticks;
+        var before = new GameWorldState
+        {
+            AlchemyInstances = PublicationTable<WorldAlchemyInstance>.Create(new[]
+            {
+                new WorldAlchemyInstance(recipe, 440, 440, true, BigDouble.One),
+            }),
+        };
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Concept, 9, 3, "add", recipe, Guid.Empty,
+            "AlchemyRecipeSO", 5, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 41));
+        var partial = new GameWorldState
+        {
+            CollectedAtUtcTicks = completedAt + 1,
+            AlchemyInstances = PublicationTable<WorldAlchemyInstance>.Create(new[]
+            {
+                new WorldAlchemyInstance(recipe, 442, 442, true, BigDouble.One),
+            }),
+        };
+        var exact = new GameWorldState
+        {
+            CollectedAtUtcTicks = completedAt + 1,
+            AlchemyInstances = PublicationTable<WorldAlchemyInstance>.Create(new[]
+            {
+                new WorldAlchemyInstance(recipe, 445, 445, true, BigDouble.One),
+            }),
+        };
+
+        Assert.False(GameMcpPostStateSettlement.IsReady(
+            GameMcpTestHarness.Context(partial, generation: 42), 41, completedAt, command));
+        Assert.True(GameMcpPostStateSettlement.IsReady(
+            GameMcpTestHarness.Context(exact, generation: 42), 41, completedAt, command));
+    }
+
+    [Fact]
     public void PlotPostStateReportsTheObservedRequestedPairQuantityChange()
     {
         var plotId = KnownEntities.FruitTreePlot.Uuid;

@@ -97,7 +97,7 @@ public sealed class ResearchGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Native_gates_refuse_before_the_mutation_permit()
+    public void Zero_available_levels_refuse_the_requested_amount_before_the_mutation_permit()
     {
         var target = Research();
         target.researchCost.affordable = false;
@@ -107,7 +107,24 @@ public sealed class ResearchGameActionTests : IDisposable
 
         var result = Submit(boundary, target, ResearchActionKind.Develop);
 
-        Assert.Equal(ResearchPreflight.DevelopUnavailable, result.Preflight);
+        Assert.Equal(ResearchPreflight.AmountUnavailable, result.Preflight);
+        Assert.Contains("at most 0 levels", result.Reason, StringComparison.Ordinal);
+        Assert.Equal(0, permits);
+        Assert.False(target.isDeveloping);
+    }
+
+    [Fact]
+    public void Develop_refuses_an_amount_larger_than_the_live_available_levels()
+    {
+        var target = Research();
+        Register(target);
+        var permits = 0;
+        using var boundary = Boundary(permit: () => { permits++; return true; });
+
+        var result = Submit(boundary, target, ResearchActionKind.Develop, amount: 3);
+
+        Assert.Equal(ResearchPreflight.AmountUnavailable, result.Preflight);
+        Assert.Contains("at most 1 level", result.Reason, StringComparison.Ordinal);
         Assert.Equal(0, permits);
         Assert.False(target.isDeveloping);
     }
@@ -189,9 +206,9 @@ public sealed class ResearchGameActionTests : IDisposable
     }
 
     private static ResearchSubmission Submit(ResearchGameAction boundary,
-        ResearchSO target, ResearchActionKind kind)
+        ResearchSO target, ResearchActionKind kind, int amount = 1)
     {
-        var action = new ResearchAction(kind, target.GetGuid(), 3, Epoch);
+        var action = new ResearchAction(kind, target.GetGuid(), amount, Epoch);
         return boundary.Submit(in action);
     }
 

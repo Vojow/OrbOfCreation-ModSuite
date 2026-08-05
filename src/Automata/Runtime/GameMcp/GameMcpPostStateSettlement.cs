@@ -63,6 +63,10 @@ internal static class GameMcpPostStateSettlement
                 structure.Reading.Disabled ==
                     string.Equals(command.Mode, "disable", System.StringComparison.Ordinal);
         }
+        if (command.Kind == GameMcpCommandKind.Concept)
+            return ConceptAmountReached(state, command);
+        if (command.Kind == GameMcpCommandKind.Research && command.Mode == "develop")
+            return ResearchAmountReached(state, command);
         if (command.Kind != GameMcpCommandKind.SpellComposition) return true;
         var workbench = state.World!.Snapshot.SpellWorkbench;
         return command.Mode switch
@@ -72,6 +76,41 @@ internal static class GameMcpPostStateSettlement
             _ => false,
         };
     }
+
+    private static bool ConceptAmountReached(GameMcpFrameContext state, GameMcpCommand command)
+    {
+        var beforeWorld = command.FrameContext?.World?.Snapshot;
+        if (beforeWorld is null) return false;
+        var before = WorldAlchemyInstanceLookup.TryFind(
+            beforeWorld.AlchemyInstances, command.TargetId, out var previous)
+            ? previous.Quantity
+            : 0;
+        var after = WorldAlchemyInstanceLookup.TryFind(
+            state.World!.Snapshot.AlchemyInstances, command.TargetId, out var current)
+            ? current.Quantity
+            : 0;
+        return command.Mode switch
+        {
+            "add" => after == checked(before + command.Amount),
+            "remove_owned" => after == checked(before - command.Amount),
+            "rotate_out" => after == 0,
+            _ => false,
+        };
+    }
+
+    private static bool ResearchAmountReached(GameMcpFrameContext state, GameMcpCommand command)
+    {
+        var beforeWorld = command.FrameContext?.World?.Snapshot;
+        return beforeWorld is not null &&
+            WorldLookup.TryFind(beforeWorld.Research, command.TargetId, out var before) &&
+            WorldLookup.TryFind(state.World!.Snapshot.Research, command.TargetId, out var after) &&
+            (before.Decision.QueueMode
+                ? PendingResearchLevels(after) == checked(PendingResearchLevels(before) + command.Amount)
+                : !after.IsDeveloping && after.Level == checked(before.Level + command.Amount));
+    }
+
+    private static int PendingResearchLevels(in WorldResearch research) =>
+        checked(research.Level + research.QueuedLevels + (research.IsDeveloping ? 1 : 0));
 
     internal static GameMcpValue TimedOut(
         GameMcpCommand command,

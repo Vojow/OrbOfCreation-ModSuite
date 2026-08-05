@@ -32,6 +32,7 @@ internal static class ResearchActionResultMapper
         ResearchPreflight.MutationPermitUnavailable => ResearchActionResultCodes.MutationPermitUnavailable,
         ResearchPreflight.PostCommitFault => ResearchActionResultCodes.PostCommitFault,
         ResearchPreflight.VerificationFailed => ResearchActionResultCodes.VerificationFailed,
+        ResearchPreflight.AmountUnavailable => ResearchActionResultCodes.AmountUnavailable,
         _ => ResearchActionResultCodes.ContractUnavailable,
     };
 }

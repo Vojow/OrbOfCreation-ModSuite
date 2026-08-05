@@ -48,7 +48,7 @@ public sealed class PlotLifecycleGameActionTests
     }
 
     [Fact]
-    public void Remove_matches_the_ui_by_clamping_to_minimum_before_a_later_cancel()
+    public void Remove_refuses_an_amount_larger_than_the_exact_active_quantity()
     {
         var plot = Plot();
         var action = Action();
@@ -58,14 +58,12 @@ public sealed class PlotLifecycleGameActionTests
         using var boundary = Boundary();
 
         Assert.True(Submit(boundary, PlotLifecycleActionKind.Add, plot, action, amount: 4).Verified);
-        var clamped = Submit(boundary, PlotLifecycleActionKind.Remove, plot, action, amount: 10);
+        var refused = Submit(boundary, PlotLifecycleActionKind.Remove, plot, action, amount: 10);
         var active = Assert.Single(_actions.value);
 
-        Assert.True(clamped.Verified, clamped.Reason);
-        Assert.Equal(1, active.GetActualQuantity());
-        var canceled = Submit(boundary, PlotLifecycleActionKind.Remove, plot, action, amount: 10);
-        Assert.True(canceled.Verified, canceled.Reason);
-        Assert.Equal(0, active.GetActualQuantity());
+        Assert.Equal(PlotLifecyclePreflight.QuantityUnavailable, refused.Preflight);
+        Assert.Contains("only 4 active instances", refused.Reason, StringComparison.Ordinal);
+        Assert.Equal(4, active.GetActualQuantity());
     }
 
     [Fact]

@@ -300,12 +300,29 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 configuration.Generation.Value);
             if (purchaseRefusal is not null) return purchaseRefusal;
             var exactReason = ExactGameMcpReason(command, world.Snapshot, in result);
+            GameMcpValue? details = null;
+            if (command.Kind == GameMcpCommandKind.Concept &&
+                FindFeature(command.Kind) is AutoConceptFeatureRuntime concepts)
+            {
+                var submission = concepts.LastGameMcpSubmission;
+                if (!submission.Verified && !string.IsNullOrEmpty(submission.Reason))
+                    exactReason = submission.Reason;
+                if (submission.MaximumAmount >= 0 &&
+                    submission.Preflight == AutoConceptPreflight.ResourceBackpressure)
+                {
+                    details = new GameMcpObjectBuilder
+                    {
+                        ["maximumAmount"] = submission.MaximumAmount,
+                    }.Freeze();
+                }
+            }
             return GameMcpCommandResult.FromAction(
                 in result,
                 command.Kind,
                 lifecycle,
                 configuration.Generation.Value,
-                exactReason);
+                exactReason,
+                details);
         }
         catch (GameMcpActionUnavailableException exception)
         {

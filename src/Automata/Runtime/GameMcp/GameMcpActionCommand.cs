@@ -738,6 +738,7 @@ internal static class GameMcpActionResultCodeNames
             if (code == ResearchActionResultCodes.MutationPermitUnavailable) return "action_family_unavailable";
             if (code == ResearchActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == ResearchActionResultCodes.VerificationFailed) return "verification_failed";
+            if (code == ResearchActionResultCodes.AmountUnavailable) return "amount_unavailable";
         }
         if (commandKind == GameMcpCommandKind.AlchemyLoadout)
         {
@@ -836,12 +837,12 @@ internal static class GameMcpActionResultCodeNames
         {
             if (code == HarvestLifecycleActionResultCodes.ElementUsageUnavailable) return "element_capacity_unavailable";
             if (code == HarvestLifecycleActionResultCodes.ActionUnavailable) return "action_not_available";
-            if (code == HarvestLifecycleActionResultCodes.AmountUnavailable) return "amount_not_available";
+            if (code == HarvestLifecycleActionResultCodes.AmountUnavailable) return "amount_unavailable";
         }
         if (commandKind == GameMcpCommandKind.Harvest)
         {
             if (code == PlotLifecycleActionResultCodes.ActionUnavailable) return "action_not_available";
-            if (code == PlotLifecycleActionResultCodes.QuantityUnavailable) return "amount_not_available";
+            if (code == PlotLifecycleActionResultCodes.QuantityUnavailable) return "amount_unavailable";
         }
         if (code == AutoCastActionResultCodes.ChargeHoldRefused)
             return "charge_hold_refused";
@@ -859,6 +860,8 @@ internal static class GameMcpActionResultCodeNames
             return "projection_refused";
         if (code == AutoConceptActionResultCodes.MasteryLimitChanged)
             return "mastery_limit_changed";
+        if (code == AutoConceptActionResultCodes.AmountUnavailable)
+            return "amount_unavailable";
         return "feature_" + code.Value;
     }
 }

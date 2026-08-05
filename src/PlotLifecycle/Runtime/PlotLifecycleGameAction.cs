@@ -120,6 +120,11 @@ internal sealed class PlotLifecycleGameAction : IDisposable
                 return Reject(PlotLifecyclePreflight.QuantityUnavailable,
                     EntityIdentityFormatter.Format(action.ActionId) + " is not active on " +
                     EntityIdentityFormatter.Format(action.PlotId) + ".");
+            if (action.Amount > before)
+                return Reject(PlotLifecyclePreflight.QuantityUnavailable,
+                    EntityIdentityFormatter.Format(action.ActionId) + " has only " + before +
+                    " active " + (before == 1 ? "instance" : "instances") + " on " +
+                    EntityIdentityFormatter.Format(action.PlotId) + ".");
             return null;
         }
 
@@ -184,7 +189,9 @@ internal sealed class PlotLifecycleGameAction : IDisposable
         in PlotLifecycleAction action,
         int before,
         int after) =>
-        action.Kind == PlotLifecycleActionKind.Add ? after > before : after < before;
+        action.Kind == PlotLifecycleActionKind.Add
+            ? after == checked(before + action.Amount)
+            : after == checked(before - action.Amount);
 
     private static int Quantity(PlotLifecycleNativeBindings native, object? instance) =>
         instance is null ? 0 : Math.Max(native.InstanceQuantity(instance), 0);

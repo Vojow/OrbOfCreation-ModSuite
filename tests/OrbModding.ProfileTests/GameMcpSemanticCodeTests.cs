@@ -18,9 +18,11 @@ public sealed class GameMcpSemanticCodeTests
             (GameMcpCommandKind.RitualLifecycle, RitualLifecycleActionResultCodes.WrongActiveRitual, "wrong_active_ritual"),
             (GameMcpCommandKind.HarvestLifecycle, HarvestLifecycleActionResultCodes.ElementUsageUnavailable, "element_capacity_unavailable"),
             (GameMcpCommandKind.HarvestLifecycle, HarvestLifecycleActionResultCodes.ActionUnavailable, "action_not_available"),
-            (GameMcpCommandKind.HarvestLifecycle, HarvestLifecycleActionResultCodes.AmountUnavailable, "amount_not_available"),
+            (GameMcpCommandKind.HarvestLifecycle, HarvestLifecycleActionResultCodes.AmountUnavailable, "amount_unavailable"),
             (GameMcpCommandKind.Harvest, PlotLifecycleActionResultCodes.ActionUnavailable, "action_not_available"),
-            (GameMcpCommandKind.Harvest, PlotLifecycleActionResultCodes.QuantityUnavailable, "amount_not_available"),
+            (GameMcpCommandKind.Harvest, PlotLifecycleActionResultCodes.QuantityUnavailable, "amount_unavailable"),
+            (GameMcpCommandKind.Research, ResearchActionResultCodes.AmountUnavailable, "amount_unavailable"),
+            (GameMcpCommandKind.Concept, AutoConceptActionResultCodes.AmountUnavailable, "amount_unavailable"),
         };
         foreach (var (kind, code, expected) in cases)
         {

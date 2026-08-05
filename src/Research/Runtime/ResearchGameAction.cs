@@ -118,6 +118,12 @@ internal sealed class ResearchGameAction : IDisposable
         switch (kind)
         {
             case ResearchActionKind.Develop:
+                if (state.MultiBuy > state.LevelsAvailable)
+                {
+                    reason = "This research can develop at most " + state.LevelsAvailable +
+                        (state.LevelsAvailable == 1 ? " level" : " levels") + " right now.";
+                    return ResearchPreflight.AmountUnavailable;
+                }
                 if (state.QueueMode)
                 {
                     if (state.MultiBuy <= 0)

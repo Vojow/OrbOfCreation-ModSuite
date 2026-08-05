@@ -15,4 +15,5 @@ internal static class ResearchActionResultCodes
     internal static ServiceActionResultCode MutationPermitUnavailable => new(5410);
     internal static ServiceActionResultCode PostCommitFault => new(5411);
     internal static ServiceActionResultCode VerificationFailed => new(5412);
+    internal static ServiceActionResultCode AmountUnavailable => new(5413);
 }

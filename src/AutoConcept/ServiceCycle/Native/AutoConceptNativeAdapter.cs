@@ -357,6 +357,15 @@ internal sealed class AutoConceptNativeAdapter :
                     ? AutoConceptPreflight.ResourceBackpressure
                     : AutoConceptPreflight.ProjectionRefused,
                 reason);
+        if (safeTarget != desiredTarget)
+        {
+            var maximumAdditional = Math.Max(0, safeTarget - candidate.Quantity);
+            return AutoConceptSubmission.Rejected(
+                AutoConceptPreflight.ResourceBackpressure,
+                "The current resource limits allow at most " + maximumAdditional +
+                " more concept " + (maximumAdditional == 1 ? "assignment" : "assignments") + ".",
+                maximumAdditional);
+        }
         var delta = safeTarget - candidate.Quantity;
         var succeeded = TryAdd(candidate, delta, out reason);
         return _lastNativeMutationOutcome.MutationAttempts == 0
