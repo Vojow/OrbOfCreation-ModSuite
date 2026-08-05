@@ -141,10 +141,37 @@ public sealed class GameMcpResearchTests
         Assert.Null(response["payment"]);
     }
 
+    [Fact]
+    public void OrdinaryDevelopSettlementUsesTheActionSentinelInsteadOfWaitingForCompletion()
+    {
+        var completedAt = DateTime.UtcNow.Ticks;
+        var before = World(isDeveloping: false);
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Research, 41, 8, "develop", ResearchId, Guid.Empty,
+            "ResearchSO", 1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 51));
+        var started = World(isDeveloping: true, collectedAtUtcTicks: completedAt + 1);
+        var idle = World(isDeveloping: false, collectedAtUtcTicks: completedAt + 1);
+
+        Assert.True(GameMcpPostStateSettlement.IsReady(
+            GameMcpTestHarness.Context(started, generation: 52), 51, completedAt, command));
+        Assert.False(GameMcpPostStateSettlement.IsReady(
+            GameMcpTestHarness.Context(idle, generation: 52), 51, completedAt, command));
+
+        var timeout = Json(GameMcpPostStateSettlement.TimedOut(
+            command, GameMcpTestHarness.Context(idle, generation: 52)), idle);
+        Assert.Equal("requested_state_not_reached",
+            (string?)timeout["postStateUnavailable"]!["reasonCode"]);
+        Assert.Contains("development did not start",
+            (string?)timeout["postStateUnavailable"]!["reason"]);
+    }
+
     private static GameWorldState World(
         bool developmentCostAffordable = true,
         double spendableAmount = 80,
-        double investmentRemaining = 60)
+        double investmentRemaining = 60,
+        bool isDeveloping = true,
+        long? collectedAtUtcTicks = null)
     {
         var decision = new WorldResearchDecision(
             true,
@@ -173,7 +200,7 @@ public sealed class GameMcpResearchTests
         var modifiers = new RawResearchModifiers(BigDouble.Zero, BigDouble.Zero,
             new BigDouble(100), BigDouble.Zero, BigDouble.Zero);
         var research = new WorldResearch(ResearchId, 1, 2, 0, 0, 10, 60,
-            true, true, false, true, true, false, true, true, true, true, true, true,
+            isDeveloping, true, false, true, true, false, true, true, true, true, true, true,
             1, 1, 0, 1, 10, false, 2, 1, new BigDouble(60), 1, 1,
             PublicationTable<WorldResearchRequirementAdjustment>.Empty, in modifiers, in decision);
         var identities = GameMcpTestHarness.EntityCatalog.Rows.AsSpan().ToArray().Concat(new[]
@@ -185,7 +212,7 @@ public sealed class GameMcpResearchTests
         return new GameWorldState
         {
             CollectedAtEpoch = 41,
-            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+            CollectedAtUtcTicks = collectedAtUtcTicks ?? DateTime.UtcNow.Ticks,
             EntityIdentities = EntityIdentityCatalogSnapshot.Bound(41, identities),
             Research = PublicationTable<WorldResearch>.Create(new[] { research }),
             CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]

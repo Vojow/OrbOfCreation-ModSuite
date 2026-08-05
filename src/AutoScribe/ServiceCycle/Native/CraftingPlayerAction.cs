@@ -46,6 +46,15 @@ internal enum CraftingPlayerNativeStage
     Verification = 6,
 }
 
+internal enum CraftingPlayerPostcondition
+{
+    None = 0,
+    DirectEffectAdvanced = 1,
+    InstanceQuantityIncreased = 2,
+    InstantCompleted = 3,
+    QueueAdmitted = 4,
+}
+
 internal readonly struct CraftingPlayerSubmission
 {
     internal CraftingPlayerSubmission(
@@ -54,7 +63,8 @@ internal readonly struct CraftingPlayerSubmission
         CraftingPlayerNativeStage stage,
         NativeMutationOutcome outcome,
         NativeMutationCallOutcome callOutcome,
-        string reason)
+        string reason,
+        CraftingPlayerPostcondition postcondition = CraftingPlayerPostcondition.None)
     {
         RecipeId = recipeId;
         Preflight = preflight;
@@ -62,6 +72,7 @@ internal readonly struct CraftingPlayerSubmission
         Outcome = outcome;
         CallOutcome = callOutcome;
         Reason = reason ?? string.Empty;
+        Postcondition = postcondition;
     }
 
     internal Guid RecipeId { get; }
@@ -70,6 +81,7 @@ internal readonly struct CraftingPlayerSubmission
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
     internal string Reason { get; }
+    internal CraftingPlayerPostcondition Postcondition { get; }
     internal bool Verified =>
         Preflight == CraftingPlayerPreflight.Proceeded &&
         Outcome == NativeMutationOutcome.Verified;

@@ -83,11 +83,11 @@ internal static class GameMcpPostStateSettlement
         if (beforeWorld is null) return false;
         var before = WorldAlchemyInstanceLookup.TryFind(
             beforeWorld.AlchemyInstances, command.TargetId, out var previous)
-            ? previous.Quantity
+            ? previous.QueuedQuantity
             : 0;
         var after = WorldAlchemyInstanceLookup.TryFind(
             state.World!.Snapshot.AlchemyInstances, command.TargetId, out var current)
-            ? current.Quantity
+            ? current.QueuedQuantity
             : 0;
         return command.Mode switch
         {
@@ -106,7 +106,7 @@ internal static class GameMcpPostStateSettlement
             WorldLookup.TryFind(state.World!.Snapshot.Research, command.TargetId, out var after) &&
             (before.Decision.QueueMode
                 ? PendingResearchLevels(after) == checked(PendingResearchLevels(before) + command.Amount)
-                : !after.IsDeveloping && after.Level == checked(before.Level + command.Amount));
+                : !before.IsDeveloping && after.IsDeveloping);
     }
 
     private static int PendingResearchLevels(in WorldResearch research) =>
@@ -139,6 +139,30 @@ internal static class GameMcpPostStateSettlement
             return GameMcpWorldQuery.PostStateUnavailable(
                 "requested_state_not_reached",
                 "the settled attribute did not show the requested enabled state");
+        }
+        if (command.Kind == GameMcpCommandKind.Research &&
+            string.Equals(command.Mode, "develop", System.StringComparison.Ordinal) &&
+            latest?.World is not null)
+        {
+            var observed = WorldLookup.TryFind(
+                latest.World.Snapshot.Research, command.TargetId, out var research)
+                ? research.IsDeveloping ? "developing" : "idle"
+                : "not published";
+            return GameMcpWorldQuery.PostStateUnavailable(
+                "requested_state_not_reached",
+                "the settled research target is " + observed +
+                "; development did not start");
+        }
+        if (command.Kind == GameMcpCommandKind.Concept && latest?.World is not null)
+        {
+            var observed = WorldAlchemyInstanceLookup.TryFind(
+                latest.World.Snapshot.AlchemyInstances, command.TargetId, out var concept)
+                ? concept.QueuedQuantity.ToString()
+                : "not published";
+            return GameMcpWorldQuery.PostStateUnavailable(
+                "requested_state_not_reached",
+                "the settled concept stack did not reach the requested amount; queued quantity is " +
+                observed);
         }
         return GameMcpWorldQuery.PostStateUnavailable(
             "post_state_timeout",

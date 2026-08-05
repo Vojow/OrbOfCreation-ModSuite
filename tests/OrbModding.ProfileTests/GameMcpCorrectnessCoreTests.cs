@@ -1,4 +1,5 @@
 using System;
+using Newtonsoft.Json.Linq;
 using OrbAutomata;
 using OrbAutomata.GameMcp;
 using OrbModding.Common;
@@ -19,6 +20,85 @@ public sealed class GameMcpCorrectnessCoreTests
             new BigDouble(1.82d, 529), new BigDouble(1.17d, 23)));
         Assert.Equal("9.03e169", PlayerFacingCost(
             new BigDouble(9.96d, 205), new BigDouble(1.103d, 38)));
+    }
+
+    [Fact]
+    public void ResourceRowsAndCostsUseTheNativeScreenCoordinate()
+    {
+        var ordinaryId = Guid.Parse("36666666-6666-4666-8666-666666666666");
+        var bandwidthId = Guid.Parse("37777777-7777-4777-8777-777777777777");
+        var rateInputs = default(RawResourceRateInputs);
+        var modifiers = default(RawResourceModifiers);
+        var ordinaryTraits = Traits(bandwidth: false, inverted: false);
+        var bandwidthTraits = Traits(bandwidth: true, inverted: true);
+        var ordinaryReading = new RawResourceSample(
+            ordinaryId, new BigDouble(60), new BigDouble(100), true,
+            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty,
+            in rateInputs, in ordinaryTraits, in modifiers);
+        var bandwidthReading = new RawResourceSample(
+            bandwidthId, new BigDouble(3), new BigDouble(10), true,
+            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty,
+            in rateInputs, in bandwidthTraits, in modifiers);
+        var world = new GameWorldState
+        {
+            EntityIdentities = EntityIdentityCatalogSnapshot.Bound(1, new[]
+            {
+                new EntityIdentityName(ordinaryId, "ResourceSO", "Knowledge", "knowledge"),
+                new EntityIdentityName(bandwidthId, "ResourceSO", "Glyph Upgrades", "glyphUpgrades"),
+            }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                new WorldResource(in ordinaryReading, true, new BigDouble(40), 0.6d,
+                    false, new BigDouble(120), BigDouble.Zero),
+                new WorldResource(in bandwidthReading, true, new BigDouble(7), 0.3d,
+                    false, new BigDouble(6), BigDouble.Zero),
+            }),
+            SpellCosts = PublicationTable<WorldSpellCost>.Create(new[]
+            {
+                new WorldSpellCost(0, WorldSpellCostKind.Immediate,
+                    ordinaryId, new BigDouble(100)),
+            }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus(
+                    "resources", WorldCategoryOutcome.Collected, 2, 0, string.Empty),
+            }),
+        };
+
+        var ordinary = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            GameMcpWorldQuery.ProjectResource(world, world.Resources[0]),
+            world.EntityIdentities));
+        Assert.Equal("60", (string?)ordinary["amount"]);
+        Assert.Equal("100", (string?)ordinary["capacity"]);
+        Assert.False((bool)ordinary["atCapacity"]!);
+        Assert.Equal(new BigDouble(60),
+            GameMcpWorldQuery.SpendableAmount(world, ordinaryId, BigDouble.Zero));
+        Assert.Equal(new BigDouble(50),
+            GameMcpWorldQuery.PlayerFacingCost(world, ordinaryId, new BigDouble(100)));
+
+        var bandwidth = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            GameMcpWorldQuery.ProjectResource(world, world.Resources[1]),
+            world.EntityIdentities));
+        Assert.Equal("7", (string?)bandwidth["amount"]);
+        Assert.Equal("10", (string?)bandwidth["capacity"]);
+        Assert.False((bool)bandwidth["atCapacity"]!);
+        Assert.Equal(new BigDouble(7),
+            GameMcpWorldQuery.SpendableAmount(world, bandwidthId, BigDouble.Zero));
+        Assert.Equal(new BigDouble(100),
+            GameMcpWorldQuery.PlayerFacingCost(world, bandwidthId, new BigDouble(100)));
+
+        var costs = Assert.IsType<JArray>(GameMcpDocumentJsonEncoder.Encode(
+            GameMcpWorldQuery.ProjectEquippedSpellCosts(
+                world, 0, WorldSpellCostKind.Immediate).Freeze(),
+            world.EntityIdentities));
+        var cost = Assert.Single(costs.Values<JObject>());
+        Assert.Equal("50", (string?)cost["cost"]);
+        Assert.Equal("60", (string?)cost["spendableAmount"]);
+        Assert.True((bool)cost["affordable"]!);
     }
 
     [Fact]
@@ -150,6 +230,13 @@ public sealed class GameMcpCorrectnessCoreTests
             world, resource, nominal));
     }
 
+    private static RawResourceTraits Traits(bool bandwidth, bool inverted) => new(
+        0d, 0d, 0d,
+        false, false, false,
+        bandwidth, inverted, false, false,
+        BigDouble.Zero, 0, 0, 0d, false, 0d,
+        BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, false);
+
     [Fact]
     public void ActionRegistrationDependsOnlyOnRuntimeAdmission()
     {
@@ -214,7 +301,7 @@ public sealed class GameMcpCorrectnessCoreTests
             CollectedAtUtcTicks = completedAt + 1,
             AlchemyInstances = PublicationTable<WorldAlchemyInstance>.Create(new[]
             {
-                new WorldAlchemyInstance(recipe, 442, 442, true, BigDouble.One),
+                new WorldAlchemyInstance(recipe, 445, 442, true, BigDouble.One),
             }),
         };
         var exact = new GameWorldState
@@ -222,7 +309,7 @@ public sealed class GameMcpCorrectnessCoreTests
             CollectedAtUtcTicks = completedAt + 1,
             AlchemyInstances = PublicationTable<WorldAlchemyInstance>.Create(new[]
             {
-                new WorldAlchemyInstance(recipe, 445, 445, true, BigDouble.One),
+                new WorldAlchemyInstance(recipe, 440, 445, true, BigDouble.One),
             }),
         };
 
@@ -230,6 +317,13 @@ public sealed class GameMcpCorrectnessCoreTests
             GameMcpTestHarness.Context(partial, generation: 42), 41, completedAt, command));
         Assert.True(GameMcpPostStateSettlement.IsReady(
             GameMcpTestHarness.Context(exact, generation: 42), 41, completedAt, command));
+
+        var timeout = GameMcpTestHarness.Json(GameMcpPostStateSettlement.TimedOut(
+            command, GameMcpTestHarness.Context(partial, generation: 42)));
+        Assert.Equal("requested_state_not_reached",
+            (string?)timeout["postStateUnavailable"]!["reasonCode"]);
+        Assert.Contains("queued quantity is 442",
+            (string?)timeout["postStateUnavailable"]!["reason"]);
     }
 
     [Fact]

@@ -103,7 +103,7 @@ public sealed class GameMcpWorldQueryTests
             },
             row.Children<JProperty>().Select(property => property.Name));
         Assert.Equal("Knowledge", (string?)row["name"]);
-        Assert.Equal("5.63e24", (string?)row["amount"]);
+        Assert.Equal("5e24", (string?)row["amount"]);
         Assert.Equal("8e26", (string?)row["capacity"]);
         Assert.Equal("1.4e21", (string?)row["netRatePerSecond"]);
         Assert.False((bool)row["atCapacity"]!);
@@ -113,7 +113,7 @@ public sealed class GameMcpWorldQueryTests
         Assert.Null(row["rateInputs"]);
         Assert.Null(row["traits"]);
         Assert.Null(row["modifiers"]);
-        Assert.Equal(221, System.Text.Encoding.UTF8.GetByteCount(
+        Assert.Equal(218, System.Text.Encoding.UTF8.GetByteCount(
             response.ToString(Newtonsoft.Json.Formatting.None)));
 
         var list = GameMcpTestHarness.Json(GameMcpWorldQuery.ListRows(
@@ -123,7 +123,7 @@ public sealed class GameMcpWorldQueryTests
             10));
         var listed = Assert.Single(list["rows"]!.Values<JObject>())!;
         Assert.Equal((string?)row["amount"], (string?)listed["amount"]);
-        Assert.Equal("5.63e24", (string?)listed["amount"]);
+        Assert.Equal("5e24", (string?)listed["amount"]);
     }
 
     [Fact]
@@ -180,7 +180,7 @@ public sealed class GameMcpWorldQueryTests
             new[] { resourceId.ToString("D") }));
         var row = Assert.Single(response["results"]!.Values<JObject>())!["row"]!;
 
-        Assert.Equal("9.83e24", (string?)row["amount"]);
+        Assert.Equal("5e24", (string?)row["amount"]);
         Assert.Equal("0", (string?)row["netRatePerSecond"]);
         Assert.Null(row["capacity"]);
         Assert.Null(row["atCapacity"]);

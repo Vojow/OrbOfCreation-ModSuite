@@ -176,7 +176,16 @@ public sealed class GameMcpCraftingTests
             1, GameMcpCommandKind.Crafting, 15, 8, "craft", RecipeId, Guid.Empty,
             "CraftingRecipeSO", 1, string.Empty, string.Empty,
             false, false, frameContext: Context(queuedAmount: 0));
-        var committed = GameMcpCommandResult.Committed("committed", 15, 8);
+        var submission = new CraftingPlayerSubmission(
+            RecipeId,
+            CraftingPlayerPreflight.Proceeded,
+            CraftingPlayerNativeStage.Verification,
+            NativeMutationOutcome.Verified,
+            new NativeMutationCallOutcome(4, 1, 1),
+            "instant craft completed",
+            CraftingPlayerPostcondition.InstantCompleted);
+        var committed = GameMcpCommandResult.Committed(
+            "committed", 15, 8, GameMcpCraftingProjection.Project(in submission));
 
         var postState = Json(GameMcpWorldQuery.ProjectGameplayPostState(
             Context(queuedAmount: 0), command, committed));
@@ -184,6 +193,32 @@ public sealed class GameMcpCraftingTests
         Assert.Equal("Craft Sigils", (string?)postState["name"]);
         Assert.True((bool)postState["completed"]!);
         Assert.Null(postState["queued"]);
+    }
+
+    [Fact]
+    public void EqualSettledQueueCountsDoNotInventInstantCompletion()
+    {
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Crafting, 15, 8, "craft", RecipeId, Guid.Empty,
+            "CraftingRecipeSO", 1, string.Empty, string.Empty,
+            false, false, frameContext: Context(queuedAmount: 4));
+        var submission = new CraftingPlayerSubmission(
+            RecipeId,
+            CraftingPlayerPreflight.Proceeded,
+            CraftingPlayerNativeStage.Verification,
+            NativeMutationOutcome.Verified,
+            new NativeMutationCallOutcome(5, 1, 1),
+            "queue admission verified",
+            CraftingPlayerPostcondition.QueueAdmitted);
+        var committed = GameMcpCommandResult.Committed(
+            "committed", 15, 8, GameMcpCraftingProjection.Project(in submission));
+
+        var postState = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            Context(queuedAmount: 4), command, committed));
+
+        Assert.Null(postState["completed"]);
+        Assert.Equal(4, (int)postState["queued"]!["before"]!);
+        Assert.Equal(4, (int)postState["queued"]!["after"]!);
     }
 
     [Theory]
@@ -225,7 +260,8 @@ public sealed class GameMcpCraftingTests
             CraftingPlayerNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(2, 1, 1),
-            "queue changed");
+            "queue changed",
+            CraftingPlayerPostcondition.QueueAdmitted);
 
         var failure = Json(GameMcpCraftingProjection.Project(in fault));
         var success = Json(GameMcpCraftingProjection.Project(in committed));

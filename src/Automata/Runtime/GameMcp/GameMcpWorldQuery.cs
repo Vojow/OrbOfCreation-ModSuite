@@ -658,7 +658,7 @@ internal static class GameMcpWorldQuery
             GameMcpCommandKind.Concept => ProjectConceptDelta(state, command),
             GameMcpCommandKind.Harvest => ProjectHarvestDelta(state, command, committed),
             GameMcpCommandKind.SpellLevel => ProjectSpellLevelDelta(state, command),
-            GameMcpCommandKind.Crafting => ProjectCraftingDelta(state, command),
+            GameMcpCommandKind.Crafting => ProjectCraftingDelta(state, command, committed),
             GameMcpCommandKind.EquipmentLoadout => ProjectEquipmentDelta(state, command),
             GameMcpCommandKind.AlchemyLoadout => ProjectAlchemyLoadoutDelta(state, command),
             GameMcpCommandKind.RitualLifecycle => ProjectRitualLifecycleDelta(state, command),
@@ -1659,7 +1659,8 @@ internal static class GameMcpWorldQuery
 
     private static GameMcpValue ProjectCraftingDelta(
         GameMcpFrameContext state,
-        GameMcpCommand command)
+        GameMcpCommand command,
+        GameMcpCommandResult committed)
     {
         if (state.World is null)
             return PostStateUnavailable("world_not_published", state.RuntimeNotAvailableReason);
@@ -1690,27 +1691,19 @@ internal static class GameMcpWorldQuery
                 current.QueuedAmount.ToInt(),
                 "queued");
         }
-        if (current.Pipeline != WorldCraftingPipeline.Direct)
+        if (GameMcpCraftingProjection.ProvedCompletion(committed.Details))
         {
-            if (hasBefore && current.QueuedAmount == previous.QueuedAmount)
+            return new JObject
             {
-                return new JObject
-                {
-                    ["uuid"] = command.TargetId.ToString("D"),
-                    ["completed"] = true,
-                }.Freeze();
-            }
-            return Change(
-                command.TargetId,
-                hasBefore ? previous.QueuedAmount.ToInt() : null,
-                current.QueuedAmount.ToInt(),
-                "queued");
+                ["uuid"] = command.TargetId.ToString("D"),
+                ["completed"] = true,
+            }.Freeze();
         }
-        return new JObject
-        {
-            ["uuid"] = command.TargetId.ToString("D"),
-            ["completed"] = true,
-        }.Freeze();
+        return Change(
+            command.TargetId,
+            hasBefore ? previous.QueuedAmount.ToInt() : null,
+            current.QueuedAmount.ToInt(),
+            "queued");
     }
 
     private static GameMcpValue Change(
@@ -4002,7 +3995,7 @@ internal static class GameMcpWorldQuery
         return destinations;
     }
 
-    private static JArray ProjectEquippedSpellCosts(
+    internal static JArray ProjectEquippedSpellCosts(
         GameWorldState world,
         int slotIndex,
         WorldSpellCostKind kind)
@@ -4018,17 +4011,18 @@ internal static class GameMcpWorldQuery
         for (var index = start; index < start + count; index++)
         {
             var value = world.SpellCosts[index];
+            var playerCost = PlayerFacingCost(world, value.ResourceId, value.Amount);
             var row = new JObject
             {
                 ["resourceId"] = value.ResourceId.ToString("D"),
-                ["cost"] = new GameMcpDomainValue(value.Amount),
+                ["cost"] = new GameMcpDomainValue(playerCost),
             };
             if (WorldLookup.TryFind(world.Resources, value.ResourceId, out var resource))
             {
                 var amount = SpendableAmount(
                     world, value.ResourceId, resource.Reading.Quantity);
                 row["amount"] = new GameMcpDomainValue(amount);
-                row["affordable"] = amount >= value.Amount;
+                row["affordable"] = amount >= playerCost;
             }
             else row["affordable"] = false;
             result.Add(row);
@@ -4059,12 +4053,11 @@ internal static class GameMcpWorldQuery
         return result;
     }
 
-    private static GameMcpValue ProjectResource(GameWorldState world, in WorldResource resource)
+    internal static GameMcpValue ProjectResource(GameWorldState world, in WorldResource resource)
     {
-        var allocation = resource.Reading.Traits.BandwidthResource;
-        var amount = allocation
-            ? SpendableAmount(world, resource.EntityId, resource.Reading.Quantity)
-            : resource.TrueQuantity;
+        var amount = resource.Reading.Traits.InvertedResource
+            ? resource.Headroom
+            : resource.Reading.Quantity;
         var result = new JObject
         {
             ["entityId"] = resource.EntityId.ToString("D"),
@@ -4076,9 +4069,7 @@ internal static class GameMcpWorldQuery
             result["capacity"] = new GameMcpDomainValue(resource.Reading.Capacity);
         result["netRatePerSecond"] = new GameMcpDomainValue(resource.TrueRate);
         if (resource.IsCapped)
-            result["atCapacity"] = allocation
-                ? amount.CompareTo(resource.Reading.Capacity) >= 0
-                : resource.IsAtCapacity;
+            result["atCapacity"] = amount.CompareTo(resource.Reading.Capacity) >= 0;
         return result.Freeze();
     }
 
@@ -4103,6 +4094,7 @@ internal static class GameMcpWorldQuery
     {
         if (!WorldLookup.TryFind(world.Resources, resourceId, out var resource))
             return nominalCost;
+        if (resource.Reading.Traits.BandwidthResource) return nominalCost;
         var quality = OrbGameMath.AsPercent(resource.Reading.Quality);
         return quality == BigDouble.Zero ? nominalCost : nominalCost / quality;
     }

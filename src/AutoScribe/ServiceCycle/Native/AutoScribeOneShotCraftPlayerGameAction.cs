@@ -106,7 +106,8 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 return Verified(
                     in action,
                     1,
-                    "The exact recipe advanced its native craft-effect publication before Execute threw.");
+                    "The exact recipe advanced its native craft-effect publication before Execute threw.",
+                    CraftingPlayerPostcondition.DirectEffectAdvanced);
             return PlayerCraftingFault(
                 in action,
                 CraftingPlayerPreflight.PostCommitFault,
@@ -143,7 +144,8 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
         return Verified(
             in action,
             1,
-            "The exact recipe advanced its native craft-effect publication.");
+            "The exact recipe advanced its native craft-effect publication.",
+            CraftingPlayerPostcondition.DirectEffectAdvanced);
     }
 
     private CraftingPlayerSubmission SubmitQueued(
@@ -261,7 +263,12 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                     NativeMutationOutcome.Verified,
                     new NativeMutationCallOutcome(calls, 1, 1),
                     "The exact queued outcome was observed after native code threw: " +
-                    ex.GetBaseException().Message);
+                    ex.GetBaseException().Message,
+                    existing is not null
+                        ? CraftingPlayerPostcondition.InstanceQuantityIncreased
+                        : instant
+                            ? CraftingPlayerPostcondition.InstantCompleted
+                            : CraftingPlayerPostcondition.QueueAdmitted);
             }
             return PlayerCraftingFault(
                 in action,
@@ -289,7 +296,8 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 calls,
                 "The exact crafting instance quantity did not increase.");
         return Verified(in action, calls,
-            "The exact crafting instance quantity increased.");
+            "The exact crafting instance quantity increased.",
+            CraftingPlayerPostcondition.InstanceQuantityIncreased);
     }
 
     private CraftingPlayerSubmission VerifyInstant(
@@ -307,7 +315,8 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 calls,
                 "The exact instant crafting instance did not reach native completion.");
         return Verified(in action, calls,
-            "The exact instant crafting instance reached native completion.");
+            "The exact instant crafting instance reached native completion.",
+            CraftingPlayerPostcondition.InstantCompleted);
     }
 
     private CraftingPlayerSubmission VerifyQueued(
@@ -326,20 +335,23 @@ internal sealed partial class AutoScribeOneShotCraftGameAction
                 calls,
                 "The exact crafting instance was not admitted to the authored queue.");
         return Verified(in action, calls,
-            "The exact crafting instance was admitted to the authored queue.");
+            "The exact crafting instance was admitted to the authored queue.",
+            CraftingPlayerPostcondition.QueueAdmitted);
     }
 
     private static CraftingPlayerSubmission Verified(
         in CraftingPlayerAction action,
         int calls,
-        string reason) =>
+        string reason,
+        CraftingPlayerPostcondition postcondition) =>
         new CraftingPlayerSubmission(
             action.RecipeId,
             CraftingPlayerPreflight.Proceeded,
             CraftingPlayerNativeStage.Verification,
             NativeMutationOutcome.Verified,
             new NativeMutationCallOutcome(calls, 1, 1),
-            reason);
+            reason,
+            postcondition);
 
     private static bool TryFindPage(
         CraftingPlayerNativeBindings native,
