@@ -214,17 +214,17 @@ surface.
 immediate/drain observations and are not mislabeled as purchase prices. Every displayed cost is in
 the screen's spend units: nominal native costs are divided by the resource quality percent through
 the audited `GetTrueSpend` formula before serialization. Each structure/upgrade cost row exposes
-`baseCost`, verified `effectiveCost`, optional `groupLevels`/`groupCost`, and named
-`costModifiers`. Every cost row uses `cost` for the screen price and `spendableAmount` for the
+the screen's `cost`, the matching `spendableAmount`, and the resource identity needed for the
+next decision. Every cost row uses `cost` for the screen price and `spendableAmount` for the
 same-publication player pool, with `affordable` and a reason only when the decision was evaluated.
-Ordinary resources spend true holdings;
-bandwidth resources spend headroom. These fields use the same exact combiner as Auto Buy and do not
+Ordinary resources compare their raw on-screen pool against the quality-adjusted spend; bandwidth
+resources compare nominal cost against headroom. These fields use the same exact combiner as Auto Buy and do not
 include Auto Buy's configurable reserve or excess policy.
 
-A `resources` row is deliberately only named identity, canonical spendable `amount`,
+A `resources` row is deliberately only named identity, the counter's on-screen `amount`,
 `netRatePerSecond`, and, when the resource is capped, `capacity` plus `atCapacity`. A negative native
-capacity is the game's uncapped sentinel and is never serialized as a magnitude. The old
-`balance`/`quantity`/`trueQuantity` ambiguity is gone. Detailed
+capacity is the game's uncapped sentinel and is never serialized as a magnitude. Inverted allocation
+counters publish their displayed headroom; ordinary counters publish their raw quantity. Detailed
 factor math will belong to a future Details-panel tool; it is not leaked through world rows.
 
 Research rows distinguish the native evaluator's base and effective requirement levels. Their
@@ -751,8 +751,8 @@ requirement leaf: the collector publishes that leaf with its owner UUID, contain
 runtime condition type. When those rows reconcile exactly with the skipped count, `world_get` and
 `world_list` keep other owners authoritative, while `world_search` localizes the evidence only when
 a returned stable entity owns the leaf. An entity get/list/search that touches the affected owner
-returns `entity_data_incomplete`, `world_list_incomplete`, or `world_search_incomplete` with the
-ordinary row marked partial and exact `implicatedSkippedRows`. A UUID found only in a composite row
+returns that row with `status: unavailable`, `reasonCode: entity_data_incomplete`, and exact
+`implicatedSkippedRows`; unaffected rows remain ordinary available results. A UUID found only in a composite row
 remains outside search coverage and is diagnosed through `world_list`. If even one skipped read cannot
 be tied to a published owner/leaf, the category-global refusal remains. Derived tables also require
 every upstream collection report to be clean.
