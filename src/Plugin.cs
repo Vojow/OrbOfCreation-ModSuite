@@ -2597,7 +2597,8 @@ public sealed class Plugin : BaseUnityPlugin
             {
                 var tabs = _uiShell.CaptureNativeTabsForGameMcp();
                 var activeTab = tabs.FirstOrDefault(tab => tab.Active);
-                details["activeTab"] = activeTab.Label;
+                if (!string.IsNullOrWhiteSpace(activeTab.Label))
+                    details["activeTab"] = activeTab.Label;
             }
             if (command.SaveCapture)
             {
@@ -2942,11 +2943,12 @@ public sealed class Plugin : BaseUnityPlugin
             var details = new GameMcpObjectBuilder
             {
                 ["scene"] = SceneManager.GetActiveScene().name,
-                ["activeTab"] = activeTab.Label,
                 ["subtabStrips"] = ProjectGameMcpSubtabStrips(
                     subtabs.Select(value =>
                         (value.StripKey, value.Label, value.Active))),
             };
+            if (!string.IsNullOrWhiteSpace(activeTab.Label))
+                details["activeTab"] = activeTab.Label;
             if (command.TargetId != Guid.Empty)
                 details["selectedPlot"] = command.TargetId.ToString("D");
             result = GadgetCommitted("navigation_arrived", details);

@@ -348,7 +348,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         }
     }
 
-    private static GameMcpValue? ProjectAmountRefusal(
+    internal static GameMcpValue? ProjectAmountRefusal(
         GameMcpCommand command,
         GameWorldState world,
         in ServiceActionResult result)
@@ -357,11 +357,13 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             return null;
         int? maximum = null;
         if (command.Kind == GameMcpCommandKind.EquipmentLoadout &&
+            command.Mode is "equip" or "unequip" &&
             WorldLookup.TryFind(world.Equipment, command.TargetId, out var equipment))
             maximum = command.Mode == "unequip"
                 ? equipment.Loadout.MaximumUnequipAmount
                 : equipment.Loadout.MaximumEquipAmount;
         else if (command.Kind == GameMcpCommandKind.AlchemyLoadout &&
+                 command.Mode is "add" or "remove" &&
                  WorldAlchemyLoadoutLookup.TryFind(
                      world.AlchemyLoadout, command.TargetId, out var alchemy))
             maximum = command.Mode == "remove" ? alchemy.TargetAmount : alchemy.MaximumAdd;

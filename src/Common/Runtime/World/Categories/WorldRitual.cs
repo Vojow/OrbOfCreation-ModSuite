@@ -257,8 +257,7 @@ internal static class WorldRitualDeriver
             var decision = source.Decision.WithCompletionCosts(completion);
             rows[index] = source.WithDecision(in decision);
         }
-        Array.Sort(rows, static (left, right) => left.EntityId.CompareTo(right.EntityId));
-        return PublicationTable<WorldRitual>.Create(rows, rows.Length);
+        return WorldTable.Create(rows, rows.Length);
     }
 
     private static PublicationTable<WorldRitualCost> ComputeCompletionCosts(in WorldRitual ritual)
