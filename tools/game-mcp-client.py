@@ -319,7 +319,7 @@ def observe_rows(
     value = structured(
         client.call_tool("world_list", {"category": category, "limit": limit})
     )
-    if value.get("status") != "available" or not isinstance(value.get("rows"), list):
+    if not isinstance(value.get("rows"), list):
         raise RuntimeError(f"{category} is not available: {value}")
     return value
 
@@ -328,8 +328,6 @@ def observe_and_purchase(client: GameMcpClient, args: argparse.Namespace) -> dic
     observed = structured(
         client.call_tool("world_search", {"query": args.uuid, "limit": 50})
     )
-    if observed.get("status") != "available":
-        raise RuntimeError(f"purchase facts are unavailable: {observed}")
     matches = observed.get("matches")
     if not isinstance(matches, list):
         raise RuntimeError("purchase search returned no matches")
@@ -430,7 +428,7 @@ def observe_and_spell_level(client: GameMcpClient, args: argparse.Namespace) -> 
     )
     results = observed.get("results")
     row_result = results[0] if isinstance(results, list) and results else None
-    if observed.get("status") != "available" or not isinstance(row_result, dict) or \
+    if not isinstance(row_result, dict) or row_result.get("status") != "available" or \
             not isinstance(row_result.get("row"), dict):
         raise RuntimeError(f"spell recipe is unavailable: {observed}")
     action = {"mode": "single", "uuid": args.uuid}
