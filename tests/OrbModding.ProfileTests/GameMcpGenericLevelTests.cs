@@ -82,17 +82,17 @@ public sealed class GameMcpGenericLevelTests
     }
 
     [Fact]
-    public void Hidden_or_undiscovered_rows_never_advertise_level_purchase()
+    public void Hidden_or_unlearned_rows_never_advertise_level_purchase()
     {
         var world = World(5, 2, purchaseAffordable: true,
-            glyphDiscovered: false, glyphAvailable: false, resourceTypeHidden: true);
+            glyphLearned: false, resourceTypeHidden: true);
 
         var glyph = Row(world, "glyphs", GlyphId);
         var resourceType = Row(world, "resource-types", ResourceTypeId);
 
         Assert.False((bool)glyph["available"]!);
         Assert.False((bool)glyph["purchase"]!["available"]!);
-        Assert.Equal("undiscovered", (string?)glyph["purchase"]!["reasonCode"]);
+        Assert.Equal("not_available", (string?)glyph["purchase"]!["reasonCode"]);
         Assert.False((bool)resourceType["purchase"]!["available"]!);
         Assert.Equal("hidden", (string?)resourceType["purchase"]!["reasonCode"]);
     }
@@ -135,8 +135,7 @@ public sealed class GameMcpGenericLevelTests
         int total,
         int bonus,
         bool purchaseAffordable,
-        bool glyphDiscovered = true,
-        bool glyphAvailable = true,
+        bool glyphLearned = true,
         bool resourceTypeHidden = false)
     {
         var paidCosts = PublicationTable<WorldLevelableCost>.Create(new[]
@@ -151,9 +150,9 @@ public sealed class GameMcpGenericLevelTests
         var equipmentType = new WorldEquipmentType(
             EquipmentTypeId, total - bonus, bonus, 1, new BigDouble(4),
             new BigDouble(8), 0, 0, withBonus);
-        var glyph = new WorldGlyph(GlyphId, total - bonus, bonus, 0, glyphDiscovered,
+        var glyph = new WorldGlyph(GlyphId, total - bonus, bonus, 0, glyphLearned,
             true, false, false, false, false, 0, BigDouble.Zero,
-            BigDouble.Zero, BigDouble.Zero, glyphAvailable, 3, levelDecision: withBonus);
+            BigDouble.Zero, BigDouble.Zero, 3, levelDecision: withBonus);
         var resourceType = new WorldResourceType(
             resourceTypeId: ResourceTypeId,
             level: total - bonus,

@@ -339,7 +339,6 @@ public sealed class GameMcpSpellCompositionTests
         BigDouble.Zero,
         BigDouble.Zero,
         new BigDouble(maximum, 0),
-        true,
         maximum);
 
     private static WorldGlyph CoreGlyph(Guid id) => new(
@@ -357,7 +356,6 @@ public sealed class GameMcpSpellCompositionTests
         BigDouble.Zero,
         BigDouble.Zero,
         BigDouble.One,
-        true,
         1);
 
     private static WorldResource Resource()

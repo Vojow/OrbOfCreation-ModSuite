@@ -232,7 +232,7 @@ internal static class GameMcpEntityExplainer
             case EntityKind.Glyph:
             {
                 WorldLookup.TryFind(world.Glyphs, id, out var glyph);
-                AddDiscoveryPredicates(result, world, id, glyph.Discovered, glyph.Discoverable);
+                AddDiscoveryPredicates(result, world, id, glyph.Learned, glyph.Discoverable);
                 break;
             }
             case EntityKind.Equipment:

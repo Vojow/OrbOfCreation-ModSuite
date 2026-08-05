@@ -62,7 +62,6 @@ internal sealed class GenericLevelNativeBindings
         "generic-level.equipment-available-action",
         "generic-level.glyph-visible-action",
         "generic-level.glyph-available-action",
-        "generic-level.glyph-discovered-action",
         "generic-level.resource-type-visible-action",
         "generic-level.resource-type-available-action",
         "generic-level.resource-type-hidden-action",
@@ -143,11 +142,11 @@ internal sealed class GenericLevelNativeBindings
                 [equipment.Name] = BindTarget(equipment, cost, true, 11, 27,
                     43, 44, includeContract),
                 [glyph.Name] = BindTarget(glyph, cost, true, 15, 30,
-                    45, 46, includeContract, discoveredIndex: 47),
+                    45, 46, includeContract),
                 [resourceType.Name] = BindTarget(resourceType, cost, true, 19, 33,
-                    48, 49, includeContract, hiddenIndex: 50),
+                    47, 48, includeContract, hiddenIndex: 49),
                 [timeRune.Name] = BindTarget(timeRune, cost, false, 23, -1,
-                    51, 52, includeContract, discoveredIndex: 53),
+                    50, 51, includeContract, discoveredIndex: 52),
             };
 
             var enough = Method(36, cost, "HasEnough", typeof(bool), Type.EmptyTypes, includeContract);

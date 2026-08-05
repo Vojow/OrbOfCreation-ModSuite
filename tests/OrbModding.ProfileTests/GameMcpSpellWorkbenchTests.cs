@@ -493,7 +493,7 @@ public sealed class GameMcpSpellWorkbenchTests
         level,
         0,
         0,
-        false,
+        true,
         true,
         false,
         augmentsSpells,
@@ -503,6 +503,5 @@ public sealed class GameMcpSpellWorkbenchTests
         BigDouble.Zero,
         BigDouble.Zero,
         BigDouble.Zero,
-        available: true,
         maximumUsages: 1);
 }

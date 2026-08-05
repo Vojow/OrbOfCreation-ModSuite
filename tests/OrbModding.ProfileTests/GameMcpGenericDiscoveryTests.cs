@@ -297,7 +297,7 @@ public sealed class GameMcpGenericDiscoveryTests
             level: 0,
             freeLevels: 0,
             discoveryRarityLevel: 1,
-            discovered: false,
+            learned: true,
             discoverable: true,
             discoveryRequired: true,
             augmentsSpells: false,
@@ -307,7 +307,6 @@ public sealed class GameMcpGenericDiscoveryTests
             BigDouble.Zero,
             BigDouble.Zero,
             BigDouble.One,
-            available: true,
             maximumUsages: maximumUsages,
             discovery: decision);
 

@@ -22756,12 +22756,6 @@
       "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
     },
     {
-      "id": "generic-level.glyph-discovered-action", "assembly": "assembly-csharp",
-      "type": "GlyphSO", "typeVisibility": "public", "kind": "method", "member": "IsDiscovered",
-      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
-      "owners": ["Automata unified level GameAction"], "usages": ["reflection"], "place": "action"
-    },
-    {
       "id": "generic-level.resource-type-visible-action", "assembly": "assembly-csharp",
       "type": "ResourceTypeSO", "typeVisibility": "public", "kind": "method", "member": "IsVisible",
       "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],

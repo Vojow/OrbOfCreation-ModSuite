@@ -95,16 +95,32 @@ public sealed class GenericLevelGameActionTests
     }
 
     [Fact]
-    public void Undiscovered_glyph_is_refused_before_purchase()
+    public void Prerequisite_learned_pool_glyph_uses_picker_availability_not_discovery_state()
     {
         var target = (GlyphSO)Target("GlyphSO");
         target.discovered = false;
+        target.NativeAvailable = true;
         Register(target);
         using var boundary = Boundary();
 
         var result = Submit(boundary, target, "GlyphSO", GenericLevelActionKind.Purchase);
 
-        Assert.Equal(GenericLevelPreflight.Undiscovered, result.Preflight);
+        Assert.True(result.Verified, result.Reason);
+        Assert.Equal(1, target.GetLevel());
+    }
+
+    [Fact]
+    public void Glyph_hidden_from_the_native_picker_is_refused_before_purchase()
+    {
+        var target = (GlyphSO)Target("GlyphSO");
+        target.discovered = true;
+        target.NativeAvailable = false;
+        Register(target);
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, target, "GlyphSO", GenericLevelActionKind.Purchase);
+
+        Assert.Equal(GenericLevelPreflight.Unavailable, result.Preflight);
         Assert.Equal(0, target.GetLevel());
     }
 

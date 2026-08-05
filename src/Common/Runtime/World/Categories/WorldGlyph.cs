@@ -5,7 +5,7 @@ namespace OrbModding.Common.Runtime.World;
 /// <summary>One glyph as published.</summary>
 internal readonly struct WorldGlyph : IWorldEntity
 {
-    internal WorldGlyph(Guid glyphId, int level, int freeLevels, int discoveryRarityLevel, bool discovered,
+    internal WorldGlyph(Guid glyphId, int level, int freeLevels, int discoveryRarityLevel, bool learned,
         bool discoverable,
         bool discoveryRequired,
         bool augmentsSpells,
@@ -15,7 +15,6 @@ internal readonly struct WorldGlyph : IWorldEntity
         BigDouble freeUsages,
         BigDouble freeLoadoutUsages,
         BigDouble maxUsages,
-        bool available = false,
         int maximumUsages = 0,
         WorldDiscoverableDecision discovery = default,
         WorldLevelableDecision levelDecision = default)
@@ -24,7 +23,7 @@ internal readonly struct WorldGlyph : IWorldEntity
         Level = level;
         FreeLevels = freeLevels;
         DiscoveryRarityLevel = discoveryRarityLevel;
-        Discovered = discovered;
+        Learned = learned;
         Discoverable = discoverable;
         DiscoveryRequired = discoveryRequired;
         AugmentsSpells = augmentsSpells;
@@ -34,7 +33,6 @@ internal readonly struct WorldGlyph : IWorldEntity
         FreeUsages = freeUsages;
         FreeLoadoutUsages = freeLoadoutUsages;
         MaxUsages = maxUsages;
-        Available = available;
         MaximumUsages = maximumUsages;
         Discovery = discovery;
         LevelDecision = levelDecision;
@@ -51,7 +49,12 @@ internal readonly struct WorldGlyph : IWorldEntity
 
     internal int DiscoveryRarityLevel { get; }
 
-    internal bool Discovered { get; }
+    /// <summary>
+    /// The native glyph picker's learned/visible fact. For discoverable glyphs this is the
+    /// discovery flag; for pool unlockers it is the authored prerequisite edge (for example,
+    /// Learn Psionic). The raw <c>GlyphSO.discovered</c> field is not ownership for both systems.
+    /// </summary>
+    internal bool Learned { get; }
 
     /// <summary>The rest of the glyph's runtime state: what it may be applied to, and its usage grants.</summary>
     internal bool Discoverable { get; }
@@ -72,9 +75,6 @@ internal readonly struct WorldGlyph : IWorldEntity
 
     internal BigDouble MaxUsages { get; }
 
-    /// <summary>The native progression verdict used by the glyph picker now.</summary>
-    internal bool Available { get; }
-
     /// <summary>The native picker clamp for this glyph, after active modifiers.</summary>
     internal int MaximumUsages { get; }
 
@@ -90,7 +90,6 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
     private Func<object, int>? _level;
     private Func<object, int>? _freeLevels;
     private Func<object, int>? _discRarityLevel;
-    private Func<object, bool>? _discovered;
     private Func<object, bool>? _discoverable;
     private Func<object, bool>? _discoveryRequired;
     private Func<object, bool>? _augmentsSpells;
@@ -119,7 +118,6 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
         _level = bind.Field<int>("level");
         _freeLevels = bind.Field<int>("freeLevels");
         _discRarityLevel = bind.Field<int>("discRarityLevel");
-        _discovered = bind.Field<bool>("discovered");
         _discoverable = bind.Field<bool>("discoverable");
         _discoveryRequired = bind.Field<bool>("discoveryRequired");
         _augmentsSpells = bind.Field<bool>("augmentsSpells");
@@ -142,7 +140,7 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
             _level!(entity),
             _freeLevels!(entity),
             _discRarityLevel!(entity),
-            _discovered!(entity),
+            _available!(entity),
             _discoverable!(entity),
             _discoveryRequired!(entity),
             _augmentsSpells!(entity),
@@ -152,7 +150,6 @@ internal sealed class WorldGlyphBinder : WorldPlainBinder<WorldGlyph>
             _freeUsages!(entity),
             _freeLoadoutUsages!(entity),
             _maxUsages!(entity),
-            _available!(entity),
             _maximumUsages!(entity),
             _discovery!.Read(entity),
             _levelDecision!.Read(entity));

@@ -224,8 +224,8 @@ internal static class GameMcpWorldQuery
             return new JObject
             {
                 ["entityId"] = glyph.EntityId.ToString("D"),
-                ["discovered"] = glyph.Discovered,
-                ["available"] = glyph.Discovered && glyph.Available,
+                ["discovered"] = glyph.Learned,
+                ["available"] = glyph.Learned,
                 ["paidLevel"] = glyph.Level - glyph.FreeLevels,
                 ["bonusLevel"] = glyph.FreeLevels,
                 ["totalLevel"] = glyph.Level,
@@ -1571,7 +1571,7 @@ internal static class GameMcpWorldQuery
                 discovered = spell.Discovered;
                 return true;
             case "GlyphSO" when WorldLookup.TryFind(world.Glyphs, targetId, out var glyph):
-                discovered = glyph.Discovered;
+                discovered = glyph.Learned;
                 return true;
             case "RitualSO" when WorldLookup.TryFind(world.Rituals, targetId, out var ritual):
                 discovered = ritual.Discovered;
@@ -3314,7 +3314,7 @@ internal static class GameMcpWorldQuery
                 {
                     projected["ownedLevel"] = holding.Level;
                     if (holding.FreeLevels != 0) projected["bonusLevel"] = holding.FreeLevels;
-                    projected["discovered"] = holding.Discovered;
+                    projected["discovered"] = holding.Learned;
                 }
                 glyphs.Add(projected);
             }
@@ -3537,7 +3537,7 @@ internal static class GameMcpWorldQuery
                 }
                 if (isGlyph)
                 {
-                    if (!glyph.Available || component.Count > glyph.MaximumUsages)
+                    if (!glyph.Learned || component.Count > glyph.MaximumUsages)
                     {
                         reasonCode = "component_unavailable";
                         reason = "Glyph " +
@@ -3711,7 +3711,7 @@ internal static class GameMcpWorldQuery
         {
             var component = components[index];
             if (!WorldLookup.TryFind(world.Glyphs, component.Uuid, out var glyph) ||
-                glyph.AugmentsSpells || !glyph.Available)
+                glyph.AugmentsSpells || !glyph.Learned)
             {
                 reason = "Component " +
                     EntityIdentityFormatter.Format(component.Uuid, world.EntityIdentities) +
@@ -3951,7 +3951,7 @@ internal static class GameMcpWorldQuery
         for (var index = 0; index < world.Glyphs.Count; index++)
         {
             var glyph = world.Glyphs[index];
-            if (!glyph.AugmentsSpells || !glyph.Available || glyph.Level <= 0) continue;
+            if (!glyph.AugmentsSpells || !glyph.Learned || glyph.Level <= 0) continue;
             var option = new JObject
             {
                 ["glyphId"] = glyph.GlyphId.ToString("D"),
@@ -3978,7 +3978,7 @@ internal static class GameMcpWorldQuery
                     world.Glyphs,
                     recipe.CoreGlyphs[index].GlyphId,
                     out var glyph) ||
-                !glyph.Available ||
+                !glyph.Learned ||
                 glyph.Level <= 0 ||
                 glyph.AugmentsSpells)
                 return false;
@@ -4494,14 +4494,14 @@ internal static class GameMcpWorldQuery
             ["entityId"] = glyph.EntityId.ToString("D"),
             ["category"] = "glyphs",
             ["nativeType"] = "GlyphSO",
-            ["discovered"] = glyph.Discovered,
-            ["available"] = glyph.Discovered && glyph.Available,
+            ["discovered"] = glyph.Learned,
+            ["available"] = glyph.Learned,
             ["usableCount"] = glyph.MaximumUsages,
         };
         AddLevelDecision(world, result, glyph.LevelDecision,
-            glyph.Discovered && glyph.Available,
-            !glyph.Discovered ? "undiscovered" : "not_available");
-        AddDiscoveryDecision(world, result, glyph.Discovery);
+            glyph.Learned,
+            "not_available");
+        if (glyph.Discoverable) AddDiscoveryDecision(world, result, glyph.Discovery);
         return result.Freeze();
     }
 

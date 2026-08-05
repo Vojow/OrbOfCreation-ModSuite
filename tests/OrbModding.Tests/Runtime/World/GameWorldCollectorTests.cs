@@ -277,6 +277,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         {
             level = 4,
             freeLevels = 1,
+            discovered = false,
+            NativeAvailable = true,
             LevelCost = Cost(6),
             BonusLevelCost = Cost(8),
         };
@@ -305,6 +307,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(WorldLookup.TryFind(world.EquipmentTypes, equipment.Identity, out var equipmentRow));
         AssertLevelDecision(equipmentRow.LevelDecision, 5, 2, 5, 7);
         Assert.True(WorldLookup.TryFind(world.Glyphs, glyph.Identity, out var glyphRow));
+        Assert.True(glyphRow.Learned);
         AssertLevelDecision(glyphRow.LevelDecision, 5, 1, 6, 8);
         Assert.True(WorldLookup.TryFind(world.ResourceTypes, resourceType.Identity, out var resourceTypeRow));
         AssertLevelDecision(resourceTypeRow.LevelDecision, 8, 3, 9, 10);
