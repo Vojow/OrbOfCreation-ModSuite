@@ -359,7 +359,8 @@ internal sealed class LoadoutGameAction : IDisposable
             if (spell is null || spell.GetType() != native.SpellType || native.SpellEmpty(spell)) continue;
             occupied++;
             if (!_spells.TryValidateStoredSpell(spell, out _, out var recipeId,
-                    out var cost, out var isUnique, out reason) || cost is null) return false;
+                    out var cost, out var isUnique, out reason,
+                    requireOwnedGlyphs: false) || cost is null) return false;
             if (isUnique && !unique.Add(recipeId))
             {
                 reason = EntityIdentityFormatter.Format(recipeId) +
@@ -381,7 +382,8 @@ internal sealed class LoadoutGameAction : IDisposable
             var spell = active![index];
             if (spell is null || spell.GetType() != native.SpellType || native.SpellEmpty(spell)) continue;
             if (!_spells.TryValidateStoredSpell(spell, out _, out _,
-                    out var cost, out _, out reason) || cost is null) return false;
+                    out var cost, out _, out reason,
+                    requireOwnedGlyphs: false) || cost is null) return false;
             currentCost = native.AddCost(currentCost, cost);
         }
         reason = string.Empty;

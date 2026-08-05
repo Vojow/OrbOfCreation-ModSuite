@@ -44,13 +44,15 @@ rename, next icon, and next color; arbitrary index selection is not a UI verb. E
 label value is its mutation sentinel.
 
 Before a selected loadout is applied, every stored spell, Equipment entry, and ordinary
-Alchemy entry is revalidated through the same admission helpers as its component GameAction.
-The composite boundary additionally checks whole-list slot limits, Equipment type-slot limits,
-per-glyph usage, and native `ResourceCostList` usage capacity. Ordinary Alchemy entries retain
+Alchemy entry is revalidated for stable identity, expected native type, and structural role.
+The native selection path does not require a saved glyph to remain an owned construction choice,
+so the suite does not impose that stricter rule. The composite boundary additionally checks
+whole-list slot limits, Equipment type-slot limits, per-glyph usage, and native
+`ResourceCostList` usage capacity. Ordinary Alchemy entries retain
 their concrete action's discovery, per-recipe maximum, and usage admission; the v1.0.5 UI exposes
 no independent editable type-slot layout for a stored Alchemy record. A stored reference that is
-stale, hidden behind an unowned glyph, undiscovered/uncreated, over-stacked, or over capacity
-refuses before `SetLoadout`.
+stale, structurally invalid, undiscovered/uncreated, over-stacked, or over capacity refuses before
+`SetLoadout`.
 
 ## Snapshots
 

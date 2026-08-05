@@ -458,9 +458,11 @@ native selectors as a verb would expose developer-era machinery the shipped UI d
 loadout is selected, whether its Equipment and Alchemy sections are enabled, the current icon and
 color indexes, whether the native manager can switch now, and the named saved spell, Equipment,
 and Alchemy entries. `game_loadout(mode="select", uuid=...)` invokes the manager's whole
-save/deactivate/load/reactivate transaction after revalidating every stored reference through the
-owning spell, Equipment, or ordinary-Alchemy action admission. Success returns the observed
-selection change and the settled selected loadout.
+save/deactivate/load/reactivate transaction after revalidating every stored reference's identity,
+native type, role, and whole-loadout capacity. Current glyph ownership is deliberately not a
+selection precondition: the native screen accepts authored saved layouts whose construction
+choices are no longer available. Success returns the observed selection change and the settled
+selected loadout.
 
 The selected player row also owns the three controls visible in the editor:
 `set_section` requires `section:"equipment"|"alchemy"` plus `enabled`; `rename` requires a name

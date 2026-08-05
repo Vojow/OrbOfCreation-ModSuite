@@ -44,6 +44,37 @@ public sealed class LoadoutGameActionTests : IDisposable
     }
 
     [Fact]
+    public void SelectAcceptsAnAuthoredSavedCoreThatIsNotAnOwnedConstructionChoice()
+    {
+        var current = Player("Current", selected: true);
+        var target = Player("Legacy elemental");
+        var glyph = new GlyphSO
+        {
+            DisplayName = "Psionic",
+            level = 0,
+            discovered = false,
+            NativeAvailable = false,
+            maxUsages = new ValueModifierRecord(new BigDouble(1)),
+        };
+        glyph.SetGuid(Guid.NewGuid());
+        var recipe = new SpellRecipeSO { discovered = true };
+        recipe.uuid = Guid.NewGuid().ToString("D");
+        recipe.coreRecipe.Add(glyph);
+        target.spells.Add(new Spell(recipe));
+        IdScriptableObject.RuntimeLookup[glyph.GetGuid()] = glyph;
+        IdScriptableObject.RuntimeLookup[recipe.GetGuid()] = recipe;
+        SpellRecipeSO.All.Add(recipe);
+        LoadoutManager.instance.playerLoadouts.value.Add(current);
+        LoadoutManager.instance.playerLoadouts.value.Add(target);
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, target.GetGuid(), LoadoutActionKind.Select);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.True(target.IsSelected());
+    }
+
+    [Fact]
     public void SelectNoOpFailsTheSingleGameWrittenSentinel()
     {
         var current = Player("Current", selected: true);

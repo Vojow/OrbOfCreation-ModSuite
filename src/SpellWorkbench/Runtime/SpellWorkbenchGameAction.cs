@@ -130,7 +130,8 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         out Guid recipeId,
         out object? usageCost,
         out bool unique,
-        out string reason)
+        out string reason,
+        bool requireOwnedGlyphs = true)
     {
         spellId = Guid.Empty;
         recipeId = Guid.Empty;
@@ -189,7 +190,8 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 reason = "A saved spell has a missing core glyph.";
                 return false;
             }
-            if (!TryValidateGlyph(native, glyph, native.ReadIdentity(glyph), false, out reason) ||
+            if (!TryValidateStoredGlyph(native, glyph, native.ReadIdentity(glyph), false,
+                    requireOwnedGlyphs, out reason) ||
                 !IncrementGlyph(native, glyph, glyphCounts, out reason))
                 return false;
         }
@@ -202,7 +204,8 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
                 reason = "A saved spell has a missing augment glyph.";
                 return false;
             }
-            if (!TryValidateGlyph(native, glyph, native.ReadIdentity(glyph), true, out reason) ||
+            if (!TryValidateStoredGlyph(native, glyph, native.ReadIdentity(glyph), true,
+                    requireOwnedGlyphs, out reason) ||
                 !IncrementGlyph(native, glyph, glyphCounts, out reason))
                 return false;
         }
@@ -218,6 +221,31 @@ internal sealed class SpellWorkbenchGameAction : IDisposable
         }
         usageCost = native.GetUsageCost(spell);
         unique = native.IsUniqueSpell(spell);
+        reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryValidateStoredGlyph(
+        SpellWorkbenchNativeBindings native,
+        object glyph,
+        Guid glyphId,
+        bool expectAugment,
+        bool requireOwnedGlyphs,
+        out string reason)
+    {
+        if (requireOwnedGlyphs)
+            return TryValidateGlyph(native, glyph, glyphId, expectAugment, out reason);
+        if (glyph.GetType() != native.GlyphType)
+        {
+            reason = "A saved spell component has the wrong native type.";
+            return false;
+        }
+        if (native.IsGlyphAugment(glyph) != expectAugment)
+        {
+            reason = EntityIdentityFormatter.Format(glyphId) +
+                " has the wrong core/augment role in the saved spell.";
+            return false;
+        }
         reason = string.Empty;
         return true;
     }
