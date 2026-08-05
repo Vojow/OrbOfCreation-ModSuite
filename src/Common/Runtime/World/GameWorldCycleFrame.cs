@@ -469,7 +469,7 @@ internal static class GameWorldFrameDeriver
                         ? item
                         : left.EnchantmentId.CompareTo(right.EnchantmentId);
                 }),
-            Rituals = frame.Rituals.Build(WorldIdentityDeriver<WorldRitual>.Shared),
+            Rituals = WorldRitualDeriver.Build(frame.Rituals),
             Achievements = frame.Achievements.Build(WorldIdentityDeriver<WorldAchievement>.Shared),
             Advancements = frame.Advancements.Build(WorldIdentityDeriver<WorldAdvancement>.Shared),
             Challenges = frame.Challenges.Build(WorldIdentityDeriver<WorldChallenge>.Shared),

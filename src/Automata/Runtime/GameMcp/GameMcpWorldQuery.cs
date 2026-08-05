@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.GameMath;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 using OrbModding.Common.Runtime.World;
@@ -3997,7 +3998,7 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
-    private static BigDouble SpendableAmount(
+    internal static BigDouble SpendableAmount(
         GameWorldState world,
         Guid resourceId,
         BigDouble fallback) =>
@@ -4006,6 +4007,21 @@ internal static class GameMcpWorldQuery
                 ? resource.Headroom
                 : resource.Reading.Quantity
             : fallback;
+
+    /// <summary>
+    /// Converts the game's nominal cost unit to the amount removed from the player's visible pool.
+    /// This is the owned equivalent of ResourceSO.GetTrueSpend(amount).
+    /// </summary>
+    internal static BigDouble PlayerFacingCost(
+        GameWorldState world,
+        Guid resourceId,
+        BigDouble nominalCost)
+    {
+        if (!WorldLookup.TryFind(world.Resources, resourceId, out var resource))
+            return nominalCost;
+        var quality = OrbGameMath.AsPercent(resource.Reading.Quality);
+        return quality == BigDouble.Zero ? nominalCost : nominalCost / quality;
+    }
 
     private static GameMcpValue ProjectAlchemyRecipe(
         GameWorldState world,
@@ -4612,7 +4628,8 @@ internal static class GameMcpWorldQuery
             var row = new JObject
             {
                 ["resourceId"] = cost.ResourceId.ToString("D"),
-                ["amount"] = new GameMcpDomainValue(cost.Cost),
+                ["cost"] = new GameMcpDomainValue(
+                    PlayerFacingCost(world, cost.ResourceId, cost.Cost)),
             };
             if (WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource))
                 row["spendableAmount"] = new GameMcpDomainValue(
@@ -4752,13 +4769,16 @@ internal static class GameMcpWorldQuery
         {
             ["targetId"] = cost.EntityId.ToString("D"),
             ["resourceId"] = cost.ResourceId.ToString("D"),
-            ["baseCost"] = new GameMcpDomainValue(cost.BaseExactAmount),
-            ["effectiveCost"] = new GameMcpDomainValue(cost.EffectiveExactAmount),
+            ["baseCost"] = new GameMcpDomainValue(
+                PlayerFacingCost(world, cost.ResourceId, cost.BaseExactAmount)),
+            ["effectiveCost"] = new GameMcpDomainValue(
+                PlayerFacingCost(world, cost.ResourceId, cost.EffectiveExactAmount)),
         };
         if (cost.ExactGroupedLevels > 1)
         {
             result["groupLevels"] = cost.ExactGroupedLevels;
-            result["groupCost"] = new GameMcpDomainValue(cost.ExactGroupedAmount);
+            result["groupCost"] = new GameMcpDomainValue(
+                PlayerFacingCost(world, cost.ResourceId, cost.ExactGroupedAmount));
         }
         if (cost.ModifierSources.Count > 0)
         {
@@ -4779,7 +4799,8 @@ internal static class GameMcpWorldQuery
         {
             result["amount"] = new GameMcpDomainValue(
                 SpendableAmount(world, cost.ResourceId, cost.AvailableAmount));
-            result["totalCost"] = new GameMcpDomainValue(cost.CombinedEffectiveAmount);
+            result["totalCost"] = new GameMcpDomainValue(
+                PlayerFacingCost(world, cost.ResourceId, cost.CombinedEffectiveAmount));
             result["resourceAffordable"] = cost.ResourceAffordable;
             result["purchaseAffordable"] = cost.Affordable;
             if (!cost.ResourceAffordable)

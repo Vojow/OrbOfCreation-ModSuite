@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Linq.Expressions;
 using System.Reflection;
+using OrbModding.Common.Runtime.GameMath;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
@@ -38,7 +39,8 @@ internal readonly struct WorldRitual : IWorldEntity
         double baseWeight,
         int minimumEffectLevel,
         WorldDiscoverableDecision discovery = default,
-        WorldRitualDecision decision = default)
+        WorldRitualDecision decision = default,
+        WorldRitualCompletionFormula completionFormula = default)
     {
         RitualId = ritualId;
         Discovered = discovered;
@@ -65,6 +67,7 @@ internal readonly struct WorldRitual : IWorldEntity
         MinimumEffectLevel = minimumEffectLevel;
         Discovery = discovery;
         Decision = decision;
+        CompletionFormula = completionFormula;
     }
 
     internal Guid RitualId { get; }
@@ -146,6 +149,20 @@ internal readonly struct WorldRitual : IWorldEntity
 
     /// <summary>The currently staged player decision; prices exist only for the selected row.</summary>
     internal WorldRitualDecision Decision { get; }
+
+    /// <summary>Raw authored inputs for the screen's selected completion-cost formula.</summary>
+    internal WorldRitualCompletionFormula CompletionFormula { get; }
+
+    internal WorldRitual WithDecision(in WorldRitualDecision decision)
+    {
+        var modifiers = Modifiers;
+        return new(
+            RitualId, Discovered, InBattle, ActiveInstances, ReachedLevel, LastReachedLevel,
+            SelectedLevel, WavesCompleted, DiscoveryRarityLevel, CritLevel, EchoLevel, ChainLevel,
+            DurationRewardBlocks, BattleTotalWeight, in modifiers, HideEndScreenResults,
+            IsDiscoverRequired, ForceLevel, ForceLevelValue, BaseWaves, MaxWaves, BaseWeight,
+            MinimumEffectLevel, Discovery, decision, CompletionFormula);
+    }
 }
 
 internal readonly struct WorldRitualCost
@@ -189,6 +206,85 @@ internal readonly struct WorldRitualDecision
         _activationCosts ?? PublicationTable<WorldRitualCost>.Empty;
     internal PublicationTable<WorldRitualCost> CompletionCosts =>
         _completionCosts ?? PublicationTable<WorldRitualCost>.Empty;
+
+    internal WorldRitualDecision WithCompletionCosts(
+        PublicationTable<WorldRitualCost> completionCosts) =>
+        new(
+            Selected, MaximumStartingLevel, UsageRequirementsMet, ActivationAffordable,
+            ActivationCosts, completionCosts);
+}
+
+internal readonly struct WorldRitualCompletionFormula
+{
+    private readonly PublicationTable<WorldRitualCost>? _baseCosts;
+    private readonly PublicationTable<GameValueModifier>? _modifiers;
+    private readonly PublicationTable<GameValueModifier>? _exponents;
+
+    internal WorldRitualCompletionFormula(
+        PublicationTable<WorldRitualCost> baseCosts,
+        PublicationTable<GameValueModifier> modifiers,
+        PublicationTable<GameValueModifier> exponents)
+    {
+        _baseCosts = baseCosts ?? throw new ArgumentNullException(nameof(baseCosts));
+        _modifiers = modifiers ?? throw new ArgumentNullException(nameof(modifiers));
+        _exponents = exponents ?? throw new ArgumentNullException(nameof(exponents));
+    }
+
+    internal PublicationTable<WorldRitualCost> BaseCosts =>
+        _baseCosts ?? PublicationTable<WorldRitualCost>.Empty;
+    internal PublicationTable<GameValueModifier> Modifiers =>
+        _modifiers ?? PublicationTable<GameValueModifier>.Empty;
+    internal PublicationTable<GameValueModifier> Exponents =>
+        _exponents ?? PublicationTable<GameValueModifier>.Empty;
+}
+
+internal static class WorldRitualDeriver
+{
+    internal static PublicationTable<WorldRitual> Build(
+        WorldSampleBuffer<WorldRitual, WorldRitual> buffer)
+    {
+        var rows = new WorldRitual[buffer.Count];
+        for (var index = 0; index < rows.Length; index++)
+        {
+            ref readonly var source = ref buffer[index];
+            if (!source.Decision.Selected)
+            {
+                rows[index] = source;
+                continue;
+            }
+
+            var completion = ComputeCompletionCosts(in source);
+            var decision = source.Decision.WithCompletionCosts(completion);
+            rows[index] = source.WithDecision(in decision);
+        }
+        Array.Sort(rows, static (left, right) => left.EntityId.CompareTo(right.EntityId));
+        return PublicationTable<WorldRitual>.Create(rows, rows.Length);
+    }
+
+    private static PublicationTable<WorldRitualCost> ComputeCompletionCosts(in WorldRitual ritual)
+    {
+        var formula = ritual.CompletionFormula;
+        var baseCosts = formula.BaseCosts;
+        if (baseCosts.Count == 0) return PublicationTable<WorldRitualCost>.Empty;
+
+        var modifiers = new GameValueModifier[formula.Modifiers.Count];
+        for (var index = 0; index < modifiers.Length; index++)
+            modifiers[index] = formula.Modifiers[index].MultiplyScalar(new BigDouble(ritual.SelectedLevel));
+        var exponents = new GameValueModifier[formula.Exponents.Count];
+        for (var index = 0; index < exponents.Length; index++)
+            exponents[index] = formula.Exponents[index].MultiplyScalar(new BigDouble(ritual.SelectedLevel));
+        var scratch = new GameValueModifier[modifiers.Length];
+        var completionMod = OrbGameMath.AsPercent(ritual.Modifiers.CompletionCostMod);
+        var rows = new WorldRitualCost[baseCosts.Count];
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var row = baseCosts[index];
+            var adjusted = GameModifierStack.AdjustWith(
+                row.Cost, modifiers, exponents, scratch) * completionMod;
+            rows[index] = new WorldRitualCost(row.ResourceId, adjusted);
+        }
+        return PublicationTable<WorldRitualCost>.Create(rows, rows.Length);
+    }
 }
 
 /// <summary>A ritual's cached modifier records — what a run at the chosen level is worth.</summary>
@@ -295,6 +391,7 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
     private WorldDiscoverableBinding? _discovery;
     private readonly Func<string, Type?> _resolveType;
     private WorldRitualDecisionBinding? _decision;
+    private WorldRitualCompletionFormulaBinding? _completionFormula;
 
     internal WorldRitualBinder(Func<string, Type?> resolveType)
     {
@@ -348,7 +445,8 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
         _minimumEffectLevel = bind.Field<int>("minimumEffectLevel");
         _discovery = new WorldDiscoverableBinding(type, TypeName);
         _decision = new WorldRitualDecisionBinding(type, _resolveType);
-        return Join(bind.Failure, _discovery.Failure, _decision.Failure);
+        _completionFormula = new WorldRitualCompletionFormulaBinding(type, _resolveType);
+        return Join(bind.Failure, _discovery.Failure, _decision.Failure, _completionFormula.Failure);
     }
 
     internal override WorldRitual Read(object entity) =>
@@ -390,7 +488,8 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
             _baseWeight!(entity),
             _minimumEffectLevel!(entity),
             _discovery!.Read(entity),
-            _decision!.Read(entity));
+            _decision!.Read(entity),
+            _completionFormula!.Read(entity));
 
     private static string Join(params string[] values)
     {
@@ -404,7 +503,115 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
     }
 }
 
-/// <summary>Reads only the selected ritual's level and two screen-visible price lists.</summary>
+/// <summary>Captures the authored ritual completion formula without evaluating native math.</summary>
+internal sealed class WorldRitualCompletionFormulaBinding
+{
+    private readonly Func<object, object?>? _baseCost;
+    private readonly Func<object, object?>? _perLevel;
+    private readonly Func<object, object?>? _perLevelValue;
+    private readonly Func<object, IList?>? _costEntries;
+    private readonly Func<object, object?>? _costResource;
+    private readonly Func<object, BigDouble>? _costValue;
+    private readonly Func<object, Guid>? _resourceId;
+    private readonly Func<object, IList?>? _modifiers;
+    private readonly Func<object, IList?>? _exponents;
+    private readonly Func<object, int>? _modifierType;
+    private readonly Func<object, int>? _modifierOrder;
+    private readonly Func<object, BigDouble>? _modifierAmount;
+
+    internal WorldRitualCompletionFormulaBinding(Type ritualType, Func<string, Type?> resolveType)
+    {
+        var costType = resolveType("ResourceCostList");
+        var tupleType = resolveType("ResourceTuple");
+        var resourceType = resolveType("ResourceSO");
+        var modifierRefType = resolveType("ModifierListRef");
+        var modifierListType = resolveType("ValueModifierList");
+        if (costType is null || tupleType is null || resourceType is null ||
+            modifierRefType is null || modifierListType is null)
+        {
+            Failure = "Ritual completion formula types were unavailable";
+            return;
+        }
+
+        _baseCost = NativeAccessorBinder.Reference(ritualType, "completionCost", costType);
+        _perLevel = NativeAccessorBinder.Reference(ritualType, "completionCostPerLevel", modifierRefType);
+        _perLevelValue = NativeAccessorBinder.CallObject(modifierRefType, "GetValue", modifierListType);
+        var entriesMethod = costType.GetMethod("GetEntries", BindingFlags.Instance |
+            BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
+        var entriesType = entriesMethod?.ReturnType;
+        var exactTuple = entriesType is { IsGenericType: true }
+            ? entriesType.GetGenericArguments()[0]
+            : null;
+        _costEntries = NativeAccessorBinder.CallList(costType, "GetEntries", exactTuple);
+        _costResource = NativeAccessorBinder.Reference(tupleType, "resource", resourceType);
+        _costValue = NativeAccessorBinder.Call<BigDouble>(tupleType, "GetValue");
+        _resourceId = NativeAccessorBinder.Call<Guid>(resourceType, "GetGuid");
+        _modifiers = NativeAccessorBinder.CollectionField(modifierListType, "modifiers");
+        _exponents = NativeAccessorBinder.CollectionField(modifierListType, "exponents");
+        var modifierType = NativeAccessorBinder.CollectionElementType(modifierListType, "modifiers");
+        _modifierType = NativeAccessorBinder.EnumField(modifierType, "type");
+        _modifierOrder = NativeAccessorBinder.Field<int>(modifierType, "order");
+        _modifierAmount = NativeAccessorBinder.Field<BigDouble>(modifierType, "adjustReal");
+
+        Failure = _baseCost is null || _perLevel is null || _perLevelValue is null ||
+            _costEntries is null || _costResource is null || _costValue is null ||
+            _resourceId is null || _modifiers is null || _exponents is null ||
+            _modifierType is null || _modifierOrder is null || _modifierAmount is null
+                ? "Ritual completion formula bindings were unavailable"
+                : string.Empty;
+    }
+
+    internal string Failure { get; }
+
+    internal WorldRitualCompletionFormula Read(object ritual)
+    {
+        var cost = _baseCost!(ritual) ??
+            throw new InvalidOperationException("RitualSO.completionCost was unavailable");
+        var perLevel = _perLevel!(ritual) ??
+            throw new InvalidOperationException("RitualSO.completionCostPerLevel was unavailable");
+        var list = _perLevelValue!(perLevel) ??
+            throw new InvalidOperationException("ModifierListRef.GetValue returned null");
+        return new WorldRitualCompletionFormula(
+            ReadCosts(cost),
+            ReadModifiers(_modifiers!(list)),
+            ReadModifiers(_exponents!(list)));
+    }
+
+    private PublicationTable<WorldRitualCost> ReadCosts(object cost)
+    {
+        var entries = _costEntries!(cost) ??
+            throw new InvalidOperationException("ResourceCostList.GetEntries returned null");
+        var rows = new WorldRitualCost[entries.Count];
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var entry = entries[index] ??
+                throw new InvalidOperationException("Ritual completion cost row was null");
+            var resource = _costResource!(entry) ??
+                throw new InvalidOperationException("Ritual completion cost row had no resource");
+            rows[index] = new WorldRitualCost(_resourceId!(resource), _costValue!(entry));
+        }
+        return PublicationTable<WorldRitualCost>.Create(rows, rows.Length);
+    }
+
+    private PublicationTable<GameValueModifier> ReadModifiers(IList? source)
+    {
+        if (source is null || source.Count == 0)
+            return PublicationTable<GameValueModifier>.Empty;
+        var rows = new GameValueModifier[source.Count];
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var modifier = source[index] ??
+                throw new InvalidOperationException("Ritual completion modifier row was null");
+            rows[index] = new GameValueModifier(
+                (GameValueModifierType)_modifierType!(modifier),
+                _modifierAmount!(modifier),
+                _modifierOrder!(modifier));
+        }
+        return PublicationTable<GameValueModifier>.Create(rows, rows.Length);
+    }
+}
+
+/// <summary>Reads only the selected ritual's level and activation price.</summary>
 internal sealed class WorldRitualDecisionBinding
 {
     private const BindingFlags Instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -417,10 +624,6 @@ internal sealed class WorldRitualDecisionBinding
     private readonly Func<object, int>? _maximumStartingLevel;
     private readonly Func<object, bool>? _usageRequirementsMet;
     private readonly Func<object, object?>? _activationCost;
-    private readonly Func<object, object?>? _fillList;
-    private readonly Func<object, IList?>? _fillEntries;
-    private readonly Func<object, object?>? _fillResource;
-    private readonly Func<object, BigDouble>? _fillCapacity;
     private readonly Func<object, bool>? _hasEnough;
     private readonly Func<object, IList?>? _costEntries;
     private readonly Func<object, object?>? _costResource;
@@ -434,10 +637,8 @@ internal sealed class WorldRitualDecisionBinding
         var costType = resolveType("ResourceCostList");
         var tupleType = resolveType("ResourceTuple");
         var resourceType = resolveType("ResourceSO");
-        var fillType = resolveType("ResourceFillList");
-        var fillEntryType = resolveType("ResourceFillList+ResourceFillEntry");
         if (_managerType is null || variableType is null || costType is null ||
-            tupleType is null || resourceType is null || fillType is null || fillEntryType is null)
+            tupleType is null || resourceType is null)
         {
             Failure = "Ritual decision types were unavailable";
             return;
@@ -450,7 +651,6 @@ internal sealed class WorldRitualDecisionBinding
         _maximumStartingLevel = ritual.Call<int>("GetMaxSelectedLevel");
         _usageRequirementsMet = ritual.Call<bool>("HasMetUsageRequirements");
         _activationCost = ritual.CallObject("GetActivationCost", costType);
-        _fillList = ritual.Reference("resourceFillList", fillType);
 
         var cost = new WorldMemberBinding(costType, "ResourceCostList");
         _hasEnough = cost.Call<bool>("HasEnough");
@@ -463,9 +663,6 @@ internal sealed class WorldRitualDecisionBinding
         var tuple = new WorldMemberBinding(tupleType, "ResourceTuple");
         _costResource = tuple.Reference("resource", resourceType);
         _costValue = tuple.Call<BigDouble>("GetValue");
-        _fillEntries = NativeAccessorBinder.CollectionField(fillType, "entries");
-        _fillResource = NativeAccessorBinder.CallObject(fillEntryType, "get_resource", resourceType);
-        _fillCapacity = NativeAccessorBinder.Call<BigDouble>(fillEntryType, "GetCapacity");
         var resource = new WorldMemberBinding(resourceType, "ResourceSO");
         _resourceId = resource.Call<Guid>("GetGuid");
 
@@ -473,9 +670,6 @@ internal sealed class WorldRitualDecisionBinding
             _manager is null ? "RitualManager.instance was unavailable" : string.Empty,
             _selectedVariable is null ? "RitualManager.selectedRitual was unavailable" : string.Empty,
             _isSelected is null ? "RitualVariable.IsItem was unavailable" : string.Empty,
-            _fillEntries is null || _fillResource is null || _fillCapacity is null
-                ? "Ritual completion fill bindings were unavailable"
-                : string.Empty,
             ritual.Failure,
             cost.Failure,
             tuple.Failure,
@@ -500,15 +694,13 @@ internal sealed class WorldRitualDecisionBinding
 
         var activation = _activationCost!(ritual) ??
             throw new InvalidOperationException("RitualSO.GetActivationCost returned null");
-        var completion = _fillList!(ritual) ??
-            throw new InvalidOperationException("RitualSO.resourceFillList was unavailable");
         return new WorldRitualDecision(
             true,
             _maximumStartingLevel!(ritual),
             _usageRequirementsMet!(ritual),
             _hasEnough!(activation),
             ReadCosts(activation),
-            ReadFillCapacities(completion));
+            PublicationTable<WorldRitualCost>.Empty);
     }
 
     private PublicationTable<WorldRitualCost> ReadCosts(object cost)
@@ -524,23 +716,6 @@ internal sealed class WorldRitualDecisionBinding
                 throw new InvalidOperationException("Ritual cost row " + index + " had no resource");
             rows[index] = new WorldRitualCost(
                 _resourceId!(resource), _costValue!(entry));
-        }
-        return PublicationTable<WorldRitualCost>.Create(rows);
-    }
-
-    private PublicationTable<WorldRitualCost> ReadFillCapacities(object fill)
-    {
-        var entries = _fillEntries!(fill) ??
-            throw new InvalidOperationException("ResourceFillList.entries was unavailable");
-        var rows = new WorldRitualCost[entries.Count];
-        for (var index = 0; index < entries.Count; index++)
-        {
-            var entry = entries[index] ??
-                throw new InvalidOperationException("Ritual completion fill row " + index + " was null");
-            var resource = _fillResource!(entry) ??
-                throw new InvalidOperationException("Ritual completion fill row " + index + " had no resource");
-            rows[index] = new WorldRitualCost(
-                _resourceId!(resource), _fillCapacity!(entry));
         }
         return PublicationTable<WorldRitualCost>.Create(rows);
     }

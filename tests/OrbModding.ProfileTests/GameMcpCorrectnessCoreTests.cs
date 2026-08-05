@@ -11,10 +11,29 @@ namespace OrbModding.ProfileTests;
 public sealed class GameMcpCorrectnessCoreTests
 {
     [Fact]
+    public void Player_facing_costs_apply_the_resources_quality_discount()
+    {
+        Assert.Equal("1.88e491", PlayerFacingCost(
+            new BigDouble(3.1d, 523), new BigDouble(1.65d, 34)));
+        Assert.Equal("1.56e508", PlayerFacingCost(
+            new BigDouble(1.82d, 529), new BigDouble(1.17d, 23)));
+        Assert.Equal("9.03e169", PlayerFacingCost(
+            new BigDouble(9.96d, 205), new BigDouble(1.103d, 38)));
+    }
+
+    [Fact]
     public void Skipped_unaffordable_purchase_names_the_short_resource_and_amounts()
     {
         var target = Guid.Parse("31111111-1111-4111-8111-111111111111");
         var resource = Guid.Parse("32222222-2222-4222-8222-222222222222");
+        var rateInputs = default(RawResourceRateInputs);
+        var traits = default(RawResourceTraits);
+        var modifiers = default(RawResourceModifiers);
+        var reading = new RawResourceSample(
+            resource, new BigDouble(2), new BigDouble(10), true,
+            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
+            new BigDouble(100), BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty, in rateInputs, in traits, in modifiers);
         var world = new GameWorldState
         {
             EntityIdentities = EntityIdentityCatalogSnapshot.Bound(1, new[]
@@ -35,6 +54,11 @@ public sealed class GameMcpCorrectnessCoreTests
                     affordable: false,
                     affordabilityReasonCode: "unaffordable"),
             }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                new WorldResource(in reading, true, new BigDouble(8), 0.2d, false,
+                    new BigDouble(4), BigDouble.Zero),
+            }),
         };
         var command = new GameMcpCommand(
             1, GameMcpCommandKind.Purchase, 1, 1, "upgrade", target, Guid.Empty,
@@ -46,7 +70,31 @@ public sealed class GameMcpCorrectnessCoreTests
 
         Assert.NotNull(result);
         Assert.Equal("unaffordable", result!.Code);
-        Assert.Equal("Needs 100 Knowledge, but only 2 is spendable.", result.Reason);
+        Assert.Equal("Needs 50 Knowledge, but only 2 is spendable.", result.Reason);
+    }
+
+    private static string PlayerFacingCost(BigDouble nominal, BigDouble quality)
+    {
+        var resource = Guid.NewGuid();
+        var rateInputs = default(RawResourceRateInputs);
+        var traits = default(RawResourceTraits);
+        var modifiers = default(RawResourceModifiers);
+        var reading = new RawResourceSample(
+            resource, BigDouble.Zero, new BigDouble(-1), true,
+            BigDouble.Zero, BigDouble.Zero, quality,
+            new BigDouble(100), BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty, in rateInputs, in traits, in modifiers);
+        var world = new GameWorldState
+        {
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                new WorldResource(in reading, true, BigDouble.Zero, 0d, false,
+                    BigDouble.Zero, BigDouble.Zero),
+            }),
+        };
+
+        return GameMcpNumberFormatter.Format(GameMcpWorldQuery.PlayerFacingCost(
+            world, resource, nominal));
     }
 
     [Fact]

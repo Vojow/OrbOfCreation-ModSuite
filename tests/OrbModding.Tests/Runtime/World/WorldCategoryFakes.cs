@@ -860,6 +860,7 @@ internal sealed class FakeModifierListVariable
 internal sealed class FakeModifierListRef
 {
     public FakeModifierListVariable? variable = new();
+    public FakeValueModifierList GetValue() => variable?.value ?? new FakeValueModifierList();
 }
 
 internal sealed class FakeGlobalValues
@@ -2049,6 +2050,7 @@ internal sealed class FakeRitual : global::IDiscoverable
     public bool usageRequirementsMet = true;
     public FakeCraftingResourceCostList activationCost = new();
     public FakeCraftingResourceCostList completionCost = new();
+    public FakeModifierListRef completionCostPerLevel = new();
     public GameWorldCollectorTests.FakeResearchFillList resourceFillList = new();
 
     public int GetMaxSelectedLevel() => maximumSelectedLevel;

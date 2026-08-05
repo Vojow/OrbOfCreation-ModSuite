@@ -87,7 +87,7 @@ public sealed class GameMcpRitualLifecycleTests
         Assert.True((bool)row["activate"]!["available"]!);
         var cost = Assert.Single(row["activate"]!["costs"]!.Values<JObject>());
         Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
-        Assert.Equal("5", (string?)cost["amount"]);
+        Assert.Equal("5", (string?)cost["cost"]);
         Assert.Equal("80", (string?)cost["spendableAmount"]);
         Assert.True((bool)row["cancelDuration"]!["available"]!);
     }
@@ -125,7 +125,7 @@ public sealed class GameMcpRitualLifecycleTests
         Assert.False((bool)delta["selected"]!["before"]!);
         Assert.True((bool)delta["selected"]!["after"]!);
         Assert.True((bool)delta["next"]!["activate"]!["available"]!);
-        Assert.Equal("5", (string?)delta["next"]!["activate"]!["costs"]![0]!["amount"]);
+        Assert.Equal("5", (string?)delta["next"]!["activate"]!["costs"]![0]!["cost"]);
     }
 
     [Fact]

@@ -2542,14 +2542,11 @@ public sealed class GameWorldCollectorTests : IDisposable
             activationCost = new FakeCraftingResourceCostList()
                 .With(knowledge, new BigDouble(5)),
             completionCost = new FakeCraftingResourceCostList()
-                .With(knowledge, new BigDouble(999)),
+                .With(knowledge, new BigDouble(2)),
+            completionCostMod = new ValueModifierRecord(new BigDouble(100d)).Dirty(),
         };
-        selected.resourceFillList.entries.Add(new FakeResearchFillList.ResourceFillEntry
-        {
-            resource = knowledge,
-            Quantity = BigDouble.One,
-            Capacity = new BigDouble(2),
-        });
+        selected.completionCostPerLevel.variable!.value.modifiers.Add(
+            new FakeValueModifier(FakeModifierKind.Raw, 1d, order: 0));
         FakeRitual.All.Add(selected);
         FakeRitualManager.instance.selectedRitual.value = selected;
 
@@ -2574,7 +2571,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, running.Decision.ActivationCosts.Count);
         Assert.Equal(1, running.Decision.CompletionCosts.Count);
         Assert.Equal(new BigDouble(5), running.Decision.ActivationCosts[0].Cost);
-        Assert.Equal(new BigDouble(2), running.Decision.CompletionCosts[0].Cost);
+        Assert.Equal(new BigDouble(9), running.Decision.CompletionCosts[0].Cost);
         Assert.True(running.InBattle);
         Assert.Equal(2, running.ActiveInstances);
         Assert.Equal(7, running.SelectedLevel);

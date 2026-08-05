@@ -1068,11 +1068,15 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             var resource = EntityIdentityFormatter.Describe(
                 cost.ResourceId, world.EntityIdentities);
             var name = resource.HasName ? resource.Name : cost.ResourceId.ToString("D");
+            var visibleCost = GameMcpWorldQuery.PlayerFacingCost(
+                world, cost.ResourceId, cost.CombinedEffectiveAmount);
+            var visibleAmount = GameMcpWorldQuery.SpendableAmount(
+                world, cost.ResourceId, cost.AvailableAmount);
             return GameMcpCommandResult.Rejected(
                 "unaffordable",
-                "Needs " + GameMcpNumberFormatter.Format(cost.CombinedEffectiveAmount) +
+                "Needs " + GameMcpNumberFormatter.Format(visibleCost) +
                 " " + name + ", but only " +
-                GameMcpNumberFormatter.Format(cost.AvailableAmount) + " is spendable.",
+                GameMcpNumberFormatter.Format(visibleAmount) + " is spendable.",
                 lifecycle,
                 configurationGeneration);
         }

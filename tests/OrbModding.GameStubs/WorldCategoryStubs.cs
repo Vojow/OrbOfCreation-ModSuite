@@ -957,6 +957,7 @@ public sealed class RitualSO : IdScriptableObject, IDiscoverable
     public int DiscoverCalls { get; private set; }
     public ResourceCostList activationCost = new ResourceCostList();
     public ResourceCostList completionCost = new ResourceCostList();
+    public ModifierListRef completionCostPerLevel = new ModifierListRef();
     public ResourceFillList resourceFillList = new ResourceFillList();
     public bool NativeUsageRequirementsMet { get; set; } = true;
     public int NativeMaximumSelectedLevel { get; set; } = 1;

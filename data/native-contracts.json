@@ -10484,6 +10484,24 @@
       "place": "capture"
     },
     {
+      "id": "ritual.completion-cost",
+      "assembly": "assembly-csharp",
+      "type": "RitualSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "completionCost",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ResourceCostList",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "ritual.completion-cost-mod",
       "assembly": "assembly-csharp",
       "type": "RitualSO",
@@ -10493,6 +10511,24 @@
       "visibility": "public",
       "static": false,
       "valueType": "ValueModifierRecord",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ritual.completion-cost-per-level",
+      "assembly": "assembly-csharp",
+      "type": "RitualSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "completionCostPerLevel",
+      "visibility": "public",
+      "static": false,
+      "valueType": "ModifierListRef",
       "owners": [
         "Automata world collection"
       ],
@@ -22431,33 +22467,6 @@
       "type": "RitualSO", "typeVisibility": "public", "kind": "method", "member": "HasMetUsageRequirements",
       "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [],
       "owners": ["Common Ritual decision world collection"], "usages": ["reflection"], "place": "capture"
-    },
-    {
-      "id": "ritual-lifecycle.ritual-fill-list-capture", "assembly": "assembly-csharp",
-      "type": "RitualSO", "typeVisibility": "public", "kind": "field", "member": "resourceFillList",
-      "visibility": "public", "static": false, "valueType": "ResourceFillList",
-      "owners": ["Common Ritual decision world collection"], "usages": ["reflection"], "place": "capture"
-    },
-    {
-      "id": "ritual-lifecycle.fill-entries-capture", "assembly": "assembly-csharp",
-      "type": "ResourceFillList", "typeVisibility": "public", "kind": "field", "member": "entries",
-      "visibility": "public", "static": false,
-      "valueType": "System.Collections.Generic.List`1<ResourceFillList+ResourceFillEntry>",
-      "owners": ["Common Ritual decision world collection"], "usages": ["reflection"], "place": "capture"
-    },
-    {
-      "id": "ritual-lifecycle.fill-resource-capture", "assembly": "assembly-csharp",
-      "type": "ResourceFillList+ResourceFillEntry", "typeVisibility": "public", "kind": "method",
-      "member": "get_resource", "visibility": "public", "static": false, "returnType": "ResourceSO",
-      "parameters": [], "owners": ["Common Ritual decision world collection"],
-      "usages": ["reflection"], "place": "capture"
-    },
-    {
-      "id": "ritual-lifecycle.fill-capacity-capture", "assembly": "assembly-csharp",
-      "type": "ResourceFillList+ResourceFillEntry", "typeVisibility": "public", "kind": "method",
-      "member": "GetCapacity", "visibility": "public", "static": false, "returnType": "BigDouble",
-      "parameters": [], "owners": ["Common Ritual decision world collection"],
-      "usages": ["reflection"], "place": "capture"
     },
     {
       "id": "generic-level.levelable.type-action", "assembly": "assembly-csharp",

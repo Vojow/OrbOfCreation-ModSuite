@@ -203,8 +203,10 @@ deeper evaluated evidence. Purchase-cost rows are composite and therefore remain
 surface.
 
 `purchase-costs` is the only modifier-adjusted live cost category. Spell and alchemy cost rows are
-immediate/drain observations and are not mislabeled as purchase prices. Each structure/upgrade cost
-row exposes `baseCost`, verified `effectiveCost`, optional `groupLevels`/`groupCost`, and named
+immediate/drain observations and are not mislabeled as purchase prices. Every displayed cost is in
+the screen's spend units: nominal native costs are divided by the resource quality percent through
+the audited `GetTrueSpend` formula before serialization. Each structure/upgrade cost row exposes
+`baseCost`, verified `effectiveCost`, optional `groupLevels`/`groupCost`, and named
 `costModifiers`. It also exposes the resource's same-publication canonical spendable `amount`, the
 `totalCost` after duplicate-resource rows are combined, `resourceAffordable`, and
 `purchaseAffordable`, with reason codes only when false. Ordinary resources spend true holdings;
@@ -350,7 +352,8 @@ read or changed.
 
 Ritual discovery remains `game_discover(surface="devote")`. Once discovered, a `rituals` detail
 row reports the selected Ritual, current/reached/maximum starting level, battle state, and active
-duration-reward state. Only the selected row carries the native activation and completion prices;
+duration-reward state. Only the selected row carries activation and completion prices in the same
+player-facing units as the Ritual panel and the eventual resource spend;
 unselected rows do not publish a speculative ledger. `setLevel`, `activate`, and
 `cancelDuration` each carry only the binding availability or refusal reason that affects the next
 decision.

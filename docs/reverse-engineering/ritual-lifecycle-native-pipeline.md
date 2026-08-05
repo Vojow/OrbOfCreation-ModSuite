@@ -29,14 +29,18 @@ level. `GetMaxSelectedLevel()` (`0x06001393`) is
 `max(reachedLevel + 1, Player.GetCeremonialLevel())`. A `forceLevel` ritual displays the forced
 value and disables the selector, so the action refuses rather than pretending the dial moved.
 
-`GetSelectedCompletionCost()` (`0x06001383`) derives a fresh list from the authored base,
-per-level modifier, current level, and the current `completionCostMod`. `ChangeStartingLevel`
-passes that result to `resourceFillList.ApplyCostList()`, whose `ResourceFillEntry.GetCapacity()`
-values become the staged obligation consumed by the battle. `UIRitual.RenderCompletionCost()`
-also calls the derived method, but rerenders only when the selected-level observer changes; a
-later modifier change can therefore make a fresh call disagree with the still-visible and
-still-consumed staged capacities. World publication reads the raw fill capacities, not a repeated
-derived call, so its preview describes the cost the current run will actually fill.
+`GetSelectedCompletionCost()` (`0x06001383`) derives a fresh nominal list from the authored base,
+the per-level modifier scaled by the selected level, and `completionCostMod`. The world capture
+reads those authored cost tuples and modifier-program records once; the published answer is then
+derived off-thread by the same owned modifier math used elsewhere. It does not read the staged
+`ResourceFillList`: that UI-owned cache can still describe the previous selection immediately
+after a toggle and produced two prices for one staged state.
+
+The visible value is the amount actually removed from the resource, not the nominal ledger input.
+`UIResourceCost.GetText()` calls `ResourceSO.GetTrueSpend()`, which divides the nominal cost by
+`quality.AsPercent()`. `ResourceCostList.PerformCost()` ultimately takes the same path through
+`ResourceSO.Spend()`. MCP ritual completion prices therefore apply that audited player-facing
+conversion after the owned nominal formula, exactly once.
 
 The outcome sentinels are the selected variable's membership and the game-written
 `RitualSO.selectedLevel`. No cost or fill-list delta is verified.

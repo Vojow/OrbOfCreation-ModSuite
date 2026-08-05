@@ -116,8 +116,7 @@ public sealed class RitualLifecycleContractTests
             "ritual-lifecycle.ritual-duration-active-action", "ritual-lifecycle.ritual-cancel-action",
             "ritual-lifecycle.battle-active-ritual-action", "ritual-lifecycle.battle-end-ritual-action",
             "ritual-lifecycle.ritual-usage-requirements-capture",
-            "ritual-lifecycle.ritual-fill-list-capture", "ritual-lifecycle.fill-entries-capture",
-            "ritual-lifecycle.fill-resource-capture", "ritual-lifecycle.fill-capacity-capture",
+            "ritual.completion-cost", "ritual.completion-cost-per-level",
         };
 
         Assert.All(expected, id => Assert.Single(
