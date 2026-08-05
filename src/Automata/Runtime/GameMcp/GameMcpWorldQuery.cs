@@ -4405,7 +4405,7 @@ internal static class GameMcpWorldQuery
             ["category"] = "glyphs",
             ["nativeType"] = "GlyphSO",
             ["discovered"] = glyph.Discovered,
-            ["available"] = glyph.Available,
+            ["available"] = glyph.Discovered && glyph.Available,
             ["usableCount"] = glyph.MaximumUsages,
         };
         AddLevelDecision(world, result, glyph.LevelDecision,

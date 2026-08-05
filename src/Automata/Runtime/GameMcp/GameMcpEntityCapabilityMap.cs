@@ -383,6 +383,13 @@ internal static class GameMcpEntityCapabilityMap
         if (target == Guid.Empty || !world.EntityIdentities.TryGet(target, out var identity))
             return false;
         nativeType = identity.RuntimeType;
+        if (nativeType == "EquipmentSO" &&
+            WorldLookup.TryFind(world.Equipment, target, out var equipment))
+        {
+            category = "equipment";
+            tool = equipment.IsCreated ? "game_equipment" : "game_discover";
+            return true;
+        }
         if (!TryCategoryForNativeType(nativeType, out category) ||
             !ByCategory.TryGetValue(category, out var descriptor)) return false;
         for (var index = 0; index < descriptor.Capabilities.Count; index++)

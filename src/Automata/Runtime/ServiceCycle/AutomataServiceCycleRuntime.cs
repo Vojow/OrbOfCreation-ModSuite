@@ -1060,8 +1060,20 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         ulong configurationGeneration)
     {
         if (command.Kind != GameMcpCommandKind.Purchase ||
-            result.Disposition != ServiceActionDisposition.Skipped ||
-            !WorldPurchaseCostLookup.TryFindRange(
+            result.Disposition != ServiceActionDisposition.Skipped)
+            return null;
+        if (string.Equals(command.Mode, "upgrade", StringComparison.Ordinal) &&
+            WorldLookup.TryFind(world.Upgrades, command.TargetId, out var upgrade) &&
+            upgrade.IsExhausted)
+        {
+            return GameMcpCommandResult.Rejected(
+                "already_maxed",
+                EntityIdentityFormatter.Format(command.TargetId, world.EntityIdentities) +
+                " is already at its maximum level.",
+                lifecycle,
+                configurationGeneration);
+        }
+        if (!WorldPurchaseCostLookup.TryFindRange(
                 world.PurchaseCosts, command.TargetId, out var start, out var count))
             return null;
         for (var index = start; index < start + count; index++)

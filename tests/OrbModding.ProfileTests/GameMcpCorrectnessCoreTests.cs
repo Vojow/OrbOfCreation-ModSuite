@@ -73,6 +73,59 @@ public sealed class GameMcpCorrectnessCoreTests
         Assert.Equal("Needs 50 Knowledge, but only 2 is spendable.", result.Reason);
     }
 
+    [Fact]
+    public void Maxed_purchase_refusal_uses_the_same_semantic_reason_as_the_read()
+    {
+        var target = Guid.Parse("34444444-4444-4444-8444-444444444444");
+        var reading = new RawUpgradeSample(
+            target, level: 10, maxLevel: 10, available: true, queuedLevels: 0,
+            buildTime: BigDouble.Zero, developmentTime: 1d, cachedCostLevel: 10);
+        var world = new GameWorldState
+        {
+            Upgrades = PublicationTable<WorldUpgrade>.Create(new[]
+            {
+                new WorldUpgrade(in reading, true, true, 0, 10, false, 0d),
+            }),
+        };
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Purchase, 1, 1, "upgrade", target, Guid.Empty,
+            "UpgradeSO", 1, string.Empty, string.Empty, false, false);
+
+        var result = AutomataServiceCycleRuntime.ProjectPurchaseRefusal(
+            command, world, ServiceActionResult.Skipped(CommonActionResultCodes.Skipped),
+            1, 1);
+
+        Assert.NotNull(result);
+        Assert.Equal("already_maxed", result!.Code);
+        Assert.Contains("maximum level", result.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Wrong_tool_redirect_uses_the_created_equipments_player_action()
+    {
+        var target = Guid.Parse("35555555-5555-4555-8555-555555555555");
+        var equipment = new WorldEquipment(
+            target, isCreated: true, discRarityLevel: 0, masteryXp: BigDouble.Zero,
+            masteryLevel: 0, isRequiredDiscovery: false, power: BigDouble.One,
+            baseLevel: BigDouble.One, experienceRateMod: BigDouble.One,
+            equippedLevel: 0, attuningLevel: 0, attunementTimeLeft: 0d,
+            baseXpRate: BigDouble.Zero);
+        var world = new GameWorldState
+        {
+            EntityIdentities = EntityIdentityCatalogSnapshot.Bound(1, new[]
+            {
+                new EntityIdentityName(target, "EquipmentSO", "Static Gauntlets", "static"),
+            }),
+            Equipment = PublicationTable<WorldEquipment>.Create(new[] { equipment }),
+        };
+
+        Assert.True(GameMcpEntityCapabilityMap.TryOwningTool(
+            world, target, out var category, out var nativeType, out var tool));
+        Assert.Equal("equipment", category);
+        Assert.Equal("EquipmentSO", nativeType);
+        Assert.Equal("game_equipment", tool);
+    }
+
     private static string PlayerFacingCost(BigDouble nominal, BigDouble quality)
     {
         var resource = Guid.NewGuid();

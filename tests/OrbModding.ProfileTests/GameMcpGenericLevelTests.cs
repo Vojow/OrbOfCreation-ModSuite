@@ -90,6 +90,7 @@ public sealed class GameMcpGenericLevelTests
         var glyph = Row(world, "glyphs", GlyphId);
         var resourceType = Row(world, "resource-types", ResourceTypeId);
 
+        Assert.False((bool)glyph["available"]!);
         Assert.False((bool)glyph["purchase"]!["available"]!);
         Assert.Equal("undiscovered", (string?)glyph["purchase"]!["reasonCode"]);
         Assert.False((bool)resourceType["purchase"]!["available"]!);
