@@ -2022,34 +2022,30 @@ internal static class GameMcpWorldQuery
                 if (!category.TryIdentity(row, out var identity)) continue;
                 totalMatches++;
                 if (matches.Count >= limit) continue;
-                matches.Add(new JObject
+                var match = new JObject
                 {
                     ["uuid"] = identity.ToString("D"),
                     ["category"] = category.Name,
                     ["nativeType"] = category.ExpectedNativeType,
-                });
+                };
+                var local = LocalizedRequirementImplications(
+                    publication.Snapshot, new HashSet<Guid> { identity });
+                var localOffers = LocalizedDiscoveryOfferImplications(
+                    publication.Snapshot, new HashSet<Guid> { identity });
+                if (local.Count > 0 || localOffers.Count > 0)
+                {
+                    match["status"] = "not_available";
+                    match["code"] = local.Count > 0
+                        ? "entity_data_incomplete"
+                        : "discovery_offer_read_incomplete";
+                    match["reason"] = local.Count > 0
+                        ? "this match has incomplete published requirement evidence"
+                        : "this discovery tree has an offer absent from the published entity rows";
+                    if (local.Count > 0) match["implicatedSkippedRows"] = local;
+                    if (localOffers.Count > 0) match["implicatedOffers"] = localOffers;
+                }
+                matches.Add(match);
             }
-        }
-
-        for (var index = 0; index < matches.Count; index++)
-        {
-            if (matches[index] is not JObject match ||
-                !Guid.TryParseExact((string?)match["uuid"], "D", out var identity))
-                continue;
-            var local = LocalizedRequirementImplications(
-                publication.Snapshot, new HashSet<Guid> { identity });
-            var localOffers = LocalizedDiscoveryOfferImplications(
-                publication.Snapshot, new HashSet<Guid> { identity });
-            if (local.Count == 0 && localOffers.Count == 0) continue;
-            match["status"] = "not_available";
-            match["code"] = local.Count > 0
-                ? "entity_data_incomplete"
-                : "discovery_offer_read_incomplete";
-            match["reason"] = local.Count > 0
-                ? "this match has incomplete published requirement evidence"
-                : "this discovery tree has an offer absent from the published entity rows";
-            if (local.Count > 0) match["implicatedSkippedRows"] = local;
-            if (localOffers.Count > 0) match["implicatedOffers"] = localOffers;
         }
         var result = Envelope(publication);
         result["total"] = totalMatches;
