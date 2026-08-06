@@ -99,7 +99,7 @@ public sealed class GameMcpEquipmentLoadoutTests
     }
 
     [Fact]
-    public void MaximumAmountEvidenceAppearsOnlyForAmountScopedRefusals()
+    public void EquipmentAmountRefusalsCarryTheObservedMaximum()
     {
         var world = World();
         var result = ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected);
@@ -107,15 +107,9 @@ public sealed class GameMcpEquipmentLoadoutTests
             1, GameMcpCommandKind.EquipmentLoadout, 19, 1, "equip",
             EquipmentId, Guid.Empty, "EquipmentSO", 3,
             string.Empty, string.Empty, false, false);
-        var select = new GameMcpCommand(
-            2, GameMcpCommandKind.EquipmentLoadout, 19, 1, "select",
-            EquipmentId, Guid.Empty, "EquipmentSO", 3,
-            string.Empty, string.Empty, false, false);
-
         var amountRefusal = Json(Assert.IsType<GameMcpObject>(
             AutomataServiceCycleRuntime.ProjectAmountRefusal(equip, world, in result)));
         Assert.Equal(2, (int)amountRefusal["maximumAmount"]!);
-        Assert.Null(AutomataServiceCycleRuntime.ProjectAmountRefusal(select, world, in result));
     }
 
     private static GameWorldState World()

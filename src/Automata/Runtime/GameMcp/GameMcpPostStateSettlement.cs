@@ -144,14 +144,29 @@ internal static class GameMcpPostStateSettlement
             string.Equals(command.Mode, "develop", System.StringComparison.Ordinal) &&
             latest?.World is not null)
         {
-            var observed = WorldLookup.TryFind(
-                latest.World.Snapshot.Research, command.TargetId, out var research)
-                ? research.IsDeveloping ? "developing" : "idle"
+            var beforeWorld = command.FrameContext?.World?.Snapshot;
+            var before = default(WorldResearch);
+            var hasBefore = beforeWorld is not null && WorldLookup.TryFind(
+                beforeWorld.Research, command.TargetId, out before);
+            var hasAfter = WorldLookup.TryFind(
+                latest.World.Snapshot.Research, command.TargetId, out var after);
+            if (hasBefore && before.Decision.QueueMode)
+            {
+                var expected = checked(PendingResearchLevels(before) + command.Amount);
+                var observed = hasAfter ? PendingResearchLevels(after).ToString() : "not published";
+                return GameMcpWorldQuery.PostStateUnavailable(
+                    "requested_state_not_reached",
+                    "the settled research queue has " + observed +
+                    " pending levels, not the requested " + expected);
+            }
+            var beforeState = hasBefore && before.IsDeveloping ? "developing" : "idle";
+            var afterState = hasAfter
+                ? after.IsDeveloping ? "developing" : "idle"
                 : "not published";
             return GameMcpWorldQuery.PostStateUnavailable(
                 "requested_state_not_reached",
-                "the settled research target is " + observed +
-                "; development did not start");
+                "the requested idle-to-developing transition was not observed; before was " +
+                beforeState + " and the settled target is " + afterState);
         }
         if (command.Kind == GameMcpCommandKind.Concept && latest?.World is not null)
         {

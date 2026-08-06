@@ -357,7 +357,6 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
             return null;
         int? maximum = null;
         if (command.Kind == GameMcpCommandKind.EquipmentLoadout &&
-            command.Mode is "equip" or "unequip" &&
             WorldLookup.TryFind(world.Equipment, command.TargetId, out var equipment))
             maximum = command.Mode == "unequip"
                 ? equipment.Loadout.MaximumUnequipAmount

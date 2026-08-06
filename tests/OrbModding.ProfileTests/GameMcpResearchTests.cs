@@ -145,13 +145,15 @@ public sealed class GameMcpResearchTests
     public void OrdinaryDevelopSettlementUsesTheActionSentinelInsteadOfWaitingForCompletion()
     {
         var completedAt = DateTime.UtcNow.Ticks;
-        var before = World(isDeveloping: false);
+        var before = World(isDeveloping: false, queueMode: false);
         var command = new GameMcpCommand(
             1, GameMcpCommandKind.Research, 41, 8, "develop", ResearchId, Guid.Empty,
             "ResearchSO", 1, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before, generation: 51));
-        var started = World(isDeveloping: true, collectedAtUtcTicks: completedAt + 1);
-        var idle = World(isDeveloping: false, collectedAtUtcTicks: completedAt + 1);
+        var started = World(
+            isDeveloping: true, collectedAtUtcTicks: completedAt + 1, queueMode: false);
+        var idle = World(
+            isDeveloping: false, collectedAtUtcTicks: completedAt + 1, queueMode: false);
 
         Assert.True(GameMcpPostStateSettlement.IsReady(
             GameMcpTestHarness.Context(started, generation: 52), 51, completedAt, command));
@@ -162,7 +164,26 @@ public sealed class GameMcpResearchTests
             command, GameMcpTestHarness.Context(idle, generation: 52)), idle);
         Assert.Equal("requested_state_not_reached",
             (string?)timeout["postStateUnavailable"]!["reasonCode"]);
-        Assert.Contains("development did not start",
+        Assert.Contains("before was idle and the settled target is idle",
+            (string?)timeout["postStateUnavailable"]!["reason"]);
+    }
+
+    [Fact]
+    public void QueueDevelopTimeoutNamesTheExpectedAndObservedPendingLevels()
+    {
+        var before = World(isDeveloping: true, queueMode: true);
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Research, 41, 8, "develop", ResearchId, Guid.Empty,
+            "ResearchSO", 2, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 51));
+        var unchanged = World(isDeveloping: true, queueMode: true);
+
+        var timeout = Json(GameMcpPostStateSettlement.TimedOut(
+            command, GameMcpTestHarness.Context(unchanged, generation: 52)), unchanged);
+
+        Assert.Equal("requested_state_not_reached",
+            (string?)timeout["postStateUnavailable"]!["reasonCode"]);
+        Assert.Contains("research queue has 4 pending levels, not the requested 6",
             (string?)timeout["postStateUnavailable"]!["reason"]);
     }
 
@@ -171,10 +192,11 @@ public sealed class GameMcpResearchTests
         double spendableAmount = 80,
         double investmentRemaining = 60,
         bool isDeveloping = true,
-        long? collectedAtUtcTicks = null)
+        long? collectedAtUtcTicks = null,
+        bool queueMode = true)
     {
         var decision = new WorldResearchDecision(
-            true,
+            queueMode,
             3,
             3,
             developmentCostAffordable ? 2 : 0,
