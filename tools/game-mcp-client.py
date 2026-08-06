@@ -428,8 +428,7 @@ def observe_and_spell_level(client: GameMcpClient, args: argparse.Namespace) -> 
     )
     results = observed.get("results")
     row_result = results[0] if isinstance(results, list) and results else None
-    if not isinstance(row_result, dict) or row_result.get("status") != "available" or \
-            not isinstance(row_result.get("row"), dict):
+    if not isinstance(row_result, dict) or not isinstance(row_result.get("row"), dict):
         raise RuntimeError(f"spell recipe is unavailable: {observed}")
     action = {"mode": "single", "uuid": args.uuid}
     return {
