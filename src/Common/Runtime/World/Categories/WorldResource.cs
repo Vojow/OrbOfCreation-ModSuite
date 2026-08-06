@@ -1,4 +1,5 @@
 using System;
+using OrbModding.Common.Runtime.GameMath;
 
 namespace OrbModding.Common.Runtime.World;
 
@@ -506,6 +507,60 @@ internal readonly struct WorldResource : IWorldEntity
     /// computation per resource per cycle, off the Unity thread, and no write at all.
     /// </remarks>
     internal BigDouble TrueRate { get; }
+}
+
+/// <summary>
+/// The two native coordinates a resource exposes: what its counter displays and what
+/// <c>ResourceSO.HasAmount</c> can spend. The native predicates are deliberately independent.
+/// </summary>
+internal static class WorldResourceCoordinate
+{
+    /// <summary>
+    /// Mirrors <c>ResourceSO.GetDisplayQuantity()</c>: inverted counters display missing capacity;
+    /// every other counter displays stored quantity.
+    /// </summary>
+    internal static BigDouble DisplayAmount(in WorldResource resource) =>
+        resource.Reading.Traits.InvertedResource
+            ? resource.Headroom
+            : resource.Reading.Quantity;
+
+    /// <summary>
+    /// The pool shown beside a player-facing cost: bandwidth spends missing capacity; ordinary
+    /// resources spend stored quantity after the cost is converted through quality.
+    /// </summary>
+    internal static BigDouble SpendableAmount(in WorldResource resource) =>
+        resource.Reading.Traits.BandwidthResource
+            ? resource.Headroom
+            : resource.Reading.Quantity;
+
+    /// <summary>
+    /// The amount comparable directly with an unconverted native cost. This is headroom for
+    /// bandwidth and quality-scaled holdings for ordinary resources.
+    /// </summary>
+    internal static BigDouble NativeCostAmount(in WorldResource resource) =>
+        resource.Reading.Traits.BandwidthResource
+            ? resource.Headroom
+            : resource.TrueQuantity;
+
+    /// <summary>Mirrors <c>ResourceSO.GetTrueSpend</c> for ordinary resources.</summary>
+    internal static BigDouble PlayerFacingCost(in WorldResource resource, BigDouble nominalCost)
+    {
+        if (resource.Reading.Traits.BandwidthResource) return nominalCost;
+        var quality = OrbGameMath.AsPercent(resource.Reading.Quality);
+        return quality == BigDouble.Zero ? nominalCost : nominalCost / quality;
+    }
+
+    /// <summary>Mirrors <c>ResourceSO.HasAmount</c>, including bandwidth integer snapping.</summary>
+    internal static bool HasAmount(in WorldResource resource, BigDouble nominalCost)
+    {
+        if (resource.Reading.Traits.BandwidthResource)
+        {
+            return OrbGameMath.SnapFloorToInt(resource.Headroom) >=
+                OrbGameMath.SnapFloorToInt(nominalCost);
+        }
+
+        return resource.Reading.Quantity.CompareTo(PlayerFacingCost(in resource, nominalCost)) >= 0;
+    }
 }
 
 /// <summary>

@@ -1164,6 +1164,7 @@ public sealed class AutoBuyCycleEvaluatorTests
                 bandwidth,
                 quantity,
                 quantity,
+                bandwidth ? headroom : quantity,
                 1.0,
                 1.0,
                 hasCapacity: capped,

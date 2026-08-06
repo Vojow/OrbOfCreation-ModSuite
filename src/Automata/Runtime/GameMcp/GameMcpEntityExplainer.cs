@@ -232,7 +232,8 @@ internal static class GameMcpEntityExplainer
             case EntityKind.Glyph:
             {
                 WorldLookup.TryFind(world.Glyphs, id, out var glyph);
-                AddDiscoveryPredicates(result, world, id, glyph.Learned, glyph.Discoverable);
+                AddDiscoveryPredicates(result, world, id, glyph.Discovered, glyph.Discoverable);
+                result["available"] = Verdict(glyph.Learned, "prerequisites_unmet");
                 break;
             }
             case EntityKind.Equipment:
@@ -777,7 +778,7 @@ internal static class GameMcpEntityExplainer
             result["recipeDiscovery"] = Blocker(
                 !crafting.Reading.Visible,
                 crafting.Reading.VisibilityReasonCode);
-            var bandwidth = CraftingBandwidthBlocker(in crafting);
+            var bandwidth = CraftingBandwidthBlocker(world, in crafting);
             var drain = CraftingDrainBlocker(in crafting);
             if (bandwidth is not null) result["bandwidth"] = bandwidth;
             if (drain is not null) result["drain"] = drain;
@@ -871,12 +872,14 @@ internal static class GameMcpEntityExplainer
         out bool blocked)
     {
         var available = BigDouble.Zero;
+        var playerCost = amount;
         var bandwidth = false;
         if (WorldLookup.TryFind(world.Resources, resourceId, out var resource))
         {
             bandwidth = resource.Reading.Traits.BandwidthResource;
-            available = bandwidth ? resource.Headroom : resource.Reading.Quantity;
-            blocked = available.CompareTo(amount) < 0;
+            available = WorldResourceCoordinate.SpendableAmount(in resource);
+            playerCost = WorldResourceCoordinate.PlayerFacingCost(in resource, amount);
+            blocked = !WorldResourceCoordinate.HasAmount(in resource, amount);
         }
         else
         {
@@ -885,7 +888,7 @@ internal static class GameMcpEntityExplainer
         var result = new JObject
         {
             ["resourceUuid"] = resourceId.ToString("D"),
-            ["cost"] = ProjectNumber(amount),
+            ["cost"] = ProjectNumber(playerCost),
             ["amount"] = ProjectNumber(available),
             ["affordable"] = !blocked,
             ["blocked"] = blocked,
@@ -895,7 +898,9 @@ internal static class GameMcpEntityExplainer
         return result;
     }
 
-    private static JObject? CraftingBandwidthBlocker(in WorldCraftingRecipe recipe)
+    private static JObject? CraftingBandwidthBlocker(
+        GameWorldState world,
+        in WorldCraftingRecipe recipe)
     {
         var rows = new JArray();
         var blocked = false;
@@ -904,14 +909,19 @@ internal static class GameMcpEntityExplainer
             var resource = recipe.Resources[index];
             if (resource.Kind != WorldCraftingRecipeResourceKind.AuthoredInput ||
                 !resource.BandwidthResource) continue;
-            var oneBlocked = !resource.ResourceStateAvailable ||
-                resource.Headroom.CompareTo(resource.Amount) < 0;
+            var available = WorldLookup.TryFind(
+                world.Resources, resource.ResourceId, out var resourceState);
+            var oneBlocked = !available ||
+                !WorldResourceCoordinate.HasAmount(in resourceState, resource.Amount);
+            var spendable = available
+                ? WorldResourceCoordinate.SpendableAmount(in resourceState)
+                : BigDouble.Zero;
             blocked |= oneBlocked;
             rows.Add(new JObject
             {
                 ["resourceUuid"] = resource.ResourceId.ToString("D"),
                 ["cost"] = ProjectNumber(resource.Amount),
-                ["amount"] = ProjectNumber(resource.Headroom),
+                ["amount"] = ProjectNumber(spendable),
                 ["affordable"] = !oneBlocked,
                 ["bandwidth"] = true,
                 ["blocked"] = oneBlocked,

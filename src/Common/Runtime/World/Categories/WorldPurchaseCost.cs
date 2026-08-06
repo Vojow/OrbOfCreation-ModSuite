@@ -614,9 +614,7 @@ internal sealed class WorldPurchaseCostDeriver
             return;
         }
 
-        available = resource.Reading.Traits.BandwidthResource
-            ? resource.Headroom
-            : resource.TrueQuantity;
+        available = WorldResourceCoordinate.NativeCostAmount(in resource);
         if (available.Mantissa < 0d)
         {
             reason = "negative_available_amount";
@@ -624,7 +622,7 @@ internal sealed class WorldPurchaseCostDeriver
         }
 
         evaluated = true;
-        affordable = available.CompareTo(combined) >= 0;
+        affordable = WorldResourceCoordinate.HasAmount(in resource, combined);
         reason = affordable
             ? "affordable"
             : resource.Reading.Traits.BandwidthResource

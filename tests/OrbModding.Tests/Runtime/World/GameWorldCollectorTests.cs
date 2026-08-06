@@ -308,6 +308,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         AssertLevelDecision(equipmentRow.LevelDecision, 5, 2, 5, 7);
         Assert.True(WorldLookup.TryFind(world.Glyphs, glyph.Identity, out var glyphRow));
         Assert.True(glyphRow.Learned);
+        Assert.False(glyphRow.Discovered);
         AssertLevelDecision(glyphRow.LevelDecision, 5, 1, 6, 8);
         Assert.True(WorldLookup.TryFind(world.ResourceTypes, resourceType.Identity, out var resourceTypeRow));
         AssertLevelDecision(resourceTypeRow.LevelDecision, 8, 3, 9, 10);

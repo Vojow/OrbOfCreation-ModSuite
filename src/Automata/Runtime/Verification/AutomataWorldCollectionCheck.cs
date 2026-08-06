@@ -1311,10 +1311,7 @@ internal sealed class AutomataWorldCollectionCheck
             if (combined == BigDouble.Zero) continue;
             if (!TryFindResource(world, resourceId, out var resource)) return false;
 
-            var spendable = resource.Reading.Traits.BandwidthResource
-                ? resource.Headroom
-                : resource.TrueQuantity;
-            if (spendable.CompareTo(combined) < 0) return false;
+            if (!WorldResourceCoordinate.HasAmount(in resource, combined)) return false;
         }
 
         return true;

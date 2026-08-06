@@ -537,6 +537,11 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
             Upgrades = PublicationTable<WorldUpgrade>.Create(new[] { upgrade }),
             Research = PublicationTable<WorldResearch>.Create(new[] { research }),
             CraftingRecipes = PublicationTable<WorldCraftingRecipe>.Create(new[] { crafting }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                GameMcpTestHarness.BandwidthResource(
+                    resourceId, new BigDouble(90), new BigDouble(100)),
+            }),
             PurchaseCosts = PublicationTable<WorldPurchaseCost>.Create(new[] { cost }),
             ActionQueues = PublicationTable<WorldActionQueue>.Create(new[]
             {

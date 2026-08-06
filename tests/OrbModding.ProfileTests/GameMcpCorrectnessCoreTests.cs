@@ -23,38 +23,60 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
-    public void ResourceRowsAndCostsUseTheNativeScreenCoordinate()
+    public void ResourceCoordinatesCoverEveryBandwidthAndInvertedQuadrant()
     {
         var ordinaryId = Guid.Parse("36666666-6666-4666-8666-666666666666");
-        var bandwidthId = Guid.Parse("37777777-7777-4777-8777-777777777777");
+        var spellCapacityId = Guid.Parse("37777777-7777-4777-8777-777777777777");
+        var potionToxicityId = Guid.Parse("38888888-8888-4888-8888-888888888888");
+        var glyphUpgradesId = Guid.Parse("39999999-9999-4999-8999-999999999999");
         var rateInputs = default(RawResourceRateInputs);
         var modifiers = default(RawResourceModifiers);
         var ordinaryTraits = Traits(bandwidth: false, inverted: false);
-        var bandwidthTraits = Traits(bandwidth: true, inverted: true);
+        var spellCapacityTraits = Traits(bandwidth: true, inverted: false);
+        var potionToxicityTraits = Traits(bandwidth: false, inverted: true);
+        var glyphUpgradesTraits = Traits(bandwidth: true, inverted: true);
         var ordinaryReading = new RawResourceSample(
-            ordinaryId, new BigDouble(60), new BigDouble(100), true,
+            ordinaryId, new BigDouble(3), new BigDouble(10), true,
             BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
             BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
             false, false, false, 0, Guid.Empty,
             in rateInputs, in ordinaryTraits, in modifiers);
-        var bandwidthReading = new RawResourceSample(
-            bandwidthId, new BigDouble(3), new BigDouble(10), true,
+        var spellCapacityReading = new RawResourceSample(
+            spellCapacityId, new BigDouble(3), new BigDouble(10), true,
             BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
             BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
             false, false, false, 0, Guid.Empty,
-            in rateInputs, in bandwidthTraits, in modifiers);
+            in rateInputs, in spellCapacityTraits, in modifiers);
+        var potionToxicityReading = new RawResourceSample(
+            potionToxicityId, new BigDouble(3), new BigDouble(10), true,
+            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty,
+            in rateInputs, in potionToxicityTraits, in modifiers);
+        var glyphUpgradesReading = new RawResourceSample(
+            glyphUpgradesId, new BigDouble(3), new BigDouble(10), true,
+            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty,
+            in rateInputs, in glyphUpgradesTraits, in modifiers);
         var world = new GameWorldState
         {
             EntityIdentities = EntityIdentityCatalogSnapshot.Bound(1, new[]
             {
                 new EntityIdentityName(ordinaryId, "ResourceSO", "Knowledge", "knowledge"),
-                new EntityIdentityName(bandwidthId, "ResourceSO", "Glyph Upgrades", "glyphUpgrades"),
+                new EntityIdentityName(spellCapacityId, "ResourceSO", "Spell Capacity", "weightSpell"),
+                new EntityIdentityName(potionToxicityId, "ResourceSO", "Potion Toxicity", "potionToxicity"),
+                new EntityIdentityName(glyphUpgradesId, "ResourceSO", "Glyph Upgrades", "glyphUpgrades"),
             }),
             Resources = PublicationTable<WorldResource>.Create(new[]
             {
-                new WorldResource(in ordinaryReading, true, new BigDouble(40), 0.6d,
-                    false, new BigDouble(120), BigDouble.Zero),
-                new WorldResource(in bandwidthReading, true, new BigDouble(7), 0.3d,
+                new WorldResource(in ordinaryReading, true, new BigDouble(7), 0.3d,
+                    false, new BigDouble(6), BigDouble.Zero),
+                new WorldResource(in spellCapacityReading, true, new BigDouble(7), 0.3d,
+                    false, new BigDouble(6), BigDouble.Zero),
+                new WorldResource(in potionToxicityReading, true, new BigDouble(7), 0.3d,
+                    false, new BigDouble(6), BigDouble.Zero),
+                new WorldResource(in glyphUpgradesReading, true, new BigDouble(7), 0.3d,
                     false, new BigDouble(6), BigDouble.Zero),
             }),
             SpellCosts = PublicationTable<WorldSpellCost>.Create(new[]
@@ -65,31 +87,14 @@ public sealed class GameMcpCorrectnessCoreTests
             CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
             {
                 new WorldCollectionCategoryStatus(
-                    "resources", WorldCategoryOutcome.Collected, 2, 0, string.Empty),
+                    "resources", WorldCategoryOutcome.Collected, 4, 0, string.Empty),
             }),
         };
 
-        var ordinary = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
-            GameMcpWorldQuery.ProjectResource(world, world.Resources[0]),
-            world.EntityIdentities));
-        Assert.Equal("60", (string?)ordinary["amount"]);
-        Assert.Equal("100", (string?)ordinary["capacity"]);
-        Assert.False((bool)ordinary["atCapacity"]!);
-        Assert.Equal(new BigDouble(60),
-            GameMcpWorldQuery.SpendableAmount(world, ordinaryId, BigDouble.Zero));
-        Assert.Equal(new BigDouble(50),
-            GameMcpWorldQuery.PlayerFacingCost(world, ordinaryId, new BigDouble(100)));
-
-        var bandwidth = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
-            GameMcpWorldQuery.ProjectResource(world, world.Resources[1]),
-            world.EntityIdentities));
-        Assert.Equal("7", (string?)bandwidth["amount"]);
-        Assert.Equal("10", (string?)bandwidth["capacity"]);
-        Assert.False((bool)bandwidth["atCapacity"]!);
-        Assert.Equal(new BigDouble(7),
-            GameMcpWorldQuery.SpendableAmount(world, bandwidthId, BigDouble.Zero));
-        Assert.Equal(new BigDouble(100),
-            GameMcpWorldQuery.PlayerFacingCost(world, bandwidthId, new BigDouble(100)));
+        AssertCoordinates(world, 0, ordinaryId, display: "3", spendable: 3, cost: 50);
+        AssertCoordinates(world, 1, spellCapacityId, display: "3", spendable: 7, cost: 100);
+        AssertCoordinates(world, 2, potionToxicityId, display: "7", spendable: 3, cost: 50);
+        AssertCoordinates(world, 3, glyphUpgradesId, display: "7", spendable: 7, cost: 100);
 
         var costs = Assert.IsType<JArray>(GameMcpDocumentJsonEncoder.Encode(
             GameMcpWorldQuery.ProjectEquippedSpellCosts(
@@ -97,8 +102,28 @@ public sealed class GameMcpCorrectnessCoreTests
             world.EntityIdentities));
         var cost = Assert.Single(costs.Values<JObject>());
         Assert.Equal("50", (string?)cost["cost"]);
-        Assert.Equal("60", (string?)cost["spendableAmount"]);
-        Assert.True((bool)cost["affordable"]!);
+        Assert.Equal("3", (string?)cost["spendableAmount"]);
+        Assert.False((bool)cost["affordable"]!);
+    }
+
+    private static void AssertCoordinates(
+        GameWorldState world,
+        int index,
+        Guid resourceId,
+        string display,
+        int spendable,
+        int cost)
+    {
+        var row = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            GameMcpWorldQuery.ProjectResource(world, world.Resources[index]),
+            world.EntityIdentities));
+        Assert.Equal(display, (string?)row["amount"]);
+        Assert.Equal("10", (string?)row["capacity"]);
+        Assert.False((bool)row["atCapacity"]!);
+        Assert.Equal(new BigDouble(spendable),
+            GameMcpWorldQuery.SpendableAmount(world, resourceId, BigDouble.Zero));
+        Assert.Equal(new BigDouble(cost),
+            GameMcpWorldQuery.PlayerFacingCost(world, resourceId, new BigDouble(100)));
     }
 
     [Fact]

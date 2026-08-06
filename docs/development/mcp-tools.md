@@ -212,19 +212,23 @@ surface.
 
 `purchase-costs` is the only modifier-adjusted live cost category. Spell and alchemy cost rows are
 immediate/drain observations and are not mislabeled as purchase prices. Every displayed cost is in
-the screen's spend units: nominal native costs are divided by the resource quality percent through
-the audited `GetTrueSpend` formula before serialization. Each structure/upgrade cost row exposes
+the screen's spend units: ordinary nominal costs are divided by the resource quality percent through
+the audited `GetTrueSpend` formula, while bandwidth costs remain nominal. Each structure/upgrade cost row exposes
 the screen's `cost`, the matching `spendableAmount`, and the resource identity needed for the
 next decision. Every cost row uses `cost` for the screen price and `spendableAmount` for the
 same-publication player pool, with `affordable` and a reason only when the decision was evaluated.
 Ordinary resources compare their raw on-screen pool against the quality-adjusted spend; bandwidth
-resources compare nominal cost against headroom. These fields use the same exact combiner as Auto Buy and do not
+resources compare nominal cost against headroom using the game's integer-snapped comparison. The
+resource counter's `amount` independently mirrors `GetDisplayQuantity`: inverted resources display
+headroom and all others display stored quantity. Cost rows use `spendableAmount` for the native
+admission operand, so independent inverted/bandwidth flags never overload one field with two
+meanings. These fields use the same exact combiner as Auto Buy and do not
 include Auto Buy's configurable reserve or excess policy.
 
 A `resources` row is deliberately only named identity, the counter's on-screen `amount`,
 `netRatePerSecond`, and, when the resource is capped, `capacity` plus `atCapacity`. A negative native
-capacity is the game's uncapped sentinel and is never serialized as a magnitude. Inverted allocation
-counters publish their displayed headroom; ordinary counters publish their raw quantity. Detailed
+capacity is the game's uncapped sentinel and is never serialized as a magnitude. Inverted counters
+publish their displayed headroom; all other counters publish their raw quantity. Detailed
 factor math will belong to a future Details-panel tool; it is not leaked through world rows.
 
 Research rows distinguish the native evaluator's base and effective requirement levels. Their
@@ -302,8 +306,10 @@ metadata and applicable discovery predicates.
 
 ### Generic discovery decisions
 
-Every `alchemy-recipes`, `equipment`, `glyphs`, `rituals`, `spell-recipes`, and `time-runes` row
-has one `discover` decision from the native `IDiscoverable` evaluator. It names whether the entity
+Every `alchemy-recipes`, `equipment`, `rituals`, `spell-recipes`, and `time-runes` row, plus each
+discoverable `glyphs` row, has one `discover` decision from the native `IDiscoverable` evaluator.
+Pool-unlocker glyphs instead expose prerequisite-backed `available` without advertising a discovery
+action their screen does not offer. A discovery decision names whether the entity
 is visible, already discovered, required for downstream play, currently discoverable, and
 affordable. Its ordered `costs` pair each named resource's screen-formatted `cost` with the same
 canonical `spendableAmount` used everywhere else. Failed decision axes carry a stable reason;

@@ -395,6 +395,7 @@ internal static class AutoBuyFrameProjector
             reading.Traits.BandwidthResource,
             reading.Quantity,
             resource.TrueQuantity,
+            WorldResourceCoordinate.NativeCostAmount(in resource),
             reading.Quality,
             reading.Modifiers.AttributeCostMod,
             resource.IsCapped,

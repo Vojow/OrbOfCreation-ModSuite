@@ -97,6 +97,19 @@ public sealed class GameMcpGenericLevelTests
         Assert.Equal("hidden", (string?)resourceType["purchase"]!["reasonCode"]);
     }
 
+    [Fact]
+    public void PrerequisiteLearnedGlyphIsAvailableWithoutClaimingDiscovery()
+    {
+        var glyph = Row(
+            World(5, 2, purchaseAffordable: true, glyphDiscoverable: false),
+            "glyphs",
+            GlyphId);
+
+        Assert.True((bool)glyph["available"]!);
+        Assert.False((bool)glyph["discovered"]!);
+        Assert.Null(glyph["discover"]);
+    }
+
     private static JObject Row(
         GameWorldState world,
         string category,
@@ -136,6 +149,7 @@ public sealed class GameMcpGenericLevelTests
         int bonus,
         bool purchaseAffordable,
         bool glyphLearned = true,
+        bool glyphDiscoverable = true,
         bool resourceTypeHidden = false)
     {
         var paidCosts = PublicationTable<WorldLevelableCost>.Create(new[]
@@ -151,7 +165,7 @@ public sealed class GameMcpGenericLevelTests
             EquipmentTypeId, total - bonus, bonus, 1, new BigDouble(4),
             new BigDouble(8), 0, 0, withBonus);
         var glyph = new WorldGlyph(GlyphId, total - bonus, bonus, 0, glyphLearned,
-            true, false, false, false, false, 0, BigDouble.Zero,
+            glyphDiscoverable, false, false, false, false, 0, BigDouble.Zero,
             BigDouble.Zero, BigDouble.Zero, 3, levelDecision: withBonus);
         var resourceType = new WorldResourceType(
             resourceTypeId: ResourceTypeId,

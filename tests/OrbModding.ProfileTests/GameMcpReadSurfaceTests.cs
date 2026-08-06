@@ -1627,6 +1627,11 @@ public sealed class GameMcpWorldEnvelopeTests
         var world = new GameWorldState
         {
             CraftingRecipes = PublicationTable<WorldCraftingRecipe>.Create(new[] { recipe }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                GameMcpTestHarness.BandwidthResource(
+                    resourceId, new BigDouble(80), new BigDouble(100)),
+            }),
             CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(
                 new[]
                 {

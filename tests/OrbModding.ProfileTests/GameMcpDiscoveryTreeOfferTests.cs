@@ -507,7 +507,11 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                 calls++;
                 Assert.Equal("available", (string?)explanation["status"]);
                 Assert.NotNull(explanation["name"]);
-                Assert.Null(explanation["predicates"]);
+                if (readOffer == secondId)
+                    Assert.Equal("prerequisites_unmet",
+                        (string?)explanation["predicates"]!["available"]!["reasonCode"]);
+                else
+                    Assert.Null(explanation["predicates"]);
             }
 
             var selected = action.Submit(new DiscoveryTreeOfferAction(

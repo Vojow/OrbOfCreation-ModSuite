@@ -758,7 +758,7 @@ Admission is per glyph and then combined:
 | Term | Member |
 |---|---|
 | exact glyph | `GlyphSO.All` (`0x040006D9`) |
-| available | `GlyphSO.IsAvailable()` (`0x06000BB6`) |
+| available | `GlyphSO.IsAvailable()` (`0x06000BB6`): when `discoverable` is true it returns the raw `discovered` field; otherwise it evaluates `prerequisites.Check()` |
 | is an augment | `GlyphSO.IsSpellAugment()` (`0x06000BB8`) |
 | count ceiling | `GlyphSO.GetMaxUsages()` (`0x06000BCE`) |
 | combined compatibility | `GlyphSO.MeetsNonLvRequirements(List<GlyphSO>, Spell)` (`0x06000C0E`) |

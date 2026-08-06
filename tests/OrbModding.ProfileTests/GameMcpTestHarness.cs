@@ -24,6 +24,30 @@ internal static class GameMcpTestHarness
 
     internal static EntityIdentityCatalogSnapshot EntityCatalog => Identities.Value;
 
+    internal static WorldResource BandwidthResource(
+        Guid resourceId,
+        BigDouble quantity,
+        BigDouble capacity)
+    {
+        var rateInputs = default(RawResourceRateInputs);
+        var modifiers = default(RawResourceModifiers);
+        var traits = new RawResourceTraits(
+            0d, 0d, 0d,
+            false, false, false,
+            true, false, false, false,
+            BigDouble.Zero, 0, 0, 0d, false, 0d,
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, false);
+        var reading = new RawResourceSample(
+            resourceId, quantity, capacity, true,
+            BigDouble.Zero, BigDouble.Zero, new BigDouble(100),
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty,
+            in rateInputs, in traits, in modifiers);
+        var headroom = BigDouble.Max(capacity - quantity, BigDouble.Zero);
+        return new WorldResource(
+            in reading, true, headroom, 0d, quantity >= capacity, quantity, BigDouble.Zero);
+    }
+
     internal static GameMcpFrameContext Context(
         WorldPublication<GameWorldState>? world = null,
         ulong configurationGeneration = 3,

@@ -190,6 +190,7 @@ internal readonly struct AutoBuyResourceRow
         bool isBandwidth,
         BigDouble storedQuantity,
         BigDouble trueQuantity,
+        BigDouble spendable,
         BigDouble quality,
         BigDouble effectiveAttributeCost,
         bool hasCapacity,
@@ -201,6 +202,7 @@ internal readonly struct AutoBuyResourceRow
         IsBandwidth = isBandwidth;
         StoredQuantity = storedQuantity;
         TrueQuantity = trueQuantity;
+        Spendable = spendable;
         Quality = quality;
         EffectiveAttributeCost = effectiveAttributeCost;
         HasCapacity = hasCapacity;
@@ -234,10 +236,10 @@ internal readonly struct AutoBuyResourceRow
     public bool IsAvailable { get; }
 
     /// <summary>
-    /// What a purchase drawing on this resource may spend: room below the ceiling for a bandwidth
-    /// resource, holdings for every other.
+    /// What a purchase drawing on this resource may spend in the native-cost coordinate, selected
+    /// once by <c>WorldResourceCoordinate</c> before this feature frame is built.
     /// </summary>
-    public BigDouble Spendable => IsBandwidth ? Headroom : TrueQuantity;
+    public BigDouble Spendable { get; }
 }
 
 /// <summary>

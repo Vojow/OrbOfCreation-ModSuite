@@ -224,7 +224,7 @@ internal static class GameMcpWorldQuery
             return new JObject
             {
                 ["entityId"] = glyph.EntityId.ToString("D"),
-                ["discovered"] = glyph.Learned,
+                ["discovered"] = glyph.Discovered,
                 ["available"] = glyph.Learned,
                 ["paidLevel"] = glyph.Level - glyph.FreeLevels,
                 ["bonusLevel"] = glyph.FreeLevels,
@@ -1571,7 +1571,7 @@ internal static class GameMcpWorldQuery
                 discovered = spell.Discovered;
                 return true;
             case "GlyphSO" when WorldLookup.TryFind(world.Glyphs, targetId, out var glyph):
-                discovered = glyph.Learned;
+                discovered = glyph.Discovered;
                 return true;
             case "RitualSO" when WorldLookup.TryFind(world.Rituals, targetId, out var ritual):
                 discovered = ritual.Discovered;
@@ -2654,12 +2654,14 @@ internal static class GameMcpWorldQuery
             var row = new JObject
             {
                 ["resourceId"] = cost.ResourceId.ToString("D"),
-                ["cost"] = new GameMcpDomainValue(cost.Amount),
+                ["cost"] = new GameMcpDomainValue(
+                    PlayerFacingCost(world, cost.ResourceId, cost.Amount)),
             };
             if (TryHarvestSpendableAmount(world, cost.ResourceId, out var amount))
             {
                 row["amount"] = new GameMcpDomainValue(amount);
-                row["affordable"] = amount.CompareTo(cost.Amount) >= 0;
+                row["affordable"] = CanAfford(
+                    world, cost.ResourceId, cost.Amount, amount);
             }
             result.Add(row);
         }
@@ -2679,9 +2681,7 @@ internal static class GameMcpWorldQuery
         if (WorldLookup.TryFind(world.HarvestResources, resourceId, out var harvestResource))
         {
             var value = harvestResource.Resource;
-            amount = value.Reading.Traits.BandwidthResource
-                ? value.Headroom
-                : value.Reading.Quantity;
+            amount = WorldResourceCoordinate.SpendableAmount(in value);
             return true;
         }
         amount = BigDouble.Zero;
@@ -2769,9 +2769,11 @@ internal static class GameMcpWorldQuery
                         costs.Add(new JObject
                         {
                             ["resourceId"] = cost.ResourceId.ToString("D"),
-                            ["cost"] = new GameMcpDomainValue(cost.Amount),
+                            ["cost"] = new GameMcpDomainValue(
+                                PlayerFacingCost(world, cost.ResourceId, cost.Amount)),
                             ["amount"] = new GameMcpDomainValue(amount),
-                            ["affordable"] = amount.CompareTo(cost.Amount) >= 0,
+                            ["affordable"] = CanAfford(
+                                world, cost.ResourceId, cost.Amount, cost.AvailableAmount),
                         });
                     }
                     initiate["costs"] = costs;
@@ -2987,12 +2989,15 @@ internal static class GameMcpWorldQuery
             for (var index = 0; index < decision.DevelopmentCosts.Count; index++)
             {
                 var value = decision.DevelopmentCosts[index];
+                var playerCost = PlayerFacingCost(world, value.ResourceId, value.Cost);
+                var spendable = SpendableAmount(world, value.ResourceId, value.Amount);
                 costs.Add(new JObject
                 {
                     ["resourceId"] = value.ResourceId.ToString("D"),
-                    ["cost"] = new GameMcpDomainValue(value.Cost),
-                    ["amount"] = new GameMcpDomainValue(value.Amount),
-                    ["affordable"] = value.Amount.CompareTo(value.Cost) >= 0,
+                    ["cost"] = new GameMcpDomainValue(playerCost),
+                    ["amount"] = new GameMcpDomainValue(spendable),
+                    ["affordable"] = CanAfford(
+                        world, value.ResourceId, value.Cost, value.Amount),
                 });
             }
             develop["costs"] = costs;
@@ -3211,16 +3216,18 @@ internal static class GameMcpWorldQuery
         for (var index = start; index < start + count; index++)
         {
             var value = world.ConsumableCosts[index];
+            var playerCost = PlayerFacingCost(world, value.ResourceId, value.Amount);
             var cost = new JObject
             {
                 ["resourceId"] = value.ResourceId.ToString("D"),
-                ["cost"] = new GameMcpDomainValue(value.Amount),
+                ["cost"] = new GameMcpDomainValue(playerCost),
             };
             if (WorldLookup.TryFind(world.Resources, value.ResourceId, out var resource))
             {
                 var amount = SpendableAmount(world, value.ResourceId, resource.Reading.Quantity);
                 cost["amount"] = new GameMcpDomainValue(amount);
-                cost["affordable"] = amount.CompareTo(value.Amount) >= 0;
+                cost["affordable"] = CanAfford(
+                    world, value.ResourceId, value.Amount, resource.Reading.Quantity);
             }
             else cost["affordable"] = false;
             result.Add(cost);
@@ -4022,7 +4029,8 @@ internal static class GameMcpWorldQuery
                 var amount = SpendableAmount(
                     world, value.ResourceId, resource.Reading.Quantity);
                 row["amount"] = new GameMcpDomainValue(amount);
-                row["affordable"] = amount >= playerCost;
+                row["affordable"] = CanAfford(
+                    world, value.ResourceId, value.Amount, resource.Reading.Quantity);
             }
             else row["affordable"] = false;
             result.Add(row);
@@ -4038,16 +4046,15 @@ internal static class GameMcpWorldQuery
         for (var index = 0; index < values.Count; index++)
         {
             var value = values[index];
+            var playerCost = PlayerFacingCost(world, value.ResourceId, value.Cost);
+            var spendable = SpendableAmount(world, value.ResourceId, value.AvailableAmount);
             result.Add(new JObject
             {
                 ["resourceId"] = value.ResourceId.ToString("D"),
-                ["cost"] = new GameMcpDomainValue(value.Cost),
-                ["amount"] = new GameMcpDomainValue(
-                    SpendableAmount(world, value.ResourceId, value.AvailableAmount)),
-                ["affordable"] = SpendableAmount(
-                    world,
-                    value.ResourceId,
-                    value.AvailableAmount).CompareTo(value.Cost) >= 0,
+                ["cost"] = new GameMcpDomainValue(playerCost),
+                ["amount"] = new GameMcpDomainValue(spendable),
+                ["affordable"] = CanAfford(
+                    world, value.ResourceId, value.Cost, value.AvailableAmount),
             });
         }
         return result;
@@ -4055,9 +4062,7 @@ internal static class GameMcpWorldQuery
 
     internal static GameMcpValue ProjectResource(GameWorldState world, in WorldResource resource)
     {
-        var amount = resource.Reading.Traits.InvertedResource
-            ? resource.Headroom
-            : resource.Reading.Quantity;
+        var amount = WorldResourceCoordinate.DisplayAmount(in resource);
         var result = new JObject
         {
             ["entityId"] = resource.EntityId.ToString("D"),
@@ -4077,10 +4082,8 @@ internal static class GameMcpWorldQuery
         GameWorldState world,
         Guid resourceId,
         BigDouble fallback) =>
-        WorldLookup.TryFind(world.Resources, resourceId, out var resource)
-            ? resource.Reading.Traits.BandwidthResource
-                ? resource.Headroom
-                : resource.Reading.Quantity
+        TryFindResource(world, resourceId, out var resource)
+            ? WorldResourceCoordinate.SpendableAmount(in resource)
             : fallback;
 
     /// <summary>
@@ -4092,11 +4095,33 @@ internal static class GameMcpWorldQuery
         Guid resourceId,
         BigDouble nominalCost)
     {
-        if (!WorldLookup.TryFind(world.Resources, resourceId, out var resource))
+        if (!TryFindResource(world, resourceId, out var resource))
             return nominalCost;
-        if (resource.Reading.Traits.BandwidthResource) return nominalCost;
-        var quality = OrbGameMath.AsPercent(resource.Reading.Quality);
-        return quality == BigDouble.Zero ? nominalCost : nominalCost / quality;
+        return WorldResourceCoordinate.PlayerFacingCost(in resource, nominalCost);
+    }
+
+    internal static bool CanAfford(
+        GameWorldState world,
+        Guid resourceId,
+        BigDouble nominalCost,
+        BigDouble fallbackAvailable) =>
+        TryFindResource(world, resourceId, out var resource)
+            ? WorldResourceCoordinate.HasAmount(in resource, nominalCost)
+            : fallbackAvailable.CompareTo(nominalCost) >= 0;
+
+    private static bool TryFindResource(
+        GameWorldState world,
+        Guid resourceId,
+        out WorldResource resource)
+    {
+        if (WorldLookup.TryFind(world.Resources, resourceId, out resource)) return true;
+        if (WorldLookup.TryFind(world.HarvestResources, resourceId, out var harvest))
+        {
+            resource = harvest.Resource;
+            return true;
+        }
+        resource = default;
+        return false;
     }
 
     private static GameMcpValue ProjectAlchemyRecipe(
@@ -4183,7 +4208,8 @@ internal static class GameMcpWorldQuery
             var row = new JObject
             {
                 ["resourceId"] = cost.ResourceId.ToString("D"),
-                ["amount"] = new GameMcpDomainValue(cost.Amount),
+                ["amount"] = new GameMcpDomainValue(
+                    PlayerFacingCost(world, cost.ResourceId, cost.Amount)),
             };
             if (WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource))
                 row["spendableAmount"] = new GameMcpDomainValue(
@@ -4240,24 +4266,27 @@ internal static class GameMcpWorldQuery
                 for (var index = 0; index < decision.Costs.Count; index++)
                 {
                     var cost = decision.Costs[index];
+                    var playerCost = PlayerFacingCost(world, cost.ResourceId, cost.Cost);
                     var costRow = new JObject
                     {
                         ["resourceId"] = cost.ResourceId.ToString("D"),
-                        ["cost"] = new GameMcpDomainValue(cost.Cost),
+                        ["cost"] = new GameMcpDomainValue(playerCost),
                     };
                     if (WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource))
                     {
                         var amount = SpendableAmount(world, cost.ResourceId, resource.Reading.Quantity);
                         costRow["amount"] = new GameMcpDomainValue(amount);
-                        costRow["affordable"] = amount.CompareTo(cost.Cost) >= 0;
+                        var affordable = CanAfford(
+                            world, cost.ResourceId, cost.Cost, resource.Reading.Quantity);
+                        costRow["affordable"] = affordable;
                         if (resource.Reading.Traits.BandwidthResource)
                         {
                             result["weightBudget"] = new JObject
                             {
                                 ["used"] = new GameMcpDomainValue(resource.Reading.Quantity),
                                 ["maximum"] = new GameMcpDomainValue(resource.Reading.Capacity),
-                                ["itemWeight"] = new GameMcpDomainValue(cost.Cost),
-                                ["fits"] = amount.CompareTo(cost.Cost) >= 0,
+                                ["itemWeight"] = new GameMcpDomainValue(playerCost),
+                                ["fits"] = affordable,
                             };
                         }
                     }
@@ -4486,7 +4515,7 @@ internal static class GameMcpWorldQuery
             ["entityId"] = glyph.EntityId.ToString("D"),
             ["category"] = "glyphs",
             ["nativeType"] = "GlyphSO",
-            ["discovered"] = glyph.Learned,
+            ["discovered"] = glyph.Discovered,
             ["available"] = glyph.Learned,
             ["usableCount"] = glyph.MaximumUsages,
         };
@@ -4627,7 +4656,8 @@ internal static class GameMcpWorldQuery
                 var row = new JObject
                 {
                     ["resourceId"] = drain.ResourceId.ToString("D"),
-                    ["amount"] = new GameMcpDomainValue(drain.Amount),
+                    ["amount"] = new GameMcpDomainValue(
+                        PlayerFacingCost(world, drain.ResourceId, drain.Amount)),
                 };
                 if (WorldLookup.TryFind(world.Resources, drain.ResourceId, out var resource))
                     row["spendableAmount"] = new GameMcpDomainValue(
@@ -4793,7 +4823,8 @@ internal static class GameMcpWorldQuery
             var row = new JObject
             {
                 ["resourceId"] = cost.ResourceId.ToString("D"),
-                ["cost"] = new GameMcpDomainValue(cost.Amount),
+                ["cost"] = new GameMcpDomainValue(
+                    PlayerFacingCost(world, cost.ResourceId, cost.Amount)),
             };
             if (WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource))
                 row["spendableAmount"] = new GameMcpDomainValue(
@@ -4831,10 +4862,12 @@ internal static class GameMcpWorldQuery
                 costs.Add(new JObject
                 {
                     ["resourceId"] = cost.ResourceId.ToString("D"),
-                    ["cost"] = new GameMcpDomainValue(cost.Cost),
+                    ["cost"] = new GameMcpDomainValue(
+                        PlayerFacingCost(world, cost.ResourceId, cost.Cost)),
                     ["amount"] = new GameMcpDomainValue(
                         SpendableAmount(world, cost.ResourceId, cost.Amount)),
-                    ["affordable"] = cost.Affordable,
+                    ["affordable"] = CanAfford(
+                        world, cost.ResourceId, cost.Cost, cost.Amount),
                 });
             }
             discover["costs"] = costs;
@@ -4936,12 +4969,15 @@ internal static class GameMcpWorldQuery
                 for (var index = 0; index < costCount; index++)
                 {
                     var cost = world.CraftingDecisionCosts[costStart + index];
+                    var playerCost = PlayerFacingCost(world, cost.ResourceId, cost.Cost);
+                    var spendable = SpendableAmount(world, cost.ResourceId, cost.Amount);
                     exactCosts.Add(new JObject
                     {
                         ["resourceId"] = cost.ResourceId.ToString("D"),
-                        ["cost"] = new GameMcpDomainValue(cost.Cost),
-                        ["amount"] = new GameMcpDomainValue(cost.Amount),
-                        ["affordable"] = cost.Affordable,
+                        ["cost"] = new GameMcpDomainValue(playerCost),
+                        ["amount"] = new GameMcpDomainValue(spendable),
+                        ["affordable"] = CanAfford(
+                            world, cost.ResourceId, cost.Cost, cost.Amount),
                     });
                 }
                 result["nextCosts"] = exactCosts;
@@ -4969,20 +5005,21 @@ internal static class GameMcpWorldQuery
                     ["resourceId"] = resource.ResourceId.ToString("D"),
                 };
                 if (resource.Kind == WorldCraftingRecipeResourceKind.AuthoredInput)
-                    projected["cost"] = new GameMcpDomainValue(resource.Amount);
+                    projected["cost"] = new GameMcpDomainValue(
+                        PlayerFacingCost(world, resource.ResourceId, resource.Amount));
                 else
                     projected["yield"] = new GameMcpDomainValue(resource.Amount);
                 if (resource.ResourceStateAvailable)
                 {
-                    var spendable = resource.BandwidthResource
-                        ? resource.Headroom
-                        : SpendableAmount(world, resource.ResourceId, resource.TrueQuantity);
+                    var spendable = SpendableAmount(
+                        world, resource.ResourceId, resource.TrueQuantity);
                     projected["amount"] = new GameMcpDomainValue(spendable);
                     if (resource.IsCapped)
                         projected["capacity"] = new GameMcpDomainValue(resource.Capacity);
                     if (resource.Kind == WorldCraftingRecipeResourceKind.AuthoredInput)
                     {
-                        projected["affordable"] = spendable.CompareTo(resource.Amount) >= 0;
+                        projected["affordable"] = CanAfford(
+                            world, resource.ResourceId, resource.Amount, resource.TrueQuantity);
                     }
                 }
                 else if (resource.Kind == WorldCraftingRecipeResourceKind.AuthoredInput)

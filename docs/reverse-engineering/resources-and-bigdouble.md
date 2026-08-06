@@ -163,6 +163,25 @@ identity for it would mean reproducing that nine-way mapping.
 
 ## Affordability
 
+### Display and spendability use different native classifiers
+
+Statically verified against the audited v1.0.5 Windows assembly: the resource counter and the
+transaction boundary do not classify resources with the same flag.
+
+- `ResourceSO.GetDisplayQuantity()` calls `IsInvertedResource()`. It returns `GetMissing()` for an
+  inverted resource and `GetQuantity()` otherwise. `UIResourceDisplay.RenderContent()` repeats that
+  choice for `trueQuantity`, then floors the displayed quantity only when
+  `IsBandwidthResource()` is true.
+- `ResourceSO.HasAmount(BigDouble)` branches on the `bandwidthResource` field. Bandwidth delegates
+  to `HasUsageMissing(BigDouble)`; ordinary resources compare the stored `quantity` with
+  `GetTrueSpend(BigDouble)`.
+- `ResourceSO.HasUsageMissing(BigDouble)` compares `GetMissing()` with the nominal cost after both
+  operands pass through `Utils.SnapFloorToInt(BigDouble)`.
+
+The two flags are independent in shipped data. A display amount therefore answers only “what does
+the counter show?”, while a spendable amount answers “what operand does native admission compare?”
+They must retain distinct names rather than sharing one guessed resource-family classifier.
+
 Ordinary resource:
 
 ```text

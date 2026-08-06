@@ -80,6 +80,9 @@ internal readonly struct WorldGlyph : IWorldEntity
 
     internal WorldDiscoverableDecision Discovery { get; }
 
+    /// <summary>The native <c>IDiscoverable.IsDiscovered()</c> fact, distinct from picker availability.</summary>
+    internal bool Discovered => Discovery.Discovered;
+
     internal WorldLevelableDecision LevelDecision { get; }
 }
 
