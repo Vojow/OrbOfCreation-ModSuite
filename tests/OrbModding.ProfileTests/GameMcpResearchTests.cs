@@ -187,6 +187,29 @@ public sealed class GameMcpResearchTests
             (string?)timeout["postStateUnavailable"]!["reason"]);
     }
 
+    [Theory]
+    [InlineData(false, "before was not published and the settled target is developing")]
+    [InlineData(true, "research queue before state was not published")]
+    public void DevelopTimeoutDoesNotInventAnAbsentBeforeState(
+        bool queueMode,
+        string expectedReason)
+    {
+        var before = new GameWorldState();
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Research, 41, 8, "develop", ResearchId, Guid.Empty,
+            "ResearchSO", 2, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 51));
+        var after = World(isDeveloping: true, queueMode: queueMode);
+
+        var timeout = Json(GameMcpPostStateSettlement.TimedOut(
+            command, GameMcpTestHarness.Context(after, generation: 52)), after);
+
+        Assert.Equal("requested_state_not_reached",
+            (string?)timeout["postStateUnavailable"]!["reasonCode"]);
+        Assert.Contains(expectedReason,
+            (string?)timeout["postStateUnavailable"]!["reason"]);
+    }
+
     private static GameWorldState World(
         bool developmentCostAffordable = true,
         double spendableAmount = 80,

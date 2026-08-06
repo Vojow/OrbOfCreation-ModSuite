@@ -233,7 +233,9 @@ internal static class GameMcpEntityExplainer
             {
                 WorldLookup.TryFind(world.Glyphs, id, out var glyph);
                 AddDiscoveryPredicates(result, world, id, glyph.Discovered, glyph.Discoverable);
-                result["available"] = Verdict(glyph.Learned, "prerequisites_unmet");
+                result["available"] = Verdict(
+                    glyph.Learned,
+                    glyph.Discoverable ? "not_discovered" : "prerequisites_unmet");
                 break;
             }
             case EntityKind.Equipment:

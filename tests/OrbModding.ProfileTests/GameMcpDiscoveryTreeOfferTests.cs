@@ -508,7 +508,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                 Assert.Equal("available", (string?)explanation["status"]);
                 Assert.NotNull(explanation["name"]);
                 if (readOffer == secondId)
-                    Assert.Equal("prerequisites_unmet",
+                    Assert.Equal("not_discovered",
                         (string?)explanation["predicates"]!["available"]!["reasonCode"]);
                 else
                     Assert.Null(explanation["predicates"]);
