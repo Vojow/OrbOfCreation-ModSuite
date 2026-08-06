@@ -38,7 +38,6 @@ internal readonly struct WorldCraftingRecipeResource
         BigDouble trueQuantity,
         bool isCapped,
         BigDouble capacity,
-        BigDouble headroom,
         BigDouble usage,
         BigDouble drain)
     {
@@ -52,7 +51,6 @@ internal readonly struct WorldCraftingRecipeResource
         TrueQuantity = trueQuantity;
         IsCapped = isCapped;
         Capacity = capacity;
-        Headroom = headroom;
         Usage = usage;
         Drain = drain;
     }
@@ -67,7 +65,6 @@ internal readonly struct WorldCraftingRecipeResource
     internal BigDouble TrueQuantity { get; }
     internal bool IsCapped { get; }
     internal BigDouble Capacity { get; }
-    internal BigDouble Headroom { get; }
     internal BigDouble Usage { get; }
     internal BigDouble Drain { get; }
 }
@@ -724,7 +721,6 @@ internal static class WorldCraftingRecipeDeriver
                     resource.TrueQuantity,
                     resource.IsCapped,
                     resource.Reading.Capacity,
-                    resource.Headroom,
                     resource.Reading.Usage,
                     resource.Reading.Drain);
             }
@@ -740,7 +736,6 @@ internal static class WorldCraftingRecipeDeriver
                     bandwidthResource: false,
                     BigDouble.Zero,
                     isCapped: false,
-                    BigDouble.Zero,
                     BigDouble.Zero,
                     BigDouble.Zero,
                     BigDouble.Zero);

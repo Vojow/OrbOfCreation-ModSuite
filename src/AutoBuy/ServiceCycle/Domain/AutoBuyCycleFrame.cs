@@ -195,7 +195,6 @@ internal readonly struct AutoBuyResourceRow
         BigDouble effectiveAttributeCost,
         bool hasCapacity,
         BigDouble capacity,
-        BigDouble headroom,
         bool isAvailable)
     {
         ResourceId = resourceId;
@@ -207,7 +206,6 @@ internal readonly struct AutoBuyResourceRow
         EffectiveAttributeCost = effectiveAttributeCost;
         HasCapacity = hasCapacity;
         Capacity = capacity;
-        Headroom = headroom;
         IsAvailable = isAvailable;
     }
 
@@ -219,19 +217,6 @@ internal readonly struct AutoBuyResourceRow
     public BigDouble EffectiveAttributeCost { get; }
     public bool HasCapacity { get; }
     public BigDouble Capacity { get; }
-
-    /// <summary>
-    /// Room left below the ceiling, never negative, and nought for a resource with no ceiling.
-    /// </summary>
-    /// <remarks>
-    /// This is what a bandwidth cost is paid out of. The game charges bandwidth against the gap
-    /// between holdings and the cap rather than against holdings, so a full bandwidth pool affords
-    /// nothing however large it is, and an empty one affords its whole capacity. An uncapped
-    /// bandwidth resource reads nought here and affords nothing, which is the game's own answer:
-    /// its shortfall term is <c>max(maxQuantity - quantity, 0)</c>, and a resource with no maximum
-    /// leaves that at nought.
-    /// </remarks>
-    public BigDouble Headroom { get; }
 
     public bool IsAvailable { get; }
 

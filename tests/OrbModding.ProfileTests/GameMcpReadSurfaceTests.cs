@@ -1612,7 +1612,6 @@ public sealed class GameMcpWorldEnvelopeTests
                     trueQuantity: new BigDouble(80d),
                     isCapped: true,
                     capacity: new BigDouble(100d),
-                    headroom: new BigDouble(20d),
                     usage: new BigDouble(4d),
                     drain: new BigDouble(1.5d)),
             }),

@@ -1311,7 +1311,11 @@ internal sealed class AutomataWorldCollectionCheck
             if (combined == BigDouble.Zero) continue;
             if (!TryFindResource(world, resourceId, out var resource)) return false;
 
-            if (!WorldResourceCoordinate.HasAmount(in resource, combined)) return false;
+            // This side of the differential deliberately mirrors AutoBuyCycleEvaluator's current
+            // exact comparison. The native side applies bandwidth snapping; a difference between
+            // them must remain visible here until the evaluator policy is ruled separately.
+            if (WorldResourceCoordinate.NativeCostAmount(in resource).CompareTo(combined) < 0)
+                return false;
         }
 
         return true;

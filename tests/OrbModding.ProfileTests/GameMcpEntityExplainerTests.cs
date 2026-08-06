@@ -523,7 +523,6 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
                     trueQuantity: new BigDouble(100d),
                     isCapped: true,
                     capacity: new BigDouble(100d),
-                    headroom: new BigDouble(10d),
                     usage: new BigDouble(90d),
                     drain: new BigDouble(2d)),
             }),

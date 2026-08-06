@@ -1169,7 +1169,6 @@ public sealed class AutoBuyCycleEvaluatorTests
                 1.0,
                 hasCapacity: capped,
                 capped ? quantity + headroom : default,
-                headroom,
                 isAvailable: true));
             return _resources.Count - 1;
         }

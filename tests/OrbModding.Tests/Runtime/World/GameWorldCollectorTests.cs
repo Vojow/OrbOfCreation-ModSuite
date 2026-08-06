@@ -400,7 +400,6 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(80d, cost.TrueQuantity.ToDouble());
         Assert.True(cost.IsCapped);
         Assert.Equal(100d, cost.Capacity.ToDouble());
-        Assert.Equal(20d, cost.Headroom.ToDouble());
         Assert.Equal(4d, cost.Usage.ToDouble());
         Assert.Equal(1.5d, cost.Drain.ToDouble());
         var output = Assert.Single(resourceRows, item =>

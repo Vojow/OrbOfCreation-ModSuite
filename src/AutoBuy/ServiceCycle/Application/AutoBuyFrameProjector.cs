@@ -400,7 +400,6 @@ internal static class AutoBuyFrameProjector
             reading.Modifiers.AttributeCostMod,
             resource.IsCapped,
             reading.Capacity,
-            resource.Headroom,
             reading.Visible);
         resourceRowIndex = resourceCount;
         Append(ref resources, resourceCount, row);

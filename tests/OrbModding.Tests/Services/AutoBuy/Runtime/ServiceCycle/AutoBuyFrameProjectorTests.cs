@@ -582,7 +582,6 @@ public sealed class AutoBuyFrameProjectorTests : IDisposable
 
         var row = frame.Resources[frame.Costs[frame.Candidates[0].CostRowStart].ResourceRowIndex];
         Assert.True(row.IsBandwidth);
-        Assert.Equal(40d, row.Headroom.ToDouble());
         Assert.Equal(40d, row.Spendable.ToDouble());
     }
 

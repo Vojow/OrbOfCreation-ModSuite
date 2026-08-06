@@ -4074,7 +4074,7 @@ internal static class GameMcpWorldQuery
             result["capacity"] = new GameMcpDomainValue(resource.Reading.Capacity);
         result["netRatePerSecond"] = new GameMcpDomainValue(resource.TrueRate);
         if (resource.IsCapped)
-            result["atCapacity"] = amount.CompareTo(resource.Reading.Capacity) >= 0;
+            result["atCapacity"] = resource.IsAtCapacity;
         return result.Freeze();
     }
 
