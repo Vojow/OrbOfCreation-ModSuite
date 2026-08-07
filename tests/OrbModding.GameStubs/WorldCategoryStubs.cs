@@ -1084,13 +1084,23 @@ public sealed class BattleManager
     }
 }
 
-public sealed class UIModal : UnityEngine.Object
+public sealed class UIModal : UnityEngine.MonoBehaviour
 {
     private bool isOpen;
     private bool isClosing;
     private float graceTime;
     public TMPro.TextMeshProUGUI modalTitle = new TMPro.TextMeshProUGUI();
+
+    public UIModal()
+    {
+        var root = new UnityEngine.GameObject("Modal");
+        gameObject = root;
+        transform = root.transform;
+        name = root.name;
+    }
+
     public bool SuppressClose { get; set; }
+    public bool SuppressOpen { get; set; }
     public bool IsOpen() => isOpen;
     public void OpenForTest(float grace = 0f, string title = "")
     {
@@ -1104,6 +1114,50 @@ public sealed class UIModal : UnityEngine.Object
     {
         if (!isOpen || isClosing || graceTime > 0f || SuppressClose) return;
         isClosing = true;
+    }
+
+    /// <summary>The visible half of the game's open: the panel's own subtree becomes live.</summary>
+    public void PerformOpen()
+    {
+        if (SuppressOpen) return;
+        isOpen = true;
+        Activate(transform);
+    }
+
+    private static void Activate(UnityEngine.Transform node)
+    {
+        node.gameObject.SetActive(true);
+        for (var index = 0; index < node.childCount; index++) Activate(node.GetChild(index));
+    }
+}
+
+public sealed class UIModalActivator : UnityEngine.MonoBehaviour
+{
+    private readonly UnityEngine.UI.Button button;
+    private readonly UIModal createdModal;
+    private readonly bool modalCreated;
+
+    public UIModalActivator(UIModal modal, string label = "Panel button")
+    {
+        var root = new UnityEngine.GameObject(label);
+        gameObject = root;
+        transform = root.transform;
+        name = label;
+        button = root.AddComponent<UnityEngine.UI.Button>();
+        createdModal = modal;
+        modalCreated = modal is not null;
+    }
+
+    public void SetLiveForTest(bool value)
+    {
+        gameObject.SetActive(value);
+        button.interactable = value;
+    }
+
+    public void OpenModal()
+    {
+        if (!modalCreated) return;
+        createdModal.PerformOpen();
     }
 }
 

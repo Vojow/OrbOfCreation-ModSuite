@@ -1022,7 +1022,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_return_to_menu",
                 "Return to the Start screen",
-                "While playing, invoke the game's Back to Menu button, including its authored manual-save event, and acknowledge after the native screen transition starts but before scene teardown.",
+                "While playing, open the panel that holds the game's Back to Main Menu button if it is shut, invoke that button including its authored manual-save event, and acknowledge after the native screen transition starts but before scene teardown.",
                 ObjectSchema(),
                 readOnly: false,
                 idempotent: false),

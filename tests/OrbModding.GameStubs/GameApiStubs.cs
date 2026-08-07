@@ -1088,6 +1088,13 @@ public class UIBackToMenuButton : UnityEngine.MonoBehaviour
         button.interactable = value;
     }
 
+    /// <summary>The instantiated copy the game parks inside a modal's content area.</summary>
+    public void PlaceInPanelForTest(UIModal panel)
+    {
+        transform.SetParent(panel.transform, false);
+        gameObject.SetActive(false);
+    }
+
     public void BackToMenu()
     {
         if (manualSave is not null) manualSave.Raise();
@@ -3869,6 +3876,13 @@ namespace UnityEngine
         }
 
         public Transform GetChild(int index) => _children[index];
+
+        public bool IsChildOf(Transform candidate)
+        {
+            for (var node = this; node is not null; node = node.parent)
+                if (ReferenceEquals(node, candidate)) return true;
+            return false;
+        }
     }
 
     public class RectTransform : Transform

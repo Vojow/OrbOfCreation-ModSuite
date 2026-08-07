@@ -6,7 +6,7 @@ using OrbModding.Common;
 
 namespace OrbAutomata;
 
-/// <summary>Exact v1.0.5 binding set for the player-visible Back to Menu button.</summary>
+/// <summary>Exact v1.0.5 binding set for the Back to Main Menu button and the panel holding it.</summary>
 internal sealed class ReturnToMenuNativeBindings
 {
     private const BindingFlags Instance =
@@ -27,6 +27,15 @@ internal sealed class ReturnToMenuNativeBindings
         "return-to-menu.game-object-active-action",
         "return-to-menu.selectable-interactable-action",
         "return-to-menu.object-name-action",
+        "return-to-menu.modal.type-action",
+        "return-to-menu.modal-open-action",
+        "return-to-menu.modal-activator.type-action",
+        "return-to-menu.activator-created-modal-action",
+        "return-to-menu.activator-modal-created-action",
+        "return-to-menu.activator-button-component-action",
+        "return-to-menu.activator-open-action",
+        "return-to-menu.component-transform-action",
+        "return-to-menu.transform-child-of-action",
     };
 
     private ReturnToMenuNativeBindings(
@@ -35,7 +44,14 @@ internal sealed class ReturnToMenuNativeBindings
         Func<object?> screenFlash,
         Func<object, bool> flashActive,
         Func<object, bool> controlLive,
-        Func<object, string> controlName)
+        Func<object, string> controlName,
+        Type activatorType,
+        Func<object, bool> panelPrepared,
+        Func<object, object?> panelModal,
+        Func<object, bool> panelOpen,
+        Func<object, bool> panelControlLive,
+        Action<object> openPanel,
+        Func<object, object, bool> panelContains)
     {
         ButtonType = buttonType;
         BackToMenu = backToMenu;
@@ -43,6 +59,13 @@ internal sealed class ReturnToMenuNativeBindings
         FlashActive = flashActive;
         ControlLive = controlLive;
         ControlName = controlName;
+        ActivatorType = activatorType;
+        PanelPrepared = panelPrepared;
+        PanelModal = panelModal;
+        PanelOpen = panelOpen;
+        PanelControlLive = panelControlLive;
+        OpenPanel = openPanel;
+        PanelContains = panelContains;
     }
 
     internal Type ButtonType { get; }
@@ -51,6 +74,15 @@ internal sealed class ReturnToMenuNativeBindings
     internal Func<object, bool> FlashActive { get; }
     internal Func<object, bool> ControlLive { get; }
     internal Func<object, string> ControlName { get; }
+
+    /// <summary>The button component the player clicks to raise a panel, and that panel's state.</summary>
+    internal Type ActivatorType { get; }
+    internal Func<object, bool> PanelPrepared { get; }
+    internal Func<object, object?> PanelModal { get; }
+    internal Func<object, bool> PanelOpen { get; }
+    internal Func<object, bool> PanelControlLive { get; }
+    internal Action<object> OpenPanel { get; }
+    internal Func<object, object, bool> PanelContains { get; }
 
     internal static bool TryCreate(
         out ReturnToMenuNativeBindings? bindings,
@@ -84,20 +116,44 @@ internal sealed class ReturnToMenuNativeBindings
                 typeof(bool), includeContract);
             var objectName = Method(10, typeof(UnityEngine.Object), "get_name",
                 typeof(string), includeContract);
+            Require(11, includeContract);
+            var modal = resolveType("UIModal") ??
+                throw new InvalidOperationException("UIModal was unavailable");
+            var modalOpen = Method(12, modal, "IsOpen", typeof(bool), includeContract);
+            Require(13, includeContract);
+            var activator = resolveType("UIModalActivator") ??
+                throw new InvalidOperationException("UIModalActivator was unavailable");
+            var createdModal = Field(14, activator, "createdModal", modal, false, includeContract);
+            var modalPrepared = Field(15, activator, "modalCreated", typeof(bool), false,
+                includeContract);
+            var activatorButton = Field(16, activator, "button",
+                typeof(UnityEngine.UI.Button), false, includeContract);
+            var openModal = Method(17, activator, "OpenModal", typeof(void), includeContract);
+            var componentTransform = Method(18, typeof(UnityEngine.Component), "get_transform",
+                typeof(UnityEngine.Transform), includeContract);
+            var childOf = Method(19, typeof(UnityEngine.Transform), "IsChildOf", typeof(bool),
+                new[] { typeof(UnityEngine.Transform) }, includeContract);
             bindings = new ReturnToMenuNativeBindings(
                 button,
                 Action(backToMenu),
                 StaticObject(instance),
                 FieldFunc<bool>(active),
                 LiveControl(controlButton, gameObject, enabled, activeInHierarchy, interactable),
-                StringMethod(objectName));
+                StringMethod(objectName),
+                activator,
+                FieldFunc<bool>(modalPrepared),
+                UnityObjectField(createdModal),
+                BoolMethod(modalOpen),
+                LiveControl(activatorButton, gameObject, enabled, activeInHierarchy, interactable),
+                Action(openModal),
+                Contains(componentTransform, childOf));
             reason = string.Empty;
             return true;
         }
         catch (Exception exception) when (exception is ArgumentException or
             InvalidOperationException or AmbiguousMatchException or NotSupportedException)
         {
-            reason = "Back to Menu contracts are unavailable: " +
+            reason = "Back to Main Menu contracts are unavailable: " +
                 exception.GetBaseException().Message;
             return false;
         }
@@ -114,10 +170,19 @@ internal sealed class ReturnToMenuNativeBindings
         Type owner,
         string name,
         Type result,
+        Func<string, bool> include) =>
+        Method(index, owner, name, result, Type.EmptyTypes, include);
+
+    private static MethodInfo Method(
+        int index,
+        Type owner,
+        string name,
+        Type result,
+        Type[] parameters,
         Func<string, bool> include)
     {
         Require(index, include);
-        var method = owner.GetMethod(name, Instance, null, Type.EmptyTypes, null);
+        var method = owner.GetMethod(name, Instance, null, parameters, null);
         if (method is null || method.IsStatic || method.ReturnType != result)
             throw new InvalidOperationException(owner.Name + "." + name + " did not match.");
         return method;
@@ -185,6 +250,39 @@ internal sealed class ReturnToMenuNativeBindings
                                 Expression.Call(buttonGameObject, activeInHierarchy),
                                 Expression.Call(nativeButton, interactable)))))));
         return Expression.Lambda<Func<object, bool>>(body, target).Compile();
+    }
+
+    private static Func<object, bool> BoolMethod(MethodInfo method)
+    {
+        var target = Expression.Parameter(typeof(object), "target");
+        return Expression.Lambda<Func<object, bool>>(
+            Expression.Call(Expression.Convert(target, method.DeclaringType!), method),
+            target).Compile();
+    }
+
+    /// <summary>
+    /// A destroyed Unity reference is not a live panel, and reading through one throws. The field
+    /// answers with the game's own object-lifetime rule instead of a plausible reference.
+    /// </summary>
+    private static Func<object, object?> UnityObjectField(FieldInfo field) =>
+        target => field.GetValue(target) as UnityEngine.Object is { } value && value != null
+            ? value
+            : null;
+
+    private static Func<object, object, bool> Contains(
+        MethodInfo componentTransform,
+        MethodInfo childOf)
+    {
+        var container = Expression.Parameter(typeof(object), "container");
+        var child = Expression.Parameter(typeof(object), "child");
+        var owner = componentTransform.DeclaringType!;
+        return Expression.Lambda<Func<object, object, bool>>(
+            Expression.Call(
+                Expression.Call(Expression.Convert(child, owner), componentTransform),
+                childOf,
+                Expression.Call(Expression.Convert(container, owner), componentTransform)),
+            container,
+            child).Compile();
     }
 
     private static Func<object, string> StringMethod(MethodInfo method)

@@ -22,6 +22,15 @@ public sealed class ReturnToMenuContractTests
             "return-to-menu.game-object-active-action",
             "return-to-menu.selectable-interactable-action",
             "return-to-menu.object-name-action",
+            "return-to-menu.modal.type-action",
+            "return-to-menu.modal-open-action",
+            "return-to-menu.modal-activator.type-action",
+            "return-to-menu.activator-created-modal-action",
+            "return-to-menu.activator-modal-created-action",
+            "return-to-menu.activator-button-component-action",
+            "return-to-menu.activator-open-action",
+            "return-to-menu.component-transform-action",
+            "return-to-menu.transform-child-of-action",
         };
 
         Assert.All(expected, id => Assert.Single(
@@ -46,6 +55,33 @@ public sealed class ReturnToMenuContractTests
         Assert.Equal(
             new byte[] { 0x02, 0x72, 0xcd, 0x3a, 0x00, 0x70, 0x28, 0x00, 0x07, 0x00, 0x06, 0x2a },
             assembly.GetMethodBodyBytes("SaveStateManager", "BackToMainMenu"));
+    }
+
+    /// <summary>
+    /// The panel that holds the control is found by identity, not by caption: its activator names
+    /// the modal it created, and the modal's own transform is what the control hangs under.
+    /// </summary>
+    [GameAssemblyFact]
+    public void PanelActivatorOwnsTheModalItOpensAndOpeningIsOneVisibleCallback()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Equal("UIModal", assembly.GetFieldType("UIModalActivator", "createdModal"));
+        Assert.Equal("System.Boolean", assembly.GetFieldType("UIModalActivator", "modalCreated"));
+        Assert.Equal("UnityEngine.UI.Button", assembly.GetFieldType("UIModalActivator", "button"));
+
+        var open = assembly.GetMethodBodyDefinitionReferences("UIModalActivator", "OpenModal");
+        Assert.Contains(open, reference =>
+            reference.DeclaringType == "UIModalActivator" && reference.MemberName == "modalCreated");
+        Assert.Contains(open, reference =>
+            reference.DeclaringType == "UIModal" && reference.MemberName == "Open");
+
+        // The clone under contentArea is why a closed panel leaves zero live controls and an open
+        // one leaves exactly one.
+        var content = assembly.GetMethodBodyDefinitionReferences(
+            "UIModal", "SetContent", "UnityEngine.RectTransform");
+        Assert.Contains(content, reference =>
+            reference.DeclaringType == "UIModal" && reference.MemberName == "contentArea");
     }
 
     [GameAssemblyFact]

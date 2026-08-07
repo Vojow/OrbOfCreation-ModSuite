@@ -23656,6 +23656,42 @@
       "visibility": "private", "static": false, "valueType": "System.Boolean", "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
     },
     {
+      "id": "return-to-menu.modal.type-action", "assembly": "assembly-csharp", "type": "UIModal", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.modal-open-action", "assembly": "assembly-csharp", "type": "UIModal", "typeVisibility": "public", "kind": "method", "member": "IsOpen",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.modal-activator.type-action", "assembly": "assembly-csharp", "type": "UIModalActivator", "typeVisibility": "public", "kind": "type",
+      "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.activator-created-modal-action", "assembly": "assembly-csharp", "type": "UIModalActivator", "typeVisibility": "public", "kind": "field", "member": "createdModal",
+      "visibility": "private", "static": false, "valueType": "UIModal", "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.activator-modal-created-action", "assembly": "assembly-csharp", "type": "UIModalActivator", "typeVisibility": "public", "kind": "field", "member": "modalCreated",
+      "visibility": "private", "static": false, "valueType": "System.Boolean", "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.activator-button-component-action", "assembly": "assembly-csharp", "type": "UIModalActivator", "typeVisibility": "public", "kind": "field", "member": "button",
+      "visibility": "private", "static": false, "valueType": "UnityEngine.UI.Button", "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.activator-open-action", "assembly": "assembly-csharp", "type": "UIModalActivator", "typeVisibility": "public", "kind": "method", "member": "OpenModal",
+      "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.component-transform-action", "assembly": "unity-engine-core-module", "type": "UnityEngine.Component", "typeVisibility": "public", "kind": "method", "member": "get_transform",
+      "visibility": "public", "static": false, "returnType": "UnityEngine.Transform", "parameters": [], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "return-to-menu.transform-child-of-action", "assembly": "unity-engine-core-module", "type": "UnityEngine.Transform", "typeVisibility": "public", "kind": "method", "member": "IsChildOf",
+      "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": ["UnityEngine.Transform"], "owners": ["Automata return-to-menu GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
       "id": "modal-dismiss.resources.type-action", "assembly": "unity-engine-core-module", "type": "UnityEngine.Resources", "typeVisibility": "public", "kind": "type",
       "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
     },

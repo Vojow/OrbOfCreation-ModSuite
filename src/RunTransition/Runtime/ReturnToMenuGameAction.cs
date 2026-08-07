@@ -5,7 +5,7 @@ using OrbModding.Common;
 
 namespace OrbAutomata;
 
-/// <summary>Unity-main-thread boundary for the native Back to Menu control.</summary>
+/// <summary>Unity-main-thread boundary for the native Back to Main Menu control.</summary>
 internal sealed class ReturnToMenuGameAction : IDisposable
 {
     private readonly Func<long> _readLifecycleEpoch;
@@ -46,7 +46,7 @@ internal sealed class ReturnToMenuGameAction : IDisposable
     {
         if (Environment.CurrentManagedThreadId != _mainThreadId)
             return Reject(ReturnToMenuPreflight.WrongThread,
-                "Back to Menu is bound to Unity thread " + _mainThreadId + ".");
+                "Back to Main Menu is bound to Unity thread " + _mainThreadId + ".");
         if (_bindings is not { } native)
             return Reject(ReturnToMenuPreflight.ContractUnavailable, _bindingFailure);
         long epoch;
@@ -65,7 +65,8 @@ internal sealed class ReturnToMenuGameAction : IDisposable
             var scene = _readScene();
             if (!string.Equals(scene, "Main", StringComparison.Ordinal))
                 return Reject(ReturnToMenuPreflight.WrongScene,
-                    "Back to Menu is available while playing; the current scene is " + scene + ".");
+                    "Back to Main Menu is available while playing; the current scene is " +
+                    scene + ".");
             var flash = native.ScreenFlash();
             if (flash is null)
                 return Reject(ReturnToMenuPreflight.ContractUnavailable,
@@ -74,21 +75,41 @@ internal sealed class ReturnToMenuGameAction : IDisposable
                 return Reject(ReturnToMenuPreflight.TransitionInProgress,
                     "The game is already changing screens.");
             var buttons = _findLoadedObjects(native.ButtonType) ?? Array.Empty<object>();
-            var live = new List<object>(buttons.Length);
+            var loaded = new List<object>(buttons.Length);
             for (var index = 0; index < buttons.Length; index++)
             {
                 var candidate = buttons[index];
-                if (candidate is not null && native.ButtonType.IsInstanceOfType(candidate) &&
-                    native.ControlLive(candidate))
-                    live.Add(candidate);
+                if (candidate is not null && native.ButtonType.IsInstanceOfType(candidate))
+                    loaded.Add(candidate);
             }
-            if (live.Count != 1)
+            var live = LiveControls(native, loaded);
+            if (live.Count > 1) return Ambiguous(native, live);
+            if (live.Count == 0)
             {
-                return Reject(ReturnToMenuPreflight.ControlUnavailable,
-                    live.Count == 0
-                        ? "The game has no visible, interactable Back to Menu control."
-                        : "The game has more than one visible, interactable Back to Menu control: " +
-                          string.Join(", ", live.ConvertAll(value => native.ControlName(value))) + ".");
+                // The player does not reach this control from the board: they open the panel that
+                // holds it and then press it. Refusing because the panel is shut would refuse the
+                // ordinary case, so the action performs the same two steps.
+                if (!TryFindClosedPanel(native, loaded, out var panel, out var panelReason))
+                    return Reject(ReturnToMenuPreflight.ControlUnavailable, panelReason);
+                if (!_tryCaptureMutationPermit())
+                    return Reject(ReturnToMenuPreflight.MutationPermitUnavailable,
+                        _readOwnershipFailure());
+                native.OpenPanel(panel!);
+                if (native.PanelModal(panel!) is not { } opened || !native.PanelOpen(opened))
+                {
+                    return Reject(ReturnToMenuPreflight.ControlUnavailable,
+                        "The game's panel did not open, so its Back to Main Menu control is still " +
+                        "out of reach.");
+                }
+                live = LiveControls(native, loaded);
+                if (live.Count > 1) return Ambiguous(native, live);
+                if (live.Count == 0)
+                {
+                    return Reject(ReturnToMenuPreflight.ControlUnavailable,
+                        "The game's panel is now open and was not closed again, and it shows no " +
+                        "interactable Back to Main Menu control.");
+                }
+                return Execute(native, live[0], flash);
             }
             if (!_tryCaptureMutationPermit())
                 return Reject(ReturnToMenuPreflight.MutationPermitUnavailable,
@@ -98,7 +119,7 @@ internal sealed class ReturnToMenuGameAction : IDisposable
         catch (Exception exception) when (IsExpected(exception))
         {
             return Reject(ReturnToMenuPreflight.ContractUnavailable,
-                "Back to Menu preflight failed before transition: " +
+                "Back to Main Menu preflight failed before transition: " +
                 exception.GetBaseException().Message);
         }
     }
@@ -137,9 +158,68 @@ internal sealed class ReturnToMenuGameAction : IDisposable
             if (native.FlashActive(flash)) return Verified();
             return Fault(ReturnToMenuPreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew,
-                "The native Back to Menu callback threw before the screen transition started: " +
+                "The native Back to Main Menu callback threw before the screen transition started: " +
                 exception.GetBaseException().Message);
         }
+    }
+
+    private static List<object> LiveControls(
+        ReturnToMenuNativeBindings native,
+        List<object> loaded)
+    {
+        var live = new List<object>(loaded.Count);
+        for (var index = 0; index < loaded.Count; index++)
+            if (native.ControlLive(loaded[index])) live.Add(loaded[index]);
+        return live;
+    }
+
+    private static ReturnToMenuSubmission Ambiguous(
+        ReturnToMenuNativeBindings native,
+        List<object> live) =>
+        Reject(ReturnToMenuPreflight.ControlUnavailable,
+            "The game has more than one visible, interactable Back to Main Menu control: " +
+            string.Join(", ", live.ConvertAll(value => native.ControlName(value))) + ".");
+
+    /// <summary>
+    /// The one shut panel whose own button the player can press and whose content holds a Back to
+    /// Main Menu control. Identity, not a label: the panel is the one that actually contains the
+    /// control, so no authored caption can move it out of reach.
+    /// </summary>
+    private bool TryFindClosedPanel(
+        ReturnToMenuNativeBindings native,
+        List<object> buttons,
+        out object? panel,
+        out string reason)
+    {
+        panel = null;
+        var loaded = _findLoadedObjects(native.ActivatorType) ?? Array.Empty<object>();
+        var candidates = new List<object>();
+        for (var index = 0; index < loaded.Length; index++)
+        {
+            var candidate = loaded[index];
+            if (candidate is null || !native.ActivatorType.IsInstanceOfType(candidate)) continue;
+            if (!native.PanelPrepared(candidate)) continue;
+            if (native.PanelModal(candidate) is not { } modal) continue;
+            if (native.PanelOpen(modal) || !native.PanelControlLive(candidate)) continue;
+            for (var button = 0; button < buttons.Count; button++)
+            {
+                if (!native.PanelContains(modal, buttons[button])) continue;
+                candidates.Add(candidate);
+                break;
+            }
+        }
+        if (candidates.Count == 1)
+        {
+            panel = candidates[0];
+            reason = string.Empty;
+            return true;
+        }
+        reason = candidates.Count == 0
+            ? "The game has no visible, interactable Back to Main Menu control, and no closed " +
+              "panel the player can open to reach one."
+            : "More than one closed panel offers a Back to Main Menu control: " +
+              string.Join(", ", candidates.ConvertAll(value => native.ControlName(value))) + ".";
+        return false;
     }
 
     private static ReturnToMenuSubmission Reject(
