@@ -846,8 +846,9 @@ exact-amount over-ask.
 A field or collection is absent when the suite did not collect it, and the response says so with a
 named `…Unavailable` fact rather than by silence. A collection that was collected and is genuinely
 empty is present and empty. `internalName` is present exactly when the asset name differs from the
-display name, and one entity spells its identity the same way whether it appears as a row or as a
-reference from another row's field.
+display name, on a row and on a reference from another row's field alike; a reference carries UUID,
+name, and that conditional `internalName`, while a row adds the classifying facts a row needs
+(`nameSource`, `nativeType`, `category`).
 
 A committed purchase reports what it paid: `game_purchase` carries `paid[]`, and a mutation that was
 never admitted against a price — the free `game_structure` toggle on the same priced attribute —
