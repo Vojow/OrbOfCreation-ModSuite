@@ -2861,10 +2861,12 @@ public sealed class Plugin : BaseUnityPlugin
             CompleteGameMcpCommand(command, failure);
             yield break;
         }
-        // Native tab selection changes the active content hierarchy during the next Unity frame.
-        // Waiting here makes a compound tab/subtab/plot request one real navigation operation instead
-        // of requiring the caller to retry after the first control becomes active.
-        yield return null;
+        // Native tab selection changes the active content hierarchy over the following frames.
+        // Resolving a subtab against a half-built hierarchy is what made one screen's strip match a
+        // name that belongs to another: the candidates the matcher searched were not the ones the
+        // catalog advertises for the screen the caller asked for.
+        var settledScreen = new bool[1];
+        yield return SettleNavigation(settledScreen);
 
         if (subtabSelector is not null)
         {
@@ -2879,7 +2881,7 @@ public sealed class Plugin : BaseUnityPlugin
                     command,
                     NavigationRefusal(
                         "subtab_match_failed",
-                        subtabReason,
+                        SubtabRefusalReason(details, subtabReason, settledScreen[0]),
                         details,
                         "subtabCandidates",
                         subtabs.Select(candidate => candidate.Label)),
@@ -2925,10 +2927,11 @@ public sealed class Plugin : BaseUnityPlugin
             capture: command.Capture);
     }
 
-    private IEnumerator CompleteNavigateGameMcpAfterSettlement(
-        GameMcpCommand command,
-        GameMcpCommandResult result,
-        bool capture = false)
+    /// <summary>
+    /// Runs until the navigation shell reports the same screen and strips two frames running, or
+    /// until one second has passed. <paramref name="settled"/>'s single slot records which it was.
+    /// </summary>
+    private IEnumerator SettleNavigation(bool[] settled)
     {
         var deadline = Time.realtimeSinceStartup + 1f;
         var stableFrames = 0;
@@ -2942,8 +2945,18 @@ public sealed class Plugin : BaseUnityPlugin
                 : 0;
             previous = current;
         }
+        settled[0] = stableFrames >= 2;
+    }
+
+    private IEnumerator CompleteNavigateGameMcpAfterSettlement(
+        GameMcpCommand command,
+        GameMcpCommandResult result,
+        bool capture = false)
+    {
+        var settled = new bool[1];
+        yield return SettleNavigation(settled);
         if (string.Equals(result.Status, "committed", StringComparison.Ordinal) &&
-            stableFrames < 2)
+            !settled[0])
         {
             result = GadgetCommitted(
                 "navigation_arrived",
@@ -3436,6 +3449,22 @@ public sealed class Plugin : BaseUnityPlugin
             observedLifecycleGeneration: _lifecycleGeneration,
             observedConfigurationGeneration:
                 _configurationStore?.CurrentGeneration.Value ?? 0);
+
+    /// <summary>
+    /// A navigate that reached the requested screen and then failed on its subtab moved the board.
+    /// The sentence says so, because a bare "refused" reads as "nothing happened" and the caller's
+    /// next read finds a screen it did not ask to be on.
+    /// </summary>
+    private static string SubtabRefusalReason(
+        GameMcpObjectBuilder details,
+        string subtabReason,
+        bool settled)
+    {
+        var arrived = settled
+            ? "The requested screen is now active"
+            : "The requested screen was selected but did not settle within one second";
+        return arrived + " and was not left; " + subtabReason + ".";
+    }
 
     private GameMcpCommandResult NavigationRefusal(
         string code,
