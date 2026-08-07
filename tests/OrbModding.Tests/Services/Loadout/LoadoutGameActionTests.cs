@@ -75,6 +75,38 @@ public sealed class LoadoutGameActionTests : IDisposable
     }
 
     [Fact]
+    public void SelectAdmitsASavedLoadoutTheGameItselfNeverInspects()
+    {
+        var current = Player("Current", selected: true);
+        var target = Player("Overloaded");
+        var glyph = new GlyphSO
+        {
+            DisplayName = "Psionic",
+            level = 0,
+            discovered = false,
+            NativeAvailable = false,
+            maxUsages = new ValueModifierRecord(new BigDouble(1)),
+        };
+        glyph.SetGuid(Guid.NewGuid());
+        var recipe = new SpellRecipeSO { discovered = true };
+        recipe.uuid = Guid.NewGuid().ToString("D");
+        recipe.coreRecipe.Add(glyph);
+        IdScriptableObject.RuntimeLookup[glyph.GetGuid()] = glyph;
+        IdScriptableObject.RuntimeLookup[recipe.GetGuid()] = recipe;
+        SpellRecipeSO.All.Add(recipe);
+        for (var index = 0; index <= LoadoutManager.instance.activeSpells.Maximum; index++)
+            target.spells.Add(new Spell(recipe));
+        LoadoutManager.instance.playerLoadouts.value.Add(current);
+        LoadoutManager.instance.playerLoadouts.value.Add(target);
+        using var boundary = Boundary();
+
+        var result = Submit(boundary, target.GetGuid(), LoadoutActionKind.Select);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.True(target.IsSelected());
+    }
+
+    [Fact]
     public void SelectNoOpFailsTheSingleGameWrittenSentinel()
     {
         var current = Player("Current", selected: true);
@@ -222,14 +254,12 @@ public sealed class LoadoutGameActionTests : IDisposable
     {
         var resolve = new Func<string, Type?>(name => typeof(LoadoutManager).Assembly.GetTypes()
             .FirstOrDefault(type => type.Name == name || type.FullName == name));
-        var spells = new SpellWorkbenchGameAction(() => Epoch, static () => true,
-            static () => "spell ownership unavailable", resolve);
         var equipment = new EquipmentLoadoutGameAction(() => Epoch, static () => true,
             static () => "Equipment ownership unavailable", resolve);
         var alchemy = new AlchemyLoadoutGameAction(() => Epoch, static () => true,
             static () => "Alchemy ownership unavailable", resolve);
         var result = new LoadoutGameAction(() => Epoch, static () => true,
-            static () => "loadout ownership unavailable", spells, equipment, alchemy,
+            static () => "loadout ownership unavailable", equipment, alchemy,
             resolve, include);
         if (include is null) Assert.True(result.BindingsAvailable, result.BindingFailure);
         return result;

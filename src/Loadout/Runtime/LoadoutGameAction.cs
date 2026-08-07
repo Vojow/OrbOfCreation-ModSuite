@@ -13,7 +13,6 @@ internal sealed class LoadoutGameAction : IDisposable
     private readonly Func<long> _readLifecycleEpoch;
     private readonly Func<bool> _tryCaptureMutationPermit;
     private readonly Func<string> _readOwnershipFailure;
-    private readonly SpellWorkbenchGameAction _spells;
     private readonly EquipmentLoadoutGameAction _equipment;
     private readonly AlchemyLoadoutGameAction _alchemy;
     private readonly Func<string, Type?>? _resolveType;
@@ -24,14 +23,13 @@ internal sealed class LoadoutGameAction : IDisposable
 
     internal LoadoutGameAction(Func<long> readLifecycleEpoch,
         Func<bool> tryCaptureMutationPermit, Func<string> readOwnershipFailure,
-        SpellWorkbenchGameAction spells, EquipmentLoadoutGameAction equipment,
+        EquipmentLoadoutGameAction equipment,
         AlchemyLoadoutGameAction alchemy, Func<string, Type?>? resolveType = null,
         Func<string, bool>? includeContract = null)
     {
         _readLifecycleEpoch = readLifecycleEpoch ?? throw new ArgumentNullException(nameof(readLifecycleEpoch));
         _tryCaptureMutationPermit = tryCaptureMutationPermit ?? throw new ArgumentNullException(nameof(tryCaptureMutationPermit));
         _readOwnershipFailure = readOwnershipFailure ?? throw new ArgumentNullException(nameof(readOwnershipFailure));
-        _spells = spells ?? throw new ArgumentNullException(nameof(spells));
         _equipment = equipment ?? throw new ArgumentNullException(nameof(equipment));
         _alchemy = alchemy ?? throw new ArgumentNullException(nameof(alchemy));
         _resolveType = resolveType;
@@ -81,11 +79,12 @@ internal sealed class LoadoutGameAction : IDisposable
                     if (native.PlayerSelected(target!))
                         return Reject(LoadoutPreflight.AlreadyInRequestedState,
                             native.PlayerName(target!) + " is already selected.");
+                    // The game's whole admission for a swap is CanSwapLoadouts() plus the
+                    // same-index early return above; LoadLoadout and SwapOnLoadout validate
+                    // nothing. The suite does not get to be stricter than the transaction.
                     if (!native.CanSwap(manager))
                         return Reject(LoadoutPreflight.SwitchBlocked,
                             "Finish casting or readying the active spell before switching loadouts.");
-                    if (!TryValidatePlayer(native, manager, target!, out var reason))
-                        return Reject(LoadoutPreflight.EntryUnavailable, reason);
                 }
                 else
                 {
@@ -259,43 +258,6 @@ internal sealed class LoadoutGameAction : IDisposable
         }
     }
 
-    private bool TryValidatePlayer(LoadoutNativeBindings native, object manager,
-        object player, out string reason)
-    {
-        reason = string.Empty;
-        var targetTotal = native.CreateCost();
-        var currentTotal = native.CreateCost();
-        var targetSpells = native.PlayerSpells(player);
-        var activeSpells = native.ActiveSpells(manager);
-        if (targetSpells is null || activeSpells is null ||
-            !TryValidateSpells(native, targetSpells, activeSpells,
-                out var target, out var current, out reason)) return false;
-        targetTotal = native.AddCost(targetTotal, target);
-        currentTotal = native.AddCost(currentTotal, current);
-
-        if (native.EquipmentEnabled(player))
-        {
-            var record = native.PlayerEquipmentRecord(player);
-            var list = native.ActiveEquipment(manager);
-            if (record is null || list is null ||
-                !TryValidateEquipment(native, record, list,
-                    out target, out current, out reason)) return false;
-            targetTotal = native.AddCost(targetTotal, target);
-            currentTotal = native.AddCost(currentTotal, current);
-        }
-        if (native.AlchemyEnabled(player))
-        {
-            var record = native.PlayerAlchemyRecord(player);
-            var list = native.ActiveAlchemy(manager);
-            if (record is null || list is null ||
-                !TryValidateAlchemy(native, record, list,
-                    out target, out current, out reason)) return false;
-            targetTotal = native.AddCost(targetTotal, target);
-            currentTotal = native.AddCost(currentTotal, current);
-        }
-        return UsageFits(native, targetTotal, currentTotal, "saved loadout", out reason);
-    }
-
     private bool TryValidateActive(LoadoutNativeBindings native, object manager,
         bool alchemy, out string reason)
     {
@@ -343,51 +305,6 @@ internal sealed class LoadoutGameAction : IDisposable
         }
         reason = "The " + subject + " exceeds the resources currently available for usage.";
         return false;
-    }
-
-    private bool TryValidateSpells(LoadoutNativeBindings native, IList target,
-        object activeList, out object targetCost, out object currentCost, out string reason)
-    {
-        reason = string.Empty;
-        targetCost = native.CreateCost();
-        currentCost = native.CreateCost();
-        var occupied = 0;
-        var unique = new HashSet<Guid>();
-        for (var index = 0; index < target.Count; index++)
-        {
-            var spell = target[index];
-            if (spell is null || spell.GetType() != native.SpellType || native.SpellEmpty(spell)) continue;
-            occupied++;
-            if (!_spells.TryValidateStoredSpell(spell, out _, out var recipeId,
-                    out var cost, out var isUnique, out reason,
-                    requireOwnedGlyphs: false) || cost is null) return false;
-            if (isUnique && !unique.Add(recipeId))
-            {
-                reason = EntityIdentityFormatter.Format(recipeId) +
-                    " is unique and appears more than once in the saved loadout.";
-                return false;
-            }
-            targetCost = native.AddCost(targetCost, cost);
-        }
-        var maximum = native.SpellMaximum(activeList);
-        if (occupied > maximum)
-        {
-            reason = "The saved spell loadout uses " + occupied +
-                " slots, but only " + maximum + " are available.";
-            return false;
-        }
-        var active = native.SpellValues(activeList);
-        for (var index = 0; index < (active?.Count ?? 0); index++)
-        {
-            var spell = active![index];
-            if (spell is null || spell.GetType() != native.SpellType || native.SpellEmpty(spell)) continue;
-            if (!_spells.TryValidateStoredSpell(spell, out _, out _,
-                    out var cost, out _, out reason,
-                    requireOwnedGlyphs: false) || cost is null) return false;
-            currentCost = native.AddCost(currentCost, cost);
-        }
-        reason = string.Empty;
-        return true;
     }
 
     private bool TryValidateEquipment(LoadoutNativeBindings native, object record,

@@ -1228,7 +1228,14 @@ internal static class GameMcpWorldQuery
                 ["color"] = loadout.Color,
             },
         };
-        if (!loadout.Selected) result["canSelect"] = loadout.CanSwitchNow;
+
+        // One predicate serves the read and the mutation: CanSwapLoadouts() is the game's whole
+        // admission for a swap, so a false read carries the code select itself would return.
+        if (!loadout.Selected)
+        {
+            result["canSelect"] = loadout.CanSwitchNow;
+            if (!loadout.CanSwitchNow) result["reasonCode"] = "switch_blocked";
+        }
         return result.Freeze();
     }
 

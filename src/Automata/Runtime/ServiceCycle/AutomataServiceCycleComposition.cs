@@ -33,7 +33,7 @@ internal static class AutomataServiceCycleComposition
         Func<GenericLevelGameAction>? createGenericLevel = null,
         Func<CraftingStationGameAction>? createCraftingStations = null,
         Func<CraftingInstanceLifecycleGameAction>? createCraftingInstances = null,
-        Func<SpellWorkbenchGameAction, EquipmentLoadoutGameAction,
+        Func<EquipmentLoadoutGameAction,
             AlchemyLoadoutGameAction, LoadoutGameAction>? createLoadouts = null,
         Func<HarvestLifecycleGameAction>? createHarvestLifecycle = null,
         Func<PlotLifecycleGameAction>? createPlotLifecycle = null,
@@ -106,7 +106,7 @@ internal static class AutomataServiceCycleComposition
         Func<GenericLevelGameAction>? createGenericLevel = null,
         Func<CraftingStationGameAction>? createCraftingStations = null,
         Func<CraftingInstanceLifecycleGameAction>? createCraftingInstances = null,
-        Func<SpellWorkbenchGameAction, EquipmentLoadoutGameAction,
+        Func<EquipmentLoadoutGameAction,
             AlchemyLoadoutGameAction, LoadoutGameAction>? createLoadouts = null,
         Func<HarvestLifecycleGameAction>? createHarvestLifecycle = null,
         Func<PlotLifecycleGameAction>? createPlotLifecycle = null,
@@ -212,10 +212,10 @@ internal static class AutomataServiceCycleComposition
             craftingInstances = createCraftingInstances?.Invoke();
             if (createLoadouts is not null)
             {
-                if (spellWorkbench is null || equipmentLoadout is null || alchemyLoadout is null)
+                if (equipmentLoadout is null || alchemyLoadout is null)
                     throw new InvalidOperationException(
-                        "The player-loadout action requires spell, Equipment, and Alchemy actions.");
-                loadouts = createLoadouts(spellWorkbench, equipmentLoadout, alchemyLoadout);
+                        "The player-loadout action requires Equipment and Alchemy actions.");
+                loadouts = createLoadouts(equipmentLoadout, alchemyLoadout);
             }
             harvestLifecycle = createHarvestLifecycle?.Invoke();
             plotLifecycle = createPlotLifecycle?.Invoke();

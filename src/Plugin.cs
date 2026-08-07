@@ -621,7 +621,7 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .ScribeOwnershipFailure)
-                    , createLoadouts: (spells, equipment, alchemy) => new LoadoutGameAction(
+                    , createLoadouts: (equipment, alchemy) => new LoadoutGameAction(
                         readAutoHarvestLifecycleEpoch,
                         tryCaptureMutationPermit: () =>
                             _automataActionFamilyOwnership!
@@ -629,7 +629,6 @@ public sealed class Plugin : BaseUnityPlugin
                         readOwnershipFailure: () =>
                             _automataActionFamilyOwnership!
                                 .PlayerLoadoutOwnershipFailure,
-                        spells,
                         equipment,
                         alchemy)
                     , createHarvestLifecycle: () => new HarvestLifecycleGameAction(
