@@ -1101,8 +1101,7 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
                 cost.ResourceId, world.EntityIdentities);
             shortfalls.Add((
                 resource.HasName ? resource.Name : cost.ResourceId.ToString("D"),
-                GameMcpWorldQuery.PlayerFacingCost(
-                    world, cost.ResourceId, cost.CombinedEffectiveAmount),
+                GameMcpWorldQuery.AdmittedCost(world, in cost),
                 GameMcpWorldQuery.SpendableAmount(
                     world, cost.ResourceId, cost.AvailableAmount)));
         }

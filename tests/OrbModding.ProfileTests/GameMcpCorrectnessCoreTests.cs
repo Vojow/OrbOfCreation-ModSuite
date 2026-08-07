@@ -628,12 +628,17 @@ public sealed class GameMcpCorrectnessCoreTests
         Assert.Equal("633", (string?)delta["committedLevel"]!["after"]);
         var paid = Assert.IsType<JObject>(Assert.Single(delta["paid"]!.Values<JObject>()));
         Assert.Equal("Glyph Upgrades", (string?)paid["resource"]!["name"]);
-        Assert.Equal("2", (string?)paid["amount"]);
+        Assert.Equal("2", (string?)paid["cost"]);
         Assert.Equal("108", (string?)paid["remaining"]);
+        Assert.Null(paid["amount"]);
     }
 
+    /// <summary>
+    /// An idle game's income routinely outruns a price between admission and settlement. The price
+    /// is what the action was admitted at, so it survives a settled balance that went up.
+    /// </summary>
     [Fact]
-    public void APurchaseThatSpentNothingObservableReportsOnlyWhatIsLeft()
+    public void APurchaseWhoseIncomeOutranItsPriceStillNamesThePriceItWasAdmittedAt()
     {
         var attributeId = Guid.Parse("f2000000-0000-0000-0000-000000000005");
         var resourceId = Guid.Parse("f2000000-0000-0000-0000-000000000006");
@@ -685,8 +690,63 @@ public sealed class GameMcpCorrectnessCoreTests
             GameMcpCommandResult.Committed("committed", 9, 3)));
 
         var paid = Assert.IsType<JObject>(Assert.Single(delta["paid"]!.Values<JObject>()));
-        Assert.Null(paid["amount"]);
+        Assert.Equal("2", (string?)paid["cost"]);
         Assert.Equal("130", (string?)paid["remaining"]);
+    }
+
+    /// <summary>
+    /// Enabling or disabling an attribute is free. It targets a priced entity, so a cost-row test is
+    /// the wrong gate: only an action admitted against a price it charges reports one.
+    /// </summary>
+    [Fact]
+    public void AFreeStructureToggleReportsNoPrice()
+    {
+        var attributeId = Guid.Parse("f2000000-0000-0000-0000-000000000007");
+        var resourceId = Guid.Parse("f2000000-0000-0000-0000-000000000008");
+        var before = new GameWorldState
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 632),
+            }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                Stock(resourceId, 110),
+            }),
+            PurchaseCosts = PublicationTable<WorldPurchaseCost>.Create(new[]
+            {
+                new WorldPurchaseCost(attributeId, resourceId, new BigDouble(2)),
+            }),
+        };
+        var command = new GameMcpCommand(
+            1,
+            GameMcpCommandKind.StructureLifecycle,
+            expectedLifecycleGeneration: 9,
+            expectedConfigurationGeneration: 3,
+            mode: "disable",
+            targetId: attributeId,
+            secondaryId: Guid.Empty,
+            derivedNativeType: "StructureSO",
+            amount: 1,
+            payloadKey: string.Empty,
+            payloadValue: string.Empty,
+            capture: false,
+            saveCapture: false,
+            frameContext: GameMcpTestHarness.Context(before));
+        var after = before with
+        {
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                Stock(resourceId, 40),
+            }),
+        };
+
+        var delta = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3)));
+
+        Assert.Null(delta["paid"]);
     }
 
     private static WorldResource Stock(Guid id, double quantity)

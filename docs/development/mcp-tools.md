@@ -849,11 +849,13 @@ empty is present and empty. `internalName` is present exactly when the asset nam
 display name, and one entity spells its identity the same way whether it appears as a row or as a
 reference from another row's field.
 
-A committed purchase-shaped mutation reports what it paid. `paid[]` carries, per resource its own
-price named, the `resource` identity, `remaining` from the settled world, and `amount` — the
-decrease between the world the action was admitted from and the settled world. Both are readings;
-`amount` is absent for a resource the settled world does not show lower, because no payment was
-observed for it.
+A committed purchase reports what it paid: `game_purchase` carries `paid[]`, and a mutation that was
+never admitted against a price — the free `game_structure` toggle on the same priced attribute —
+does not. Per resource the price named, `paid[]` carries the `resource` identity, `cost` — the price
+the action was admitted at, the same number that resource's cost row showed, charged by the game's
+own transaction — and `remaining`, read from the settled world. There is no delta field: the
+difference between two worlds also contains every income stream and every other spender in that
+window, so it is not a price and is not computed.
 
 JSON tool data is emitted once in `structuredContent`; `content` appears only for actual inline media
 such as screenshots, and success omits the false `isError` default. The server does not repeat the

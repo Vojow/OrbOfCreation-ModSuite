@@ -641,17 +641,20 @@ internal static class GameMcpWorldQuery
         WithPaid(state, command, ProjectChangedFact(state, command, committed));
 
     /// <summary>
-    /// What the committed mutation was observed to pay. Both numbers are readings the suite took:
-    /// the decrease between the world the action was admitted from and the settled world, and what
-    /// the settled world leaves. A resource its price named that the settled world does not show
-    /// lower carries only the remainder, because no payment was observed for it.
+    /// What a committed purchase cost and what the settled world leaves. <c>cost</c> is the price the
+    /// action was admitted at — the same admission-capture number the caller's cost row and the
+    /// unaffordable sentence read — because the game owns charging it; <c>remaining</c> is read from
+    /// the settled world. Neither is derived by subtracting one world from another: an income stream
+    /// or a second spender in the same window would land in that difference.
     /// </summary>
     private static GameMcpValue WithPaid(
         GameMcpFrameContext state,
         GameMcpCommand command,
         GameMcpValue projected)
     {
-        if (state.World is null) return projected;
+        // Only a purchase is admitted against a price it then charges. Every other kind reaching a
+        // priced target — the free game_structure toggle above all — pays nothing for it.
+        if (state.World is null || command.Kind != GameMcpCommandKind.Purchase) return projected;
         var before = Before(command);
         if (before is null) return projected;
         var after = state.World.Snapshot;
@@ -661,17 +664,14 @@ internal static class GameMcpWorldQuery
         var paid = new JArray();
         for (var index = start; index < start + count; index++)
         {
-            var resourceId = before.PurchaseCosts[index].ResourceId;
-            var settled = SpendableAmount(after, resourceId, BigDouble.Zero);
-            var row = new JObject
+            var cost = before.PurchaseCosts[index];
+            paid.Add(new JObject
             {
-                ["resource"] = resourceId.ToString("D"),
-                ["remaining"] = new GameMcpDomainValue(settled),
-            };
-            var admitted = SpendableAmount(before, resourceId, BigDouble.Zero);
-            if (admitted > settled)
-                row["amount"] = new GameMcpDomainValue(admitted - settled);
-            paid.Add(row);
+                ["resource"] = cost.ResourceId.ToString("D"),
+                ["cost"] = new GameMcpDomainValue(AdmittedCost(before, in cost)),
+                ["remaining"] = new GameMcpDomainValue(
+                    SpendableAmount(after, cost.ResourceId, BigDouble.Zero)),
+            });
         }
         if (paid.Count == 0) return projected;
         var result = new JObject();
@@ -5067,6 +5067,19 @@ internal static class GameMcpWorldQuery
         result["discover"] = discover;
     }
 
+    /// <summary>
+    /// The price one cost row asks in the player's own units, straight from the capture the action
+    /// is admitted against. The published cost row, the unaffordable sentence, and a committed
+    /// purchase's <c>paid[]</c> all read this one expression, so they cannot disagree.
+    /// </summary>
+    internal static BigDouble AdmittedCost(GameWorldState world, in WorldPurchaseCost cost) =>
+        PlayerFacingCost(
+            world,
+            cost.ResourceId,
+            cost.AffordabilityEvaluated
+                ? cost.CombinedEffectiveAmount
+                : cost.EffectiveExactAmount);
+
     internal static JObject ProjectPurchaseCost(
         GameWorldState world,
         in WorldPurchaseCost cost)
@@ -5074,12 +5087,7 @@ internal static class GameMcpWorldQuery
         var result = new JObject
         {
             ["resourceId"] = cost.ResourceId.ToString("D"),
-            ["cost"] = new GameMcpDomainValue(PlayerFacingCost(
-                world,
-                cost.ResourceId,
-                cost.AffordabilityEvaluated
-                    ? cost.CombinedEffectiveAmount
-                    : cost.EffectiveExactAmount)),
+            ["cost"] = new GameMcpDomainValue(AdmittedCost(world, in cost)),
         };
         if (cost.AffordabilityEvaluated)
         {
