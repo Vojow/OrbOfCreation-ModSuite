@@ -396,14 +396,16 @@ internal sealed class GameMcpCommandResult
             };
         }
 
+        // One vocabulary everywhere: `reason` is the prose, `reasonCode` is the machine name, and a
+        // success carries neither — it would only restate its own status word.
         var projected = new GameMcpObjectBuilder
         {
             ["status"] = status,
-            ["code"] = stableCode,
         };
         var succeeded = status is "committed" or "available";
         if (!succeeded)
         {
+            projected["reasonCode"] = stableCode;
             projected["reason"] = Reason;
             if (command.TargetId != Guid.Empty)
                 projected["uuid"] = command.TargetId.ToString("D");

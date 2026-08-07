@@ -79,17 +79,16 @@ internal static class GameMcpEntityWireNormalizer
                 _ => status,
             };
             if (status is "available" or "committed") item.Remove("code");
-            else if (status is "committed" or "refused" or "rejected" or "skipped" or "faulted")
+            else if (status is "refused" or "rejected" or "skipped" or "faulted")
             {
                 if (item["code"] is JValue mutationCode)
                 {
                     var normalizedCode = CanonicalCode(
                         Snake((string?)mutationCode ?? string.Empty));
-                    if (string.Equals(normalizedCode, (string?)item["status"],
+                    item.Remove("code");
+                    if (!string.Equals(normalizedCode, (string?)item["status"],
                             StringComparison.Ordinal))
-                        item.Remove("code");
-                    else
-                        item["code"] = normalizedCode;
+                        item["reasonCode"] = normalizedCode;
                 }
             }
             else if (item["code"] is JToken readCode)

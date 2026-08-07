@@ -868,7 +868,7 @@ shape errors together under `error.data.validationErrors`, with distinct `missin
 most clients show the caller.
 
 A faulted GameAction is still a completed MCP tool invocation: it omits `isError`, and its domain
-`status`, stable `code`, actionable reason, and one relevant fact remain in `structuredContent`.
+`status`, stable `reasonCode`, actionable reason, and one relevant fact remain in `structuredContent`.
 `isError=true` is reserved for infrastructure failures that happen before a canonical action
 terminal exists. This distinction prevents clients from replacing the domain result with an opaque
 generic tool error.

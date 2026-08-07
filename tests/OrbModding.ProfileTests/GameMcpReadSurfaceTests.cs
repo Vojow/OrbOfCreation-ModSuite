@@ -230,7 +230,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Null(body["result"]!["content"]);
         var structured = body["result"]!["structuredContent"]!;
         Assert.Equal("faulted", (string?)structured["status"]);
-        Assert.Equal("verification_failed", (string?)structured["code"]);
+        Assert.Equal("verification_failed", (string?)structured["reasonCode"]);
         Assert.Equal(reason, (string?)structured["reason"]);
         Assert.Equal(tree.ToString("D"), (string?)structured["uuid"]);
         Assert.Equal("crafting mode", (string?)structured["missingOutcome"]);
@@ -295,7 +295,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
             observedConfigurationGeneration: 9).Project(command));
 
         Assert.Equal("refused", (string?)result["status"]);
-        Assert.Equal("native_rejected", (string?)result["code"]);
+        Assert.Equal("native_rejected", (string?)result["reasonCode"]);
         Assert.Equal("exact refusal", (string?)result["reason"]);
         Assert.Null(result["mutationScope"]);
         Assert.Null(result["worldGenerationMismatch"]);

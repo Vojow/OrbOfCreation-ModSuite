@@ -881,7 +881,7 @@ public sealed class GameMcpCorrectnessCoreTests
             observedConfigurationGeneration: 0).Project(command));
 
         Assert.Equal("refused", (string?)response["status"]);
-        Assert.Equal("native_rejected", (string?)response["code"]);
+        Assert.Equal("native_rejected", (string?)response["reasonCode"]);
         Assert.Equal("live native admission refused", (string?)response["reason"]);
         Assert.Equal(command.TargetId.ToString("D"), (string?)response["uuid"]);
         Assert.Equal(4, response.Count);
