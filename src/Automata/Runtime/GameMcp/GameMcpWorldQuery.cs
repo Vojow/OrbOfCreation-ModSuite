@@ -2589,7 +2589,8 @@ internal static class GameMcpWorldQuery
             var resource = harvestResource.Resource;
             var output = new JObject
             {
-                ["amount"] = new GameMcpDomainValue(resource.Reading.Quantity),
+                ["amount"] = new GameMcpDomainValue(
+                    WorldResourceCoordinate.DisplayAmount(in resource)),
                 ["netRatePerSecond"] = new GameMcpDomainValue(resource.TrueRate),
             };
             if (resource.IsCapped)
@@ -4635,7 +4636,8 @@ internal static class GameMcpWorldQuery
             var holding = new JObject { ["resourceId"] = context.PersistentResourceId.ToString("D") };
             if (WorldLookup.TryFind(world.Resources, context.PersistentResourceId, out var resource))
             {
-                holding["amount"] = new GameMcpDomainValue(resource.Reading.Quantity);
+                holding["amount"] = new GameMcpDomainValue(
+                    WorldResourceCoordinate.DisplayAmount(in resource));
                 if (resource.IsCapped)
                     holding["capacity"] = new GameMcpDomainValue(resource.Reading.Capacity);
                 holding["atCapacity"] = resource.IsAtCapacity;
