@@ -29,7 +29,8 @@ internal readonly struct WorldCraftingDecision
         int automationQuantity = 0,
         int automationUsed = 0,
         int automationMaximum = 0,
-        bool canAutomate = false)
+        bool canAutomate = false,
+        string automationReasonCode = "")
     {
         RecipeId = recipeId;
         Pipeline = pipeline;
@@ -44,6 +45,7 @@ internal readonly struct WorldCraftingDecision
         AutomationUsed = automationUsed;
         AutomationMaximum = automationMaximum;
         CanAutomate = canAutomate;
+        AutomationReasonCode = automationReasonCode ?? string.Empty;
     }
 
     internal Guid RecipeId { get; }
@@ -59,6 +61,12 @@ internal readonly struct WorldCraftingDecision
     internal int AutomationUsed { get; }
     internal int AutomationMaximum { get; }
     internal bool CanAutomate { get; }
+
+    /// <summary>
+    /// Why the automation queue will not take this recipe, answered where the native predicates ran.
+    /// An undiscovered recipe is refused for being undiscovered, never for a queue that has room.
+    /// </summary>
+    internal string AutomationReasonCode { get; }
     internal bool CanCancelManual => QueuedAmount > BigDouble.Zero;
     internal bool CanCancelAutomation => AutomationQuantity > 0;
 }
@@ -409,8 +417,13 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
             throw new InvalidOperationException("page automation value was null");
         var automationQuantity = AutomationQuantity(valuesInAutomation, recipeId);
         var automationHasExisting = automationQuantity > 0;
-        var canAutomate = visible &&
-            (automationHasExisting || _queueHasRoom!(automation));
+        var automationHasRoom = automationHasExisting || _queueHasRoom!(automation);
+        var canAutomate = visible && automationHasRoom;
+        var automationReasonCode = !visible
+            ? "hidden_or_undiscovered"
+            : automationHasRoom
+                ? "ready"
+                : "automation_full";
         var hasExisting = HasRecipe(valuesInQueue, recipeId);
         var hasSpace = hasExisting && mode == 0 || _queueHasRoom!(queue);
         var targetAmount = previous +
@@ -449,7 +462,8 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
             automationQuantity,
             CountNonNull(valuesInAutomation),
             _queueMaximum!(automation),
-            canAutomate));
+            canAutomate,
+            automationReasonCode));
     }
 
     private void AppendQueueEntries(GameWorldCycleFrame frame)

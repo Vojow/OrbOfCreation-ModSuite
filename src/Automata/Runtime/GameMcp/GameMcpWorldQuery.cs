@@ -5103,6 +5103,12 @@ internal static class GameMcpWorldQuery
         return result;
     }
 
+    private static string AutomationRefusal(string reasonCode) => reasonCode switch
+    {
+        "hidden_or_undiscovered" => "This recipe is not discovered yet.",
+        _ => "Every automation slot on this queue is in use.",
+    };
+
     private static GameMcpValue ProjectCraftingRecipe(
         GameWorldState world,
         in WorldCraftingRecipe recipe)
@@ -5156,8 +5162,8 @@ internal static class GameMcpWorldQuery
                 }
                 if (!decision.CanAutomate)
                 {
-                    automation["reasonCode"] = "automation_full";
-                    automation["reason"] = "Every automation slot on this queue is in use.";
+                    automation["reasonCode"] = decision.AutomationReasonCode;
+                    automation["reason"] = AutomationRefusal(decision.AutomationReasonCode);
                 }
                 result["automation"] = automation;
             }

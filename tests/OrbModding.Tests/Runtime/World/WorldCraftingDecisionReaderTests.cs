@@ -114,6 +114,46 @@ public sealed class WorldCraftingDecisionReaderTests : IDisposable
     }
 
     [Fact]
+    public void An_undiscovered_recipe_is_refused_for_being_undiscovered_not_for_a_full_queue()
+    {
+        var recipe = Recipe();
+        recipe.visible = false;
+        CraftingRecipeSO.All.Add(recipe);
+        Page(recipe, mode: 0, maximum: 2);
+        var reader = Reader();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 7 };
+
+        reader.Collect(new HashSet<Guid>(), frame);
+
+        ref readonly var decision = ref frame.CraftingDecisions[0];
+        Assert.False(decision.CanAutomate);
+        Assert.Equal(0, decision.AutomationUsed);
+        Assert.Equal(2, decision.AutomationMaximum);
+        Assert.Equal("hidden_or_undiscovered", decision.AutomationReasonCode);
+    }
+
+    [Fact]
+    public void A_full_automation_queue_is_the_only_thing_that_reads_as_automation_full()
+    {
+        var recipe = Recipe();
+        CraftingRecipeSO.All.Add(recipe);
+        var other = Recipe();
+        var page = Page(recipe, mode: 0, maximum: 1);
+        page.craftingAutomationInstances.value.Add(
+            new CraftingInstance(other, new BigDouble(1)).SetAuto(true));
+        var reader = Reader();
+        var frame = new GameWorldCycleFrame { CollectedAtEpoch = 7 };
+
+        reader.Collect(new HashSet<Guid>(), frame);
+
+        ref readonly var decision = ref frame.CraftingDecisions[0];
+        Assert.False(decision.CanAutomate);
+        Assert.Equal(1, decision.AutomationUsed);
+        Assert.Equal(1, decision.AutomationMaximum);
+        Assert.Equal("automation_full", decision.AutomationReasonCode);
+    }
+
+    [Fact]
     public void AuthoredPageRoutingIsPinnedForLifecycleAndRecapturedAfterEpochChanges()
     {
         var recipe = Recipe();

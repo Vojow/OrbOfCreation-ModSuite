@@ -141,6 +141,19 @@ public sealed class GameMcpCraftingTests
     }
 
     [Fact]
+    public void An_undiscovered_recipe_is_never_told_its_automation_queue_is_full()
+    {
+        var row = Json(GameMcpWorldQuery.GetRow(
+            Context(canAutomate: false, automationReasonCode: "hidden_or_undiscovered"),
+            "crafting-recipes",
+            RecipeId.ToString("D")))["row"]!["automation"]!;
+
+        Assert.False((bool)row["available"]!);
+        Assert.Equal("hidden_or_undiscovered", (string?)row["reasonCode"]);
+        Assert.Equal("This recipe is not discovered yet.", (string?)row["reason"]);
+    }
+
+    [Fact]
     public void QueueContentsAreOrderedNamedAndOmitManualAutomationFields()
     {
         var result = Json(GameMcpWorldQuery.ListRows(
@@ -349,12 +362,14 @@ public sealed class GameMcpCraftingTests
     private static GameMcpFrameContext Context(
         int queuedAmount = 4,
         int automationQuantity = 3,
-        bool canAutomate = true)
+        bool canAutomate = true,
+        string automationReasonCode = "automation_full")
     {
         using var publisher =
             new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
         publisher.Publish(
-            World(queuedAmount, automationQuantity, canAutomate), new WorldGeneration(2201));
+            World(queuedAmount, automationQuantity, canAutomate, automationReasonCode),
+            new WorldGeneration(2201));
         return GameMcpTestHarness.Context(
             publisher.ReadLatest(), configurationGeneration: 8, lifecycleGeneration: 15);
     }
@@ -362,7 +377,8 @@ public sealed class GameMcpCraftingTests
     private static GameWorldState World(
         int queuedAmount = 4,
         int automationQuantity = 3,
-        bool canAutomate = true)
+        bool canAutomate = true,
+        string automationReasonCode = "automation_full")
     {
         var reading = new RawCraftingRecipeSample(
             RecipeId,
@@ -405,7 +421,8 @@ public sealed class GameMcpCraftingTests
                     automationQuantity: automationQuantity,
                     automationUsed: 1,
                     automationMaximum: 3,
-                    canAutomate: canAutomate),
+                    canAutomate: canAutomate,
+                    automationReasonCode: automationReasonCode),
             }),
             CraftingQueueEntries = PublicationTable<WorldCraftingQueueEntry>.Create(new[]
             {
