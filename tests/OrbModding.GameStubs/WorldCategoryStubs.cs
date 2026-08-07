@@ -1089,13 +1089,15 @@ public sealed class UIModal : UnityEngine.Object
     private bool isOpen;
     private bool isClosing;
     private float graceTime;
+    public TMPro.TextMeshProUGUI modalTitle = new TMPro.TextMeshProUGUI();
     public bool SuppressClose { get; set; }
     public bool IsOpen() => isOpen;
-    public void OpenForTest(float grace = 0f)
+    public void OpenForTest(float grace = 0f, string title = "")
     {
         isOpen = true;
         isClosing = false;
         graceTime = grace;
+        modalTitle.text = title;
     }
     public void FinishCloseForTest() => isOpen = false;
     public void CloseModal()

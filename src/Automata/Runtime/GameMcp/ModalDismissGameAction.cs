@@ -3,6 +3,7 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using OrbModding.Common;
+using TMPro;
 using UnityEngine;
 
 namespace OrbAutomata.GameMcp;
@@ -34,6 +35,7 @@ internal sealed class ModalDismissGameAction : IDisposable
         "modal-dismiss.modal-closing-action",
         "modal-dismiss.modal-grace-action",
         "modal-dismiss.modal-close-action",
+        "modal-dismiss.modal-title-action",
     };
 
     private const BindingFlags Instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -44,6 +46,7 @@ internal sealed class ModalDismissGameAction : IDisposable
     private readonly int _mainThreadId;
     private Bindings? _bindings;
     private object? _pendingModal;
+    private long _pendingEpoch;
     private string _bindingFailure = string.Empty;
 
     internal ModalDismissGameAction(
@@ -61,14 +64,16 @@ internal sealed class ModalDismissGameAction : IDisposable
     internal bool BindingsAvailable => _bindings is not null;
     internal string BindingFailure => _bindingFailure;
 
-    internal ModalDismissSubmission Submit(long lifecycleEpoch)
+    /// <summary>
+    /// Dismissal is a screen action with no entity to name, so the caller has no lifecycle to
+    /// submit. The boundary reads the live lifecycle itself and pins it for the settled read.
+    /// </summary>
+    internal ModalDismissSubmission Submit()
     {
         if (Environment.CurrentManagedThreadId != _mainThreadId)
             return Refused("wrong_thread", "Modal controls are available only on the Unity thread.");
         if (_bindings is not { } native)
             return Refused("contract_unavailable", _bindingFailure);
-        if (_readLifecycleEpoch() != lifecycleEpoch)
-            return Refused("lifecycle_replaced", "The submitted game lifecycle is stale.");
 
         try
         {
@@ -82,7 +87,7 @@ internal sealed class ModalDismissGameAction : IDisposable
                 openCount++;
             }
             if (openCount == 0)
-                return Refused("no_modal_open", "There is no open modal to dismiss.");
+                return Refused("no_open_modal", "There is no open modal to dismiss.");
             if (openCount != 1)
                 return Refused("multiple_modals_open",
                     "More than one modal is open, so no single close control is unambiguous.");
@@ -95,6 +100,7 @@ internal sealed class ModalDismissGameAction : IDisposable
             if (!native.IsClosing(candidate!))
                 return Refused("requested_state_not_reached", "The modal did not begin closing.");
             _pendingModal = candidate;
+            _pendingEpoch = _readLifecycleEpoch();
             return new ModalDismissSubmission(true, "committed", string.Empty);
         }
         catch (Exception exception) when (exception is InvalidOperationException or
@@ -105,12 +111,12 @@ internal sealed class ModalDismissGameAction : IDisposable
         }
     }
 
-    internal bool TryObserveDismissed(long lifecycleEpoch, out bool dismissed, out string reason)
+    internal bool TryObserveDismissed(out bool dismissed, out string reason)
     {
         dismissed = false;
         reason = string.Empty;
         if (Environment.CurrentManagedThreadId != _mainThreadId || _bindings is not { } native ||
-            _readLifecycleEpoch() != lifecycleEpoch)
+            _readLifecycleEpoch() != _pendingEpoch)
         {
             reason = "The modal lifecycle changed before dismissal settled.";
             return false;
@@ -131,6 +137,45 @@ internal sealed class ModalDismissGameAction : IDisposable
             ArgumentException or TargetInvocationException)
         {
             reason = "The modal settled state could not be read: " +
+                exception.GetBaseException().Message;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The titles the game is showing on its open modals, so a screen read tells the caller what
+    /// is covering the board instead of leaving it to be discovered by a refused action.
+    /// </summary>
+    internal bool TryReadOpenModals(out string[] titles, out string reason)
+    {
+        titles = Array.Empty<string>();
+        reason = string.Empty;
+        if (Environment.CurrentManagedThreadId != _mainThreadId)
+        {
+            reason = "Modal controls are available only on the Unity thread.";
+            return false;
+        }
+        if (_bindings is not { } native)
+        {
+            reason = _bindingFailure;
+            return false;
+        }
+        try
+        {
+            var open = new System.Collections.Generic.List<string>();
+            foreach (var value in native.FindAll(native.ModalType))
+            {
+                if (value is null || value.GetType() != native.ModalType || !native.IsOpen(value))
+                    continue;
+                open.Add(native.Title(value));
+            }
+            titles = open.ToArray();
+            return true;
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or
+            ArgumentException or TargetInvocationException)
+        {
+            reason = "The open modal titles could not be read: " +
                 exception.GetBaseException().Message;
             return false;
         }
@@ -172,8 +217,9 @@ internal sealed class ModalDismissGameAction : IDisposable
             var isClosing = Field(5, modal, "isClosing", typeof(bool));
             var graceTime = Field(6, modal, "graceTime", typeof(float));
             var close = Method(7, modal, "CloseModal", typeof(void), Type.EmptyTypes, isStatic: false);
+            var title = Field(8, modal, "modalTitle", typeof(TextMeshProUGUI));
             _bindings = new Bindings(modal, FindAll(findAll), BoolMethod(isOpen),
-                BoolField(isClosing), FloatField(graceTime), Action(close));
+                BoolField(isClosing), FloatField(graceTime), Action(close), Title(title));
             _bindingFailure = string.Empty;
         }
         catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
@@ -249,6 +295,9 @@ internal sealed class ModalDismissGameAction : IDisposable
             Expression.Call(Expression.Convert(target, method.DeclaringType!), method), target).Compile();
     }
 
+    private static Func<object, string> Title(FieldInfo field) =>
+        modal => field.GetValue(modal) is TextMeshProUGUI label ? label.text ?? string.Empty : string.Empty;
+
     private static ModalDismissSubmission Refused(string code, string reason) => new(false, code, reason);
 
     private sealed class Bindings
@@ -259,7 +308,8 @@ internal sealed class ModalDismissGameAction : IDisposable
             Func<object, bool> isOpen,
             Func<object, bool> isClosing,
             Func<object, float> graceTime,
-            Action<object> close)
+            Action<object> close,
+            Func<object, string> title)
         {
             ModalType = modalType;
             FindAll = findAll;
@@ -267,6 +317,7 @@ internal sealed class ModalDismissGameAction : IDisposable
             IsClosing = isClosing;
             GraceTime = graceTime;
             Close = close;
+            Title = title;
         }
 
         internal Type ModalType { get; }
@@ -275,6 +326,7 @@ internal sealed class ModalDismissGameAction : IDisposable
         internal Func<object, bool> IsClosing { get; }
         internal Func<object, float> GraceTime { get; }
         internal Action<object> Close { get; }
+        internal Func<object, string> Title { get; }
     }
 }
 #endif

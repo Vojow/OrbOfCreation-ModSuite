@@ -23702,6 +23702,10 @@
     {
       "id": "modal-dismiss.modal-close-action", "assembly": "assembly-csharp", "type": "UIModal", "typeVisibility": "public", "kind": "method", "member": "CloseModal",
       "visibility": "public", "static": false, "returnType": "System.Void", "parameters": [], "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
+    },
+    {
+      "id": "modal-dismiss.modal-title-action", "assembly": "assembly-csharp", "type": "UIModal", "typeVisibility": "public", "kind": "field", "member": "modalTitle",
+      "visibility": "public", "static": false, "valueType": "TMPro.TextMeshProUGUI", "owners": ["Automata modal dismiss GameAction"], "usages": ["reflection"], "place": "action"
     }
   ],
   "sourceAudit": {

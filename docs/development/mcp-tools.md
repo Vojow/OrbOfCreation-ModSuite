@@ -1013,7 +1013,10 @@ STOP are not generic writable settings.
 `game_screenshot` has no required parameters and returns an MCP `image` content block with
 `mimeType: image/png`. `maxWidth` bounds the encoded image between 320 and 4,096 pixels and defaults
 to 1,280, which is the control for response size. The response reports the encoded `width`,
-`height`, and `scene`, and echoes nothing else.
+`height`, `scene`, and whatever native modal is covering the board, and echoes nothing else.
+`game_screenshot` and `game_navigate` both carry `openModals` — the game-written title of every open
+`UIModal` — whenever at least one is open, and `openModalsUnavailable` with the reason when that read
+is not possible. Neither field appears when the read succeeded and no modal is open.
 `{"save":true}` additionally writes a server-generated, collision-resistant name under the current
 trace folder. The caller supplies no basename, and there is no per-process filename cap.
 
@@ -1041,8 +1044,11 @@ the process remains able to deliver an MCP response. See
 `docs/reverse-engineering/clean-exit-boundary.md` for the audited drop.
 
 `game_modal(mode="dismiss")` drives the visible close control on the one open native `UIModal`.
-It refuses when there is no modal, when more than one modal makes the target ambiguous, or while
-the native grace period still disables closing. The action invokes `UIModal.CloseModal()`, verifies
+It refuses `no_open_modal` when there is no modal, `multiple_modals_open` when more than one makes
+the target ambiguous, and `modal_close_not_ready` while the native grace period still disables
+closing. The tool names no entity, so the
+caller submits no lifecycle: the boundary reads the live lifecycle itself and pins it for the settled
+read. The action invokes `UIModal.CloseModal()`, verifies
 the game-owned closing flag, then watches that exact modal for up to the shared one-second
 settlement bound. A completed close returns `open: false`; timeout remains committed and says the
 post-state is unavailable because the verified close already began. It does not click modal-specific confirm, purchase, reset, or

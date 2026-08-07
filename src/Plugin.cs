@@ -2440,7 +2440,7 @@ public sealed class Plugin : BaseUnityPlugin
                     "The native modal close control is unavailable.");
                 return true;
             }
-            var submission = _modalDismissGameAction.Submit(command.ExpectedLifecycleGeneration);
+            var submission = _modalDismissGameAction.Submit();
             if (!submission.Committed)
             {
                 result = GadgetRejected(submission.Code, submission.Reason);
@@ -2480,10 +2480,7 @@ public sealed class Plugin : BaseUnityPlugin
             var dismissed = false;
             var reason = string.Empty;
             if (_modalDismissGameAction is null ||
-                !_modalDismissGameAction.TryObserveDismissed(
-                    command.ExpectedLifecycleGeneration,
-                    out dismissed,
-                    out reason))
+                !_modalDismissGameAction.TryObserveDismissed(out dismissed, out reason))
             {
                 CompleteGameMcpCommand(command, GameMcpCommandResult.Faulted(
                     "modal_state_unavailable",
@@ -2600,6 +2597,7 @@ public sealed class Plugin : BaseUnityPlugin
                 if (!string.IsNullOrWhiteSpace(activeTab.Label))
                     details["activeTab"] = activeTab.Label;
             }
+            AppendOpenModals(details);
             if (command.SaveCapture)
             {
                 var directory = AutomataTraceRunRoot.Child("mcp-screenshots");
@@ -2744,6 +2742,30 @@ public sealed class Plugin : BaseUnityPlugin
         }
         result["tabs"] = projectedTabs;
         return result.Freeze();
+    }
+
+    /// <summary>
+    /// Names whatever native modal is covering the board. A screen read that stayed silent about
+    /// an open Settings panel is what made a covered board look like a working one.
+    /// </summary>
+    private void AppendOpenModals(GameMcpObjectBuilder details)
+    {
+        if (_modalDismissGameAction is null)
+        {
+            details["openModalsUnavailable"] =
+                "The native modal contracts were not composed.";
+            return;
+        }
+        if (!_modalDismissGameAction.TryReadOpenModals(out var titles, out var reason))
+        {
+            details["openModalsUnavailable"] =
+                reason.Length == 0 ? "The open modal titles are unavailable." : reason;
+            return;
+        }
+        if (titles.Length == 0) return;
+        var open = new GameMcpArrayBuilder();
+        foreach (var title in titles) open.Add(title);
+        details["openModals"] = open;
     }
 
     private static GameMcpValue ProjectGameMcpSubtabStrips(
@@ -2951,6 +2973,7 @@ public sealed class Plugin : BaseUnityPlugin
                 details["activeTab"] = activeTab.Label;
             if (command.TargetId != Guid.Empty)
                 details["selectedPlot"] = command.TargetId.ToString("D");
+            AppendOpenModals(details);
             result = GadgetCommitted("navigation_arrived", details);
         }
         if (capture && string.Equals(result.Status, "committed", StringComparison.Ordinal))
