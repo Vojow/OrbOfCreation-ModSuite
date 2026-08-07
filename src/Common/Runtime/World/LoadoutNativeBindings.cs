@@ -33,14 +33,12 @@ internal sealed class LoadoutNativeBindings
         "loadout.global-variables.type-action",
         "loadout.identity.type-action",
         "loadout.stacked-record.type-action",
-        "loadout.spell-list.type-action",
         "loadout.manager-instance-action",
         "loadout.manager-player-list-action",
         "loadout.manager-alchemy-snapshots-action",
         "loadout.manager-equipment-snapshots-action",
         "loadout.manager-active-alchemy-action",
         "loadout.manager-active-equipment-action",
-        "loadout.manager-active-spells-action",
         "loadout.manager-can-swap-action",
         "loadout.manager-set-loadout-action",
         "loadout.manager-save-active-action",
@@ -68,8 +66,6 @@ internal sealed class LoadoutNativeBindings
         "loadout.spell-guid-action",
         "loadout.spell-reference-action",
         "loadout.spell-empty-action",
-        "loadout.spell-list-all-action",
-        "loadout.spell-list-maximum-action",
         "loadout.alchemy-list-maximum-action",
         "loadout.equipment-list-maximum-action",
         "loadout.alchemy-snapshot-empty-action",
@@ -107,7 +103,6 @@ internal sealed class LoadoutNativeBindings
         Func<object, object?> equipmentSnapshots,
         Func<object, object?> activeAlchemy,
         Func<object, object?> activeEquipment,
-        Func<object, object?> activeSpells,
         Func<object, bool> canSwap,
         Action<object, object> setLoadout,
         Action<object> saveActive,
@@ -135,8 +130,6 @@ internal sealed class LoadoutNativeBindings
         Func<object, Guid> spellId,
         Func<object, object?> spellReference,
         Func<object, bool> spellEmpty,
-        Func<object, IList?> spellValues,
-        Func<object, int> spellMaximum,
         Func<object, int> alchemyMaximum,
         Func<object, int> equipmentMaximum,
         Func<object, IList?> alchemySnapshotValues,
@@ -174,7 +167,6 @@ internal sealed class LoadoutNativeBindings
         EquipmentSnapshots = equipmentSnapshots;
         ActiveAlchemy = activeAlchemy;
         ActiveEquipment = activeEquipment;
-        ActiveSpells = activeSpells;
         CanSwap = canSwap;
         SetLoadout = setLoadout;
         SaveActive = saveActive;
@@ -202,8 +194,6 @@ internal sealed class LoadoutNativeBindings
         SpellId = spellId;
         SpellReference = spellReference;
         SpellEmpty = spellEmpty;
-        SpellValues = spellValues;
-        SpellMaximum = spellMaximum;
         AlchemyMaximum = alchemyMaximum;
         EquipmentMaximum = equipmentMaximum;
         AlchemySnapshotValues = alchemySnapshotValues;
@@ -242,7 +232,6 @@ internal sealed class LoadoutNativeBindings
     internal Func<object, object?> EquipmentSnapshots { get; }
     internal Func<object, object?> ActiveAlchemy { get; }
     internal Func<object, object?> ActiveEquipment { get; }
-    internal Func<object, object?> ActiveSpells { get; }
     internal Func<object, bool> CanSwap { get; }
     internal Action<object, object> SetLoadout { get; }
     internal Action<object> SaveActive { get; }
@@ -270,8 +259,6 @@ internal sealed class LoadoutNativeBindings
     internal Func<object, Guid> SpellId { get; }
     internal Func<object, object?> SpellReference { get; }
     internal Func<object, bool> SpellEmpty { get; }
-    internal Func<object, IList?> SpellValues { get; }
-    internal Func<object, int> SpellMaximum { get; }
     internal Func<object, int> AlchemyMaximum { get; }
     internal Func<object, int> EquipmentMaximum { get; }
     internal Func<object, IList?> AlchemySnapshotValues { get; }
@@ -331,7 +318,6 @@ internal sealed class LoadoutNativeBindings
             var globals = T("GlobalVariables");
             var identity = T("IdScriptableObject");
             var stackedOpen = T("Stacked.StackedIdRecord`1");
-            var spellList = T("SpellListVariable");
             var alchemyRecord = stackedOpen.MakeGenericType(alchemyRecipe);
             var equipmentRecord = stackedOpen.MakeGenericType(equipment);
 
@@ -350,7 +336,6 @@ internal sealed class LoadoutNativeBindings
             var managerEquipmentSnapshots = Field(manager, "equipmentLoadouts", equipmentSnapshotList, false);
             var managerAlchemy = Field(manager, "activeAlchemy", alchemyList, false);
             var managerEquipment = Field(manager, "activeEquipment", equipmentList, false);
-            var managerSpells = Field(manager, "activeSpells", spellList, false);
             var canSwap = Method(manager, "CanSwapLoadouts", typeof(bool));
             var setLoadout = Method(manager, "SetLoadout", typeof(void), player);
             var saveActive = Method(manager, "SaveActiveLoadout", typeof(void));
@@ -378,8 +363,6 @@ internal sealed class LoadoutNativeBindings
             var spellId = Method(spell, "GetId", typeof(Guid));
             var spellReference = Method(spell, "get_reference", spellRecipe);
             var spellEmpty = Method(spell, "IsEmpty", typeof(bool));
-            var activeSpells = Method(spellList, "GetAll", spellCollection);
-            var spellMaximum = Method(spellList, "GetMax", typeof(int));
             var alchemyMaximum = Method(alchemyList, "GetMax", typeof(int));
             var equipmentMaximum = Method(equipmentList, "GetMax", typeof(int));
             var alchemySnapshots = Field(alchemySnapshotList, "value", alchemySnapshotCollection, false);
@@ -410,7 +393,7 @@ internal sealed class LoadoutNativeBindings
                 alchemySnapshotList, equipmentSnapshotList,
                 StaticObject(managerInstance), ObjectField(managerPlayer),
                 ObjectField(managerAlchemySnapshots), ObjectField(managerEquipmentSnapshots),
-                ObjectField(managerAlchemy), ObjectField(managerEquipment), ObjectField(managerSpells),
+                ObjectField(managerAlchemy), ObjectField(managerEquipment),
                 Func<bool>(canSwap), ActionObject(setLoadout), ActionVoid(saveActive),
                 ListField(playerAll), Func<Guid>(playerGuid),
                 Func<string>(playerName), Func<bool>(selected), Func<bool>(equipmentEnabled),
@@ -420,7 +403,7 @@ internal sealed class LoadoutNativeBindings
                 Func<int>(labelColor), ActionString(setName), ActionInt(setIcon),
                 ActionInt(setColor), StaticList(customIcons), StaticList(customColors),
                 Func<Guid>(getIdentity), Func<Guid>(spellId), ObjectFunc(spellReference),
-                Func<bool>(spellEmpty), ListFunc(activeSpells), Func<int>(spellMaximum),
+                Func<bool>(spellEmpty),
                 Func<int>(alchemyMaximum), Func<int>(equipmentMaximum),
                 ListField(alchemySnapshots), ListField(equipmentSnapshots), Func<bool>(alchemyEmpty),
                 Func<bool>(equipmentEmpty), ActionVoid(clearAlchemy), ActionVoid(clearEquipment),

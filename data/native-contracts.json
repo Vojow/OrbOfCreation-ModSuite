@@ -23196,10 +23196,6 @@
       "typeVisibility": "public", "kind": "type", "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
     },
     {
-      "id": "loadout.spell-list.type-action", "assembly": "assembly-csharp", "type": "SpellListVariable",
-      "typeVisibility": "public", "kind": "type", "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
-    },
-    {
       "id": "loadout.manager-instance-action", "assembly": "assembly-csharp", "type": "LoadoutManager", "typeVisibility": "public", "kind": "field", "member": "instance",
       "visibility": "public", "static": true, "valueType": "LoadoutManager", "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
     },
@@ -23222,10 +23218,6 @@
     {
       "id": "loadout.manager-active-equipment-action", "assembly": "assembly-csharp", "type": "LoadoutManager", "typeVisibility": "public", "kind": "field", "member": "activeEquipment",
       "visibility": "public", "static": false, "valueType": "EquipmentListVariable", "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "loadout.manager-active-spells-action", "assembly": "assembly-csharp", "type": "LoadoutManager", "typeVisibility": "public", "kind": "field", "member": "activeSpells",
-      "visibility": "public", "static": false, "valueType": "SpellListVariable", "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
     },
     {
       "id": "loadout.manager-can-swap-action", "assembly": "assembly-csharp", "type": "LoadoutManager", "typeVisibility": "public", "kind": "method", "member": "CanSwapLoadouts",
@@ -23334,14 +23326,6 @@
     {
       "id": "loadout.spell-empty-action", "assembly": "assembly-csharp", "type": "Spell", "typeVisibility": "public", "kind": "method", "member": "IsEmpty",
       "visibility": "public", "static": false, "returnType": "System.Boolean", "parameters": [], "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "loadout.spell-list-all-action", "assembly": "assembly-csharp", "type": "SpellListVariable", "typeVisibility": "public", "kind": "method", "member": "GetAll",
-      "visibility": "public", "static": false, "returnType": "System.Collections.Generic.List`1<Spell>", "parameters": [], "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
-    },
-    {
-      "id": "loadout.spell-list-maximum-action", "assembly": "assembly-csharp", "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "method", "member": "GetMax",
-      "visibility": "public", "static": false, "returnType": "System.Int32", "parameters": [], "owners": ["Automata player loadout GameAction", "Common loadout world collection"], "usages": ["reflection"], "place": "action"
     },
     {
       "id": "loadout.alchemy-list-maximum-action", "assembly": "assembly-csharp", "type": "AbstractListVariable`1", "typeVisibility": "public", "kind": "method", "member": "GetMax",
