@@ -1061,7 +1061,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_tooltips",
                 "Discover visible tooltips",
-                "Page through active tooltip-bearing elements on the current screen by exact sibling-indexed native path.",
+                "Page through active tooltip-bearing elements on the current screen by exact sibling-indexed native path. nextOffset is present exactly when more rows remain, and is the offset to resume from.",
                 ObjectSchema(new JObject
                 {
                     ["offset"] = IntegerSchema(0, int.MaxValue),

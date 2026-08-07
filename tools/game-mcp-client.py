@@ -476,7 +476,7 @@ def measure_reads(client: GameMcpClient) -> dict[str, Any]:
     tooltip_catalog = structured(
         client.call_tool("game_tooltips", {"offset": 0, "limit": 1})
     )
-    tooltip_rows = tooltip_catalog.get("tooltips")
+    tooltip_rows = tooltip_catalog.get("rows")
     if isinstance(tooltip_rows, list) and tooltip_rows and isinstance(tooltip_rows[0], dict):
         path = tooltip_rows[0].get("path")
         if isinstance(path, str):

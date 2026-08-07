@@ -179,13 +179,17 @@ generation or retain a snapshot token across calls.
 Localized collection gaps mark only the implicated list/search/get row unavailable and attach the
 partial row plus exact evidence there; unaffected rows in the same call remain ordinary results.
 
-`world_list`, `world_search`, and `entity_catalog` page one way. Each takes `offset` and `limit`
+Every paged read — `world_list`, `world_search`, `entity_catalog`, and `game_tooltips` — pages one
+way. Each takes `offset` and `limit`
 and answers with `total` plus `rows`; the collection is always present, including when it is empty.
 `nextOffset` is present exactly when more rows remain, and its value is the input offset plus the
 rows actually delivered, so `nextOffset` present means "resume here" and `nextOffset` absent means
-"that was the end". There is no `truncated`, `returned`, `hasMore`, or `matches`. A page may be
-shorter than `limit` because the response is bounded at 12 KB, which each tool's description states;
+"that was the end". There is no `truncated`, `returned`, `hasMore`, `matches`, or `tooltips`. A page
+of the three world-backed readers may be shorter than `limit` because the response is bounded at
+12 KB, which each of those tool descriptions states;
 a short page with a `nextOffset` is that bound, and a short page without one is the end of the set.
+`game_tooltips` pages the screen's live hover elements rather than a published table, so `limit` is
+its only page bound.
 `world_search` deduplicates by entity identity before paging, so one entity that matches in two
 categories occupies one row and one page slot.
 

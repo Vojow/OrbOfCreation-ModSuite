@@ -14,12 +14,12 @@ public sealed class GameMcpGadgetTests
         {
             ["status"] = "committed",
             ["code"] = "tooltip_catalog_read",
-            ["tooltips"] = new GameMcpArrayBuilder(),
+            ["rows"] = new GameMcpArrayBuilder(),
         });
 
         Assert.Null(result["status"]);
         Assert.Null(result["code"]);
-        Assert.Empty(result["tooltips"]!);
+        Assert.Empty(result["rows"]!);
     }
 
     [Fact]

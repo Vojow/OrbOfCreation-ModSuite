@@ -3283,7 +3283,7 @@ public sealed class Plugin : BaseUnityPlugin
         {
             ["scene"] = SceneManager.GetActiveScene().name,
             ["total"] = entries.Length,
-            ["tooltips"] = projected,
+            ["rows"] = projected,
         };
         if (end < entries.Length) details["nextOffset"] = end;
         return GadgetCommitted(
