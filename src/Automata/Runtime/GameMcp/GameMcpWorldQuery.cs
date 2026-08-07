@@ -196,24 +196,39 @@ internal static class GameMcpWorldQuery
         GameMcpWorldCategory category,
         object row)
     {
+        // The list row spells a level exactly as the row and the reference do: the badge the screen
+        // shows, with work in flight named separately.
         if (row is WorldStructure structure)
         {
             var projected = new JObject
             {
                 ["entityId"] = structure.EntityId.ToString("D"),
-                ["committedLevel"] = structure.CommittedLevel,
+                ["level"] = new GameMcpDomainValue(structure.Reading.Level),
                 ["enabled"] = !structure.Reading.Disabled,
             };
+            if (structure.Reading.QueuedLevels != 0)
+                projected["queuedLevels"] = new GameMcpDomainValue(structure.Reading.QueuedLevels);
             if (TryPurchaseAffordability(world, structure.EntityId, out var affordable))
                 projected["affordable"] = affordable;
             return projected.Freeze();
         }
         if (row is WorldUpgrade upgrade)
         {
+            var projected = new JObject
+            {
+                ["entityId"] = upgrade.EntityId.ToString("D"),
+                ["level"] = upgrade.Reading.Level,
+            };
+            if (upgrade.Reading.QueuedLevels != 0)
+                projected["queuedLevels"] = upgrade.Reading.QueuedLevels;
+
             // An exhausted upgrade has no next level, so it has no price to be short of and no
             // ceiling distance left to report. An unbounded one has no ceiling at all.
-            var projected = PurchaseListRow(world, upgrade.EntityId, upgrade.CommittedLevel,
-                priced: !upgrade.IsExhausted);
+            if (!upgrade.IsExhausted &&
+                TryPurchaseAffordability(world, upgrade.EntityId, out var upgradeAffordable))
+            {
+                projected["affordable"] = upgradeAffordable;
+            }
             if (upgrade.IsBounded) projected["remainingLevels"] = upgrade.RemainingLevels;
             projected["available"] = upgrade.Reading.Available && !upgrade.IsExhausted;
             if (upgrade.IsExhausted) projected["reasonCode"] = "already_maxed";
@@ -325,22 +340,6 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
-    private static JObject PurchaseListRow(
-        GameWorldState world,
-        Guid entityId,
-        object level,
-        bool priced = true)
-    {
-        var result = new JObject
-        {
-            ["entityId"] = entityId.ToString("D"),
-            ["committedLevel"] = level,
-        };
-        if (priced && TryPurchaseAffordability(world, entityId, out var affordable))
-            result["affordable"] = affordable;
-        return result;
-    }
-
     private static bool TryPurchaseAffordability(
         GameWorldState world,
         Guid entityId,
@@ -363,8 +362,8 @@ internal static class GameMcpWorldQuery
     private static string[] ListFields(GameMcpWorldCategory category) => category.Name switch
     {
         "resources" => new[] { "entityId", "trueQuantity" },
-        "structures" => new[] { "entityId", "committedLevel", "reading.disabled" },
-        "upgrades" => new[] { "entityId", "committedLevel" },
+        "structures" => new[] { "entityId", "level", "reading.disabled" },
+        "upgrades" => new[] { "entityId", "level" },
         "research" => new[] { "entityId", "totalLevel", "complete" },
         "spell-recipes" => new[] { "entityId", "masteryLevel", "discovered" },
         "alchemy-recipes" => new[] { "entityId", "masteryLevel", "discovered" },

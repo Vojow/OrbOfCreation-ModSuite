@@ -788,10 +788,15 @@ public sealed class GameMcpCorrectnessCoreTests
             "structures",
             attributeId.ToString("D")));
         var row = response["row"]!;
+        var listed = GameMcpTestHarness.Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(world, 2101), "structures", 0, 10))["rows"]![0]!;
 
         Assert.Equal("632", (string?)row["level"]);
         Assert.Equal("3", (string?)row["queuedLevels"]);
         Assert.Null(row["committedLevel"]);
+        Assert.Equal("632", (string?)listed["level"]);
+        Assert.Equal("3", (string?)listed["queuedLevels"]);
+        Assert.Null(listed["committedLevel"]);
     }
 
     [Fact]
