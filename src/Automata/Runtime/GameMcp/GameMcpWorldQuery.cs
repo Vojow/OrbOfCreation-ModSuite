@@ -637,6 +637,53 @@ internal static class GameMcpWorldQuery
     internal static GameMcpValue ProjectGameplayPostState(
         GameMcpFrameContext state,
         GameMcpCommand command,
+        GameMcpCommandResult committed) =>
+        WithPaid(state, command, ProjectChangedFact(state, command, committed));
+
+    /// <summary>
+    /// What the committed mutation was observed to pay. Both numbers are readings the suite took:
+    /// the decrease between the world the action was admitted from and the settled world, and what
+    /// the settled world leaves. A resource its price named that the settled world does not show
+    /// lower carries only the remainder, because no payment was observed for it.
+    /// </summary>
+    private static GameMcpValue WithPaid(
+        GameMcpFrameContext state,
+        GameMcpCommand command,
+        GameMcpValue projected)
+    {
+        if (state.World is null) return projected;
+        var before = Before(command);
+        if (before is null) return projected;
+        var after = state.World.Snapshot;
+        if (!WorldPurchaseCostLookup.TryFindRange(
+                before.PurchaseCosts, command.TargetId, out var start, out var count))
+            return projected;
+        var paid = new JArray();
+        for (var index = start; index < start + count; index++)
+        {
+            var resourceId = before.PurchaseCosts[index].ResourceId;
+            var settled = SpendableAmount(after, resourceId, BigDouble.Zero);
+            var row = new JObject
+            {
+                ["resource"] = resourceId.ToString("D"),
+                ["remaining"] = new GameMcpDomainValue(settled),
+            };
+            var admitted = SpendableAmount(before, resourceId, BigDouble.Zero);
+            if (admitted > settled)
+                row["amount"] = new GameMcpDomainValue(admitted - settled);
+            paid.Add(row);
+        }
+        if (paid.Count == 0) return projected;
+        var result = new JObject();
+        if (projected is GameMcpObject existing) result.CopyFrom(existing);
+        else result["result"] = projected;
+        result["paid"] = paid;
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectChangedFact(
+        GameMcpFrameContext state,
+        GameMcpCommand command,
         GameMcpCommandResult committed) => command.Kind switch
         {
             GameMcpCommandKind.SpellWorkbench when string.Equals(

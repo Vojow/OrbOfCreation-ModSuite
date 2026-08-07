@@ -567,6 +567,144 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
+    public void ACommittedPurchaseReportsWhatItPaidAndWhatIsLeft()
+    {
+        var attributeId = Guid.Parse("f2000000-0000-0000-0000-000000000003");
+        var resourceId = Guid.Parse("f2000000-0000-0000-0000-000000000004");
+        var identities = EntityIdentityCatalogSnapshot.Bound(1, new[]
+        {
+            new EntityIdentityName(resourceId, "ResourceSO", "Glyph Upgrades", "GlyphUpgrades"),
+        });
+        var before = new GameWorldState
+        {
+            EntityIdentities = identities,
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 632),
+            }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                Stock(resourceId, 110),
+            }),
+            PurchaseCosts = PublicationTable<WorldPurchaseCost>.Create(new[]
+            {
+                new WorldPurchaseCost(attributeId, resourceId, new BigDouble(2)),
+            }),
+        };
+        var command = new GameMcpCommand(
+            1,
+            GameMcpCommandKind.Purchase,
+            expectedLifecycleGeneration: 9,
+            expectedConfigurationGeneration: 3,
+            mode: "structure",
+            targetId: attributeId,
+            secondaryId: Guid.Empty,
+            derivedNativeType: "StructureSO",
+            amount: 1,
+            payloadKey: string.Empty,
+            payloadValue: string.Empty,
+            capture: false,
+            saveCapture: false,
+            frameContext: GameMcpTestHarness.Context(before));
+        var after = before with
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 633),
+            }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                Stock(resourceId, 108),
+            }),
+        };
+
+        var delta = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            GameMcpWorldQuery.ProjectGameplayPostState(
+                GameMcpTestHarness.Context(after),
+                command,
+                GameMcpCommandResult.Committed("committed", 9, 3)),
+            identities));
+
+        Assert.Equal("633", (string?)delta["committedLevel"]!["after"]);
+        var paid = Assert.IsType<JObject>(Assert.Single(delta["paid"]!.Values<JObject>()));
+        Assert.Equal("Glyph Upgrades", (string?)paid["resource"]!["name"]);
+        Assert.Equal("2", (string?)paid["amount"]);
+        Assert.Equal("108", (string?)paid["remaining"]);
+    }
+
+    [Fact]
+    public void APurchaseThatSpentNothingObservableReportsOnlyWhatIsLeft()
+    {
+        var attributeId = Guid.Parse("f2000000-0000-0000-0000-000000000005");
+        var resourceId = Guid.Parse("f2000000-0000-0000-0000-000000000006");
+        var before = new GameWorldState
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 632),
+            }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                Stock(resourceId, 110),
+            }),
+            PurchaseCosts = PublicationTable<WorldPurchaseCost>.Create(new[]
+            {
+                new WorldPurchaseCost(attributeId, resourceId, new BigDouble(2)),
+            }),
+        };
+        var command = new GameMcpCommand(
+            1,
+            GameMcpCommandKind.Purchase,
+            expectedLifecycleGeneration: 9,
+            expectedConfigurationGeneration: 3,
+            mode: "structure",
+            targetId: attributeId,
+            secondaryId: Guid.Empty,
+            derivedNativeType: "StructureSO",
+            amount: 1,
+            payloadKey: string.Empty,
+            payloadValue: string.Empty,
+            capture: false,
+            saveCapture: false,
+            frameContext: GameMcpTestHarness.Context(before));
+        var after = before with
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 633),
+            }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                Stock(resourceId, 130),
+            }),
+        };
+
+        var delta = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3)));
+
+        var paid = Assert.IsType<JObject>(Assert.Single(delta["paid"]!.Values<JObject>()));
+        Assert.Null(paid["amount"]);
+        Assert.Equal("130", (string?)paid["remaining"]);
+    }
+
+    private static WorldResource Stock(Guid id, double quantity)
+    {
+        var rateInputs = default(RawResourceRateInputs);
+        var traits = default(RawResourceTraits);
+        var modifiers = default(RawResourceModifiers);
+        var held = new BigDouble(quantity);
+        var reading = new RawResourceSample(
+            id, held, new BigDouble(-1), true,
+            BigDouble.Zero, BigDouble.Zero, new BigDouble(100),
+            new BigDouble(100), BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty, in rateInputs, in traits, in modifiers);
+        return new WorldResource(
+            in reading, true, held, 0d, false, held, BigDouble.Zero);
+    }
+
+    [Fact]
     public void AnAttributeRowPublishesTheBadgeLevelAndNamesWorkInFlightSeparately()
     {
         var attributeId = Guid.Parse("f2000000-0000-0000-0000-000000000002");
