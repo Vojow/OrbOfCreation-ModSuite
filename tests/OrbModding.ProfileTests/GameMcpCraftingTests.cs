@@ -196,7 +196,7 @@ public sealed class GameMcpCraftingTests
     }
 
     [Fact]
-    public void EqualSettledQueueCountsDoNotInventInstantCompletion()
+    public void AnUnmovedSettledQueueIsNamedRatherThanReportedAsTheCraft()
     {
         var command = new GameMcpCommand(
             1, GameMcpCommandKind.Crafting, 15, 8, "craft", RecipeId, Guid.Empty,
@@ -217,8 +217,39 @@ public sealed class GameMcpCraftingTests
             Context(queuedAmount: 4), command, committed));
 
         Assert.Null(postState["completed"]);
-        Assert.Equal(4, (int)postState["queued"]!["before"]!);
-        Assert.Equal(4, (int)postState["queued"]!["after"]!);
+        Assert.Null(postState["queued"]);
+        Assert.Equal("post_state_not_observed",
+            (string?)postState["postStateUnavailable"]!["reasonCode"]);
+        Assert.Contains("entered the game's crafting queue",
+            (string?)postState["postStateUnavailable"]!["reason"]);
+        Assert.Contains("still shows 4 queued",
+            (string?)postState["postStateUnavailable"]!["reason"]);
+    }
+
+    [Fact]
+    public void AQueueAdmissionTheSettledWorldConfirmsIsTheNamedQueueGrowth()
+    {
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Crafting, 15, 8, "craft", RecipeId, Guid.Empty,
+            "CraftingRecipeSO", 1, string.Empty, string.Empty,
+            false, false, frameContext: Context(queuedAmount: 0));
+        var submission = new CraftingPlayerSubmission(
+            RecipeId,
+            CraftingPlayerPreflight.Proceeded,
+            CraftingPlayerNativeStage.Verification,
+            NativeMutationOutcome.Verified,
+            new NativeMutationCallOutcome(5, 1, 1),
+            "queue admission verified",
+            CraftingPlayerPostcondition.QueueAdmitted);
+        var committed = GameMcpCommandResult.Committed(
+            "committed", 15, 8, GameMcpCraftingProjection.Project(in submission));
+
+        var postState = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            Context(queuedAmount: 2), command, committed));
+
+        Assert.Null(postState["postStateUnavailable"]);
+        Assert.Equal(0, (int)postState["queued"]!["before"]!);
+        Assert.Equal(2, (int)postState["queued"]!["after"]!);
     }
 
     [Theory]
@@ -268,7 +299,7 @@ public sealed class GameMcpCraftingTests
 
         Assert.Equal("requested craft completion", (string?)failure["missingOutcome"]);
         Assert.Single(failure.Properties());
-        Assert.Empty(success.Properties());
+        Assert.True((bool)success["started"]!);
     }
 
     [Fact]

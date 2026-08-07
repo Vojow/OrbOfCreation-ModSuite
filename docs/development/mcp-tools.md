@@ -907,13 +907,21 @@ recipe, authored page/queue route, native purchase amount, affordability, and ro
 thread, then captures the shared crafting permit last. Direct recipes invoke native
 `CraftingRecipeSO.Execute`; page recipes re-drive the audited stack/new/instant
 `UICraftingPage.QueueCraft` sequence.
+A committed `craft` reports only what the settled world shows: a completed direct or instant craft
+returns `completed: true`, and a queued craft returns the queue growth the settled world confirms.
+When the settled queue count is unchanged, the response stays committed and returns
+`postStateUnavailable` with reason code `post_state_not_observed` naming the count it read — an
+unmoved count is the same number before and after the craft and is never published as its delta.
 
 The other modes use the same authored page relation and exact recipe identity.
 `automate` repeats the UI's native multi-buy and automation-quantity calculation before calling
 `CraftingInstanceListVariable.AutomateCraft`; the two cancel modes call the exact manual or
-automated instance route shown by the UI. The recipe row publishes manual queued amount and the
+automated instance route shown by the UI. `cancel_automation` passes the negated multi-buy amount,
+matching the game's own automation strip, because the native control adds whatever it is given. The
+recipe row publishes manual queued amount and the
 automated quantity/capacity needed for the next decision. Success is one settled quantity change;
-refund accounting is neither computed nor used as a gate.
+refund accounting is neither computed nor used as a gate. A fault that already moved the automation
+quantity reports it under `observed`, so a caller is never invited to retry into more damage.
 
 `game_discover`'s composition modes require `surface` plus `components` and accept no target UUID.
 `preview` resolves the

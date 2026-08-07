@@ -1699,11 +1699,19 @@ internal static class GameMcpWorldQuery
                 ["completed"] = true,
             }.Freeze();
         }
-        return Change(
-            command.TargetId,
-            hasBefore ? previous.QueuedAmount.ToInt() : null,
-            current.QueuedAmount.ToInt(),
-            "queued");
+        var settled = current.QueuedAmount.ToInt();
+        if (!hasBefore) return Change(command.TargetId, null, settled, "queued");
+        var started = previous.QueuedAmount.ToInt();
+        if (settled > started) return Change(command.TargetId, started, settled, "queued");
+        // An unmoved queue count is the same number before and after the craft, which proves
+        // nothing about it. Say what the settled world shows instead of publishing the pre-state.
+        return PostStateUnavailable(
+            "post_state_not_observed",
+            GameMcpCraftingProjection.ProvedQueueEntry(committed.Details)
+                ? "the craft entered the game's crafting queue, but the settled queue still shows " +
+                  settled + " queued for this recipe, so the entry it created is no longer observable"
+                : "the settled crafting queue still shows " + settled +
+                  " queued for this recipe, so the committed craft left no observable change");
     }
 
     private static GameMcpValue Change(

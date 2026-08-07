@@ -13,6 +13,9 @@ internal static class GameMcpCraftingProjection
             if (submission.Postcondition is CraftingPlayerPostcondition.DirectEffectAdvanced or
                 CraftingPlayerPostcondition.InstantCompleted)
                 result["completed"] = true;
+            else if (submission.Postcondition is CraftingPlayerPostcondition.QueueAdmitted or
+                     CraftingPlayerPostcondition.InstanceQuantityIncreased)
+                result["started"] = true;
             return result.Freeze();
         }
         if (submission.CallOutcome.MutationAttempts == 0) return new JObject().Freeze();
@@ -22,15 +25,20 @@ internal static class GameMcpCraftingProjection
         }.Freeze();
     }
 
-    internal static bool ProvedCompletion(GameMcpValue? details)
+    internal static bool ProvedCompletion(GameMcpValue? details) => Observed(details, "completed");
+
+    /// <summary>Whether the action itself saw the craft enter the game's crafting queue.</summary>
+    internal static bool ProvedQueueEntry(GameMcpValue? details) => Observed(details, "started");
+
+    private static bool Observed(GameMcpValue? details, string name)
     {
         if (details is not GameMcpObject result) return false;
         for (var index = 0; index < result.Properties.Count; index++)
         {
             var property = result.Properties[index];
-            if (property.Name == "completed" && property.Value is GameMcpScalar scalar &&
-                scalar.Value is bool completed)
-                return completed;
+            if (property.Name == name && property.Value is GameMcpScalar scalar &&
+                scalar.Value is bool observed)
+                return observed;
         }
         return false;
     }
