@@ -328,15 +328,15 @@ def observe_and_purchase(client: GameMcpClient, args: argparse.Namespace) -> dic
     observed = structured(
         client.call_tool("world_search", {"query": args.uuid, "limit": 50})
     )
-    matches = observed.get("matches")
-    if not isinstance(matches, list):
-        raise RuntimeError("purchase search returned no matches")
+    rows = observed.get("rows")
+    if not isinstance(rows, list):
+        raise RuntimeError("purchase search returned no rows")
     target = next(
         (
-            match
-            for match in matches
-            if isinstance(match, dict)
-            and match.get("category") in {"structures", "upgrades"}
+            row
+            for row in rows
+            if isinstance(row, dict)
+            and row.get("category") in {"structures", "upgrades"}
         ),
         None,
     )
