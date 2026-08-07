@@ -58,7 +58,14 @@ internal static class GameWorldStateDeriver
         var remaining = capacity - quantity;
         var headroom = IsNegative(remaining) ? BigDouble.Zero : remaining;
         var fillFraction = Clamp01((quantity / capacity).ToDouble());
-        var isAtCapacity = quantity.CompareTo(capacity) >= 0;
+
+        // "At capacity" answers the question the counter asks, so it compares the counter's own
+        // number with the counter's own ceiling. An inverted counter displays missing capacity
+        // (`GetDisplayQuantity() => GetMissing()`), so it is full exactly when nothing is stored —
+        // Toxicity reads full when toxicity is actually maxed, not when tolerance is untouched.
+        // The game's own `IsAtMax()` compares stored quantity instead and has no callers.
+        var displayed = sample.Traits.InvertedResource ? headroom : quantity;
+        var isAtCapacity = displayed.CompareTo(capacity) >= 0;
 
         return new WorldResource(
             in sample, isCapped: true, headroom, fillFraction, isAtCapacity, trueQuantity, trueRate);

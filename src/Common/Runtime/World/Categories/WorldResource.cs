@@ -482,7 +482,13 @@ internal readonly struct WorldResource : IWorldEntity
     /// </summary>
     internal double FillFraction { get; }
 
-    /// <summary>Whether holdings have reached or passed the ceiling.</summary>
+    /// <summary>
+    /// Whether the counter's displayed number has reached or passed the ceiling. Ordinary counters
+    /// display stored quantity; inverted ones display missing capacity, so they are at capacity when
+    /// nothing is stored. Reading this against <see cref="WorldResourceCoordinate.SpendableAmount"/>
+    /// mixes coordinates — it belongs beside
+    /// <see cref="WorldResourceCoordinate.DisplayAmount"/>.
+    /// </summary>
     internal bool IsAtCapacity { get; }
 
     /// <summary>

@@ -229,8 +229,9 @@ A `resources` row is deliberately only named identity, the counter's on-screen `
 `netRatePerSecond`, and, when the resource is capped, `capacity` plus `atCapacity`. A negative native
 capacity is the game's uncapped sentinel and is never serialized as a magnitude. Inverted counters
 publish their displayed headroom; all other counters publish their raw quantity. `atCapacity`
-always answers whether the underlying holdings reached the ceiling, so an inverted counter can
-display `amount: 0` while truthfully reporting `atCapacity: true`. Detailed
+answers in the same coordinate as `amount`: it is true exactly when the published `amount` reached
+`capacity`, so an inverted counter reading `amount: 0` is not at capacity and one reading its whole
+pool is. Detailed
 factor math will belong to a future Details-panel tool; it is not leaked through world rows.
 
 Research rows distinguish the native evaluator's base and effective requirement levels. Their

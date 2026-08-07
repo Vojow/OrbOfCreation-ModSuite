@@ -22,6 +22,12 @@ public sealed class GameMcpCorrectnessCoreTests
             new BigDouble(9.96d, 205), new BigDouble(1.103d, 38)));
     }
 
+    /// <summary>
+    /// The four bandwidth/inverted quadrants, plus the live rows that exposed the old rule:
+    /// <c>atCapacity</c> answers in the coordinate <c>amount</c> is published in, so an inverted
+    /// counter is full when its displayed number reaches the ceiling. Potion Toxicity showing 0 of
+    /// its tolerance is not at capacity; Stability showing its whole pool is.
+    /// </summary>
     [Fact]
     public void ResourceCoordinatesCoverEveryBandwidthAndInvertedQuadrant()
     {
@@ -29,36 +35,9 @@ public sealed class GameMcpCorrectnessCoreTests
         var spellCapacityId = Guid.Parse("37777777-7777-4777-8777-777777777777");
         var potionToxicityId = Guid.Parse("38888888-8888-4888-8888-888888888888");
         var glyphUpgradesId = Guid.Parse("39999999-9999-4999-8999-999999999999");
-        var rateInputs = default(RawResourceRateInputs);
-        var modifiers = default(RawResourceModifiers);
-        var ordinaryTraits = Traits(bandwidth: false, inverted: false);
-        var spellCapacityTraits = Traits(bandwidth: true, inverted: false);
-        var potionToxicityTraits = Traits(bandwidth: false, inverted: true);
-        var glyphUpgradesTraits = Traits(bandwidth: true, inverted: true);
-        var ordinaryReading = new RawResourceSample(
-            ordinaryId, new BigDouble(3), new BigDouble(10), true,
-            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
-            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
-            false, false, false, 0, Guid.Empty,
-            in rateInputs, in ordinaryTraits, in modifiers);
-        var spellCapacityReading = new RawResourceSample(
-            spellCapacityId, new BigDouble(3), new BigDouble(10), true,
-            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
-            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
-            false, false, false, 0, Guid.Empty,
-            in rateInputs, in spellCapacityTraits, in modifiers);
-        var potionToxicityReading = new RawResourceSample(
-            potionToxicityId, new BigDouble(10), new BigDouble(10), true,
-            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
-            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
-            false, false, false, 0, Guid.Empty,
-            in rateInputs, in potionToxicityTraits, in modifiers);
-        var glyphUpgradesReading = new RawResourceSample(
-            glyphUpgradesId, new BigDouble(10), new BigDouble(10), true,
-            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
-            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
-            false, false, false, 0, Guid.Empty,
-            in rateInputs, in glyphUpgradesTraits, in modifiers);
+        var stabilityId = Guid.Parse("3aaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+        var timeAdvancementId = Guid.Parse("3bbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+        var arcanumId = Guid.Parse("3ccccccc-cccc-4ccc-8ccc-cccccccccccc");
         var world = new GameWorldState
         {
             EntityIdentities = EntityIdentityCatalogSnapshot.Bound(1, new[]
@@ -67,17 +46,19 @@ public sealed class GameMcpCorrectnessCoreTests
                 new EntityIdentityName(spellCapacityId, "ResourceSO", "Spell Capacity", "weightSpell"),
                 new EntityIdentityName(potionToxicityId, "ResourceSO", "Potion Toxicity", "potionToxicity"),
                 new EntityIdentityName(glyphUpgradesId, "ResourceSO", "Glyph Upgrades", "glyphUpgrades"),
+                new EntityIdentityName(stabilityId, "ResourceSO", "Stability", "stability"),
+                new EntityIdentityName(timeAdvancementId, "ResourceSO", "Time Advancement", "timeAdvancement"),
+                new EntityIdentityName(arcanumId, "ResourceSO", "Arcanum", "arcanum"),
             }),
             Resources = PublicationTable<WorldResource>.Create(new[]
             {
-                new WorldResource(in ordinaryReading, true, new BigDouble(7), 0.3d,
-                    false, new BigDouble(6), BigDouble.Zero),
-                new WorldResource(in spellCapacityReading, true, new BigDouble(7), 0.3d,
-                    false, new BigDouble(6), BigDouble.Zero),
-                new WorldResource(in potionToxicityReading, true, BigDouble.Zero, 1d,
-                    true, new BigDouble(20), BigDouble.Zero),
-                new WorldResource(in glyphUpgradesReading, true, BigDouble.Zero, 1d,
-                    true, new BigDouble(20), BigDouble.Zero),
+                Derived(ordinaryId, held: 3, bandwidth: false, inverted: false),
+                Derived(spellCapacityId, held: 3, bandwidth: true, inverted: false),
+                Derived(potionToxicityId, held: 10, bandwidth: false, inverted: true),
+                Derived(glyphUpgradesId, held: 10, bandwidth: true, inverted: true),
+                Derived(stabilityId, held: 0, bandwidth: false, inverted: true),
+                Derived(timeAdvancementId, held: 4, bandwidth: false, inverted: true),
+                Derived(arcanumId, held: 10, bandwidth: false, inverted: false),
             }),
             SpellCosts = PublicationTable<WorldSpellCost>.Create(new[]
             {
@@ -87,7 +68,7 @@ public sealed class GameMcpCorrectnessCoreTests
             CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
             {
                 new WorldCollectionCategoryStatus(
-                    "resources", WorldCategoryOutcome.Collected, 4, 0, string.Empty),
+                    "resources", WorldCategoryOutcome.Collected, 7, 0, string.Empty),
             }),
         };
 
@@ -96,9 +77,15 @@ public sealed class GameMcpCorrectnessCoreTests
         AssertCoordinates(
             world, 1, spellCapacityId, display: "3", spendable: 7, cost: 100, atCapacity: false);
         AssertCoordinates(
-            world, 2, potionToxicityId, display: "0", spendable: 10, cost: 50, atCapacity: true);
+            world, 2, potionToxicityId, display: "0", spendable: 10, cost: 50, atCapacity: false);
         AssertCoordinates(
-            world, 3, glyphUpgradesId, display: "0", spendable: 0, cost: 100, atCapacity: true);
+            world, 3, glyphUpgradesId, display: "0", spendable: 0, cost: 100, atCapacity: false);
+        AssertCoordinates(
+            world, 4, stabilityId, display: "10", spendable: 0, cost: 50, atCapacity: true);
+        AssertCoordinates(
+            world, 5, timeAdvancementId, display: "6", spendable: 4, cost: 50, atCapacity: false);
+        AssertCoordinates(
+            world, 6, arcanumId, display: "10", spendable: 10, cost: 50, atCapacity: true);
 
         var costs = Assert.IsType<JArray>(GameMcpDocumentJsonEncoder.Encode(
             GameMcpWorldQuery.ProjectEquippedSpellCosts(
@@ -258,6 +245,20 @@ public sealed class GameMcpCorrectnessCoreTests
 
         return GameMcpNumberFormatter.Format(GameMcpWorldQuery.PlayerFacingCost(
             world, resource, nominal));
+    }
+
+    private static WorldResource Derived(Guid resourceId, int held, bool bandwidth, bool inverted)
+    {
+        var rateInputs = default(RawResourceRateInputs);
+        var modifiers = default(RawResourceModifiers);
+        var traits = Traits(bandwidth, inverted);
+        var reading = new RawResourceSample(
+            resourceId, new BigDouble(held), new BigDouble(10), true,
+            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty,
+            in rateInputs, in traits, in modifiers);
+        return GameWorldStateDeriver.Derive(in reading, default(WorldFrameGlobals));
     }
 
     private static RawResourceTraits Traits(bool bandwidth, bool inverted) => new(
