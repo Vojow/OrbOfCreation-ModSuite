@@ -928,7 +928,11 @@ internal static class GameMcpWorldQuery
                     ["before"] = hadBefore ? previous.InBattle : (bool?)null,
                     ["after"] = current.InBattle,
                 },
-                ["wavesCompleted"] = current.WavesCompleted,
+                ["wavesCompleted"] = new JObject
+                {
+                    ["before"] = hadBefore ? previous.WavesCompleted : (int?)null,
+                    ["after"] = current.WavesCompleted,
+                },
             };
             if (current.InBattle)
             {
@@ -936,6 +940,20 @@ internal static class GameMcpWorldQuery
                 var drain = ProjectRitualCosts(world, current.Decision.CompletionCosts);
                 if (drain.Count > 0) postState["completionCosts"] = drain;
             }
+            else
+            {
+                // Ending a battle is the moment its result exists. The settled row carries the level
+                // the battle reached and the duration rewards it left running; without them the
+                // caller has to guess what the results modal said.
+                postState["reachedLevel"] = current.LastReachedLevel;
+                postState["activeInstances"] = current.ActiveInstances;
+            }
+
+            // Every other ritual mode answers with what the caller can do next. End is the mode that
+            // most needs it, because it is the one that reopens selecting, levelling and activating.
+            var afterBattle = new JObject();
+            AddRitualDecision(world, afterBattle, in current);
+            postState["next"] = afterBattle;
             return postState.Freeze();
         }
         if (command.Mode == "cancel_duration")

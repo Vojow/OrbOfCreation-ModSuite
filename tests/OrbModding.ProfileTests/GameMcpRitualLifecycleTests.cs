@@ -147,11 +147,39 @@ public sealed class GameMcpRitualLifecycleTests
         Assert.False((bool)delta["activeBattle"]!["after"]!);
     }
 
+    [Fact]
+    public void Settled_end_delta_reports_the_battle_result_and_what_is_possible_next()
+    {
+        var before = World(
+            selected: true, level: 4, activeInstances: 0, inBattle: true, wavesCompleted: 7);
+        var after = World(
+            selected: true, level: 4, activeInstances: 2, inBattle: false, wavesCompleted: 0);
+        var command = new GameMcpCommand(1, GameMcpCommandKind.RitualLifecycle,
+            9, 3, "end", RitualId, Guid.Empty, "RitualSO",
+            1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 95));
+
+        var delta = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after, generation: 96), command,
+            GameMcpCommandResult.Committed("committed", 9, 3)), after);
+
+        Assert.Equal(7, (int)delta["wavesCompleted"]!["before"]!);
+        Assert.Equal(0, (int)delta["wavesCompleted"]!["after"]!);
+        Assert.Equal(5, (int)delta["reachedLevel"]!);
+        Assert.Equal(2, (int)delta["activeInstances"]!);
+
+        // Parity with select, deselect, set_level and activate: end says what is possible next.
+        Assert.True((bool)delta["next"]!["selected"]!);
+        Assert.Equal(4, (int)delta["next"]!["setLevel"]!["current"]!);
+        Assert.True((bool)delta["next"]!["activate"]!["available"]!);
+    }
+
     private static GameWorldState World(
         bool selected,
         int level,
         int activeInstances,
-        bool inBattle = false)
+        bool inBattle = false,
+        int wavesCompleted = 0)
     {
         var activation = selected
             ? PublicationTable<WorldRitualCost>.Create(new[]
@@ -165,7 +193,7 @@ public sealed class GameMcpRitualLifecycleTests
             activation, completion);
         var modifiers = default(RawRitualModifiers);
         var ritual = new WorldRitual(RitualId, true, inBattle, activeInstances,
-            6, 5, level, 0, 0, 0, 0, 0, 1, BigDouble.Zero, in modifiers,
+            6, 5, level, wavesCompleted, 0, 0, 0, 0, 1, BigDouble.Zero, in modifiers,
             false, false, false, 0, 1, 20, 1d, 0, decision: decision);
         var rateInputs = default(RawResourceRateInputs);
         var traits = default(RawResourceTraits);
