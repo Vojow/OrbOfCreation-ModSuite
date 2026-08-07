@@ -396,11 +396,12 @@ corresponding visible Ritual control. `mode="set_level"` also requires the zero-
 shown by the Ritual screen. The old runestone-selection manager methods are empty/null-returning in
 v1.0.5 and are deliberately absent. Activation revalidates the selected Ritual and the screen's
 native price before payment; success is the settled battle transition. `cancel_duration` ends an
-already-running duration reward and does not claim to cancel a battle. `end` is the moment the
-battle's result exists, so it reports the waves the battle completed as an observed change, the
-level it reached, the duration rewards it left running, and the same `next` affordance block the
-other modes carry. Selection, level, battle, and duration activity each use one game-written
-outcome sentinel and never a resource ledger.
+already-running duration reward and does not claim to cancel a battle. `activate` and `end` are the
+two battle-boundary modes, so both report `activeBattle` and `wavesCompleted` as observed
+`{before, after}` changes and both carry the same `next` affordance block the other modes carry;
+`end` additionally reports the level the battle reached and the duration rewards it left running,
+because that is the moment its result exists. Selection, level, battle, and duration activity each
+use one game-written outcome sentinel and never a resource ledger.
 
 ### Unified level controls
 
