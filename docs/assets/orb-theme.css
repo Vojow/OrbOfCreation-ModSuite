@@ -78,8 +78,13 @@ body::before {
   pointer-events: none;
 }
 
+/* The title bar scrolls away with the page, so it holds no layout height of its
+   own: the window box overflows into the margin below it, and the theme's
+   scripts read the remaining 18px frame as the offset for sticky sidebars. */
 .md-header {
-  height: 164px;
+  position: relative;
+  height: 0;
+  margin-bottom: 146px;
   padding: 18px 18px 0;
   background: transparent;
   box-shadow: none;
@@ -219,8 +224,8 @@ body::before {
 }
 
 .md-sidebar {
-  top: 176px;
-  height: calc(100vh - 184px);
+  top: 18px;
+  height: calc(100vh - 18px);
   padding: 0;
 }
 
@@ -429,7 +434,8 @@ body::before {
 
 @media screen and (max-width: 76.234375em) {
   .md-header {
-    height: 96px;
+    height: 0;
+    margin-bottom: 88px;
     padding: 8px 8px 0;
   }
 
