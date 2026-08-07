@@ -1567,7 +1567,8 @@ public sealed class Plugin : BaseUnityPlugin
             case "entity_catalog":
                 execution = GameMcpToolExecution.Read(
                     GameMcpEntityCatalog.Search(
-                        EntityIdentities(context), request.Query, request.Limit).Freeze());
+                        EntityIdentities(context), request.Query, request.Offset,
+                        request.Limit).Freeze());
                 return true;
             case "explain_entity":
                 execution = GameMcpToolExecution.Read(
@@ -1577,7 +1578,8 @@ public sealed class Plugin : BaseUnityPlugin
                 return true;
             case "world_search":
                 execution = GameMcpToolExecution.Read(
-                    GameMcpWorldQuery.Search(context, request.Query, request.Limit).Freeze());
+                    GameMcpWorldQuery.Search(
+                        context, request.Query, request.Offset, request.Limit).Freeze());
                 return true;
             case "suite_health":
                 execution = GameMcpToolExecution.Text(ProjectGameMcpHealthText(context));

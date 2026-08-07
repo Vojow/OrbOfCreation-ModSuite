@@ -179,10 +179,12 @@ internal static class GameMcpWorldQuery
             end = index + 1;
         }
 
+        // One pagination rule: nextOffset present means more rows remain and names where to
+        // resume. A page shorter than the limit with a nextOffset is the byte budget; a page
+        // shorter than the limit without one is the end of the category.
         var result = Envelope(publication);
         result["rows"] = rows;
         result["total"] = count;
-        if (end < requestedEnd) result["truncated"] = true;
         if (end < count) result["nextOffset"] = end;
         if (string.Equals(category.Name, "challenges", StringComparison.Ordinal))
             result["challengeState"] = ProjectChallengeState(world);
@@ -1991,6 +1993,7 @@ internal static class GameMcpWorldQuery
     internal static JObject Search(
         GameMcpFrameContext state,
         string query,
+        int offset,
         int limit)
     {
         if (!TryWorld(state, out var publication, out var unavailable))
@@ -1998,6 +2001,8 @@ internal static class GameMcpWorldQuery
         var normalized = (query ?? string.Empty).Trim();
         if (normalized.Length == 0)
             return NotAvailable(publication, "query_required", "query must not be empty");
+        if (offset < 0)
+            return NotAvailable(publication, "invalid_offset", "offset must be zero or greater");
         if (limit <= 0 || limit > MaximumPageSize)
         {
             return NotAvailable(
@@ -2009,8 +2014,14 @@ internal static class GameMcpWorldQuery
 
         // Search is deliberately an entity-catalog surface. Composite diagnostic categories are
         // readable through world_list, where their full identity and localized partiality survive.
-        var matches = new JArray();
+        // One entity is one match however many categories publish it: identity is deduplicated
+        // before paging, so a repeat can never eat a slot the caller paid for.
+        var rows = new JArray();
         var totalMatches = 0;
+        var scanned = 0;
+        var seen = new HashSet<Guid>();
+        var estimatedBytes = 128;
+        var byteBudgetReached = false;
         var unavailableCategories = new JArray();
         for (var categoryIndex = 0; categoryIndex < Categories.Length; categoryIndex++)
         {
@@ -2038,8 +2049,10 @@ internal static class GameMcpWorldQuery
                 var row = category.Row(publication.Snapshot, rowIndex);
                 if (!Matches(publication.Snapshot, category, row, normalized)) continue;
                 if (!category.TryIdentity(row, out var identity)) continue;
+                if (!seen.Add(identity)) continue;
                 totalMatches++;
-                if (matches.Count >= limit) continue;
+                scanned++;
+                if (scanned <= offset || rows.Count >= limit || byteBudgetReached) continue;
                 var match = new JObject
                 {
                     ["uuid"] = identity.ToString("D"),
@@ -2062,15 +2075,22 @@ internal static class GameMcpWorldQuery
                     if (local.Count > 0) match["implicatedSkippedRows"] = local;
                     if (localOffers.Count > 0) match["implicatedOffers"] = localOffers;
                 }
-                matches.Add(match);
+                var matchBytes = 192 + local.Count * 128 + localOffers.Count * 128;
+                if (rows.Count > 0 && estimatedBytes + matchBytes > MaximumListResponseBytes)
+                {
+                    byteBudgetReached = true;
+                    continue;
+                }
+                estimatedBytes += matchBytes;
+                rows.Add(match);
             }
         }
         var result = Envelope(publication);
         result["total"] = totalMatches;
         if (unavailableCategories.Count > 0)
             result["unavailableCategories"] = unavailableCategories;
-        result["matches"] = matches;
-        if (matches.Count < totalMatches) result["truncated"] = true;
+        result["rows"] = rows;
+        if (offset + rows.Count < totalMatches) result["nextOffset"] = offset + rows.Count;
         return result;
     }
 

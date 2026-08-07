@@ -16,11 +16,14 @@ internal static class GameMcpEntityCatalog
     internal static JObject Search(
         EntityIdentityCatalogSnapshot catalog,
         string query,
+        int offset,
         int limit)
     {
         var normalized = (query ?? string.Empty).Trim();
         if (normalized.Length == 0)
             return NotAvailable("query_required", "query must not be empty");
+        if (offset < 0)
+            return NotAvailable("invalid_offset", "offset must be zero or greater");
         if (limit <= 0 || limit > 200)
             return NotAvailable("invalid_limit", "limit must be between 1 and 200");
         if (!catalog.IsBound)
@@ -30,7 +33,7 @@ internal static class GameMcpEntityCatalog
                     ? catalog.FailureReason
                     : "the live entity catalog has not bound in this playing lifecycle yet");
 
-        var matches = new JArray();
+        var page = new JArray();
         var totalMatches = 0;
         var rows = catalog.Rows.AsSpan();
         for (var index = 0; index < rows.Length; index++)
@@ -38,15 +41,16 @@ internal static class GameMcpEntityCatalog
             var row = rows[index];
             if (!Matches(in row, normalized)) continue;
             totalMatches++;
-            if (matches.Count < limit) matches.Add(Project(catalog, in row));
+            if (totalMatches > offset && page.Count < limit)
+                page.Add(Project(catalog, in row));
         }
 
         var result = new JObject
         {
             ["total"] = totalMatches,
-            ["matches"] = matches,
+            ["rows"] = page,
         };
-        if (totalMatches > matches.Count) result["truncated"] = true;
+        if (offset + page.Count < totalMatches) result["nextOffset"] = offset + page.Count;
         return result;
     }
 

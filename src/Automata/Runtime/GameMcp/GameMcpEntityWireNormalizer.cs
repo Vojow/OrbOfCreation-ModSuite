@@ -402,7 +402,7 @@ internal static class GameMcpEntityWireNormalizer
 
     private static bool IsArrayReadResult(JObject item) =>
         item["rows"] is JArray || item["results"] is JArray ||
-        item["matches"] is JArray || item["categories"] is JArray ||
+        item["categories"] is JArray ||
         item["tooltips"] is JArray;
 
     private static bool IsBoundedCardinal(string field) => field switch

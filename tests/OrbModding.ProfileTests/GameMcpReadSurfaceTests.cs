@@ -27,7 +27,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
     {
         var catalog = GameMcpTestHarness.EntityCatalog;
         Assert.Null(GameMcpTestHarness.Json(
-            GameMcpEntityCatalog.Search(catalog, "Hidden Component", 20).Freeze())["status"]);
+            GameMcpEntityCatalog.Search(catalog, "Hidden Component", 0, 20).Freeze())["status"]);
         Assert.Same(catalog, GameMcpTestHarness.EntityCatalog);
     }
 
@@ -482,7 +482,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
         Assert.Null(result["totalCatalogRows"]);
         Assert.Null(result["rowsWithDisplayName"]);
         Assert.Null(result["truncated"]);
-        var match = Assert.IsType<JObject>(Assert.Single((JArray)result["matches"]!));
+        var match = Assert.IsType<JObject>(Assert.Single((JArray)result["rows"]!));
         Assert.Equal("0d0474b5-f135-4d17-a2e6-288b8aeb20eb", (string?)match["uuid"]);
         Assert.Equal("AttributeSO", (string?)match["nativeType"]);
         Assert.Equal("HiddenComponent", (string?)match["internalName"]);
@@ -500,31 +500,68 @@ public sealed class GameMcpStreamableHttpProtocolTests
             GameMcpEntityCatalog.Search(
                 GameMcpTestHarness.EntityCatalog,
                 "definitely-no-such-live-entity",
+                0,
                 20).Freeze());
 
         Assert.Null(result["status"]);
         Assert.Equal(0, (int)result["total"]!);
         Assert.Null(result["returned"]);
-        Assert.Empty(result["matches"]!);
+        Assert.Empty(result["rows"]!);
         Assert.Null(result["query"]);
         Assert.Null(result["limit"]);
         Assert.Null(result["truncated"]);
+        Assert.Null(result["nextOffset"]);
     }
 
     [Fact]
-    public void LimitedCatalogSearchUsesTotalReturnedAndNextOffset()
+    public void CatalogSearchPagesWithNextOffsetAndNeverRepeatsARow()
+    {
+        var first = GameMcpTestHarness.Json(GameMcpEntityCatalog.Search(
+            GameMcpTestHarness.EntityCatalog,
+            "a",
+            0,
+            1).Freeze());
+
+        var total = (int)first["total"]!;
+        Assert.True(total > 1);
+        Assert.Null(first["returned"]);
+        Assert.Null(first["truncated"]);
+        Assert.Null(first["hasMore"]);
+        Assert.Single(first["rows"]!);
+        Assert.Equal(1, (int)first["nextOffset"]!);
+
+        var second = GameMcpTestHarness.Json(GameMcpEntityCatalog.Search(
+            GameMcpTestHarness.EntityCatalog,
+            "a",
+            (int)first["nextOffset"]!,
+            1).Freeze());
+
+        Assert.Equal(total, (int)second["total"]!);
+        Assert.NotEqual(
+            (string?)first["rows"]![0]!["uuid"],
+            (string?)second["rows"]![0]!["uuid"]);
+
+        var last = GameMcpTestHarness.Json(GameMcpEntityCatalog.Search(
+            GameMcpTestHarness.EntityCatalog,
+            "a",
+            total - 1,
+            1).Freeze());
+
+        Assert.Single(last["rows"]!);
+        Assert.Null(last["nextOffset"]);
+    }
+
+    [Fact]
+    public void CatalogSearchRefusesANegativeOffset()
     {
         var result = GameMcpTestHarness.Json(GameMcpEntityCatalog.Search(
             GameMcpTestHarness.EntityCatalog,
             "a",
-            1).Freeze());
+            -1,
+            10).Freeze());
 
-        Assert.True((int)result["total"]! > result["matches"]!.Count());
-        Assert.Null(result["returned"]);
-        Assert.Null(result["nextOffset"]);
-        Assert.Null(result["hasMore"]);
-        Assert.True((bool)result["truncated"]!);
-        Assert.Single(result["matches"]!);
+        Assert.Equal("unavailable", (string?)result["status"]);
+        Assert.Equal("invalid_offset", (string?)result["reasonCode"]);
     }
 
     [Fact]
@@ -551,7 +588,7 @@ public sealed class GameMcpStreamableHttpProtocolTests
                 GameMcpTestHarness.Context()));
 
         var result = (JObject)response.Body!["result"]!["structuredContent"]!;
-        var match = Assert.IsType<JObject>(Assert.Single((JArray)result["matches"]!));
+        var match = Assert.IsType<JObject>(Assert.Single((JArray)result["rows"]!));
         Assert.Null(match["internalName"]);
         Assert.Equal("OrbAnim2", (string?)match["name"]);
         Assert.Equal("asset", (string?)match["nameSource"]);
@@ -1016,11 +1053,11 @@ public sealed class GameMcpWorldEnvelopeTests
         Assert.Equal("category_not_collected", (string?)rows["reasonCode"]);
 
         var search = GameMcpTestHarness.Json(
-            GameMcpWorldQuery.Search(state, "resource", 10));
+            GameMcpWorldQuery.Search(state, "resource", 0, 10));
         Assert.Null(search["status"]);
         Assert.Null(search["reasonCode"]);
         Assert.NotEmpty(search["unavailableCategories"]!.Values<JObject>());
-        Assert.Empty(search["matches"]!);
+        Assert.Empty(search["rows"]!);
 
         var overview = GameMcpTestHarness.Json(GameMcpWorldQuery.Overview(state));
         Assert.False((bool)overview["collection"]!["complete"]!);
@@ -1099,18 +1136,20 @@ public sealed class GameMcpWorldEnvelopeTests
         var unaffectedSearch = GameMcpTestHarness.Json(GameMcpWorldQuery.Search(
             state,
             unaffectedId.ToString("D"),
+            0,
             10));
         Assert.Null(unaffectedSearch["status"]);
         Assert.Null(unaffectedSearch["code"]);
-        Assert.Single(unaffectedSearch["matches"]!.Values<JObject>());
+        Assert.Single(unaffectedSearch["rows"]!.Values<JObject>());
 
         var affectedSearch = GameMcpTestHarness.Json(GameMcpWorldQuery.Search(
             state,
             affectedId.ToString("D"),
+            0,
             10));
         Assert.Null(affectedSearch["status"]);
         Assert.Null(affectedSearch["reasonCode"]);
-        var affectedMatch = Assert.Single(affectedSearch["matches"]!.Values<JObject>());
+        var affectedMatch = Assert.Single(affectedSearch["rows"]!.Values<JObject>());
         Assert.Equal("unavailable", (string?)affectedMatch["status"]);
         Assert.Equal("entity_data_incomplete", (string?)affectedMatch["reasonCode"]);
         var searchFailure = Assert.Single(
@@ -1211,11 +1250,12 @@ public sealed class GameMcpWorldEnvelopeTests
         var search = GameMcpTestHarness.Json(GameMcpWorldQuery.Search(
             Snapshot(publisher.ReadLatest()),
             "00000000",
+            0,
             10));
 
         Assert.Null(search["status"]);
         Assert.Equal(0, (int)search["total"]!);
-        Assert.Empty(search["matches"]!.Values<JObject>());
+        Assert.Empty(search["rows"]!.Values<JObject>());
         Assert.Null(search["nextOffset"]);
     }
 
@@ -1278,11 +1318,12 @@ public sealed class GameMcpWorldEnvelopeTests
         var search = GameMcpTestHarness.Json(GameMcpWorldQuery.Search(
             state,
             ownerId.ToString("D"),
+            0,
             10));
         Assert.Null(search["status"]);
         Assert.Equal(0, (int)search["total"]!);
         Assert.Null(search["returned"]);
-        Assert.Empty(search["matches"]!);
+        Assert.Empty(search["rows"]!);
         Assert.Null(search["partialMatches"]);
         Assert.Null(search["implicatedSkippedRows"]);
 

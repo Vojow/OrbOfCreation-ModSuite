@@ -131,13 +131,15 @@ internal static class GameMcpTestHarness
                 GameMcpEntityCatalog.Search(
                     context.World?.Snapshot.EntityIdentities ?? EntityCatalog,
                     request.Query,
+                    request.Offset,
                     request.Limit).Freeze()),
             "explain_entity" => GameMcpToolExecution.Read(
                 GameMcpEntityExplainer.Explain(
                     context,
                     request.Uuid.ToString("D")).Freeze()),
             "world_search" => GameMcpToolExecution.Read(
-                GameMcpWorldQuery.Search(context, request.Query, request.Limit).Freeze()),
+                GameMcpWorldQuery.Search(
+                    context, request.Query, request.Offset, request.Limit).Freeze()),
             _ => GameMcpToolExecution.Error(new GameMcpObjectBuilder
             {
                 ["status"] = "not_available",

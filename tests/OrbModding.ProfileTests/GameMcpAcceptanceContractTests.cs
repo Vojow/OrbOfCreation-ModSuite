@@ -337,9 +337,10 @@ public sealed class GameMcpWorldQueryTests
         var search = GameMcpTestHarness.Json(GameMcpWorldQuery.Search(
             searchState,
             GameMcpAcceptanceFixture.SpellId.ToString("D"),
+            0,
             5));
-        Assert.Single(search["matches"]!.Values<JObject>());
-        Assert.Equal(127, System.Text.Encoding.UTF8.GetByteCount(
+        Assert.Single(search["rows"]!.Values<JObject>());
+        Assert.Equal(124, System.Text.Encoding.UTF8.GetByteCount(
             search.ToString(Newtonsoft.Json.Formatting.None)));
 
         var exact = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(

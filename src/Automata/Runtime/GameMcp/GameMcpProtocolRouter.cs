@@ -244,6 +244,7 @@ internal sealed class GameMcpProtocolRouter
             case "entity_catalog":
             case "world_search":
                 builder.Query = RequireString(arguments, "query");
+                builder.Offset = OptionalInt(arguments, "offset", 0);
                 builder.Limit = OptionalInt(
                     arguments, "limit", GameMcpWorldQuery.DefaultLimit);
                 break;
@@ -559,7 +560,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "world_list",
                 "List exact world rows",
-                "Page through one discoverable category from one immutable published world. Limit is an upper bound; the response may stop earlier at the byte bound and returns nextOffset when more rows remain.",
+                "Page through one discoverable category from one immutable published world. limit is an upper bound: a page also stops at a 12 KB response budget, so wide rows come back short. nextOffset is present exactly when more rows remain, and is the offset to resume from.",
                 ObjectSchema(
                     new JObject
                     {
@@ -576,11 +577,12 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "entity_catalog",
                 "Search live entity catalog",
-                "Search every UUID loaded in the game's runtime registry by native type, internal asset name, and available player-facing display name, including loaded entities hidden by progression.",
+                "Search every UUID loaded in the game's runtime registry by native type, internal asset name, and available player-facing display name, including loaded entities hidden by progression. nextOffset is present exactly when more rows remain, and is the offset to resume from.",
                 ObjectSchema(
                     new JObject
                     {
                         ["query"] = StringSchema("Case-insensitive UUID, native type, internal name, or player-facing display name fragment."),
+                        ["offset"] = IntegerSchema(0, int.MaxValue),
                         ["limit"] = IntegerSchema(1, 200),
                     },
                     "query")),
@@ -597,11 +599,12 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "world_search",
                 "Search published entities",
-                "Search stable-UUID entity categories only. Composite diagnostic categories are intentionally excluded; use world_list for those rows and their localized partiality evidence.",
+                "Search stable-UUID entity categories only. Composite diagnostic categories are intentionally excluded; use world_list for those rows and their localized partiality evidence. limit is an upper bound: a page also stops at a 12 KB response budget, so wide rows come back short. nextOffset is present exactly when more rows remain, and is the offset to resume from.",
                 ObjectSchema(
                     new JObject
                     {
                         ["query"] = StringSchema("Case-insensitive text or UUID fragment."),
+                        ["offset"] = IntegerSchema(0, int.MaxValue),
                         ["limit"] = IntegerSchema(1, 200),
                     },
                     "query")),
