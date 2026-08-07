@@ -210,6 +210,13 @@ resource traits, rate inputs, and modifier structs stay out of world rows. `expl
 deeper evaluated evidence. Purchase-cost rows are composite and therefore remain a `world_list`
 surface.
 
+A `structures` row publishes `level` as the number the attribute's own badge shows, the game's
+persisted `GetBaseLevel()`, and names work still in flight separately as `queuedLevels`; neither
+number is repeated under a second name. An `upgrades` row publishes `maxLevel` and `remainingLevels`
+only when the upgrade has a ceiling: a negative native maximum is the uncapped sentinel, so both
+fields are absent together rather than reading `0`. An exhausted upgrade reads `already_maxed` and
+publishes no `affordable`, because a level that cannot be bought has no price to be short of.
+
 `purchase-costs` is the only modifier-adjusted live cost category. Spell and alchemy cost rows are
 immediate/drain observations and are not mislabeled as purchase prices. Every displayed cost is in
 the screen's spend units: ordinary nominal costs are divided by the resource quality percent through

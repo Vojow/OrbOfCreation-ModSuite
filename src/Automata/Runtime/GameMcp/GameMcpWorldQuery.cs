@@ -208,8 +208,11 @@ internal static class GameMcpWorldQuery
         }
         if (row is WorldUpgrade upgrade)
         {
-            var projected = PurchaseListRow(world, upgrade.EntityId, upgrade.CommittedLevel);
-            projected["remainingLevels"] = upgrade.RemainingLevels;
+            // An exhausted upgrade has no next level, so it has no price to be short of and no
+            // ceiling distance left to report. An unbounded one has no ceiling at all.
+            var projected = PurchaseListRow(world, upgrade.EntityId, upgrade.CommittedLevel,
+                priced: !upgrade.IsExhausted);
+            if (upgrade.IsBounded) projected["remainingLevels"] = upgrade.RemainingLevels;
             projected["available"] = upgrade.Reading.Available && !upgrade.IsExhausted;
             if (upgrade.IsExhausted) projected["reasonCode"] = "already_maxed";
             return projected.Freeze();
@@ -323,14 +326,15 @@ internal static class GameMcpWorldQuery
     private static JObject PurchaseListRow(
         GameWorldState world,
         Guid entityId,
-        object level)
+        object level,
+        bool priced = true)
     {
         var result = new JObject
         {
             ["entityId"] = entityId.ToString("D"),
             ["committedLevel"] = level,
         };
-        if (TryPurchaseAffordability(world, entityId, out var affordable))
+        if (priced && TryPurchaseAffordability(world, entityId, out var affordable))
             result["affordable"] = affordable;
         return result;
     }
@@ -2355,6 +2359,8 @@ internal static class GameMcpWorldQuery
             ? ProjectResource(world, in resource)
             : row is WorldStructure structure
             ? ProjectStructure(in structure)
+            : row is WorldUpgrade upgrade
+            ? ProjectUpgrade(in upgrade)
             : row is WorldPurchaseCost purchaseCost
             ? ProjectPurchaseCost(world, in purchaseCost).Freeze()
             : row is WorldCraftingRecipe craftingRecipe
@@ -2409,6 +2415,34 @@ internal static class GameMcpWorldQuery
                 category.Name,
                 category.ExpectedNativeType);
 
+    /// <summary>
+    /// An upgrade with no ceiling has no ceiling to report: the game marks that with a negative
+    /// <c>maxLevel</c>, and a sentinel becomes absence rather than a plausible number. Both
+    /// <c>maxLevel</c> and <c>remainingLevels</c> are therefore published together or not at all.
+    /// </summary>
+    private static GameMcpValue ProjectUpgrade(in WorldUpgrade upgrade)
+    {
+        var result = new JObject
+        {
+            ["entityId"] = upgrade.EntityId.ToString("D"),
+            ["category"] = "upgrades",
+            ["nativeType"] = "UpgradeSO",
+            ["available"] = upgrade.Reading.Available && !upgrade.IsExhausted,
+            ["level"] = upgrade.Reading.Level,
+        };
+        if (upgrade.IsExhausted) result["reasonCode"] = "already_maxed";
+        if (upgrade.Reading.QueuedLevels != 0)
+            result["queuedLevels"] = upgrade.Reading.QueuedLevels;
+        if (upgrade.IsBounded)
+        {
+            result["maxLevel"] = upgrade.Reading.MaxLevel;
+            result["remainingLevels"] = upgrade.RemainingLevels;
+        }
+        if (upgrade.IsDeveloping)
+            result["developmentProgress"] = upgrade.DevelopmentProgress;
+        return result.Freeze();
+    }
+
     private static GameMcpValue ProjectStructure(in WorldStructure structure)
     {
         var enabled = !structure.Reading.Disabled;
@@ -2420,15 +2454,22 @@ internal static class GameMcpWorldQuery
             toggle["next"] = enabled ? "disable" : "enable";
         else
             toggle["reasonCode"] = "not_available";
-        return new JObject
+        var result = new JObject
         {
             ["entityId"] = structure.EntityId.ToString("D"),
             ["category"] = "structures",
             ["nativeType"] = "StructureSO",
-            ["level"] = new GameMcpDomainValue(structure.CommittedLevel),
+
+            // The badge UIStructureItem renders is StructureSO.GetBaseLevel(), the persisted
+            // quantity; queued work shows beside it as "+N". Publishing level plus queued under
+            // this name would put a number on the wire that no screen shows.
+            ["level"] = new GameMcpDomainValue(structure.Reading.Level),
             ["enabled"] = enabled,
             ["toggle"] = toggle,
-        }.Freeze();
+        };
+        if (structure.Reading.QueuedLevels != 0)
+            result["queuedLevels"] = structure.Reading.QueuedLevels;
+        return result.Freeze();
     }
 
     private static GameMcpValue ProjectHarvestElement(
@@ -5209,6 +5250,10 @@ internal static class GameMcpWorldQuery
         object row) =>
         row is WorldResource resource
             ? ProjectResource(world, in resource)
+            : row is WorldStructure structure
+            ? ProjectStructure(in structure)
+            : row is WorldUpgrade upgrade
+            ? ProjectUpgrade(in upgrade)
             : row is WorldPurchaseCost purchaseCost
             ? ProjectPurchaseCost(world, in purchaseCost).Freeze()
             : row is WorldCraftingRecipe craftingRecipe
@@ -5508,13 +5553,13 @@ internal static class GameMcpWorldQuery
         "structures" => new[]
         {
             "entityId", "reading.unlocked", "reading.level", "reading.queuedLevels",
-            "committedLevel", "effectiveLevel", "hasWorkInFlight",
+            "effectiveLevel", "hasWorkInFlight",
             "developmentProgress", "reading.insufficientReqPenaltyActive",
         },
         "upgrades" => new[]
         {
             "entityId", "reading.available", "reading.level", "reading.maxLevel",
-            "reading.queuedLevels", "reading.cachedCostLevel", "committedLevel",
+            "reading.queuedLevels",
             "remainingLevels", "isExhausted", "isDeveloping", "developmentProgress",
         },
         "research" => new[]

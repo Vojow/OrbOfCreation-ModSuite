@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using OrbAutomata;
 using OrbAutomata.GameMcp;
@@ -499,6 +500,81 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
+    public void AnAttributeRowPublishesTheBadgeLevelAndNamesWorkInFlightSeparately()
+    {
+        var attributeId = Guid.Parse("f2000000-0000-0000-0000-000000000002");
+        var world = new GameWorldState
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 632, queued: 3),
+            }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus(
+                    "structures", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
+            }),
+            CollectedAtEpoch = 41,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            GameMcpTestHarness.Context(world, 2101),
+            "structures",
+            attributeId.ToString("D")));
+        var row = response["row"]!;
+
+        Assert.Equal("632", (string?)row["level"]);
+        Assert.Equal("3", (string?)row["queuedLevels"]);
+        Assert.Null(row["committedLevel"]);
+    }
+
+    [Fact]
+    public void AnUpgradeWithoutACeilingOmitsItInsteadOfReportingNoLevelsLeft()
+    {
+        var unboundedId = Guid.Parse("f2000000-0000-0000-0000-000000000003");
+        var exhaustedId = Guid.Parse("f2000000-0000-0000-0000-000000000004");
+        var world = new GameWorldState
+        {
+            Upgrades = PublicationTable<WorldUpgrade>.Create(new[]
+            {
+                Upgrade(unboundedId, level: 7, maxLevel: -1),
+                Upgrade(exhaustedId, level: 10, maxLevel: 10),
+            }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus(
+                    "upgrades", WorldCategoryOutcome.Collected, 2, 0, string.Empty),
+            }),
+            CollectedAtEpoch = 41,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+        var context = GameMcpTestHarness.Context(world, 2102);
+
+        var unbounded = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context, "upgrades", unboundedId.ToString("D")))["row"]!;
+        Assert.Equal(7, (int)unbounded["level"]!);
+        Assert.Null(unbounded["maxLevel"]);
+        Assert.Null(unbounded["remainingLevels"]);
+        Assert.Null(unbounded["reasonCode"]);
+
+        var exhausted = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context, "upgrades", exhaustedId.ToString("D")))["row"]!;
+        Assert.Equal(10, (int)exhausted["maxLevel"]!);
+        Assert.Equal(0, (int)exhausted["remainingLevels"]!);
+        Assert.Equal("already_maxed", (string?)exhausted["reasonCode"]);
+        Assert.False((bool)exhausted["available"]!);
+
+        var listed = GameMcpTestHarness.Json(
+            GameMcpWorldQuery.ListRows(context, "upgrades", 0, 10));
+        var rows = listed["rows"]!.Values<JObject>().ToArray();
+        Assert.Null(rows[0]!["remainingLevels"]);
+        Assert.Equal(0, (int)rows[1]!["remainingLevels"]!);
+        Assert.Equal("already_maxed", (string?)rows[1]!["reasonCode"]);
+        Assert.Null(rows[1]!["affordable"]);
+    }
+
+    [Fact]
     public void ActionFailureProjectionCarriesOnlyStableCodeAndActionableReason()
     {
         var context = GameMcpTestHarness.Context(
@@ -545,7 +621,18 @@ public sealed class GameMcpCorrectnessCoreTests
         Assert.Null(response["configurationGenerationMismatch"]);
     }
 
-    private static WorldStructure Structure(Guid id, int level)
+    private static WorldUpgrade Upgrade(Guid id, int level, int maxLevel) =>
+        GameWorldStateDeriver.Derive(new RawUpgradeSample(
+            id,
+            level,
+            maxLevel,
+            available: true,
+            queuedLevels: 0,
+            buildTime: BigDouble.Zero,
+            developmentTime: 0d,
+            cachedCostLevel: level));
+
+    private static WorldStructure Structure(Guid id, int level, int queued = 0)
     {
         var modifiers = new RawStructureModifiers(
             BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
@@ -556,7 +643,7 @@ public sealed class GameMcpCorrectnessCoreTests
             id,
             Guid.Empty,
             new BigDouble(level),
-            BigDouble.Zero,
+            new BigDouble(queued),
             unlocked: true,
             queuedEchos: 0,
             completedEchos: 0,
@@ -576,8 +663,8 @@ public sealed class GameMcpCorrectnessCoreTests
             in modifiers);
         return new WorldStructure(
             in reading,
-            new BigDouble(level),
-            hasWorkInFlight: false,
+            new BigDouble(level + queued),
+            hasWorkInFlight: queued != 0,
             new BigDouble(level),
             developmentProgress: 0);
     }
