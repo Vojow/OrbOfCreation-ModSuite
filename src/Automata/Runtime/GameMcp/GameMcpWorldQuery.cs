@@ -226,9 +226,9 @@ internal static class GameMcpWorldQuery
                 ["entityId"] = glyph.EntityId.ToString("D"),
                 ["discovered"] = glyph.Discovered,
                 ["available"] = glyph.Learned,
-                ["paidLevel"] = glyph.Level - glyph.FreeLevels,
-                ["bonusLevel"] = glyph.FreeLevels,
-                ["totalLevel"] = glyph.Level,
+                ["paidLevel"] = glyph.LevelDecision.TotalLevel - glyph.LevelDecision.BonusLevels,
+                ["bonusLevel"] = glyph.LevelDecision.BonusLevels,
+                ["totalLevel"] = glyph.LevelDecision.TotalLevel,
             }.Freeze();
         if (row is WorldPlotNode plot)
             return new JObject

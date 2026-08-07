@@ -82,6 +82,23 @@ public sealed class GameMcpGenericLevelTests
     }
 
     [Fact]
+    public void Listed_glyph_levels_match_the_row_for_a_bonus_levelled_glyph()
+    {
+        var world = World(total: 5, bonus: 2, purchaseAffordable: false);
+        var listed = Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(world, generation: 901), "glyphs", 0, 10).Freeze(), world);
+        var row = Row(world, "glyphs", GlyphId);
+
+        var entry = Assert.Single(listed["rows"]!.Values<JObject>())!;
+        Assert.Equal(3, (int)entry["paidLevel"]!);
+        Assert.Equal(2, (int)entry["bonusLevel"]!);
+        Assert.Equal(5, (int)entry["totalLevel"]!);
+        Assert.Equal((int)row["paidLevel"]!, (int)entry["paidLevel"]!);
+        Assert.Equal((int)row["bonusLevel"]!, (int)entry["bonusLevel"]!);
+        Assert.Equal((int)row["totalLevel"]!, (int)entry["totalLevel"]!);
+    }
+
+    [Fact]
     public void Hidden_or_unlearned_rows_never_advertise_level_purchase()
     {
         var world = World(5, 2, purchaseAffordable: true,
