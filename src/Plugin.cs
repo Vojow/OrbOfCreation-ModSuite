@@ -2881,7 +2881,7 @@ public sealed class Plugin : BaseUnityPlugin
                     command,
                     NavigationRefusal(
                         "subtab_match_failed",
-                        SubtabRefusalReason(details, subtabReason, settledScreen[0]),
+                        SubtabRefusalReason(subtabReason, settledScreen[0]),
                         details,
                         "subtabCandidates",
                         subtabs.Select(candidate => candidate.Label)),
@@ -3456,7 +3456,6 @@ public sealed class Plugin : BaseUnityPlugin
     /// next read finds a screen it did not ask to be on.
     /// </summary>
     private static string SubtabRefusalReason(
-        GameMcpObjectBuilder details,
         string subtabReason,
         bool settled)
     {
