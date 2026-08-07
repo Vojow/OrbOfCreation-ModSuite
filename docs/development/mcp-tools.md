@@ -489,7 +489,9 @@ native selectors as a verb would expose developer-era machinery the shipped UI d
 `player-loadouts` lists the named, stable player loadout UUIDs. A detail row reports whether the
 loadout is selected, whether its Equipment and Alchemy sections are enabled, the current icon and
 color indexes, whether the native manager can switch now, and the named saved spell, Equipment,
-and Alchemy entries. `game_loadout(mode="select", uuid=...)` invokes the manager's whole
+and Alchemy entries. All three sections are always present with their own list: a loadout that
+saved nothing publishes empty lists rather than dropping the keys, so empty never reads the same
+as unprojected. `game_loadout(mode="select", uuid=...)` invokes the manager's whole
 save/deactivate/load/reactivate transaction after revalidating every stored reference's identity,
 native type, role, and whole-loadout capacity. Current glyph ownership is deliberately not a
 selection precondition: the native screen accepts authored saved layouts whose construction
@@ -713,7 +715,9 @@ contract, its authored `GetDescription()` text leads the explanation after ident
 is invented when that source is absent. The `state` row uses the same curated player surface as
 world reads rather than serializing the collector's complete internal struct.
 
-Only applicable predicate slots are present: `visible`, `available`, `canDevelop`, `canPurchase`,
+The `predicates` and `blockers` blocks are always present, empty or not, so an entity nothing
+applies to never reads like an entity nobody evaluated. Only applicable predicate slots are inside:
+`visible`, `available`, `canDevelop`, `canPurchase`,
 `canDiscover`, and `canUse`. Presence means applicable. Each slot carries `value` and a stable
 `reasonCode`; absence means the predicate does not apply, not false. Crafting purchase uses the
 published `CraftingRecipeSO.CanBuyAt(GetStartingQuantity())` verdict, spell use uses the equipped
@@ -727,7 +731,9 @@ and points to `entity_catalog`; a catalog-known UUID with no explainable row ret
 `not_world_projected` and names the applicable read surface. The two remedies never share a code.
 
 Per-level structure, upgrade, and Research requirements preserve the implicit container `AND`,
-explicit native `AND`/`OR` nodes, authored order, and recursively expanded prerequisite-link tiers. Every leaf names
+explicit native `AND`/`OR` nodes, authored order, and recursively expanded prerequisite-link tiers.
+Every operator node carries its `children` list, so an entity with no requirements reads as an
+empty list rather than as an operator over an unstated set. Every leaf names
 the requirement UUID and native type, comparison kind, exact published value selected by the native
 evaluator (`purchased_level`, `total_level`, `purchased_quantity`, discovery, mastery, recipe,
 advancement, reached, numeric, or link gate), current and required values, met verdict, and base,
@@ -1105,7 +1111,11 @@ tools/game-mcp-client.py navigate World --subtab Agromancy \
 ```
 
 When `capture` is true, the server waits until the destination has settled and returns the
-PNG inline in the same terminal response. Compound navigation captures exactly once, after the
+PNG inline in the same terminal response, alongside the image's `width`, `height`, and `scene`.
+Those fields are absent exactly when the caller asked for no capture: a requested capture that
+cannot be encoded or stored fails the whole call loudly (`inline_screenshot_failed`,
+`screenshot_budget_unavailable`, or `screenshot_budget_reached`) rather than answering without
+them. Compound navigation captures exactly once, after the
 final tab/subtab/plot selection; intermediate frames are never encoded. PNG size depends heavily on
 the destination's visual entropy: the mostly dark Start screen compresses far smaller than the
 dense Main HUD. MCP base64 then adds about one third to the PNG byte count, which explains why a

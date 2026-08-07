@@ -76,14 +76,15 @@ internal static class GameMcpEntityExplainer
             out var category)
                 ? GameMcpWorldQuery.ProjectEntityState(world, category, row)
                 : new GameMcpDomainValue(row);
-        if (predicates.Count > 0) result["predicates"] = predicates;
+        // Both blocks are always present. An entity with no applicable predicate and one whose
+        // predicates were never evaluated are different answers, and an omitted key said both.
+        result["predicates"] = predicates;
         if (requirements is not null) result["requirements"] = requirements;
         var researchThresholds = ResearchThresholds(world, uuid, kind);
         if (researchThresholds is not null) result["researchThresholds"] = researchThresholds;
         var purchase = Purchase(world, uuid, kind);
         if (purchase is not null) result["purchase"] = purchase;
-        var blockers = Blockers(world, uuid, kind);
-        if (blockers.Count > 0) result["blockers"] = blockers;
+        result["blockers"] = Blockers(world, uuid, kind);
         if (parityFailure is not null)
         {
             result["code"] = parityFailureCode;
@@ -460,8 +461,11 @@ internal static class GameMcpEntityExplainer
                 ["ownerUuid"] = ownerId.ToString("D"),
                 ["tierIndex"] = containerIndex,
                 ["operator"] = "AND",
+
+                // An operator node always carries its list. Dropping an empty one left a node
+                // asserting a structure it did not have, and read the same as one nobody expanded.
+                ["children"] = children,
             };
-            if (children.Count > 0) result["children"] = children;
             return result;
         }
         finally
@@ -551,8 +555,8 @@ internal static class GameMcpEntityExplainer
                 ["parentOrdinal"] = row.ParentOrdinal,
                 ["depth"] = row.Depth,
                 ["operator"] = row.Operator.ToString().ToUpperInvariant(),
+                ["children"] = children,
             };
-            if (children.Count > 0) group["children"] = children;
             return group;
         }
 

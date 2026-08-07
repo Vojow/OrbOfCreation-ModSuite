@@ -652,6 +652,36 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         Assert.Equal("insufficient_resource", (string?)rows[1]!["reasonCode"]);
     }
 
+    [Fact]
+    public void AnEntityWithNothingToSayPublishesEmptyBlocksRatherThanOmittingThem()
+    {
+        var upgradeId = Guid.Parse("d5100000-0000-4000-8000-000000000011");
+        var rawUpgrade = new RawUpgradeSample(
+            upgradeId,
+            level: 1,
+            maxLevel: 10,
+            available: true,
+            queuedLevels: 0,
+            buildTime: BigDouble.Zero,
+            developmentTime: 1,
+            cachedCostLevel: 1);
+        var world = new GameWorldState
+        {
+            Upgrades = PublicationTable<WorldUpgrade>.Create(new[]
+            {
+                GameWorldStateDeriver.Derive(in rawUpgrade),
+            }),
+            CollectedAtEpoch = 41,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+
+        var explanation = Explain(world, upgradeId, 932);
+
+        Assert.NotNull(explanation["predicates"]);
+        Assert.NotNull(explanation["blockers"]);
+        Assert.Empty(explanation["requirements"]!["root"]!["children"]!.Values<JObject>());
+    }
+
     private static WorldPurchaseCost PriceLine(
         Guid ownerId,
         Guid resourceId,

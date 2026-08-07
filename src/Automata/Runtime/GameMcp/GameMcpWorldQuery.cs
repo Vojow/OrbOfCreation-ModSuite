@@ -1200,14 +1200,20 @@ internal static class GameMcpWorldQuery
                 (entry.Kind == WorldLoadoutEntryKind.Equipment ? equipment : alchemy).Add(row);
             }
         }
-        var sections = new JObject();
-        if (spells.Count > 0) sections["spells"] = spells;
-        var equipmentSection = new JObject { ["saved"] = loadout.SavesEquipment };
-        if (equipment.Count > 0) equipmentSection["entries"] = equipment;
-        sections["equipment"] = equipmentSection;
-        var alchemySection = new JObject { ["saved"] = loadout.SavesAlchemy };
-        if (alchemy.Count > 0) alchemySection["entries"] = alchemy;
-        sections["alchemy"] = alchemySection;
+        // Every section is always present with its own list, empty or not: a loadout that saves
+        // nothing is a fact the caller needs, and dropping the key made it read the same as a
+        // section nobody projected.
+        var sections = new JObject { ["spells"] = spells };
+        sections["equipment"] = new JObject
+        {
+            ["saved"] = loadout.SavesEquipment,
+            ["entries"] = equipment,
+        };
+        sections["alchemy"] = new JObject
+        {
+            ["saved"] = loadout.SavesAlchemy,
+            ["entries"] = alchemy,
+        };
         var result = new JObject
         {
             ["uuid"] = loadout.EntityId.ToString("D"),

@@ -97,6 +97,20 @@ public sealed class GameMcpLoadoutTests
     }
 
     [Fact]
+    public void A_loadout_that_saved_nothing_still_carries_every_section_as_an_empty_list()
+    {
+        var world = World(selected: true, populatedSnapshot: false, anySavedEntries: false);
+        var response = Json(GameMcpWorldQuery.GetRow(Context(world, 902),
+            "player-loadouts", PlayerId.ToString("D")).Freeze(), world);
+        var sections = Assert.IsType<JObject>(response["row"]!["sections"]);
+
+        Assert.Empty(sections["spells"]!.Values<JObject>());
+        Assert.Empty(sections["equipment"]!["entries"]!.Values<JObject>());
+        Assert.Empty(sections["alchemy"]!["entries"]!.Values<JObject>());
+        Assert.True((bool)sections["equipment"]!["saved"]!);
+    }
+
+    [Fact]
     public void Settled_deltas_use_the_observed_player_and_snapshot_states()
     {
         var before = World(selected: false, populatedSnapshot: true);
@@ -124,16 +138,21 @@ public sealed class GameMcpLoadoutTests
         Assert.Null(cleared["snapshot"]!["entries"]);
     }
 
-    private static GameWorldState World(bool selected, bool populatedSnapshot)
+    private static GameWorldState World(
+        bool selected,
+        bool populatedSnapshot,
+        bool anySavedEntries = true)
     {
-        var entries = new[]
-        {
-            new WorldLoadoutEntry(PlayerId, WorldLoadoutEntryKind.Spell, SpellId, RecipeId, 1),
-            new WorldLoadoutEntry(PlayerId, WorldLoadoutEntryKind.Equipment,
-                EquipmentId, Guid.Empty, 2),
-            new WorldLoadoutEntry(PlayerId, WorldLoadoutEntryKind.Alchemy,
-                AlchemyId, Guid.Empty, 3),
-        };
+        var entries = anySavedEntries
+            ? new[]
+            {
+                new WorldLoadoutEntry(PlayerId, WorldLoadoutEntryKind.Spell, SpellId, RecipeId, 1),
+                new WorldLoadoutEntry(PlayerId, WorldLoadoutEntryKind.Equipment,
+                    EquipmentId, Guid.Empty, 2),
+                new WorldLoadoutEntry(PlayerId, WorldLoadoutEntryKind.Alchemy,
+                    AlchemyId, Guid.Empty, 3),
+            }
+            : Array.Empty<WorldLoadoutEntry>();
         var snapshotEntries = populatedSnapshot
             ? new[] { new WorldSnapshotEntry(SnapshotId, 0, EquipmentId, 2) }
             : Array.Empty<WorldSnapshotEntry>();
