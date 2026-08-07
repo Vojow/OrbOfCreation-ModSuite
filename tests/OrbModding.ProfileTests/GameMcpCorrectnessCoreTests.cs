@@ -120,10 +120,11 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
-    public void Skipped_unaffordable_purchase_names_the_short_resource_and_amounts()
+    public void Skipped_unaffordable_purchase_names_every_short_resource_and_amounts()
     {
         var target = Guid.Parse("31111111-1111-4111-8111-111111111111");
         var resource = Guid.Parse("32222222-2222-4222-8222-222222222222");
+        var second = Guid.Parse("32222222-2222-4222-8222-222222222223");
         var rateInputs = default(RawResourceRateInputs);
         var traits = default(RawResourceTraits);
         var modifiers = default(RawResourceModifiers);
@@ -132,11 +133,17 @@ public sealed class GameMcpCorrectnessCoreTests
             BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
             new BigDouble(100), BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
             false, false, false, 0, Guid.Empty, in rateInputs, in traits, in modifiers);
+        var secondReading = new RawResourceSample(
+            second, new BigDouble(1), new BigDouble(10), true,
+            BigDouble.Zero, BigDouble.Zero, new BigDouble(200),
+            new BigDouble(100), BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty, in rateInputs, in traits, in modifiers);
         var world = new GameWorldState
         {
             EntityIdentities = EntityIdentityCatalogSnapshot.Bound(1, new[]
             {
                 new EntityIdentityName(resource, "ResourceSO", "Knowledge", "knowledge"),
+                new EntityIdentityName(second, "ResourceSO", "Mana", "mana"),
             }),
             PurchaseCosts = PublicationTable<WorldPurchaseCost>.Create(new[]
             {
@@ -151,10 +158,23 @@ public sealed class GameMcpCorrectnessCoreTests
                     resourceAffordabilityReasonCode: "insufficient_resource",
                     affordable: false,
                     affordabilityReasonCode: "unaffordable"),
+                new WorldPurchaseCost(
+                    target, second, new BigDouble(100), new BigDouble(100), 1,
+                    new BigDouble(100),
+                    PublicationTable<WorldPurchaseCostModifierSource>.Empty,
+                    affordabilityEvaluated: true,
+                    availableAmount: new BigDouble(1),
+                    combinedEffectiveAmount: new BigDouble(100),
+                    resourceAffordable: false,
+                    resourceAffordabilityReasonCode: "insufficient_resource",
+                    affordable: false,
+                    affordabilityReasonCode: "unaffordable"),
             }),
             Resources = PublicationTable<WorldResource>.Create(new[]
             {
                 new WorldResource(in reading, true, new BigDouble(8), 0.2d, false,
+                    new BigDouble(4), BigDouble.Zero),
+                new WorldResource(in secondReading, true, new BigDouble(9), 0.2d, false,
                     new BigDouble(4), BigDouble.Zero),
             }),
         };
@@ -168,7 +188,54 @@ public sealed class GameMcpCorrectnessCoreTests
 
         Assert.NotNull(result);
         Assert.Equal("unaffordable", result!.Code);
-        Assert.Equal("Needs 50 Knowledge, but only 2 is spendable.", result.Reason);
+        Assert.Equal(
+            "Needs 50 Knowledge (have 2); 50 Mana (have 1).",
+            result.Reason);
+    }
+
+    [Fact]
+    public void Native_rejection_the_read_side_can_explain_never_answers_native_rejected()
+    {
+        var target = Guid.Parse("34444444-4444-4444-8444-444444444444");
+        var reading = new RawUpgradeSample(
+            target, level: 10, maxLevel: 10, available: true, queuedLevels: 0,
+            buildTime: BigDouble.Zero, developmentTime: 1d, cachedCostLevel: 10);
+        var world = new GameWorldState
+        {
+            Upgrades = PublicationTable<WorldUpgrade>.Create(new[]
+            {
+                new WorldUpgrade(in reading, true, true, 0, 10, false, 0d),
+            }),
+        };
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Purchase, 1, 1, "upgrade", target, Guid.Empty,
+            "UpgradeSO", 1, string.Empty, string.Empty, false, false);
+
+        var result = AutomataServiceCycleRuntime.ProjectPurchaseRefusal(
+            command,
+            world,
+            ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected),
+            1,
+            1);
+
+        Assert.NotNull(result);
+        Assert.Equal("already_maxed", result!.Code);
+    }
+
+    [Fact]
+    public void Native_rejection_the_read_side_cannot_explain_stays_native_rejected()
+    {
+        var target = Guid.Parse("34444444-4444-4444-8444-444444444445");
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Purchase, 1, 1, "upgrade", target, Guid.Empty,
+            "UpgradeSO", 1, string.Empty, string.Empty, false, false);
+
+        Assert.Null(AutomataServiceCycleRuntime.ProjectPurchaseRefusal(
+            command,
+            new GameWorldState(),
+            ServiceActionResult.Rejected(CommonActionResultCodes.NativeRejected),
+            1,
+            1));
     }
 
     [Fact]

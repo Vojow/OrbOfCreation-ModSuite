@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using OrbModding.Common.Runtime.Configuration;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Configuration;
@@ -1100,9 +1101,19 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         long lifecycle,
         ulong configurationGeneration)
     {
+        // native_rejected is reserved for a native refusal the published world cannot explain. A
+        // rejection whose cause the read side already names answers with that same name.
         if (command.Kind != GameMcpCommandKind.Purchase ||
-            result.Disposition != ServiceActionDisposition.Skipped)
+            result.Disposition is not (ServiceActionDisposition.Skipped or
+                ServiceActionDisposition.Rejected))
+        {
             return null;
+        }
+        if (result.Disposition == ServiceActionDisposition.Rejected &&
+            result.Code != CommonActionResultCodes.NativeRejected)
+        {
+            return null;
+        }
         if (string.Equals(command.Mode, "upgrade", StringComparison.Ordinal) &&
             WorldLookup.TryFind(world.Upgrades, command.TargetId, out var upgrade) &&
             upgrade.IsExhausted)
@@ -1117,26 +1128,26 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         if (!WorldPurchaseCostLookup.TryFindRange(
                 world.PurchaseCosts, command.TargetId, out var start, out var count))
             return null;
+        var shortfalls = new List<(string Resource, BigDouble Needed, BigDouble Held)>();
         for (var index = start; index < start + count; index++)
         {
             var cost = world.PurchaseCosts[index];
             if (!cost.AffordabilityEvaluated || cost.ResourceAffordable) continue;
             var resource = EntityIdentityFormatter.Describe(
                 cost.ResourceId, world.EntityIdentities);
-            var name = resource.HasName ? resource.Name : cost.ResourceId.ToString("D");
-            var visibleCost = GameMcpWorldQuery.PlayerFacingCost(
-                world, cost.ResourceId, cost.CombinedEffectiveAmount);
-            var visibleAmount = GameMcpWorldQuery.SpendableAmount(
-                world, cost.ResourceId, cost.AvailableAmount);
-            return GameMcpCommandResult.Rejected(
-                "unaffordable",
-                "Needs " + GameMcpNumberFormatter.Format(visibleCost) +
-                " " + name + ", but only " +
-                GameMcpNumberFormatter.Format(visibleAmount) + " is spendable.",
-                lifecycle,
-                configurationGeneration);
+            shortfalls.Add((
+                resource.HasName ? resource.Name : cost.ResourceId.ToString("D"),
+                GameMcpWorldQuery.PlayerFacingCost(
+                    world, cost.ResourceId, cost.CombinedEffectiveAmount),
+                GameMcpWorldQuery.SpendableAmount(
+                    world, cost.ResourceId, cost.AvailableAmount)));
         }
-        return null;
+        if (shortfalls.Count == 0) return null;
+        return GameMcpCommandResult.Rejected(
+            "unaffordable",
+            GameMcpWorldQuery.ShortfallSentence(shortfalls),
+            lifecycle,
+            configurationGeneration);
     }
 
     private sealed class GameMcpActionUnavailableException : Exception
