@@ -311,7 +311,7 @@ public sealed class GameMcpCorrectnessCoreTests
     }
 
     [Fact]
-    public void ConceptSettlementWaitsForTheExactRequestedAmount()
+    public void ConceptSettlementWaitsForTheActiveCountItsResponsePublishes()
     {
         var recipe = Guid.Parse("39999999-9999-4999-8999-999999999999");
         var completedAt = DateTime.UtcNow.Ticks;
@@ -326,15 +326,8 @@ public sealed class GameMcpCorrectnessCoreTests
             1, GameMcpCommandKind.Concept, 9, 3, "add", recipe, Guid.Empty,
             "AlchemyRecipeSO", 5, string.Empty, string.Empty, false, false,
             frameContext: GameMcpTestHarness.Context(before, generation: 41));
-        var partial = new GameWorldState
-        {
-            CollectedAtUtcTicks = completedAt + 1,
-            AlchemyInstances = PublicationTable<WorldAlchemyInstance>.Create(new[]
-            {
-                new WorldAlchemyInstance(recipe, 445, 442, true, BigDouble.One),
-            }),
-        };
-        var exact = new GameWorldState
+        // The game takes the queue increase a settlement before it submits it.
+        var queuedOnly = new GameWorldState
         {
             CollectedAtUtcTicks = completedAt + 1,
             AlchemyInstances = PublicationTable<WorldAlchemyInstance>.Create(new[]
@@ -342,17 +335,32 @@ public sealed class GameMcpCorrectnessCoreTests
                 new WorldAlchemyInstance(recipe, 440, 445, true, BigDouble.One),
             }),
         };
+        var submitted = new GameWorldState
+        {
+            CollectedAtUtcTicks = completedAt + 1,
+            AlchemyInstances = PublicationTable<WorldAlchemyInstance>.Create(new[]
+            {
+                new WorldAlchemyInstance(recipe, 445, 445, true, BigDouble.One),
+            }),
+        };
 
         Assert.False(GameMcpPostStateSettlement.IsReady(
-            GameMcpTestHarness.Context(partial, generation: 42), 41, completedAt, command));
+            GameMcpTestHarness.Context(queuedOnly, generation: 42), 41, completedAt, command));
         Assert.True(GameMcpPostStateSettlement.IsReady(
-            GameMcpTestHarness.Context(exact, generation: 42), 41, completedAt, command));
+            GameMcpTestHarness.Context(submitted, generation: 42), 41, completedAt, command));
+
+        var delta = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(submitted, generation: 42),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3)));
+        Assert.Equal(440, (int)delta["activeCount"]!["before"]!);
+        Assert.Equal(445, (int)delta["activeCount"]!["after"]!);
 
         var timeout = GameMcpTestHarness.Json(GameMcpPostStateSettlement.TimedOut(
-            command, GameMcpTestHarness.Context(partial, generation: 42)));
+            command, GameMcpTestHarness.Context(queuedOnly, generation: 42)));
         Assert.Equal("requested_state_not_reached",
             (string?)timeout["postStateUnavailable"]!["reasonCode"]);
-        Assert.Contains("queued quantity is 442",
+        Assert.Contains("active count is 440",
             (string?)timeout["postStateUnavailable"]!["reason"]);
     }
 

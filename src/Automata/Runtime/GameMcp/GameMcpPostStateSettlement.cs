@@ -77,17 +77,23 @@ internal static class GameMcpPostStateSettlement
         };
     }
 
+    /// <summary>
+    /// The game writes an Alchemy queue decrease straight through but holds an increase for a
+    /// quarter second before submitting it, so the queued quantity moves a settlement ahead of the
+    /// active one. Waiting on the active quantity is what keeps the response in the same
+    /// coordinate the concept projection publishes.
+    /// </summary>
     private static bool ConceptAmountReached(GameMcpFrameContext state, GameMcpCommand command)
     {
         var beforeWorld = command.FrameContext?.World?.Snapshot;
         if (beforeWorld is null) return false;
         var before = WorldAlchemyInstanceLookup.TryFind(
             beforeWorld.AlchemyInstances, command.TargetId, out var previous)
-            ? previous.QueuedQuantity
+            ? previous.Quantity
             : 0;
         var after = WorldAlchemyInstanceLookup.TryFind(
             state.World!.Snapshot.AlchemyInstances, command.TargetId, out var current)
-            ? current.QueuedQuantity
+            ? current.Quantity
             : 0;
         return command.Mode switch
         {
@@ -184,11 +190,11 @@ internal static class GameMcpPostStateSettlement
         {
             var observed = WorldAlchemyInstanceLookup.TryFind(
                 latest.World.Snapshot.AlchemyInstances, command.TargetId, out var concept)
-                ? concept.QueuedQuantity.ToString()
+                ? concept.Quantity.ToString()
                 : "not published";
             return GameMcpWorldQuery.PostStateUnavailable(
                 "requested_state_not_reached",
-                "the settled concept stack did not reach the requested amount; queued quantity is " +
+                "the settled concept stack did not reach the requested amount; active count is " +
                 observed);
         }
         return GameMcpWorldQuery.PostStateUnavailable(
