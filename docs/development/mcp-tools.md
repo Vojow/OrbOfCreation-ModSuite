@@ -827,7 +827,8 @@ sentence was written from, so the two can never disagree.
 
 | Code | Meaning | Surfaces |
 | --- | --- | --- |
-| `already_maxed` | The target has no level, use, or purchase left to buy | `game_purchase`, `game_level`, read-side develop and purchase decisions |
+| `already_maxed` | The target has no level, use, or purchase left to buy | `game_purchase`, read-side develop and purchase decisions |
+| `cannot_level` | The game's own per-type level gate is shut. `game_level` has no ceiling code because none of its four types has a ceiling: every one answers `ILevelable.CanLevel()` unconditionally true, so an exhausted level target is not a state this surface can reach | `game_level` |
 | `unaffordable` | One or more named resources fall short. The sentence names every one of them: `Needs <cost> <Resource> (have <held>); …` | every purchase-shaped mutation and every read-side cost decision |
 | `amount_unavailable` | The exact amount asked for exceeds what the game allows right now. Carries `maximumAmount` | `game_research develop`, `game_concept`, `game_equipment`, `game_alchemy`, `game_agromancy` |
 | `automation_full` | Every automation slot on the queue is in use | `explain_entity`/`world_get` crafting rows, `game_craft automate` |

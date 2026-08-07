@@ -32,6 +32,11 @@ suite to perform. The action checks `CanLevel`, reads the current `GetLevelCost`
 `ResourceCostList.HasEnough` immediately before invoking `PurchaseLevel`; it never calls
 `PerformCost`.
 
+All four owned implementations compile `CanLevel()` to `ldc.i4.1; ret` — none of these types has a
+level ceiling, so the gate is the game's own and it is permanently open in this build. The suite
+re-reads it before every level anyway, because the game owns that gate; but no ordinary level target
+can be exhausted, which is why this surface has no maxed refusal to give.
+
 `UILevelableItem.RenderFreeLevelButton` displays `ILevelableHasFree.GetFreeLevelCost`, requires
 `ResourceCostList.AllResourcesVisible` and `HasEnough`, and connects the click to
 `PurchaseFreeLevel`. Bonus levels follow that exact route for the three implementing types.
