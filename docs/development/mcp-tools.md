@@ -224,6 +224,8 @@ the audited `GetTrueSpend` formula, while bandwidth costs remain nominal. Each s
 the screen's `cost`, the matching `spendableAmount`, and the resource identity needed for the
 next decision. Every cost row uses `cost` for the screen price and `spendableAmount` for the
 same-publication player pool, with `affordable` and a reason only when the decision was evaluated.
+A row's verdict answers for that row's own resource; the whole price is what the rows fold to, so
+no aggregate verdict is published beside them.
 Ordinary resources compare their raw on-screen pool against the quality-adjusted spend; bandwidth
 resources compare nominal cost against headroom using the game's integer-snapped comparison. The
 resource counter's `amount` independently mirrors `GetDisplayQuantity`: inverted resources display

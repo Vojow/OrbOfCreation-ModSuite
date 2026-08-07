@@ -611,6 +611,69 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         Assert.True((bool)craftingResult["blockers"]!["drain"]!["blocked"]!);
     }
 
+    [Fact]
+    public void EachPurchaseCostRowAnswersForItsOwnResourceWithNoAggregateBesideThem()
+    {
+        var upgradeId = Guid.Parse("d5100000-0000-4000-8000-000000000001");
+        var heldId = Guid.Parse("d5100000-0000-4000-8000-000000000002");
+        var shortId = Guid.Parse("d5100000-0000-4000-8000-000000000003");
+        var rawUpgrade = new RawUpgradeSample(
+            upgradeId,
+            level: 1,
+            maxLevel: 10,
+            available: true,
+            queuedLevels: 0,
+            buildTime: BigDouble.Zero,
+            developmentTime: 1,
+            cachedCostLevel: 1);
+        var world = new GameWorldState
+        {
+            Upgrades = PublicationTable<WorldUpgrade>.Create(new[]
+            {
+                GameWorldStateDeriver.Derive(in rawUpgrade),
+            }),
+            PurchaseCosts = PublicationTable<WorldPurchaseCost>.Create(new[]
+            {
+                PriceLine(upgradeId, heldId, held: 400, resourceAffordable: true),
+                PriceLine(upgradeId, shortId, held: 5, resourceAffordable: false),
+            }),
+            CollectedAtEpoch = 41,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+
+        var purchase = Explain(world, upgradeId, 931)["purchase"]!;
+        var rows = purchase["rows"]!.Values<JObject>().ToArray();
+
+        Assert.Null(purchase["affordability"]);
+        Assert.Single(purchase.Children());
+        Assert.True((bool)rows[0]!["affordable"]!);
+        Assert.Null(rows[0]!["reasonCode"]);
+        Assert.False((bool)rows[1]!["affordable"]!);
+        Assert.Equal("insufficient_resource", (string?)rows[1]!["reasonCode"]);
+    }
+
+    private static WorldPurchaseCost PriceLine(
+        Guid ownerId,
+        Guid resourceId,
+        double held,
+        bool resourceAffordable) =>
+        new(
+            ownerId,
+            resourceId,
+            baseExactAmount: new BigDouble(100d),
+            effectiveExactAmount: new BigDouble(100d),
+            exactGroupedLevels: 1,
+            exactGroupedAmount: new BigDouble(100d),
+            modifierSources: PublicationTable<WorldPurchaseCostModifierSource>.Empty,
+            affordabilityEvaluated: true,
+            availableAmount: new BigDouble(held),
+            combinedEffectiveAmount: new BigDouble(100d),
+            resourceAffordable,
+            resourceAffordabilityReasonCode:
+                resourceAffordable ? string.Empty : "insufficient_resource",
+            affordable: false,
+            affordabilityReasonCode: "unaffordable");
+
     private static bool Predicate(JObject explanation, string name) =>
         (bool)explanation["predicates"]![name]!["value"]!;
 

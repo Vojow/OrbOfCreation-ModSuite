@@ -4945,8 +4945,12 @@ internal static class GameMcpWorldQuery
         {
             result["spendableAmount"] = new GameMcpDomainValue(
                 SpendableAmount(world, cost.ResourceId, cost.AvailableAmount));
-            result["affordable"] = cost.Affordable;
-            if (!cost.Affordable) result["reasonCode"] = cost.AffordabilityReasonCode;
+
+            // This row answers for its own resource. The whole-price verdict is what the rows fold
+            // to, and a row that reported it claimed to be short of a resource it holds plenty of.
+            result["affordable"] = cost.ResourceAffordable;
+            if (!cost.ResourceAffordable)
+                result["reasonCode"] = cost.ResourceAffordabilityReasonCode;
         }
         return result;
     }

@@ -670,23 +670,18 @@ internal static class GameMcpEntityExplainer
             };
         }
         var rows = new JArray();
-        var affordable = true;
-        var evaluated = true;
         for (var index = 0; index < count; index++)
         {
             var row = world.PurchaseCosts[start + index];
             rows.Add(GameMcpWorldQuery.ProjectPurchaseCost(world, in row));
-            evaluated &= row.AffordabilityEvaluated;
-            affordable &= row.Affordable;
         }
-        var result = new JObject
+
+        // No outer status around the array: each row already carries its own verdict, and a row
+        // without one was not evaluated.
+        return new JObject
         {
             ["rows"] = rows,
         };
-        result["affordability"] = !evaluated
-            ? "unavailable"
-            : affordable ? "affordable" : "unaffordable";
-        return result;
     }
 
     private static JObject Blockers(GameWorldState world, Guid id, EntityKind kind)
