@@ -99,25 +99,25 @@ public sealed class GameMcpEquipmentLoadoutTests
     }
 
     [Fact]
-    public void EquipmentAmountRefusalsOnlyCarryTheObservedMaximumWhenItBinds()
+    public void EquipmentAmountRefusalCarriesTheCeilingItsOwnSentenceNames()
     {
-        var world = World();
-        var result = ServiceActionResult.Rejected(CommonActionResultCodes.PolicyRejected);
-        var equip = new GameMcpCommand(
-            1, GameMcpCommandKind.EquipmentLoadout, 19, 1, "equip",
-            EquipmentId, Guid.Empty, "EquipmentSO", 3,
-            string.Empty, string.Empty, false, false);
-        var amountRefusal = Json(Assert.IsType<GameMcpObject>(
-            AutomataServiceCycleRuntime.ProjectAmountRefusal(equip, world, in result)));
-        Assert.Equal(2, (int)amountRefusal["maximumAmount"]!);
+        var refused = Json(Assert.IsType<GameMcpObject>(
+            GameMcpEquipmentLoadoutProjection.Project(
+                EquipmentLoadoutSubmission.Reject(
+                    EquipmentLoadoutPreflight.AmountUnavailable,
+                    "This artifact can equip at most 2 more stacks with the current " +
+                    "capacity and resources.",
+                    2))));
 
-        var withinRange = new GameMcpCommand(
-            2, GameMcpCommandKind.EquipmentLoadout, 19, 1, "equip",
-            EquipmentId, Guid.Empty, "EquipmentSO", 2,
-            string.Empty, string.Empty, false, false);
+        Assert.Equal(2, (int)refused["maximumAmount"]!);
 
-        Assert.Null(AutomataServiceCycleRuntime.ProjectAmountRefusal(
-            withinRange, world, in result));
+        var noCeiling = Json(Assert.IsType<GameMcpObject>(
+            GameMcpEquipmentLoadoutProjection.Project(
+                EquipmentLoadoutSubmission.Reject(
+                    EquipmentLoadoutPreflight.NotCreated,
+                    "The artifact has not been created."))));
+
+        Assert.Null(noCeiling["maximumAmount"]);
     }
 
     private static GameWorldState World()

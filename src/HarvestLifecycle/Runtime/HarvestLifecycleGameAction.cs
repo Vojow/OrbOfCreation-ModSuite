@@ -154,7 +154,8 @@ internal sealed class HarvestLifecycleGameAction : IDisposable
             : Reject(HarvestLifecyclePreflight.AmountUnavailable,
                 "The current resource capacity allows at most " + maximum + " more " +
                 Plural(maximum, "instance", "instances") + " of " +
-                EntityIdentityFormatter.Format(action.ElementId) + ".");
+                EntityIdentityFormatter.Format(action.ElementId) + ".",
+                maximum);
     }
 
     private static HarvestLifecycleSubmission? AdmitAction(
@@ -175,7 +176,8 @@ internal sealed class HarvestLifecycleGameAction : IDisposable
                 : Reject(HarvestLifecyclePreflight.AmountUnavailable,
                     EntityIdentityFormatter.Format(action.ActionId) + " has only " + current +
                     " active " + Plural(current, "instance", "instances") + " on " +
-                    EntityIdentityFormatter.Format(action.ElementId) + ".");
+                    EntityIdentityFormatter.Format(action.ElementId) + ".",
+                    current);
         if (active is null && !native.ActionListHasRoom(list))
             return Reject(HarvestLifecyclePreflight.ActionListFull,
                 "The active harvest action list has no empty slot.");
@@ -185,7 +187,8 @@ internal sealed class HarvestLifecycleGameAction : IDisposable
             : Reject(HarvestLifecyclePreflight.AmountUnavailable,
                 EntityIdentityFormatter.Format(action.ActionId) + " allows at most " + maximum +
                 " active " + Plural(maximum, "instance", "instances") + " on " +
-                EntityIdentityFormatter.Format(action.ElementId) + ".");
+                EntityIdentityFormatter.Format(action.ElementId) + ".",
+                maximum);
     }
 
     private static HarvestLifecycleSubmission Execute(
@@ -301,7 +304,9 @@ internal sealed class HarvestLifecycleGameAction : IDisposable
 
     private static HarvestLifecycleSubmission Reject(
         HarvestLifecyclePreflight preflight,
-        string reason) => HarvestLifecycleSubmission.Reject(preflight, reason);
+        string reason,
+        int maximumAmount = -1) =>
+        HarvestLifecycleSubmission.Reject(preflight, reason, maximumAmount);
 
     private static HarvestLifecycleSubmission Verified() =>
         new(HarvestLifecyclePreflight.Proceeded,

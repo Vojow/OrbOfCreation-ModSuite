@@ -61,7 +61,12 @@ internal sealed class ResearchGameAction : IDisposable
             var before = Capture(native, target, action.Amount);
             var preflight = Preflight(action.Kind, in before, out var reason);
             if (preflight != ResearchPreflight.Proceeded)
-                return ResearchSubmission.Reject(preflight, reason);
+                return ResearchSubmission.Reject(
+                    preflight,
+                    reason,
+                    preflight == ResearchPreflight.AmountUnavailable
+                        ? before.LevelsAvailable
+                        : -1);
             if (!_tryCaptureMutationPermit())
                 return ResearchSubmission.Reject(ResearchPreflight.MutationPermitUnavailable,
                     _readOwnershipFailure());

@@ -160,7 +160,8 @@ internal sealed class EquipmentLoadoutGameAction : IDisposable
                     return EquipmentLoadoutSubmission.Reject(
                         EquipmentLoadoutPreflight.AmountUnavailable,
                         "This artifact can equip at most " + maximumAdditional +
-                        " more stacks with the current capacity and resources.");
+                        " more stacks with the current capacity and resources.",
+                        maximumAdditional);
             }
             else
             {

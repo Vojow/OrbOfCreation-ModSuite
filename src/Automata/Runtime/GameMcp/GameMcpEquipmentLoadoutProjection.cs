@@ -9,6 +9,10 @@ internal static class GameMcpEquipmentLoadoutProjection
         var result = new GameMcpObjectBuilder();
         if (submission.CallOutcome.MutationAttempts > 0)
             result["missingOutcome"] = "requested equipped stack count";
+
+        // A refusal whose sentence names a ceiling carries that same ceiling as a number, read from
+        // the admission capture the sentence was written from.
+        if (submission.MaximumAmount >= 0) result["maximumAmount"] = submission.MaximumAmount;
         return result.Freeze();
     }
 }

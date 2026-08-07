@@ -174,7 +174,8 @@ internal sealed class AlchemyLoadoutGameAction : IDisposable
                 if (action.Amount <= 0 || action.Amount > maximumAdditional)
                     return Reject(AlchemyLoadoutPreflight.UsageUnavailable,
                         "This recipe can add at most " + maximumAdditional +
-                        " uses with the current capacity and resources.");
+                        " uses with the current capacity and resources.",
+                        maximumAdditional);
             }
             else if (action.Kind == AlchemyLoadoutActionKind.Remove)
             {
@@ -285,8 +286,9 @@ internal sealed class AlchemyLoadoutGameAction : IDisposable
         return -1;
     }
 
-    private static AlchemyLoadoutSubmission Reject(AlchemyLoadoutPreflight preflight, string reason) =>
-        AlchemyLoadoutSubmission.Reject(preflight, reason);
+    private static AlchemyLoadoutSubmission Reject(
+        AlchemyLoadoutPreflight preflight, string reason, int maximumAmount = -1) =>
+        AlchemyLoadoutSubmission.Reject(preflight, reason, maximumAmount);
 
     private static AlchemyLoadoutSubmission Verified() =>
         new(AlchemyLoadoutPreflight.Proceeded, AlchemyLoadoutNativeStage.Verification,

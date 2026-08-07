@@ -34,7 +34,8 @@ internal readonly struct PlotLifecycleSubmission
         NativeMutationCallOutcome callOutcome,
         string reason,
         int beforeQuantity = 0,
-        int afterQuantity = 0)
+        int afterQuantity = 0,
+        int maximumAmount = -1)
     {
         Preflight = preflight;
         Stage = stage;
@@ -43,6 +44,7 @@ internal readonly struct PlotLifecycleSubmission
         Reason = reason ?? string.Empty;
         BeforeQuantity = beforeQuantity;
         AfterQuantity = afterQuantity;
+        MaximumAmount = maximumAmount;
     }
 
     internal PlotLifecyclePreflight Preflight { get; }
@@ -52,12 +54,21 @@ internal readonly struct PlotLifecycleSubmission
     internal string Reason { get; }
     internal int BeforeQuantity { get; }
     internal int AfterQuantity { get; }
+
+    /// <summary>
+    /// The ceiling the refusal prose names, or <c>-1</c> when the prose names none. It is read from
+    /// the same admission capture the prose is written from, so the sentence and the machine field
+    /// can never disagree.
+    /// </summary>
+    internal int MaximumAmount { get; }
+
     internal bool Verified => Preflight == PlotLifecyclePreflight.Proceeded &&
         Outcome == NativeMutationOutcome.Verified;
 
     internal static PlotLifecycleSubmission Reject(
         PlotLifecyclePreflight preflight,
-        string reason) =>
+        string reason,
+        int maximumAmount = -1) =>
         new(preflight, PlotLifecycleNativeStage.None,
-            NativeMutationOutcome.BeforeCaptureFailed, default, reason);
+            NativeMutationOutcome.BeforeCaptureFailed, default, reason, 0, 0, maximumAmount);
 }

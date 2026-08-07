@@ -5080,7 +5080,10 @@ internal static class GameMcpWorldQuery
                     automation["maximum"] = decision.AutomationMaximum;
                 }
                 if (!decision.CanAutomate)
-                    automation["reason"] = "automation_full";
+                {
+                    automation["reasonCode"] = "automation_full";
+                    automation["reason"] = "Every automation slot on this queue is in use.";
+                }
                 result["automation"] = automation;
             }
             if (!decision.CanStart && decision.ReasonCode.Length > 0 &&

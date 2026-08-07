@@ -121,6 +121,23 @@ public sealed class GameMcpCraftingTests
         Assert.Equal(3, (int)row["automation"]!["amount"]!);
         Assert.True((bool)row["automation"]!["available"]!);
         Assert.True((bool)row["automation"]!["canCancel"]!);
+        Assert.Null(row["automation"]!["reason"]);
+        Assert.Null(row["automation"]!["reasonCode"]);
+    }
+
+    [Fact]
+    public void BlockedAutomationPutsTheCodeInReasonCodeAndProseInReason()
+    {
+        var row = Json(GameMcpWorldQuery.GetRow(
+            Context(canAutomate: false),
+            "crafting-recipes",
+            RecipeId.ToString("D")))["row"]!["automation"]!;
+
+        Assert.False((bool)row["available"]!);
+        Assert.Equal("automation_full", (string?)row["reasonCode"]);
+        Assert.Equal("Every automation slot on this queue is in use.", (string?)row["reason"]);
+        Assert.Equal(1, (int)row["used"]!);
+        Assert.Equal(3, (int)row["maximum"]!);
     }
 
     [Fact]
@@ -331,16 +348,21 @@ public sealed class GameMcpCraftingTests
 
     private static GameMcpFrameContext Context(
         int queuedAmount = 4,
-        int automationQuantity = 3)
+        int automationQuantity = 3,
+        bool canAutomate = true)
     {
         using var publisher =
             new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
-        publisher.Publish(World(queuedAmount, automationQuantity), new WorldGeneration(2201));
+        publisher.Publish(
+            World(queuedAmount, automationQuantity, canAutomate), new WorldGeneration(2201));
         return GameMcpTestHarness.Context(
             publisher.ReadLatest(), configurationGeneration: 8, lifecycleGeneration: 15);
     }
 
-    private static GameWorldState World(int queuedAmount = 4, int automationQuantity = 3)
+    private static GameWorldState World(
+        int queuedAmount = 4,
+        int automationQuantity = 3,
+        bool canAutomate = true)
     {
         var reading = new RawCraftingRecipeSample(
             RecipeId,
@@ -383,7 +405,7 @@ public sealed class GameMcpCraftingTests
                     automationQuantity: automationQuantity,
                     automationUsed: 1,
                     automationMaximum: 3,
-                    canAutomate: true),
+                    canAutomate: canAutomate),
             }),
             CraftingQueueEntries = PublicationTable<WorldCraftingQueueEntry>.Create(new[]
             {

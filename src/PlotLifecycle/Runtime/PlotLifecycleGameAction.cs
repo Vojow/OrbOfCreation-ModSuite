@@ -139,10 +139,13 @@ internal sealed class PlotLifecycleGameAction : IDisposable
         var maximumRemaining = native.InstanceMaximumRemaining(prototype);
         var maximum = native.InstanceMaximum(prototype);
         if (action.Amount > maximumRemaining || before + action.Amount > maximum)
+        {
+            var remaining = Math.Max(Math.Min(maximumRemaining, maximum - before), 0);
             return Reject(PlotLifecyclePreflight.QuantityUnavailable,
-                "The plot currently allows at most " +
-                Math.Max(Math.Min(maximumRemaining, maximum - before), 0) +
-                " more active instances of " + EntityIdentityFormatter.Format(action.ActionId) + ".");
+                "The plot currently allows at most " + remaining +
+                " more active instances of " + EntityIdentityFormatter.Format(action.ActionId) + ".",
+                remaining);
+        }
         if ((current is null || before <= 0) && !native.ListHasRoom(list))
             return Reject(PlotLifecyclePreflight.ActionListFull,
                 "The active plot-action list has no empty slot.");
@@ -233,7 +236,9 @@ internal sealed class PlotLifecycleGameAction : IDisposable
 
     private static PlotLifecycleSubmission Reject(
         PlotLifecyclePreflight preflight,
-        string reason) => PlotLifecycleSubmission.Reject(preflight, reason);
+        string reason,
+        int maximumAmount = -1) =>
+        PlotLifecycleSubmission.Reject(preflight, reason, maximumAmount);
 
     private static PlotLifecycleSubmission Verified(int before, int after) =>
         new(PlotLifecyclePreflight.Proceeded, PlotLifecycleNativeStage.Verification,

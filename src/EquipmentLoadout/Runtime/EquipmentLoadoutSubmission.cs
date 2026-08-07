@@ -42,21 +42,31 @@ internal readonly struct EquipmentLoadoutSubmission
 {
     internal EquipmentLoadoutSubmission(EquipmentLoadoutPreflight preflight,
         EquipmentLoadoutNativeStage stage, NativeMutationOutcome outcome,
-        NativeMutationCallOutcome callOutcome, string reason)
+        NativeMutationCallOutcome callOutcome, string reason, int maximumAmount = -1)
     {
         Preflight = preflight;
         Stage = stage;
         Outcome = outcome;
         CallOutcome = callOutcome;
         Reason = reason ?? string.Empty;
+        MaximumAmount = maximumAmount;
     }
     internal EquipmentLoadoutPreflight Preflight { get; }
     internal EquipmentLoadoutNativeStage Stage { get; }
     internal NativeMutationOutcome Outcome { get; }
     internal NativeMutationCallOutcome CallOutcome { get; }
     internal string Reason { get; }
+
+    /// <summary>
+    /// The ceiling the refusal prose names, or <c>-1</c> when the prose names none. It is read from
+    /// the same admission capture the prose is written from, so the sentence and the machine field
+    /// can never disagree.
+    /// </summary>
+    internal int MaximumAmount { get; }
+
     internal bool Verified => Preflight == EquipmentLoadoutPreflight.Proceeded && Outcome == NativeMutationOutcome.Verified;
-    internal static EquipmentLoadoutSubmission Reject(EquipmentLoadoutPreflight preflight, string reason) =>
+    internal static EquipmentLoadoutSubmission Reject(
+        EquipmentLoadoutPreflight preflight, string reason, int maximumAmount = -1) =>
         new(preflight, EquipmentLoadoutNativeStage.None, NativeMutationOutcome.BeforeCaptureFailed,
-            default, reason);
+            default, reason, maximumAmount);
 }

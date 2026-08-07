@@ -314,6 +314,29 @@ public sealed class GameMcpResearchTests
         };
     }
 
+    [Fact]
+    public void Develop_over_ask_carries_the_ceiling_its_own_sentence_names()
+    {
+        var refused = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            GameMcpResearchProjection.Project(
+                ResearchSubmission.Reject(
+                    ResearchPreflight.AmountUnavailable,
+                    "This research can develop at most 1 level right now.",
+                    1)),
+            EntityIdentityCatalogSnapshot.Unbound(1)));
+
+        Assert.Equal(1, (int)refused["maximumAmount"]!);
+
+        var noCeiling = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            GameMcpResearchProjection.Project(
+                ResearchSubmission.Reject(
+                    ResearchPreflight.DevelopUnavailable,
+                    "The next research level is unavailable or unaffordable.")),
+            EntityIdentityCatalogSnapshot.Unbound(1)));
+
+        Assert.Null(noCeiling["maximumAmount"]);
+    }
+
     private static WorldResource Held(double quantity)
     {
         var rateInputs = default(RawResourceRateInputs);
