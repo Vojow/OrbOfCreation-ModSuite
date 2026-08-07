@@ -271,6 +271,33 @@ public sealed class GameMcpCraftingTests
         Assert.Empty(success.Properties());
     }
 
+    [Fact]
+    public void A_faulted_instance_transition_names_the_state_it_already_moved()
+    {
+        var silent = new CraftingInstanceLifecycleSubmission(
+            CraftingInstanceLifecyclePreflight.VerificationFailed,
+            CraftingInstanceLifecycleNativeStage.Verification,
+            NativeMutationOutcome.PostconditionFailed,
+            new NativeMutationCallOutcome(1, 1, 0),
+            "nothing moved");
+        var damaging = new CraftingInstanceLifecycleSubmission(
+            CraftingInstanceLifecyclePreflight.VerificationFailed,
+            CraftingInstanceLifecycleNativeStage.Verification,
+            NativeMutationOutcome.PostconditionFailed,
+            new NativeMutationCallOutcome(1, 1, 0),
+            "the automation entry grew",
+            CraftingInstanceLifecycleSideEffect.Automation(1, 2));
+
+        var quiet = Json(GameMcpCraftingProjection.Project(in silent));
+        var reported = Json(GameMcpCraftingProjection.Project(in damaging));
+
+        Assert.Null(quiet["observed"]);
+        Assert.Equal(
+            "requested crafting-instance transition", (string?)reported["missingOutcome"]);
+        Assert.Equal(1, (int)reported["observed"]!["automation"]!["before"]!);
+        Assert.Equal(2, (int)reported["observed"]!["automation"]!["after"]!);
+    }
+
     private static GameMcpFrameContext Context(
         int queuedAmount = 4,
         int automationQuantity = 3)

@@ -298,7 +298,7 @@ public sealed class CraftingInstanceListVariable : GenericListVariable<CraftingI
     public void RemoveAutomation(CraftingInstance instance, int amount)
     {
         if (SuppressAutomationRemoval) return;
-        instance.AddAutomationQuantity(-amount);
+        instance.AddAutomationQuantity(amount);
         if (instance.Quantity <= BigDouble.Zero)
         {
             instance.Remove();

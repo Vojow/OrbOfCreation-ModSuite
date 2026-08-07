@@ -55,6 +55,76 @@ public sealed class CraftingInstanceLifecycleGameActionTests : IDisposable
     }
 
     [Fact]
+    public void Automated_cancel_hands_the_adding_control_a_negative_amount()
+    {
+        var (recipe, page) = Surface();
+        var existing = new CraftingInstance(recipe, new BigDouble(9)).SetAuto(true);
+        existing.SetAutomationQuantity(9);
+        page.craftingAutomationInstances.value.Add(existing);
+        using var boundary = Boundary(recipe);
+
+        var first = Submit(
+            boundary, recipe, CraftingInstanceLifecycleActionKind.CancelAutomation);
+        var second = Submit(
+            boundary, recipe, CraftingInstanceLifecycleActionKind.CancelAutomation);
+
+        Assert.True(first.Verified, first.Reason);
+        Assert.True(second.Verified, second.Reason);
+        Assert.Equal(3, existing.GetAutomationQuantity());
+    }
+
+    [Fact]
+    public void Automated_cancel_that_empties_the_entry_observes_its_removal()
+    {
+        var (recipe, page) = Surface();
+        var existing = new CraftingInstance(recipe, new BigDouble(3)).SetAuto(true);
+        existing.SetAutomationQuantity(3);
+        page.craftingAutomationInstances.value.Add(existing);
+        using var boundary = Boundary(recipe);
+
+        var result = Submit(
+            boundary, recipe, CraftingInstanceLifecycleActionKind.CancelAutomation);
+
+        Assert.True(result.Verified, result.Reason);
+        Assert.True(existing.Removed);
+        Assert.Empty(page.craftingAutomationInstances.value);
+    }
+
+    [Fact]
+    public void A_failed_transition_reports_the_automation_quantity_it_already_moved()
+    {
+        var (recipe, page) = Surface();
+        recipe.MultiBuyQuantityOverride = new BigDouble(7);
+        var existing = new CraftingInstance(recipe, new BigDouble(2)).SetAuto(false);
+        existing.SetAutomationQuantity(2);
+        page.craftingAutomationInstances.value.Add(existing);
+        using var boundary = Boundary(recipe);
+
+        var result = Submit(boundary, recipe, CraftingInstanceLifecycleActionKind.Automate);
+
+        Assert.Equal(CraftingInstanceLifecyclePreflight.VerificationFailed, result.Preflight);
+        Assert.True(result.SideEffect.Observed);
+        Assert.Equal(2, result.SideEffect.AutomationBefore);
+        Assert.Equal(5, result.SideEffect.AutomationAfter);
+    }
+
+    [Fact]
+    public void A_failed_transition_that_wrote_nothing_reports_no_side_effect()
+    {
+        var (recipe, page) = Surface();
+        var existing = new CraftingInstance(recipe, new BigDouble(2)).SetAuto(true);
+        existing.SetAutomationQuantity(2);
+        page.craftingAutomationInstances.value.Add(existing);
+        page.craftingAutomationInstances.SuppressAutomation = true;
+        using var boundary = Boundary(recipe);
+
+        var result = Submit(boundary, recipe, CraftingInstanceLifecycleActionKind.Automate);
+
+        Assert.Equal(CraftingInstanceLifecyclePreflight.VerificationFailed, result.Preflight);
+        Assert.False(result.SideEffect.Observed);
+    }
+
+    [Fact]
     public void Manual_cancel_runs_cancel_then_removes_the_exact_instance()
     {
         var (recipe, page) = Surface();

@@ -179,7 +179,9 @@ internal sealed class CraftingInstanceLifecycleGameAction : IDisposable
                 if (amount <= 0)
                     return Reject(CraftingInstanceLifecyclePreflight.MultiBuyUnavailable,
                         "The game's multi-buy amount must be positive.");
-                native.RemoveAutomation(automation, instance!, amount);
+                // RemoveAutomation adds its amount; the game's own automation strip negates
+                // the multi-buy before calling it (UICraftingInstanceList.OnClickInstance).
+                native.RemoveAutomation(automation, instance!, -amount);
             }
             else if (action.Kind == CraftingInstanceLifecycleActionKind.CancelManual)
             {
@@ -199,7 +201,8 @@ internal sealed class CraftingInstanceLifecycleGameAction : IDisposable
                 ? Verified()
                 : Fault(in action, CraftingInstanceLifecyclePreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed,
-                    "The requested crafting-instance transition was not observable.");
+                    "The requested crafting-instance transition was not observable.",
+                    SideEffect(in action, native, instance, before));
         }
         catch (Exception exception) when (IsExpected(exception))
         {
@@ -208,7 +211,33 @@ internal sealed class CraftingInstanceLifecycleGameAction : IDisposable
             return Fault(in action, CraftingInstanceLifecyclePreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew,
                 "The native crafting callback threw before the requested transition was observable: " +
-                exception.GetBaseException().Message);
+                exception.GetBaseException().Message,
+                SideEffect(in action, native, instance, before));
+        }
+    }
+
+    /// <summary>
+    /// A failing transition still leaves whatever the native call already wrote. Re-reading the
+    /// automation quantity is what lets a refusal name the damage instead of hiding it.
+    /// </summary>
+    private static CraftingInstanceLifecycleSideEffect SideEffect(
+        in CraftingInstanceLifecycleAction action,
+        CraftingInstanceLifecycleNativeBindings native,
+        object? instance,
+        int before)
+    {
+        if (action.Kind == CraftingInstanceLifecycleActionKind.CancelManual || instance is null)
+            return default;
+        try
+        {
+            var after = native.AutomationQuantity(instance);
+            return after == before
+                ? default
+                : CraftingInstanceLifecycleSideEffect.Automation(before, after);
+        }
+        catch (Exception exception) when (IsExpected(exception))
+        {
+            return default;
         }
     }
 
@@ -224,11 +253,14 @@ internal sealed class CraftingInstanceLifecycleGameAction : IDisposable
         if (action.Kind == CraftingInstanceLifecycleActionKind.CancelManual)
             return instance is not null && !ContainsReference(native.QueueValues(queue), instance);
         if (instance is null) return false;
-        var after = native.AutomationQuantity(instance);
-        return action.Kind == CraftingInstanceLifecycleActionKind.Automate
-            ? ValidInstance(native, native.QueueInstance(automation, recipe),
-                action.RecipeId, expectedAuto: true) && after > before
-            : after < before;
+        if (action.Kind == CraftingInstanceLifecycleActionKind.Automate)
+            return ValidInstance(native, native.QueueInstance(automation, recipe),
+                action.RecipeId, expectedAuto: true) &&
+                native.AutomationQuantity(instance) > before;
+        // A cancel that empties the entry makes the game drop it from the automation list, so
+        // absence is the same observation as a smaller quantity.
+        return !ContainsReference(native.QueueValues(automation), instance) ||
+            native.AutomationQuantity(instance) < before;
     }
 
     private static bool AutomationAmount(
@@ -332,10 +364,12 @@ internal sealed class CraftingInstanceLifecycleGameAction : IDisposable
         CraftingInstanceLifecyclePreflight preflight,
         CraftingInstanceLifecycleNativeStage stage,
         NativeMutationOutcome outcome,
-        string reason) =>
+        string reason,
+        CraftingInstanceLifecycleSideEffect sideEffect) =>
         new(preflight, stage, outcome, new NativeMutationCallOutcome(1, 1, 0),
             "Crafting " + stage + " failed on " +
-            EntityIdentityFormatter.Format(action.RecipeId) + ": " + reason);
+            EntityIdentityFormatter.Format(action.RecipeId) + ": " + reason,
+            sideEffect);
 
     private void BindLifecycle()
     {

@@ -216,6 +216,24 @@ public sealed class CraftingPlayerContractTests
             "CraftingInstance", "CancelCraft", "ResourceCostList", "PerformCost"));
     }
 
+    [GameAssemblyFact]
+    public void AutomatedCancel_NegatesTheMultiBuyBeforeTheAddingNativeControl()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.True(assembly.MethodReferencesMethod(
+            "CraftingInstanceListVariable", "RemoveAutomation",
+            "CraftingInstance", "AddAutomationQuantity"));
+
+        var body = assembly.GetMethodBodyBytes("UICraftingInstanceList", "OnClickInstance");
+        var operand = assembly.MethodReferenceOffset(
+            "UICraftingInstanceList", "OnClickInstance",
+            "CraftingInstanceListVariable", "RemoveAutomation");
+        Assert.True(operand >= 2);
+        Assert.Equal(0x6F, body[operand - 1]);
+        Assert.Equal(0x65, body[operand - 2]);
+    }
+
     private static void AssertMethod(
         GameAssemblyMetadata assembly,
         string typeName,

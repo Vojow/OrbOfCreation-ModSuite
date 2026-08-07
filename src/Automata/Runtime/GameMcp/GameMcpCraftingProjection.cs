@@ -40,10 +40,22 @@ internal static class GameMcpCraftingProjection
     {
         if (submission.Verified || submission.CallOutcome.MutationAttempts == 0)
             return new JObject().Freeze();
-        return new JObject
+        var failure = new JObject
         {
             ["missingOutcome"] = "requested crafting-instance transition",
-        }.Freeze();
+        };
+        if (submission.SideEffect.Observed)
+        {
+            failure["observed"] = new JObject
+            {
+                ["automation"] = new JObject
+                {
+                    ["before"] = submission.SideEffect.AutomationBefore,
+                    ["after"] = submission.SideEffect.AutomationAfter,
+                },
+            };
+        }
+        return failure.Freeze();
     }
 }
 #endif
