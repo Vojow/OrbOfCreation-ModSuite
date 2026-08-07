@@ -3010,8 +3010,6 @@ internal static class GameMcpWorldQuery
         if (developAvailable) develop["affordable"] = decision.DevelopmentCostAffordable;
         if (!developAvailable)
         {
-            var investmentBlocked = TryResearchInvestmentBlocker(
-                world, decision.Investment, out var investmentReason);
             var reasonCode = research.Complete
                 ? "already_maxed"
                 : decision.QueueMode && decision.MultiBuy <= 0
@@ -3032,25 +3030,23 @@ internal static class GameMcpWorldQuery
                                                 ? "already_developing"
                                                 : !research.WithinDevelopRange
                                                     ? "develop_range_refused"
-
-                                                    // The drain is not one of the gates the game
-                                                    // consults, so it only speaks once every gate
-                                                    // it does consult has been ruled out.
-                                                    : investmentBlocked
-                                                        ? "investment_unavailable"
-                                                        : "native_develop_refused";
+                                                    : "native_develop_refused";
             develop["reasonCode"] = reasonCode;
 
             // The cost verdict is published exactly when the cost is what decides. A row refused
             // for being maxed, queued out, or short of requirements has no next price to afford.
             if (reasonCode == "unaffordable")
+            {
                 develop["affordable"] = decision.DevelopmentCostAffordable;
-            develop["reason"] = reasonCode == "already_maxed"
-                ? "This research is already maxed."
-                : reasonCode == "investment_unavailable"
-                    ? investmentReason
+                develop["reason"] = ShortfallReason(world, decision.DevelopmentCosts);
+            }
+            else
+            {
+                develop["reason"] = reasonCode == "already_maxed"
+                    ? "This research is already maxed."
                     : "This research cannot be developed right now: " +
                       reasonCode.Replace('_', ' ') + ".";
+            }
         }
         var developmentCostsInformNextDecision =
             !research.Complete &&
@@ -3097,33 +3093,6 @@ internal static class GameMcpWorldQuery
                 ["remainingLevels"] = Number(decision.FreeBonusLevels),
             };
         return result.Freeze();
-    }
-
-    /// <summary>
-    /// The fill entries are the drain that pays for research already in flight, so a shortage
-    /// there stalls progress rather than refusing the next level. Its numbers still have to be
-    /// comparable: <c>GetRemaining()</c> is what the entry still owes in the units the player
-    /// spends, so it is weighed against what the player actually holds in those same units.
-    /// </summary>
-    private static bool TryResearchInvestmentBlocker(
-        GameWorldState world,
-        PublicationTable<WorldResearchInvestment> investment,
-        out string reason)
-    {
-        for (var index = 0; index < investment.Count; index++)
-        {
-            var value = investment[index];
-            if (!TryFindResource(world, value.ResourceId, out var pool)) continue;
-            var spendable = WorldResourceCoordinate.SpendableAmount(in pool);
-            if (value.Remaining.CompareTo(spendable) <= 0) continue;
-            reason = "Needs " + GameMcpNumberFormatter.Format(value.Remaining) + " more " +
-                EntityIdentityFormatter.Describe(
-                    value.ResourceId, world.EntityIdentities).Name +
-                "; you have " + GameMcpNumberFormatter.Format(spendable) + ".";
-            return true;
-        }
-        reason = string.Empty;
-        return false;
     }
 
     // Levels, slots, counts, and enum discriminants are bounded cardinals, not game-domain
@@ -4185,6 +4154,52 @@ internal static class GameMcpWorldQuery
         if (!TryFindResource(world, resourceId, out var resource))
             return nominalCost;
         return WorldResourceCoordinate.PlayerFacingCost(in resource, nominalCost);
+    }
+
+    /// <summary>
+    /// The one have/need sentence on every surface. Each entry names a resource that is genuinely
+    /// short, the price it asks, and what the player holds, both in the player's own units. A
+    /// caller that fixes the first named resource is not blocked by a second one nobody mentioned.
+    /// </summary>
+    internal static string ShortfallSentence(
+        IEnumerable<(string Resource, BigDouble Needed, BigDouble Held)> rows)
+    {
+        var text = new StringBuilder("Needs ");
+        var written = 0;
+        foreach (var row in rows)
+        {
+            if (written > 0) text.Append("; ");
+            written++;
+            text.Append(GameMcpNumberFormatter.Format(row.Needed))
+                .Append(' ')
+                .Append(row.Resource)
+                .Append(" (have ")
+                .Append(GameMcpNumberFormatter.Format(row.Held))
+                .Append(')');
+        }
+        return written == 0 ? string.Empty : text.Append('.').ToString();
+    }
+
+    private static string ShortfallReason(
+        GameWorldState world,
+        PublicationTable<WorldResearchCost> costs)
+    {
+        var rows = new List<(string, BigDouble, BigDouble)>();
+        for (var index = 0; index < costs.Count; index++)
+        {
+            var value = costs[index];
+            if (CanAfford(world, value.ResourceId, value.Cost, value.Amount)) continue;
+            var identity = EntityIdentityFormatter.Describe(
+                value.ResourceId, world.EntityIdentities);
+            rows.Add((
+                identity.HasName ? identity.Name : value.ResourceId.ToString("D"),
+                PlayerFacingCost(world, value.ResourceId, value.Cost),
+                SpendableAmount(world, value.ResourceId, value.Amount)));
+        }
+        var sentence = ShortfallSentence(rows);
+        return sentence.Length == 0
+            ? "This research cannot be developed right now: unaffordable."
+            : sentence;
     }
 
     internal static bool CanAfford(
