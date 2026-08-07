@@ -4798,7 +4798,8 @@ internal static class GameMcpWorldQuery
             purchase["affordable"] = decision.PurchaseAffordable;
             if (!decision.PurchaseAffordable) purchase["reasonCode"] = "unaffordable";
             var costs = ProjectLevelCosts(world, decision.PaidCosts);
-            if (costs.Count > 0) purchase["costs"] = costs;
+            purchase["costs"] = costs;
+            if (costs.Count == 0) purchase["free"] = true;
         }
         result["purchase"] = purchase;
 
@@ -4815,7 +4816,8 @@ internal static class GameMcpWorldQuery
             bonus["affordable"] = decision.BonusAffordable;
             if (!decision.BonusAffordable) bonus["reasonCode"] = "unaffordable";
             var costs = ProjectLevelCosts(world, decision.BonusCosts);
-            if (costs.Count > 0) bonus["costs"] = costs;
+            bonus["costs"] = costs;
+            if (costs.Count == 0) bonus["free"] = true;
         }
         result["bonus"] = bonus;
     }

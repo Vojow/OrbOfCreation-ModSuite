@@ -390,8 +390,9 @@ The `equipment-types`, `glyphs`, `resource-types`, and `time-runes` detail rows 
 pre-decision surface for their ordinary level-list buttons. Each row distinguishes paid, bonus,
 and total levels and carries a `purchase` decision. Equipment types, glyphs, and resource types
 also carry `bonus`; time runes do not implement that native control. Available decisions include
-the exact named native usage cost and current spendable amount. Inapplicable or unavailable
-controls do not publish priced ledgers.
+the exact named native usage cost and current spendable amount as `costs`; a control the game
+levels for nothing publishes `costs: []` with `free: true` rather than dropping the array.
+Inapplicable or unavailable controls do not publish priced ledgers.
 
 Call `game_level(mode="purchase"|"bonus", uuid=..., amount=...)`. The tool derives the exact native type from
 the published category, repeats the visible button's live admission on Unity's main thread, and

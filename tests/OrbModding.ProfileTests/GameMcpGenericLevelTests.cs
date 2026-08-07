@@ -98,6 +98,22 @@ public sealed class GameMcpGenericLevelTests
         Assert.Equal((int)row["totalLevel"]!, (int)entry["totalLevel"]!);
     }
 
+    /// <summary>
+    /// A glyph with no authored <c>levelingCost</c> is levelled by the game for nothing:
+    /// <c>ResourceCostList.HasEnough()</c> is true over an empty list, and a levelable's cost
+    /// button never performs a cost. The wire says so instead of dropping the array.
+    /// </summary>
+    [Fact]
+    public void A_glyph_the_game_levels_for_nothing_publishes_an_empty_cost_list_and_says_so()
+    {
+        var glyph = Row(
+            World(5, 2, purchaseAffordable: true, levelsAreFree: true), "glyphs", GlyphId);
+
+        Assert.True((bool)glyph["purchase"]!["available"]!);
+        Assert.Empty(glyph["purchase"]!["costs"]!.Values<JObject>());
+        Assert.True((bool)glyph["purchase"]!["free"]!);
+    }
+
     [Fact]
     public void Hidden_or_unlearned_rows_never_advertise_level_purchase()
     {
@@ -167,10 +183,13 @@ public sealed class GameMcpGenericLevelTests
         bool purchaseAffordable,
         bool glyphLearned = true,
         bool glyphDiscoverable = true,
-        bool resourceTypeHidden = false)
+        bool resourceTypeHidden = false,
+        bool levelsAreFree = false)
     {
-        var paidCosts = PublicationTable<WorldLevelableCost>.Create(new[]
-            { new WorldLevelableCost(CostResourceId, new BigDouble(5)) });
+        var paidCosts = levelsAreFree
+            ? PublicationTable<WorldLevelableCost>.Empty
+            : PublicationTable<WorldLevelableCost>.Create(new[]
+                { new WorldLevelableCost(CostResourceId, new BigDouble(5)) });
         var bonusCosts = PublicationTable<WorldLevelableCost>.Create(new[]
             { new WorldLevelableCost(CostResourceId, new BigDouble(2)) });
         var withBonus = new WorldLevelableDecision(total, bonus, true,
