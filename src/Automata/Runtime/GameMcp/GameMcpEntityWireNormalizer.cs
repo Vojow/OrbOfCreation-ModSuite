@@ -260,13 +260,22 @@ internal static class GameMcpEntityWireNormalizer
         parent[role] = Reference(uuid, catalog);
     }
 
+    /// <summary>
+    /// One entity, one identity shape. A referenced UUID carries the same name and internal name a
+    /// primary row carries, so the same entity never spells its identity two ways depending on
+    /// which field happened to introduce it.
+    /// </summary>
     private static JObject Reference(
         Guid uuid,
         EntityIdentityCatalogSnapshot catalog)
     {
         var result = new JObject { ["uuid"] = uuid.ToString("D") };
         var identity = EntityIdentityFormatter.Describe(uuid, catalog);
-        if (identity.HasName) result["name"] = identity.Name;
+        if (!identity.HasName) return result;
+        result["name"] = identity.Name;
+        if (identity.AssetName.Length > 0 &&
+            !string.Equals(identity.AssetName, identity.Name, StringComparison.Ordinal))
+            result["internalName"] = identity.AssetName;
         return result;
     }
 

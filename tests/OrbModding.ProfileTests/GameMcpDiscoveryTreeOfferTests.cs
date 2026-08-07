@@ -538,6 +538,18 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                 (string)selectedResponse["selectedOffer"]!["uuid"]!);
             Assert.Equal(firstId.ToString("D"), selectedOffer.ToString("D"));
 
+            // One entity spells its identity one way: the reference under selectedOffer carries the
+            // same name and internal name the offer's own row carries.
+            var selectedRow = selectedResponse["offers"]!.Values<JObject>()
+                .Single(offer => (string?)offer!["uuid"] == firstId.ToString("D"))!;
+            Assert.Equal(
+                (string?)selectedRow["name"],
+                (string?)selectedResponse["selectedOffer"]!["name"]);
+            Assert.NotNull(selectedRow["internalName"]);
+            Assert.Equal(
+                (string?)selectedRow["internalName"],
+                (string?)selectedResponse["selectedOffer"]!["internalName"]);
+
             var confirmed = action.Submit(new DiscoveryTreeOfferAction(
                 DiscoveryTreeOfferActionKind.Confirm,
                 readTreeId,
@@ -580,7 +592,7 @@ public sealed class GameMcpDiscoveryTreeOfferTests
                     response.ToString(Newtonsoft.Json.Formatting.None));
             }
             Assert.Equal(
-                new[] { 573, 662, 450 },
+                new[] { 573, 698, 450 },
                 new[]
                 {
                     CommittedBytes(rerollResponse),
