@@ -1,5 +1,6 @@
 #if SERVICE_CYCLE_PROFILE
 using System;
+using System.Text;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.World;
 using JObject = OrbAutomata.GameMcp.GameMcpObjectBuilder;
@@ -35,14 +36,24 @@ internal static class GameMcpEntityCatalog
 
         var page = new JArray();
         var totalMatches = 0;
+        var estimatedBytes = 128;
+        var budgetReached = false;
         var rows = catalog.Rows.AsSpan();
         for (var index = 0; index < rows.Length; index++)
         {
             var row = rows[index];
             if (!Matches(in row, normalized)) continue;
             totalMatches++;
-            if (totalMatches > offset && page.Count < limit)
-                page.Add(Project(catalog, in row));
+            if (totalMatches <= offset || page.Count >= limit || budgetReached) continue;
+            var rowBytes = EstimateRowBytes(in row);
+            if (page.Count > 0 &&
+                estimatedBytes + rowBytes > GameMcpWorldQuery.MaximumListResponseBytes)
+            {
+                budgetReached = true;
+                continue;
+            }
+            estimatedBytes += rowBytes;
+            page.Add(Project(catalog, in row));
         }
 
         var result = new JObject
@@ -86,6 +97,12 @@ internal static class GameMcpEntityCatalog
         row.RuntimeType.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
         row.AssetName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
         row.DisplayName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+
+    private static int EstimateRowBytes(in EntityIdentityName row) =>
+        checked(192 +
+            Encoding.UTF8.GetByteCount(row.RuntimeType) +
+            Encoding.UTF8.GetByteCount(row.AssetName) +
+            Encoding.UTF8.GetByteCount(row.DisplayName));
 
     private static JObject Project(
         EntityIdentityCatalogSnapshot catalog,

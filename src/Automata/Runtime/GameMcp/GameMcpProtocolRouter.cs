@@ -579,7 +579,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "entity_catalog",
                 "Search live entity catalog",
-                "Search every UUID loaded in the game's runtime registry by native type, internal asset name, and available player-facing display name, including loaded entities hidden by progression. nextOffset is present exactly when more rows remain, and is the offset to resume from.",
+                "Search every UUID loaded in the game's runtime registry by native type, internal asset name, and available player-facing display name, including loaded entities hidden by progression. limit is an upper bound: a page also stops at a 12 KB response budget, so wide rows come back short. nextOffset is present exactly when more rows remain, and is the offset to resume from.",
                 ObjectSchema(
                     new JObject
                     {

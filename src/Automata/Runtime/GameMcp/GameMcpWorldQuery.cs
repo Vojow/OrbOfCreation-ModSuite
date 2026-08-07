@@ -18,7 +18,8 @@ internal static class GameMcpWorldQuery
 {
     private const int DefaultPageSize = 50;
     private const int MaximumPageSize = 200;
-    private const int MaximumListResponseBytes = 12 * 1024;
+    /// <summary>One page budget for every paged read, so short pages mean the same thing on all of them.</summary>
+    internal const int MaximumListResponseBytes = 12 * 1024;
     internal const int MaximumBatchSize = 200;
     private static readonly GameMcpWorldCategory[] Categories = CreateCategories();
     private static readonly Dictionary<string, GameMcpWorldCategory> ByName = IndexCategories();
