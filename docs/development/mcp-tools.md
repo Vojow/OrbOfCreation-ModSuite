@@ -143,15 +143,15 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 | `game_loadout` | Switch or edit the active player loadout, or save/load/clear an Equipment or Alchemy snapshot slot |
 | `game_challenge` | Select, activate, abandon, or fetch the Time/prestige challenge offers |
 | `game_prestige` | Confirm and perform the irreversible persistent reset |
-| `game_research` | Develop/queue an explicit amount, pause, resume, cancel, or apply a free research bonus level |
+| `game_research` | Develop/queue levels (`amount` defaults to 1), pause, resume, cancel, or apply a free research bonus level |
 | `suite_config_set` | Commit one allowlisted setting through the configuration store |
 | `suite_emergency_stop` | Engage or resume the suite's shared emergency stop |
 | `game_screenshot` | Return the framebuffer as inline MCP image content |
 | `game_continue` | Continue the already-selected save from the Start scene |
 | `game_return_to_menu` | Raise the native manual-save event and return from play to the Start scene |
 | `game_modal` | Dismiss the one unambiguous open native modal through its close control |
-| `game_screen_catalog` | Read compact named tabs with the active tab/subtab marked and grouped |
-| `game_navigate` | Navigate a catalog tab/subtab and optional published plot UUID |
+| `game_screen_catalog` | Read the live screens with the active screen and its subtab strips marked |
+| `game_navigate` | Navigate a catalog screen/subtab and optional published plot UUID |
 | `game_tooltips` | Page through active tooltip-bearing elements by exact indexed path |
 | `game_tooltip` | Read compact plain screen text, including nested/computed and inspected content |
 | `game_probe` | Read one fixed native fact not carried by `WORLD` |
@@ -179,11 +179,15 @@ generation or retain a snapshot token across calls.
 Localized collection gaps mark only the implicated list/search/get row unavailable and attach the
 partial row plus exact evidence there; unaffected rows in the same call remain ordinary results.
 
-Paged list and catalog reads use one pagination vocabulary: `total`, `nextOffset` when more rows
-remain, and `truncated:true` when a byte bound delivered fewer rows than requested. `nextOffset`
-always equals the input offset plus the rows actually delivered. There is no redundant `returned`
-or `hasMore`; the collection itself is always present, including when it is empty. Search has no
-cursor and therefore says `truncated:true` whenever its exact total exceeds the returned matches.
+`world_list`, `world_search`, and `entity_catalog` page one way. Each takes `offset` and `limit`
+and answers with `total` plus `rows`; the collection is always present, including when it is empty.
+`nextOffset` is present exactly when more rows remain, and its value is the input offset plus the
+rows actually delivered, so `nextOffset` present means "resume here" and `nextOffset` absent means
+"that was the end". There is no `truncated`, `returned`, `hasMore`, or `matches`. A page may be
+shorter than `limit` because the response is bounded at 12 KB, which each tool's description states;
+a short page with a `nextOffset` is that bound, and a short page without one is the end of the set.
+`world_search` deduplicates by entity identity before paging, so one entity that matches in two
+categories occupies one row and one page slot.
 
 `entity_catalog` complements `world_search` with the game's complete live runtime identity registry.
 At the first stable Playing world capture after `RuntimeReady`, the suite validates and copies that
@@ -227,17 +231,15 @@ same-publication player pool, with `affordable` and a reason only when the decis
 A row's verdict answers for that row's own resource; the whole price is what the rows fold to, so
 no aggregate verdict is published beside them.
 Ordinary resources compare their raw on-screen pool against the quality-adjusted spend; bandwidth
-resources compare nominal cost against headroom using the game's integer-snapped comparison. The
-resource counter's `amount` independently mirrors `GetDisplayQuantity`: inverted resources display
-headroom and all others display stored quantity. Cost rows use `spendableAmount` for the native
-admission operand, so independent inverted/bandwidth flags never overload one field with two
-meanings. These fields use the same exact combiner as Auto Buy and do not
+resources compare nominal cost against headroom using the game's integer-snapped comparison. A
+counter's `amount` is always the number the screen shows for it, whatever native member happens to
+carry that number. Cost rows use `spendableAmount` for the native admission operand, so independent
+inverted/bandwidth flags never overload one field with two meanings. These fields use the same exact combiner as Auto Buy and do not
 include Auto Buy's configurable reserve or excess policy.
 
 A `resources` row is deliberately only named identity, the counter's on-screen `amount`,
 `netRatePerSecond`, and, when the resource is capped, `capacity` plus `atCapacity`. A negative native
-capacity is the game's uncapped sentinel and is never serialized as a magnitude. Inverted counters
-publish their displayed headroom; all other counters publish their raw quantity. `atCapacity`
+capacity is the game's uncapped sentinel and is never serialized as a magnitude. `atCapacity`
 answers in the same coordinate as `amount`: it is true exactly when the published `amount` reached
 `capacity`, so an inverted counter reading `amount: 0` is not at capacity and one reading its whole
 pool is. Detailed
@@ -293,8 +295,8 @@ composite diagnostic row. If an owner UUID exists only in `entity-requirements`,
 authoritative empty entity result; `world_list(entity-requirements)` retains the exact localized
 owner, ordinal, and runtime type evidence. If a searchable entity row itself is returned and that
 entity owns an unmodeled leaf, the search result is explicitly incomplete for that entity. Its
-`total` counts only stable-identity matches that the response can actually return. The tool accepts
-no offset, so a bounded result carries `truncated:true` instead of advertising an unusable cursor.
+`total` counts only stable-identity matches that the response can actually return, counted after
+identity deduplication so the total and the pages agree.
 
 ### Discovery decision loop
 
@@ -394,8 +396,11 @@ corresponding visible Ritual control. `mode="set_level"` also requires the zero-
 shown by the Ritual screen. The old runestone-selection manager methods are empty/null-returning in
 v1.0.5 and are deliberately absent. Activation revalidates the selected Ritual and the screen's
 native price before payment; success is the settled battle transition. `cancel_duration` ends an
-already-running duration reward and does not claim to cancel a battle. Selection, level, battle,
-and duration activity each use one game-written outcome sentinel and never a resource ledger.
+already-running duration reward and does not claim to cancel a battle. `end` is the moment the
+battle's result exists, so it reports the waves the battle completed as an observed change, the
+level it reached, the duration rewards it left running, and the same `next` affordance block the
+other modes carry. Selection, level, battle, and duration activity each use one game-written
+outcome sentinel and never a resource ledger.
 
 ### Unified level controls
 
@@ -761,9 +766,10 @@ leeway, recipe-discovery, bandwidth, and drain evidence only when an axis applie
 null domain properties, and inapplicable axes are omitted.
 
 `game_navigate` is classified **UI-only, no gameplay/save mutation**. It is not read-only because
-selecting a tab, subtab, or plot commits live UI state. Success returns `activeTab` and every
-independent `subtabStrips[{active,labels}]` state. A tab/subtab match refusal returns the exact live label
-candidates it compared. It carries no static mutation-scope label or counter ceremony. Navigation
+selecting a screen, subtab, or plot commits live UI state. Success returns `activeScreen` and every
+independent `subtabStrips[{active,labels}]` state. A screen or subtab match refusal returns the exact
+live label candidates it compared. A subtab refusal reached its screen before it failed, and its
+sentence says so: the screen change is a committed effect the caller can see in `activeScreen`. It carries no static mutation-scope label or counter ceremony. Navigation
 never authorizes a gameplay or save mutation.
 
 `suite_health` has no arguments or detail mode. It is compact text: scene, runtime availability,
@@ -803,18 +809,59 @@ not a timeout to lengthen.
 
 A successful read uses `available`; an unavailable domain read uses `unavailable`. A successful
 mutation uses `committed`; a refused mutation uses `refused`; infrastructure or native divergence
-uses `faulted`. Success adds only the settled delta and omits a code that would restate
-`committed`. Refusals and faults add a stable `code`, one actionable `reason`, and only the identity,
-admission, or missing-outcome facts that
-made it true. Counters, request echoes, generations, payment stanzas, and decomposed receipts are
-absent. There is one canonical shape per tool and no verbosity option.
+uses `faulted`. A tool's status word never depends on one of its arguments: `game_screenshot`
+answers `committed` whether or not `save` was asked for, because the capture is something the
+server performed either way. Success adds only the settled delta and omits a code that would restate
+`committed`. Refusals and faults add a stable `reasonCode`, one actionable `reason`, and only the
+identity, admission, or missing-outcome facts that made it true. Counters, request echoes,
+generations, and decomposed receipts are absent. There is one canonical shape per tool and no
+verbosity option.
+
+`reason` is always prose and `reasonCode` is always the machine name, on every surface — a read's
+blocked sub-decision follows the same rule as a mutation's refusal. A refusal whose sentence names a
+ceiling also carries that ceiling as `maximumAmount`, read from the same admission capture the
+sentence was written from, so the two can never disagree.
+
+### Refusal vocabulary
+
+| Code | Meaning | Surfaces |
+| --- | --- | --- |
+| `already_maxed` | The target has no level, use, or purchase left to buy | `game_purchase`, `game_level`, read-side develop and purchase decisions |
+| `unaffordable` | One or more named resources fall short. The sentence names every one of them: `Needs <cost> <Resource> (have <held>); …` | every purchase-shaped mutation and every read-side cost decision |
+| `amount_unavailable` | The exact amount asked for exceeds what the game allows right now. Carries `maximumAmount` | `game_research develop`, `game_concept`, `game_equipment`, `game_alchemy`, `game_agromancy` |
+| `automation_full` | Every automation slot on the queue is in use | `explain_entity`/`world_get` crafting rows, `game_craft automate` |
+| `switch_blocked` | The game refuses a loadout swap right now (`LoadoutManager.CanSwapLoadouts()`) | `game_loadout select`, the `canSelect` read |
+| `saved_entry_unavailable` | A saved snapshot's stored entry cannot be restored | `game_loadout snapshot_save`, `game_loadout snapshot_load` |
+| `screen_match_failed` / `subtab_match_failed` | The exact label matched zero or several live entries | `game_navigate` |
+| `projection_refused` | The suite's own resource-rate policy refuses the assignment; the game did not | `game_concept` |
+| `native_rejected` | The game refused and the published world does not explain why | any native mutation, reserved for exactly that case |
+
+`native_rejected` is the last resort, not the default: a refusal the read side can already account
+for answers with that account's own code. `investment_unavailable` is retired — the game never
+consults the resource fill list for develop admission — and `amount_unavailable` is the name for an
+exact-amount over-ask.
+
+### Presence semantics
+
+A field or collection is absent when the suite did not collect it, and the response says so with a
+named `…Unavailable` fact rather than by silence. A collection that was collected and is genuinely
+empty is present and empty. `internalName` is present exactly when the asset name differs from the
+display name, and one entity spells its identity the same way whether it appears as a row or as a
+reference from another row's field.
+
+A committed purchase-shaped mutation reports what it paid. `paid[]` carries, per resource its own
+price named, the `resource` identity, `remaining` from the settled world, and `amount` — the
+decrease between the world the action was admitted from and the settled world. Both are readings;
+`amount` is absent for a resource the settled world does not show lower, because no payment was
+observed for it.
 
 JSON tool data is emitted once in `structuredContent`; `content` appears only for actual inline media
 such as screenshots, and success omits the false `isError` default. The server does not repeat the
 structured payload as a text item or emit an empty media array, avoiding a second client-side parse
 and text-channel truncation. Invalid arguments return all detected schema
 shape errors together under `error.data.validationErrors`, with distinct `missing_required` and
-`unexpected_field` codes.
+`unexpected_field` codes, and `error.message` names the offending fields because that is the part
+most clients show the caller.
 
 A faulted GameAction is still a completed MCP tool invocation: it omits `isError`, and its domain
 `status`, stable `code`, actionable reason, and one relevant fact remain in `structuredContent`.
@@ -1085,8 +1132,8 @@ destructive buttons.
 
 `game_screen_catalog` reads the live Main-scene UI. Top tabs retain native rail order. Current
 subtabs are active `UIViewRadioButton` controls under the current native content area. Inactive
-popup templates are excluded. The response is a structured `scene` plus ordered `tabs`, each with
-its `label` and `active` flag; the active tab additionally carries `subtabStrips`, where every
+popup templates are excluded. The response is a structured `scene` plus ordered `screens`, each with
+its `label` and `active` flag; the active screen additionally carries `subtabStrips`, where every
 independent strip names its `active` label and its ordered `labels`. Unity hierarchy paths and
 unstable numeric indexes are deliberately absent. Inactive tab content is not instantiated, and the
 audited v1.0.5 data and scene assets do not carry an authoritative tab-to-subtab roster. The catalog
@@ -1096,13 +1143,17 @@ therefore omits inactive subtabs rather than navigating speculatively or guessin
 ordinal and closed-world: zero or multiple matches reject with the exact candidate labels. Plot selection resolves
 the supplied UUID as a published `PlotNodeSO` and invokes the one audited active
 `UIPlotNodeList.OnNodeClick(PlotNodeSO)`. It is not a hardcoded Fruit Tree command.
-For a compound request, the server selects the top tab, resolves and selects the requested subtab
-or plot, then waits up to one second for the active tab and complete live strip set to remain stable
-across frames. A timeout stays committed but returns only `postStateUnavailable`; it never labels a
+For a compound request, the server selects the top screen, waits up to one second for the active
+screen and complete live strip set to remain stable across frames, and only then resolves and
+selects the requested subtab or plot. Resolving against the settled hierarchy is what makes the
+subtab candidates the matcher searched identical to the ones the catalog advertises for that screen.
+It then waits for settlement again before answering. A timeout stays committed but returns only `postStateUnavailable`; it never labels a
 mid-transition strip set or capture as settled. The whole operation
 still returns one terminal tool result; callers never split it into a retry sequence.
-Mods uses that identical catalog-indexed button path. Selecting Mods while it is already active is
-an idempotent tab reselect and leaves its page open; the MCP does not carry a Mods-only toggle case.
+Mods is a suite-added screen, not one of the game's — see
+[runtime architecture](../runtime-architecture/architecture.md#the-mods-screen-is-ours-not-the-games).
+It uses that identical catalog-indexed button path. Selecting Mods while it is already active is
+an idempotent screen reselect and leaves its page open; the MCP carries no Mods-only toggle case.
 
 ```sh
 tools/game-mcp-client.py catalog

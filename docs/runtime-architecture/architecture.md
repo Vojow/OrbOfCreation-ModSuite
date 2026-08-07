@@ -148,6 +148,23 @@ cycle never overlaps one service's capture and evaluation. Only the raw grab of 
 the main thread, and the one declared exception is the modifier memo rule that
 [world collection](world-collection.md) owns.
 
+## The Mods screen is ours, not the game's
+
+The **Mods** entry in the top rail is a suite surface. `ModConfigNativeNavigationInstaller` finds the
+native `MainContentContainer/TopBar/ViewRadio` strip, clones its last live `UIViewRadioButton` into
+`OrbModConfig.ModsButton`, and parents a suite panel beside the native screens under
+`Canvas/ContentArea/MainContentContainer/ScreenContent`. `ModConfigNativeNavigationHost` owns that
+clone: it remembers the native view that was active, deactivates the native views while Mods is
+open, restores the previous one when the player leaves, and unwinds the whole installation on
+dispose. Nothing about Mods exists in the audited v1.0.5 assets.
+
+Two consequences follow. Mods belongs in this dossier and in the user guide, never in
+`docs/game-systems/`, which documents only what the game itself ships. And every surface that
+enumerates screens sees Mods as one more entry with the same shape as a native one: the screen
+catalog lists it in rail order, `game_navigate` reaches it through the same catalog-indexed button
+path, and its own pages are reported as that screen's subtab strip. Selecting Mods while it is
+already active is an idempotent reselect, so no Mods-only case exists anywhere in the MCP surface.
+
 ## Superseded paths stay gone
 
 There is one production path, no runtime selector, and no fallback implementation.
