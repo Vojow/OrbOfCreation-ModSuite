@@ -422,7 +422,7 @@ internal sealed class GameMcpProtocolRouter
                     "develop", "pause", "resume", "cancel", "bonus");
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 builder.Amount = builder.Mode == "develop"
-                    ? RequiredInt(arguments, "amount", 1, int.MaxValue)
+                    ? OptionalIntInRange(arguments, "amount", 1, 1, int.MaxValue)
                     : 1;
                 break;
             case "suite_config_set":
@@ -505,8 +505,10 @@ internal sealed class GameMcpProtocolRouter
                 GameMcpOperationClass.Gameplay,
         "game_navigate" or "game_continue" or "game_modal" => GameMcpOperationClass.UiState,
         "game_tooltip" when request.Capture => GameMcpOperationClass.UiState,
-        "game_screenshot" when request.SaveCapture => GameMcpOperationClass.SuiteAdministration,
-        "suite_config_set" or "suite_emergency_stop" =>
+
+        // A screenshot is a capture the server performs, not a read of published state, whether or
+        // not the caller also asks for it on disk. One classification keeps one status word.
+        "game_screenshot" or "suite_config_set" or "suite_emergency_stop" =>
             GameMcpOperationClass.SuiteAdministration,
         _ => GameMcpOperationClass.ReadOnly,
     };
@@ -533,10 +535,10 @@ internal sealed class GameMcpProtocolRouter
             "game_challenge" or "game_prestige" or "game_research" or "game_alchemy" or
             "game_ritual" or "game_level" or "game_loadout" =>
             GameMcpFrameData.World | GameMcpFrameData.Configuration,
-        "game_screenshot" when request?.SaveCapture == true => GameMcpFrameData.Configuration,
+        "game_screenshot" => GameMcpFrameData.Configuration,
         "game_navigate" or "game_continue" or "game_modal" =>
             GameMcpFrameData.World | GameMcpFrameData.Scene,
-        "game_screenshot" or "game_probe" or
+        "game_probe" or
             "game_screen_catalog" or "game_tooltips" or "game_tooltip" =>
             GameMcpFrameData.None,
         _ => throw new InvalidOperationException("no frame-data policy exists for tool " + name),
@@ -957,7 +959,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_research",
                 "Develop or manage research",
-                "Develop, queue, pause, resume, cancel, or apply a free bonus level to one exact research. Success returns the changed level or state.",
+                "Develop, queue, pause, resume, cancel, or apply a free bonus level to one exact research. amount is the number of levels a develop asks for and defaults to 1. Success returns the changed level or state.",
                 ModeSchema(ActionSchema(
                     new JObject
                     {
@@ -966,7 +968,7 @@ internal sealed class GameMcpProtocolRouter
                         ["amount"] = IntegerSchema(1, int.MaxValue),
                     },
                     "mode", "uuid"),
-                    ModeRule("develop", new[] { "amount" }),
+                    ModeRule("develop"),
                     ModeRule("pause", forbidden: new[] { "amount" }),
                     ModeRule("resume", forbidden: new[] { "amount" }),
                     ModeRule("cancel", forbidden: new[] { "amount" }),
@@ -1037,12 +1039,12 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "game_screen_catalog",
                 "Discover navigable screens",
-                "List live top tabs with the active tab marked and its current subtabs grouped beneath it.",
+                "List the live screens with the active one marked and its current subtab strips grouped beneath it. Screens come back under screens[]; a navigate answers with activeScreen.",
                 ObjectSchema()),
             Tool(
                 "game_navigate",
                 "Navigate the live screen catalog",
-                "UI-only, no gameplay/save mutation. Select one catalog tab, optional subtab, and optional published plot node; capture returns an inline PNG after arrival.",
+                "UI-only, no gameplay/save mutation. Select one catalog screen, an optional subtab of that screen, and an optional published plot node; capture returns an inline PNG after arrival.",
                 ObjectSchema(
                     new JObject
                     {
@@ -1912,11 +1914,27 @@ internal sealed class GameMcpInvalidParamsException : Exception
 
     internal static GameMcpInvalidParamsException Validation(JArray errors) =>
         new(
-            "tool arguments failed schema validation",
+            Sentence(errors),
             new JObject
             {
                 ["kind"] = "argument_validation_failed",
                 ["validationErrors"] = errors,
             });
+
+    // Most MCP clients show the caller only this message, so the offending fields belong in it. A
+    // validation error that names no field costs the caller a guess per attempt.
+    private static string Sentence(JArray errors)
+    {
+        var text = new System.Text.StringBuilder("tool arguments failed schema validation");
+        var written = 0;
+        foreach (var error in errors.OfType<JObject>())
+        {
+            var message = (string?)error["message"];
+            if (string.IsNullOrEmpty(message)) continue;
+            text.Append(written == 0 ? ": " : "; ").Append(message);
+            written++;
+        }
+        return text.ToString();
+    }
 }
 #endif

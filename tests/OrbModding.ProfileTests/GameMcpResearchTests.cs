@@ -63,7 +63,27 @@ public sealed class GameMcpResearchTests
             rejected.Body!["error"]!["data"]!["validationErrors"]!.Values<JObject>(),
             error => (string?)error["code"] == "unexpected_field" &&
                      (string?)error["field"] == "worldGeneration");
+
+        // Most clients show the caller only error.message, so the offending fields belong in it.
+        Assert.Contains("uuid", (string?)missing.Body!["error"]!["message"]!,
+            StringComparison.Ordinal);
+        Assert.Contains("worldGeneration", (string?)rejected.Body!["error"]!["message"]!,
+            StringComparison.Ordinal);
         Assert.Empty(inbox.ClaimPending());
+    }
+
+    [Fact]
+    public void Develop_without_an_amount_asks_for_one_level_instead_of_failing_validation()
+    {
+        var operation = GameMcpProtocolRouter.BuildOperation(
+            "game_research",
+            new JObject
+            {
+                ["mode"] = "develop",
+                ["uuid"] = ResearchId.ToString("D"),
+            });
+
+        Assert.Equal(1, operation.Amount);
     }
 
     [Fact]

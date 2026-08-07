@@ -170,7 +170,7 @@ public sealed class GameMcpGadgetTests
             observedConfigurationGeneration: 34,
             details: new GameMcpObjectBuilder
             {
-                ["activeTab"] = "Research",
+                ["activeScreen"] = "Research",
                 ["subtabStrips"] = new GameMcpArrayBuilder(
                     new GameMcpObjectBuilder
                     {
@@ -196,7 +196,7 @@ public sealed class GameMcpGadgetTests
         Assert.Null(projected["observedLifecycleGeneration"]);
         Assert.Null(projected["observedConfigurationGeneration"]);
         Assert.Null(projected["operation"]);
-        Assert.Equal("Research", (string?)projected["activeTab"]);
+        Assert.Equal("Research", (string?)projected["activeScreen"]);
         Assert.Null(projected["activeSubtab"]);
         Assert.Null(projected["subtabs"]);
         var strips = projected["subtabStrips"]!.OfType<JObject>().ToArray();
@@ -212,13 +212,13 @@ public sealed class GameMcpGadgetTests
             .WithDetails(
                 new GameMcpObjectBuilder
                 {
-                    ["activeTab"] = "Research",
+                    ["activeScreen"] = "Research",
                     ["subtabCandidates"] = new GameMcpArrayBuilder("Discover", "Development"),
                 }.Freeze());
         var partialProjection = GameMcpTestHarness.Json(partial.Project(command));
         Assert.Equal("refused", (string?)partialProjection["status"]);
         Assert.Null(partialProjection["uiStateMutationAttempts"]);
-        Assert.Equal("Research", (string?)partialProjection["activeTab"]);
+        Assert.Equal("Research", (string?)partialProjection["activeScreen"]);
         Assert.Equal(new[] { "Discover", "Development" },
             partialProjection["subtabCandidates"]!.Values<string>());
     }
@@ -242,7 +242,7 @@ public sealed class GameMcpGadgetTests
         var json = GameMcpTestHarness.Json(projected);
         Assert.Equal("available", (string?)json["status"]);
         Assert.Equal("Main", (string?)json["scene"]);
-        var tabs = json["tabs"]!.Values<JObject>().ToArray();
+        var tabs = json["screens"]!.Values<JObject>().ToArray();
         Assert.Equal(new[] { "Magic", "Scholar", "Mods" },
             tabs.Select(tab => (string)tab["label"]!).ToArray());
         var scholar = tabs[1];
@@ -319,7 +319,7 @@ public sealed class GameMcpGadgetTests
             GameMcpCommandResult.Committed("navigation_arrived", 1, 1)
                 .Project(mutation))["status"]);
         Assert.Equal("refused", (string?)GameMcpTestHarness.Json(
-            GameMcpCommandResult.Rejected("tab_match_failed", "no match")
+            GameMcpCommandResult.Rejected("screen_match_failed", "no match")
                 .Project(mutation))["status"]);
     }
 

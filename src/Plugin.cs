@@ -2596,7 +2596,7 @@ public sealed class Plugin : BaseUnityPlugin
                 var tabs = _uiShell.CaptureNativeTabsForGameMcp();
                 var activeTab = tabs.FirstOrDefault(tab => tab.Active);
                 if (!string.IsNullOrWhiteSpace(activeTab.Label))
-                    details["activeTab"] = activeTab.Label;
+                    details["activeScreen"] = activeTab.Label;
             }
             AppendOpenModals(details);
             if (command.SaveCapture)
@@ -2721,7 +2721,7 @@ public sealed class Plugin : BaseUnityPlugin
         {
             result["reasonCode"] = "navigation_unavailable";
             result["reason"] = "the Main scene navigation shell is not alive";
-            result["tabs"] = new GameMcpArrayBuilder();
+            result["screens"] = new GameMcpArrayBuilder();
             return result.Freeze();
         }
         var projectedTabs = new GameMcpArrayBuilder();
@@ -2741,7 +2741,7 @@ public sealed class Plugin : BaseUnityPlugin
             projectedTab["subtabStrips"] = ProjectGameMcpSubtabStrips(subtabs);
             projectedTabs.Add(projectedTab);
         }
-        result["tabs"] = projectedTabs;
+        result["screens"] = projectedTabs;
         return result.Freeze();
     }
 
@@ -2833,10 +2833,10 @@ public sealed class Plugin : BaseUnityPlugin
         if (!TryResolveTabSelector(request.Tab, tabs, out var tab, out var tabReason))
         {
             failure = NavigationRefusal(
-                "tab_match_failed",
+                "screen_match_failed",
                 tabReason,
                 null,
-                "tabCandidates",
+                "screenCandidates",
                 tabs.Select(candidate => candidate.Label));
             return false;
         }
@@ -2846,7 +2846,7 @@ public sealed class Plugin : BaseUnityPlugin
             return false;
         }
 
-        details = new GameMcpObjectBuilder { ["activeTab"] = tab.Label };
+        details = new GameMcpObjectBuilder { ["activeScreen"] = tab.Label };
         return true;
     }
 
@@ -2971,7 +2971,7 @@ public sealed class Plugin : BaseUnityPlugin
                         (value.StripKey, value.Label, value.Active))),
             };
             if (!string.IsNullOrWhiteSpace(activeTab.Label))
-                details["activeTab"] = activeTab.Label;
+                details["activeScreen"] = activeTab.Label;
             if (command.TargetId != Guid.Empty)
                 details["selectedPlot"] = command.TargetId.ToString("D");
             AppendOpenModals(details);

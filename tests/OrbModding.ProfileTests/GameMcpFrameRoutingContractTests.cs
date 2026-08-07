@@ -131,9 +131,12 @@ public sealed class GameMcpFrameRoutingContractTests
             new JObject { ["save"] = true });
 
         Assert.Equal(GameMcpOperationClass.ReadOnly, tooltipRead.Classification);
-        Assert.Equal(GameMcpOperationClass.ReadOnly, screenshot.Classification);
+
+        // One tool, one status word: a screenshot is a capture the server performs either way, so
+        // the save flag must not move it between classifications.
+        Assert.Equal(GameMcpOperationClass.SuiteAdministration, screenshot.Classification);
         Assert.Equal(GameMcpOperationClass.SuiteAdministration, savedScreenshot.Classification);
-        Assert.Equal(GameMcpFrameData.None, screenshot.RequiredData);
+        Assert.Equal(GameMcpFrameData.Configuration, screenshot.RequiredData);
         Assert.Equal(GameMcpFrameData.Configuration, savedScreenshot.RequiredData);
     }
 
