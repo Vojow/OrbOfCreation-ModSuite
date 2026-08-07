@@ -203,15 +203,6 @@ internal static class GameMcpEntityWireNormalizer
             item.Remove("amount");
             return;
         }
-        if (item["cost"] is null && item["required"] is JToken required &&
-            item["availableToInvest"] is JToken available)
-        {
-            item["cost"] = required;
-            item["spendableAmount"] = available;
-            item.Remove("required");
-            item.Remove("availableToInvest");
-            return;
-        }
         if (item["cost"] is null && item["effectiveCost"] is JToken effective &&
             item["amount"] is JToken spendable)
         {

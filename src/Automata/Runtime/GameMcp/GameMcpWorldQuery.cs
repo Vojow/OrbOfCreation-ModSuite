@@ -2945,13 +2945,21 @@ internal static class GameMcpWorldQuery
             for (var index = 0; index < decision.Investment.Count; index++)
             {
                 var value = decision.Investment[index];
-                investment.Add(new JObject
+
+                // `invested` and `required` are the native fill bar, both raw. `GetRemaining()` is
+                // what is still owed after the resource's own quality conversion — a remaining
+                // price, not a pool — so it is named as one and published beside the actual pool.
+                var row = new JObject
                 {
                     ["resourceId"] = value.ResourceId.ToString("D"),
                     ["invested"] = new GameMcpDomainValue(value.Invested),
                     ["required"] = new GameMcpDomainValue(value.Required),
-                    ["availableToInvest"] = new GameMcpDomainValue(value.Remaining),
-                });
+                    ["remainingCost"] = new GameMcpDomainValue(value.Remaining),
+                };
+                if (TryFindResource(world, value.ResourceId, out var pool))
+                    row["spendableAmount"] = new GameMcpDomainValue(
+                        WorldResourceCoordinate.SpendableAmount(in pool));
+                investment.Add(row);
             }
             result["investment"] = investment;
         }
@@ -2982,11 +2990,11 @@ internal static class GameMcpWorldQuery
         {
             ["available"] = developAvailable,
             ["route"] = decision.QueueMode ? "queue" : "immediate",
-            ["affordable"] = decision.DevelopmentCostAffordable,
         };
         if (decision.QueueMode)
             develop["maximumBatch"] = Number(Math.Min(decision.MultiBuy, queueRoom));
         develop["levels"] = Number(decision.LevelsAvailable);
+        if (developAvailable) develop["affordable"] = decision.DevelopmentCostAffordable;
         if (!developAvailable)
         {
             var investmentBlocked = TryResearchInvestmentBlocker(
@@ -2997,24 +3005,33 @@ internal static class GameMcpWorldQuery
                     ? "multi_buy_unavailable"
                     : decision.QueueMode && queueRoom <= 0
                         ? "research_queue_full"
-                        : investmentBlocked
-                            ? "investment_unavailable"
-                            : !research.MeetsLevelRequirements
-                                ? "requirements_unmet"
-                                : !research.StillHasLeeway
-                                    ? "research_leeway_exhausted"
-                                    : !research.BelowArtificialMaxLevel
-                                        ? "research_cap_reached"
-                                        : !research.BelowMaxInvestmentLevel
-                                            ? "research_investment_cap_reached"
-                                            : !decision.DevelopmentCostAffordable
-                                                ? "unaffordable"
-                                                : research.IsDeveloping && !decision.QueueMode
-                                                    ? "already_developing"
-                                                    : !research.WithinDevelopRange
-                                                        ? "develop_range_refused"
+                        : !research.MeetsLevelRequirements
+                            ? "requirements_unmet"
+                            : !research.StillHasLeeway
+                                ? "research_leeway_exhausted"
+                                : !research.BelowArtificialMaxLevel
+                                    ? "research_cap_reached"
+                                    : !research.BelowMaxInvestmentLevel
+                                        ? "research_investment_cap_reached"
+                                        : !decision.DevelopmentCostAffordable
+                                            ? "unaffordable"
+                                            : research.IsDeveloping && !decision.QueueMode
+                                                ? "already_developing"
+                                                : !research.WithinDevelopRange
+                                                    ? "develop_range_refused"
+
+                                                    // The drain is not one of the gates the game
+                                                    // consults, so it only speaks once every gate
+                                                    // it does consult has been ruled out.
+                                                    : investmentBlocked
+                                                        ? "investment_unavailable"
                                                         : "native_develop_refused";
             develop["reasonCode"] = reasonCode;
+
+            // The cost verdict is published exactly when the cost is what decides. A row refused
+            // for being maxed, queued out, or short of requirements has no next price to afford.
+            if (reasonCode == "unaffordable")
+                develop["affordable"] = decision.DevelopmentCostAffordable;
             develop["reason"] = reasonCode == "already_maxed"
                 ? "This research is already maxed."
                 : reasonCode == "investment_unavailable"
@@ -3069,6 +3086,12 @@ internal static class GameMcpWorldQuery
         return result.Freeze();
     }
 
+    /// <summary>
+    /// The fill entries are the drain that pays for research already in flight, so a shortage
+    /// there stalls progress rather than refusing the next level. Its numbers still have to be
+    /// comparable: <c>GetRemaining()</c> is what the entry still owes in the units the player
+    /// spends, so it is weighed against what the player actually holds in those same units.
+    /// </summary>
     private static bool TryResearchInvestmentBlocker(
         GameWorldState world,
         PublicationTable<WorldResearchInvestment> investment,
@@ -3077,11 +3100,13 @@ internal static class GameMcpWorldQuery
         for (var index = 0; index < investment.Count; index++)
         {
             var value = investment[index];
-            if (value.Remaining.CompareTo(value.Required) >= 0) continue;
-            reason = "Needs " + GameMcpNumberFormatter.Format(value.Required) + " " +
+            if (!TryFindResource(world, value.ResourceId, out var pool)) continue;
+            var spendable = WorldResourceCoordinate.SpendableAmount(in pool);
+            if (value.Remaining.CompareTo(spendable) <= 0) continue;
+            reason = "Needs " + GameMcpNumberFormatter.Format(value.Remaining) + " more " +
                 EntityIdentityFormatter.Describe(
                     value.ResourceId, world.EntityIdentities).Name +
-                "; you can invest " + GameMcpNumberFormatter.Format(value.Remaining) + ".";
+                "; you have " + GameMcpNumberFormatter.Format(spendable) + ".";
             return true;
         }
         reason = string.Empty;

@@ -109,6 +109,47 @@ public sealed class GameMcpResearchTests
     }
 
     [Fact]
+    public void Investment_names_the_remaining_price_beside_what_the_player_actually_holds()
+    {
+        var world = World(investmentRemaining: 60, heldAmount: 90);
+        var response = Json(GameMcpWorldQuery.GetRow(GameMcpTestHarness.Context(world, 2804),
+            "research", ResearchId.ToString("D")).Freeze(), world);
+        var investment = Assert.Single(response["row"]!["investment"]!).Value<JObject>()!;
+
+        Assert.Equal("40", (string?)investment["invested"]);
+        Assert.Equal("100", (string?)investment["required"]);
+        Assert.Equal("60", (string?)investment["remainingCost"]);
+        Assert.Equal("90", (string?)investment["spendableAmount"]);
+        Assert.Null(investment["availableToInvest"]);
+        Assert.Null(investment["cost"]);
+    }
+
+    [Fact]
+    public void An_unpublished_investment_resource_omits_holdings_instead_of_reporting_none()
+    {
+        var world = World(investmentRemaining: 60);
+        var response = Json(GameMcpWorldQuery.GetRow(GameMcpTestHarness.Context(world, 2805),
+            "research", ResearchId.ToString("D")).Freeze(), world);
+        var investment = Assert.Single(response["row"]!["investment"]!).Value<JObject>()!;
+
+        Assert.Equal("60", (string?)investment["remainingCost"]);
+        Assert.Null(investment["spendableAmount"]);
+    }
+
+    [Fact]
+    public void A_refusal_that_is_not_about_price_publishes_no_price_verdict()
+    {
+        var world = World(complete: true, developmentCostAffordable: false,
+            investmentRemaining: 100, heldAmount: 1);
+        var response = Json(GameMcpWorldQuery.GetRow(GameMcpTestHarness.Context(world, 2806),
+            "research", ResearchId.ToString("D")).Freeze(), world);
+        var develop = response["row"]!["develop"]!;
+
+        Assert.Equal("already_maxed", (string?)develop["reasonCode"]);
+        Assert.Null(develop["affordable"]);
+    }
+
+    [Fact]
     public void Failure_names_the_missing_outcome_while_success_yields_to_fresh_world_poststate()
     {
         var failed = new ResearchSubmission(ResearchPreflight.VerificationFailed,
@@ -216,7 +257,9 @@ public sealed class GameMcpResearchTests
         double investmentRemaining = 60,
         bool isDeveloping = true,
         long? collectedAtUtcTicks = null,
-        bool queueMode = true)
+        bool queueMode = true,
+        bool complete = false,
+        double? heldAmount = null)
     {
         var decision = new WorldResearchDecision(
             queueMode,
@@ -245,7 +288,7 @@ public sealed class GameMcpResearchTests
         var modifiers = new RawResearchModifiers(BigDouble.Zero, BigDouble.Zero,
             new BigDouble(100), BigDouble.Zero, BigDouble.Zero);
         var research = new WorldResearch(ResearchId, 1, 2, 0, 0, 10, 60,
-            isDeveloping, true, false, true, true, false, true, true, true, true, true, true,
+            isDeveloping, true, false, true, true, complete, true, true, true, true, true, true,
             1, 1, 0, 1, 10, false, 2, 1, new BigDouble(60), 1, 1,
             PublicationTable<WorldResearchRequirementAdjustment>.Empty, in modifiers, in decision);
         var identities = GameMcpTestHarness.EntityCatalog.Rows.AsSpan().ToArray().Concat(new[]
@@ -259,6 +302,9 @@ public sealed class GameMcpResearchTests
             CollectedAtEpoch = 41,
             CollectedAtUtcTicks = collectedAtUtcTicks ?? DateTime.UtcNow.Ticks,
             EntityIdentities = EntityIdentityCatalogSnapshot.Bound(41, identities),
+            Resources = heldAmount is null
+                ? PublicationTable<WorldResource>.Empty
+                : PublicationTable<WorldResource>.Create(new[] { Held(heldAmount.Value) }),
             Research = PublicationTable<WorldResearch>.Create(new[] { research }),
             CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
             {
@@ -266,6 +312,22 @@ public sealed class GameMcpResearchTests
                     1, 0, string.Empty),
             }),
         };
+    }
+
+    private static WorldResource Held(double quantity)
+    {
+        var rateInputs = default(RawResourceRateInputs);
+        var modifiers = default(RawResourceModifiers);
+        var traits = default(RawResourceTraits);
+        var held = new BigDouble(quantity);
+        var reading = new RawResourceSample(
+            ResourceId, held, new BigDouble(-1), true,
+            BigDouble.Zero, BigDouble.Zero, new BigDouble(100),
+            BigDouble.Zero, BigDouble.Zero, BigDouble.Zero, BigDouble.Zero,
+            false, false, false, 0, Guid.Empty,
+            in rateInputs, in traits, in modifiers);
+        return new WorldResource(
+            in reading, true, BigDouble.Zero, 0d, false, held, BigDouble.Zero);
     }
 
     private static JObject Json(GameMcpValue value, GameWorldState world) =>

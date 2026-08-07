@@ -255,8 +255,12 @@ members of the research row.
 The same detailed row is the complete pre-decision surface for `game_research`. Uncapped research
 omits `maximumLevel` rather than serializing the game's zero sentinel. It names the immediate or
 queue route, live multi-buy maximum, exact number of levels the native cumulative loop will accept,
-and ordered named costs paired with each resource's canonical `spendableAmount`. While development
-is active it includes elapsed/required/remaining progress and per-resource investment; associated
+and ordered named costs paired with each resource's canonical `spendableAmount`. `develop.affordable`
+appears only where the price is what decides: an available decision, or a refusal whose `reasonCode`
+is `unaffordable`. While development is active it includes elapsed/required/remaining progress and,
+per resource, the drain that pays for the research already in flight: `invested` and `required` are
+the native fill bar, `remainingCost` is what that bar still owes in the units the player spends, and
+`spendableAmount` is what the player actually holds. Associated
 research types carry their remaining free bonus levels and investment caps. Only currently
 UI-reachable next verbs appear: `develop`, `pause`, `resume`, `cancel`, and `bonus`. A committed
 mutation returns the changed level or state; read detail remains in `world_get`.
