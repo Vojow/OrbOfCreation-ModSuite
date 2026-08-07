@@ -30,7 +30,8 @@ internal readonly struct WorldCraftingDecision
         int automationUsed = 0,
         int automationMaximum = 0,
         bool canAutomate = false,
-        string automationReasonCode = "")
+        string automationReasonCode = "",
+        Guid automationQueueId = default)
     {
         RecipeId = recipeId;
         Pipeline = pipeline;
@@ -46,13 +47,21 @@ internal readonly struct WorldCraftingDecision
         AutomationMaximum = automationMaximum;
         CanAutomate = canAutomate;
         AutomationReasonCode = automationReasonCode ?? string.Empty;
+        AutomationQueueId = automationQueueId;
     }
 
     internal Guid RecipeId { get; }
     internal WorldCraftingPipeline Pipeline { get; }
     internal BigDouble PurchaseAmount { get; }
     internal BigDouble QueuedAmount { get; }
+    /// <summary>The manual queue this recipe routes to.</summary>
     internal Guid QueueId { get; }
+
+    /// <summary>
+    /// The automation queue this recipe routes to. Both queues the page owns are published, so a
+    /// caller can join either one to its live contents instead of only the manual half.
+    /// </summary>
+    internal Guid AutomationQueueId { get; }
     internal int QueueUsed { get; }
     internal int QueueMaximum { get; }
     internal bool CanStart { get; }
@@ -146,6 +155,31 @@ internal static class WorldCraftingDecisionLookup
         for (var index = 0; index < costs.Count; index++)
         {
             if (costs[index].RecipeId != recipeId)
+            {
+                if (start >= 0) break;
+                continue;
+            }
+            if (start < 0) start = index;
+            count++;
+        }
+        return start >= 0;
+    }
+
+    /// <summary>
+    /// The contiguous slot-ordered run one queue owns. Entries are derived sorted by queue then
+    /// slot, and each queue is appended exactly once, so one run holds all of a queue's contents.
+    /// </summary>
+    internal static bool TryFindQueueRange(
+        PublicationTable<WorldCraftingQueueEntry> entries,
+        Guid queueId,
+        out int start,
+        out int count)
+    {
+        start = -1;
+        count = 0;
+        for (var index = 0; index < entries.Count; index++)
+        {
+            if (entries[index].QueueId != queueId)
             {
                 if (start >= 0) break;
                 continue;
@@ -463,7 +497,8 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
             CountNonNull(valuesInAutomation),
             _queueMaximum!(automation),
             canAutomate,
-            automationReasonCode));
+            automationReasonCode,
+            _queueIdentity!(automation)));
     }
 
     private void AppendQueueEntries(GameWorldCycleFrame frame)

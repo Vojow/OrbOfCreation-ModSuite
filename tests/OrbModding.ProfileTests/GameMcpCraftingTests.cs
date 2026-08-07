@@ -154,6 +154,43 @@ public sealed class GameMcpCraftingTests
     }
 
     [Fact]
+    public void Both_queues_name_themselves_and_list_what_occupies_their_slots()
+    {
+        var row = Json(GameMcpWorldQuery.GetRow(
+            Context(),
+            "crafting-recipes",
+            RecipeId.ToString("D")))["row"]!;
+
+        var manual = row["queue"]!;
+        Assert.Equal("Sigil Queue", (string?)manual["queue"]!["name"]);
+        var manualSlot = Assert.Single(manual["slots"]!).Value<JObject>()!;
+        Assert.Equal(0, (int?)manualSlot["slot"]);
+        Assert.Equal("Craft Sigils", (string?)manualSlot["recipe"]!["name"]);
+        Assert.Equal("4", (string?)manualSlot["amount"]);
+        Assert.Null(manualSlot["repetitions"]);
+
+        var automation = row["automation"]!;
+        Assert.Equal("Auto Sigil Queue", (string?)automation["queue"]!["name"]);
+        var automationSlot = Assert.Single(automation["slots"]!).Value<JObject>()!;
+        Assert.Equal(1, (int?)automationSlot["slot"]);
+        Assert.Equal("Craft Sigils", (string?)automationSlot["recipe"]!["name"]);
+        Assert.Equal("3", (string?)automationSlot["amount"]);
+        Assert.Equal(3, (int?)automationSlot["repetitions"]);
+    }
+
+    [Fact]
+    public void A_queue_that_was_read_and_holds_nothing_lists_no_slots_rather_than_going_absent()
+    {
+        var row = Json(GameMcpWorldQuery.GetRow(
+            Context(withQueueEntries: false),
+            "crafting-recipes",
+            RecipeId.ToString("D")))["row"]!;
+
+        Assert.Empty(row["queue"]!["slots"]!);
+        Assert.Empty(row["automation"]!["slots"]!);
+    }
+
+    [Fact]
     public void QueueContentsAreOrderedNamedAndOmitManualAutomationFields()
     {
         var result = Json(GameMcpWorldQuery.ListRows(
@@ -363,12 +400,15 @@ public sealed class GameMcpCraftingTests
         int queuedAmount = 4,
         int automationQuantity = 3,
         bool canAutomate = true,
-        string automationReasonCode = "automation_full")
+        string automationReasonCode = "automation_full",
+        bool withQueueEntries = true)
     {
         using var publisher =
             new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
         publisher.Publish(
-            World(queuedAmount, automationQuantity, canAutomate, automationReasonCode),
+            World(
+                queuedAmount, automationQuantity, canAutomate, automationReasonCode,
+                withQueueEntries),
             new WorldGeneration(2201));
         return GameMcpTestHarness.Context(
             publisher.ReadLatest(), configurationGeneration: 8, lifecycleGeneration: 15);
@@ -378,7 +418,8 @@ public sealed class GameMcpCraftingTests
         int queuedAmount = 4,
         int automationQuantity = 3,
         bool canAutomate = true,
-        string automationReasonCode = "automation_full")
+        string automationReasonCode = "automation_full",
+        bool withQueueEntries = true)
     {
         var reading = new RawCraftingRecipeSample(
             RecipeId,
@@ -422,16 +463,19 @@ public sealed class GameMcpCraftingTests
                     automationUsed: 1,
                     automationMaximum: 3,
                     canAutomate: canAutomate,
-                    automationReasonCode: automationReasonCode),
+                    automationReasonCode: automationReasonCode,
+                    automationQueueId: AutomationQueueId),
             }),
-            CraftingQueueEntries = PublicationTable<WorldCraftingQueueEntry>.Create(new[]
-            {
-                new WorldCraftingQueueEntry(
-                    QueueId, 0, RecipeId, new BigDouble(queuedAmount), false, 0),
-                new WorldCraftingQueueEntry(
-                    AutomationQueueId, 1, RecipeId,
-                    new BigDouble(automationQuantity), true, automationQuantity),
-            }),
+            CraftingQueueEntries = withQueueEntries
+                ? PublicationTable<WorldCraftingQueueEntry>.Create(new[]
+                {
+                    new WorldCraftingQueueEntry(
+                        QueueId, 0, RecipeId, new BigDouble(queuedAmount), false, 0),
+                    new WorldCraftingQueueEntry(
+                        AutomationQueueId, 1, RecipeId,
+                        new BigDouble(automationQuantity), true, automationQuantity),
+                })
+                : PublicationTable<WorldCraftingQueueEntry>.Empty,
             CraftingDecisionCosts = PublicationTable<WorldCraftingDecisionCost>.Create(new[]
             {
                 new WorldCraftingDecisionCost(

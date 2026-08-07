@@ -97,6 +97,9 @@ public sealed class WorldCraftingDecisionReaderTests : IDisposable
         Assert.Equal(3, decision.AutomationQuantity);
         Assert.Equal(1, decision.AutomationUsed);
         Assert.Equal(2, decision.AutomationMaximum);
+        Assert.Equal(page.craftingQueueInstances.GetGuid(), decision.QueueId);
+        Assert.Equal(page.craftingAutomationInstances.GetGuid(), decision.AutomationQueueId);
+        Assert.NotEqual(decision.QueueId, decision.AutomationQueueId);
         Assert.Equal(2, frame.CraftingQueueEntries.Count);
         ref readonly var manualEntry = ref frame.CraftingQueueEntries[0];
         Assert.Equal(page.craftingQueueInstances.GetGuid(), manualEntry.QueueId);

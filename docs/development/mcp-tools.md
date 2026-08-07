@@ -293,6 +293,12 @@ lifecycle-bound crafting reader supplies these rows and recipe decisions, so a m
 queue-role contradiction, or unstable page roster makes the category unavailable rather than
 publishing a partial queue.
 
+A crafting recipe row carries both queues its page owns as first-class facts. `queue` and
+`automation` each name their own queue and carry `slots` — the same lean entries in slot order, so a
+row that reports a queue is full also reports what is filling it and therefore what to cancel. The
+collection is always present: a queue that was read and holds nothing lists no slots rather than
+going absent.
+
 `world_search` deliberately indexes only categories whose identity mode is
 `stable_entity_uuid`. It does not pretend that an owner/resource UUID uniquely identifies a
 composite diagnostic row. If an owner UUID exists only in `entity-requirements`, search returns an

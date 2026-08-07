@@ -5103,6 +5103,20 @@ internal static class GameMcpWorldQuery
         return result;
     }
 
+    /// <summary>
+    /// What occupies a queue right now, so a row that reports a queue is full also reports what is
+    /// filling it. The collection is always present; a queue that was read and is empty is empty.
+    /// </summary>
+    private static GameMcpValue QueueSlots(GameWorldState world, Guid queueId)
+    {
+        var slots = new JArray();
+        if (WorldCraftingDecisionLookup.TryFindQueueRange(
+                world.CraftingQueueEntries, queueId, out var start, out var count))
+            for (var index = 0; index < count; index++)
+                slots.Add(ProjectCraftingQueueEntry(world.CraftingQueueEntries[start + index]));
+        return slots.Freeze();
+    }
+
     private static string AutomationRefusal(string reasonCode) => reasonCode switch
     {
         "hidden_or_undiscovered" => "This recipe is not discovered yet.",
@@ -5146,13 +5160,16 @@ internal static class GameMcpWorldQuery
                     ["queueId"] = decision.QueueId.ToString("D"),
                     ["used"] = decision.QueueUsed,
                     ["maximum"] = decision.QueueMaximum,
+                    ["slots"] = QueueSlots(world, decision.QueueId),
                 };
                 if (decision.CanCancelManual)
                     result["cancelManual"] = new JObject { ["available"] = true };
                 var automation = new JObject
                 {
+                    ["queueId"] = decision.AutomationQueueId.ToString("D"),
                     ["amount"] = decision.AutomationQuantity,
                     ["available"] = decision.CanAutomate,
+                    ["slots"] = QueueSlots(world, decision.AutomationQueueId),
                 };
                 if (decision.CanCancelAutomation) automation["canCancel"] = true;
                 if (decision.AutomationMaximum > 0)
