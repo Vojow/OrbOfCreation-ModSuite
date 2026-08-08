@@ -2,6 +2,7 @@
 using System;
 using System.Collections;
 using OrbModding.Common.Runtime.World;
+using UnityEngine;
 
 namespace OrbAutomata.GameMcp;
 
@@ -43,6 +44,26 @@ internal sealed class GameMcpTooltipNativeAccess
 
         access = new GameMcpTooltipNativeAccess(read);
         reason = string.Empty;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the player can actually hover this element.
+    /// </summary>
+    /// <remarks>
+    /// Closing a modal never deactivates anything: <c>UIModal.SetElementVisibility(false)</c> drops
+    /// the canvas group's alpha, interactivity, and raycasts, and that is the whole of it. Every
+    /// modal the session has ever opened therefore stays active in the hierarchy forever, so a
+    /// catalog filtered on Unity liveness alone answers with panels the player closed an hour ago.
+    /// The game's own <c>IsOpen</c> is what separates the panel on screen from the ones behind it.
+    /// </remarks>
+    internal static bool OnScreen(Component element)
+    {
+        if (element is null) return false;
+        for (var node = element.transform; node is not null; node = node.parent)
+        {
+            if (node.GetComponent<UIModal>() is { } modal && !modal.IsOpen()) return false;
+        }
         return true;
     }
 

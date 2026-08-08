@@ -15164,6 +15164,25 @@
       "place": "action"
     },
     {
+      "id": "game-mcp-tooltip-catalog.modal-open-action",
+      "assembly": "assembly-csharp",
+      "type": "UIModal",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsOpen",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Game MCP tooltip explorer"
+      ],
+      "usages": [
+        "direct"
+      ],
+      "place": "action"
+    },
+    {
       "id": "ui-plot-node-list.on-node-click",
       "assembly": "assembly-csharp",
       "type": "UIPlotNodeList",

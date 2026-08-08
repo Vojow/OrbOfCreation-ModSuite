@@ -3387,7 +3387,8 @@ public sealed class Plugin : BaseUnityPlugin
             .OfType<HoverTooltip>()
             .Where(hover =>
                 hover.enabled &&
-                hover.gameObject.activeInHierarchy)
+                hover.gameObject.activeInHierarchy &&
+                GameMcpTooltipNativeAccess.OnScreen(hover))
             .OrderBy(hover => ScreenOrderKey(hover.transform), StringComparer.Ordinal)
             .ToArray();
 

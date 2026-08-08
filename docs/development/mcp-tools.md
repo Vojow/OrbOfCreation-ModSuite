@@ -1261,7 +1261,12 @@ Main-scene navigation capture can be several megabytes even though it contains o
 The current game build makes the exploration loop feasible. Active `HoverTooltip` components carry
 an `ITooltipable`, core name/type/description methods, and a private authored `subTooltips` list;
 `OpenTooltip` renders the selected element. `game_tooltips` pages through current-screen elements by
-an exact native hierarchy path whose sibling indices disambiguate repeated Unity clone rows.
+an exact native hierarchy path whose sibling indices disambiguate repeated Unity clone rows. Its
+scope is what the player can hover: the screen's own controls, the persistent chrome that outlives
+navigation, and any open modal. Closing a modal only drops its canvas group's alpha and raycasts, so
+every panel the session ever opened stays active in the hierarchy — the catalog reads the game's own
+`UIModal.IsOpen()` up each element's ancestry and lists none of them, and `total` therefore counts
+hoverable elements rather than instantiated ones.
 `game_tooltip` requires one exact path and returns the tooltip as compact plain screen text. The
 catalog includes the owning UUID when the assigned tooltip item is itself an identity-bearing game
 entity; control-only rows retain the volatile current-screen path and name. The

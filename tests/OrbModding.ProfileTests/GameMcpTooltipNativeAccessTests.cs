@@ -58,6 +58,33 @@ public sealed class GameMcpTooltipNativeAccessTests
         Assert.Contains("off the Unity startup thread", refusalReason);
     }
 
+    [Fact]
+    public void AClosedModalStaysInstantiatedAndItsControlsAreNotOnScreen()
+    {
+        var modalRoot = new UnityEngine.GameObject("Modal(Clone)");
+        var modal = modalRoot.AddComponent<global::UIModal>();
+        var button = new UnityEngine.GameObject("SaveButton");
+        button.transform.SetParent(modalRoot.transform, false);
+        var hover = button.AddComponent<global::HoverTooltip>();
+
+        Assert.True(button.activeInHierarchy);
+        Assert.False(GameMcpTooltipNativeAccess.OnScreen(hover));
+
+        modal.OpenForTest();
+        Assert.True(GameMcpTooltipNativeAccess.OnScreen(hover));
+    }
+
+    [Fact]
+    public void PersistentChromeOutsideAnyModalIsOnScreen()
+    {
+        var bar = new UnityEngine.GameObject("CastingBar");
+        var icon = new UnityEngine.GameObject("SpellButton");
+        icon.transform.SetParent(bar.transform, false);
+
+        Assert.True(GameMcpTooltipNativeAccess.OnScreen(
+            icon.AddComponent<global::HoverTooltip>()));
+    }
+
     private sealed class MissingSubTooltips
     {
     }
