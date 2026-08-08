@@ -26,7 +26,7 @@ internal readonly struct WorldCraftingDecision
         int queueMaximum,
         bool canStart,
         string reasonCode,
-        int automationQuantity = 0,
+        int automationRepetitions = 0,
         int automationUsed = 0,
         int automationMaximum = 0,
         bool canAutomate = false,
@@ -42,7 +42,7 @@ internal readonly struct WorldCraftingDecision
         QueueMaximum = queueMaximum;
         CanStart = canStart;
         ReasonCode = reasonCode ?? string.Empty;
-        AutomationQuantity = automationQuantity;
+        AutomationRepetitions = automationRepetitions;
         AutomationUsed = automationUsed;
         AutomationMaximum = automationMaximum;
         CanAutomate = canAutomate;
@@ -66,7 +66,13 @@ internal readonly struct WorldCraftingDecision
     internal int QueueMaximum { get; }
     internal bool CanStart { get; }
     internal string ReasonCode { get; }
-    internal int AutomationQuantity { get; }
+    /// <summary>
+    /// How many times the automation entry repeats, which is what the game's own
+    /// <c>CraftingInstance.GetAutomationQuantity()</c> returns:
+    /// <c>SetAutomationQuantity(n)</c> stores <c>quantity = 2^(n-1)</c>, so this is the exponent,
+    /// not the badge. The badge number lives on the queue entry's <see cref="WorldCraftingQueueEntry.Amount"/>.
+    /// </summary>
+    internal int AutomationRepetitions { get; }
     internal int AutomationUsed { get; }
     internal int AutomationMaximum { get; }
     internal bool CanAutomate { get; }
@@ -77,7 +83,7 @@ internal readonly struct WorldCraftingDecision
     /// </summary>
     internal string AutomationReasonCode { get; }
     internal bool CanCancelManual => QueuedAmount > BigDouble.Zero;
-    internal bool CanCancelAutomation => AutomationQuantity > 0;
+    internal bool CanCancelAutomation => AutomationRepetitions > 0;
 }
 
 internal readonly struct WorldCraftingDecisionCost
@@ -449,8 +455,8 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
             throw new InvalidOperationException("page automation queue was null");
         var valuesInAutomation = _queueValues!(automation) ??
             throw new InvalidOperationException("page automation value was null");
-        var automationQuantity = AutomationQuantity(valuesInAutomation, recipeId);
-        var automationHasExisting = automationQuantity > 0;
+        var automationRepetitions = AutomationRepetitions(valuesInAutomation, recipeId);
+        var automationHasExisting = automationRepetitions > 0;
         var automationHasRoom = automationHasExisting || _queueHasRoom!(automation);
         var canAutomate = visible && automationHasRoom;
         var automationReasonCode = !visible
@@ -493,7 +499,7 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
             _queueMaximum!(queue),
             canQueue,
             reasonCode,
-            automationQuantity,
+            automationRepetitions,
             CountNonNull(valuesInAutomation),
             _queueMaximum!(automation),
             canAutomate,
@@ -628,10 +634,10 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
         return false;
     }
 
-    private int AutomationQuantity(IList instances, Guid recipeId)
+    private int AutomationRepetitions(IList instances, Guid recipeId)
     {
         var found = false;
-        var quantity = 0;
+        var repetitions = 0;
         for (var index = 0; index < instances.Count; index++)
         {
             var instance = instances[index];
@@ -644,9 +650,9 @@ internal sealed class WorldCraftingDecisionReader : IWorldCategoryReader
                 throw new InvalidOperationException(
                     "automation queue contained duplicate instances for one recipe");
             found = true;
-            quantity = _instanceAutomationQuantity!(instance);
+            repetitions = _instanceAutomationQuantity!(instance);
         }
-        return quantity;
+        return repetitions;
     }
 
     private static bool SameReferences(object[] first, object[] second)

@@ -118,7 +118,9 @@ public sealed class GameMcpCraftingTests
         Assert.Equal("900", (string?)cost["spendableAmount"]);
         Assert.True((bool)cost["affordable"]!);
         Assert.True((bool)row["cancelManual"]!["available"]!);
-        Assert.Equal(3, (int)row["automation"]!["amount"]!);
+        // Repetitions 3 means a badge of 4: the two coordinates are only equal at 1 and 2.
+        Assert.Equal("4", (string?)row["automation"]!["amount"]);
+        Assert.Equal(3, (int)row["automation"]!["repetitions"]!);
         Assert.True((bool)row["automation"]!["available"]!);
         Assert.True((bool)row["automation"]!["canCancel"]!);
         Assert.Null(row["automation"]!["reason"]);
@@ -174,7 +176,7 @@ public sealed class GameMcpCraftingTests
         var automationSlot = Assert.Single(automation["slots"]!).Value<JObject>()!;
         Assert.Equal(1, (int?)automationSlot["slot"]);
         Assert.Equal("Craft Sigils", (string?)automationSlot["recipe"]!["name"]);
-        Assert.Equal("3", (string?)automationSlot["amount"]);
+        Assert.Equal("4", (string?)automationSlot["amount"]);
         Assert.Equal(3, (int?)automationSlot["repetitions"]);
     }
 
@@ -210,7 +212,7 @@ public sealed class GameMcpCraftingTests
         Assert.Null(rows[0]?["repetitions"]);
         Assert.Equal("Auto Sigil Queue", (string?)rows[1]?["queue"]?["name"]);
         Assert.Equal(1, (int?)rows[1]?["slot"]);
-        Assert.Equal("3", (string?)rows[1]?["amount"]);
+        Assert.Equal("4", (string?)rows[1]?["amount"]);
         Assert.True((bool?)rows[1]?["automatic"]);
         Assert.Equal(3, (int?)rows[1]?["repetitions"]);
     }
@@ -319,26 +321,30 @@ public sealed class GameMcpCraftingTests
         Assert.Equal(2, (int)postState["queued"]!["after"]!);
     }
 
+    // The screen's badge, not the repetition count: repetitions 4 to 3 is a badge of 8 to 4.
     [Theory]
-    [InlineData("automate", 3, 5)]
-    [InlineData("cancel_automation", 5, 2)]
-    public void Automated_modes_return_only_the_settled_quantity_change(
+    [InlineData("automate", 3, 5, "4", "16")]
+    [InlineData("cancel_automation", 4, 3, "8", "4")]
+    public void Automated_modes_return_the_settled_badge_amount(
         string mode,
         int before,
-        int after)
+        int after,
+        string badgeBefore,
+        string badgeAfter)
     {
         var command = new GameMcpCommand(
             1, GameMcpCommandKind.Crafting, 15, 8, mode, RecipeId, Guid.Empty,
             "CraftingRecipeSO", 1, string.Empty, string.Empty,
-            false, false, frameContext: Context(automationQuantity: before));
+            false, false, frameContext: Context(automationRepetitions: before));
         var committed = GameMcpCommandResult.Committed("committed", 15, 8);
 
         var postState = Json(GameMcpWorldQuery.ProjectGameplayPostState(
-            Context(automationQuantity: after), command, committed));
+            Context(automationRepetitions: after), command, committed));
 
         Assert.Equal("Craft Sigils", (string?)postState["name"]);
-        Assert.Equal(before, (int)postState["automation"]!["before"]!);
-        Assert.Equal(after, (int)postState["automation"]!["after"]!);
+        Assert.Equal(badgeBefore, (string?)postState["amount"]!["before"]);
+        Assert.Equal(badgeAfter, (string?)postState["amount"]!["after"]);
+        Assert.Null(postState["automation"]);
         Assert.Null(postState["receipt"]);
     }
 
@@ -392,13 +398,13 @@ public sealed class GameMcpCraftingTests
         Assert.Null(quiet["observed"]);
         Assert.Equal(
             "requested crafting-instance transition", (string?)reported["missingOutcome"]);
-        Assert.Equal(1, (int)reported["observed"]!["automation"]!["before"]!);
-        Assert.Equal(2, (int)reported["observed"]!["automation"]!["after"]!);
+        Assert.Equal(1, (int)reported["observed"]!["repetitions"]!["before"]!);
+        Assert.Equal(2, (int)reported["observed"]!["repetitions"]!["after"]!);
     }
 
     private static GameMcpFrameContext Context(
         int queuedAmount = 4,
-        int automationQuantity = 3,
+        int automationRepetitions = 3,
         bool canAutomate = true,
         string automationReasonCode = "automation_full",
         bool withQueueEntries = true)
@@ -407,7 +413,7 @@ public sealed class GameMcpCraftingTests
             new ServiceWorldPublisher<GameWorldState>(GameWorldStateDefaults.Empty);
         publisher.Publish(
             World(
-                queuedAmount, automationQuantity, canAutomate, automationReasonCode,
+                queuedAmount, automationRepetitions, canAutomate, automationReasonCode,
                 withQueueEntries),
             new WorldGeneration(2201));
         return GameMcpTestHarness.Context(
@@ -416,7 +422,7 @@ public sealed class GameMcpCraftingTests
 
     private static GameWorldState World(
         int queuedAmount = 4,
-        int automationQuantity = 3,
+        int automationRepetitions = 3,
         bool canAutomate = true,
         string automationReasonCode = "automation_full",
         bool withQueueEntries = true)
@@ -459,7 +465,7 @@ public sealed class GameMcpCraftingTests
                     queueMaximum: 3,
                     canStart: true,
                     reasonCode: "ready",
-                    automationQuantity: automationQuantity,
+                    automationRepetitions: automationRepetitions,
                     automationUsed: 1,
                     automationMaximum: 3,
                     canAutomate: canAutomate,
@@ -471,9 +477,12 @@ public sealed class GameMcpCraftingTests
                 {
                     new WorldCraftingQueueEntry(
                         QueueId, 0, RecipeId, new BigDouble(queuedAmount), false, 0),
+                    // The badge the automation strip draws is the instance's own quantity,
+                    // which the game stores as 2^(repetitions - 1).
                     new WorldCraftingQueueEntry(
                         AutomationQueueId, 1, RecipeId,
-                        new BigDouble(automationQuantity), true, automationQuantity),
+                        new BigDouble(AutomationBadgeAmount(automationRepetitions)), true,
+                        automationRepetitions),
                 })
                 : PublicationTable<WorldCraftingQueueEntry>.Empty,
             CraftingDecisionCosts = PublicationTable<WorldCraftingDecisionCost>.Create(new[]
@@ -490,6 +499,9 @@ public sealed class GameMcpCraftingTests
             }),
         };
     }
+
+    private static int AutomationBadgeAmount(int repetitions) =>
+        repetitions <= 0 ? 0 : 1 << (repetitions - 1);
 
     private static EntityIdentityCatalogSnapshot Identities()
     {

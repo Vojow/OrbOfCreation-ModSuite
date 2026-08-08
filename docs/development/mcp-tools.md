@@ -302,6 +302,12 @@ row that reports a queue is full also reports what is filling it and therefore w
 collection is always present: a queue that was read and holds nothing lists no slots rather than
 going absent.
 
+An automated recipe has two numbers and they are not the same number. `automation.amount` is the
+badge the automation strip draws — the queued instance's own quantity — and `automation.repetitions`
+is the exponent behind it, because the game stores `quantity = 2^(repetitions - 1)`. They agree at 1
+and 2 and diverge exponentially after that, so they never share a name: the strip's number is always
+`amount`, the count of presses is always `repetitions`.
+
 `world_search` deliberately indexes only categories whose identity mode is
 `stable_entity_uuid`. It does not pretend that an owner/resource UUID uniquely identifies a
 composite diagnostic row. If an owner UUID exists only in `entity-requirements`, search returns an
@@ -1011,9 +1017,12 @@ The other modes use the same authored page relation and exact recipe identity.
 automated instance route shown by the UI. `cancel_automation` passes the negated multi-buy amount,
 matching the game's own automation strip, because the native control adds whatever it is given. The
 recipe row publishes manual queued amount and the
-automated quantity/capacity needed for the next decision. Success is one settled quantity change;
-refund accounting is neither computed nor used as a gate. A fault that already moved the automation
-quantity reports it under `observed`, so a caller is never invited to retry into more damage.
+automated quantity/capacity needed for the next decision. Success is one settled change, published
+as `amount: {before, after}` in the strip's own badge coordinate — one `cancel_automation` on a
+doubled entry moves the badge 8 to 4 while the repetitions behind it move 4 to 3, so the response
+names the number the screen shows. Refund accounting is neither computed nor used as a gate. A fault
+that already moved the native automation quantity reports it under `observed` as `repetitions`,
+which is the coordinate that call returns, so a caller is never invited to retry into more damage.
 
 `game_discover`'s composition modes require `surface` plus `components` and accept no target UUID.
 `preview` resolves the

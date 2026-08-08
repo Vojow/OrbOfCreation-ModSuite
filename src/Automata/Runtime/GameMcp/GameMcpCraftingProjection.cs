@@ -54,9 +54,11 @@ internal static class GameMcpCraftingProjection
         };
         if (submission.SideEffect.Observed)
         {
+            // The action observes GetAutomationQuantity(), which counts repetitions rather than
+            // the badge's amount, so it is published under that name.
             failure["observed"] = new JObject
             {
-                ["automation"] = new JObject
+                ["repetitions"] = new JObject
                 {
                     ["before"] = submission.SideEffect.AutomationBefore,
                     ["after"] = submission.SideEffect.AutomationAfter,

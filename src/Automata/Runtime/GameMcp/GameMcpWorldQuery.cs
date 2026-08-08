@@ -1764,11 +1764,17 @@ internal static class GameMcpWorldQuery
                 "the settled world has no crafting decision for the committed recipe");
         if (command.Mode is "automate" or "cancel_automation")
         {
+            // The screen's number, not the repetition count behind it: one cancel on a doubled
+            // entry moves the badge 8 to 4 while the repetitions move 4 to 3.
             return Change(
                 command.TargetId,
-                hasBefore ? previous.AutomationQuantity : null,
-                current.AutomationQuantity,
-                "automation");
+                hasBefore && oldWorld is not null
+                    ? new GameMcpDomainValue(AutomationAmount(
+                        oldWorld, previous.AutomationQueueId, command.TargetId))
+                    : null,
+                new GameMcpDomainValue(AutomationAmount(
+                    state.World.Snapshot, current.AutomationQueueId, command.TargetId)),
+                "amount");
         }
         if (command.Mode == "cancel_manual")
         {
@@ -5126,6 +5132,29 @@ internal static class GameMcpWorldQuery
         return slots.Freeze();
     }
 
+    /// <summary>
+    /// What the automation strip's badge shows for one recipe. <c>UICraftingInstance</c> draws the
+    /// queued instance's own <c>quantity</c>, while the entry's repetition count is the exponent
+    /// behind it — <c>CraftingInstance.SetAutomationQuantity(n)</c> stores
+    /// <c>quantity = 2^(n-1)</c>. The two coincide at 1 and 2 and diverge exponentially after that,
+    /// so only the badge's number is published as <c>amount</c>.
+    /// </summary>
+    private static BigDouble AutomationAmount(
+        GameWorldState world,
+        Guid automationQueueId,
+        Guid recipeId)
+    {
+        if (!WorldCraftingDecisionLookup.TryFindQueueRange(
+                world.CraftingQueueEntries, automationQueueId, out var start, out var count))
+            return BigDouble.Zero;
+        for (var index = 0; index < count; index++)
+        {
+            var entry = world.CraftingQueueEntries[start + index];
+            if (entry.RecipeId == recipeId) return entry.Amount;
+        }
+        return BigDouble.Zero;
+    }
+
     private static string AutomationRefusal(string reasonCode) => reasonCode switch
     {
         "hidden_or_undiscovered" => "This recipe is not discovered yet.",
@@ -5176,7 +5205,9 @@ internal static class GameMcpWorldQuery
                 var automation = new JObject
                 {
                     ["queueId"] = decision.AutomationQueueId.ToString("D"),
-                    ["amount"] = decision.AutomationQuantity,
+                    ["amount"] = new GameMcpDomainValue(AutomationAmount(
+                        world, decision.AutomationQueueId, recipe.EntityId)),
+                    ["repetitions"] = decision.AutomationRepetitions,
                     ["available"] = decision.CanAutomate,
                     ["slots"] = QueueSlots(world, decision.AutomationQueueId),
                 };
