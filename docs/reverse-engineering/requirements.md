@@ -42,6 +42,26 @@ game is making. The verdicts that decompose a research refusal — `IsVisible()`
 `IsBelowArtificialMaxLevel()`, `IsBelowMaxInvestmentLevel()` — are only comparable with each other
 and with those levels when read in the same generation.
 
+`IsWithinDevelopRange()` is the gate the last five of those feed, and its body fixes both the order
+they are asked in and how the final three compose:
+
+```
+ResearchSO.IsWithinDevelopRange() : bool
+  IsComplete()                       → false when true
+  GetDevelopmentCost().HasEnough()   → false when false
+  MeetsLevelRequirements()           → false when false
+  StillHasLeeway()                   → true when true
+  IsBelowArtificialMaxLevel() && IsBelowMaxInvestmentLevel()
+```
+
+Two consequences a refusal has to respect. **Cost is asked before level requirements**, so a node
+that is both unaffordable and short of its requirements is refused for the price — the gate the
+game itself reached first. And **leeway is one gate with the two caps, not three**: the method
+develops on leeway *or* on being below both caps, so exhausted leeway beside an open cap refuses
+nothing, and a cap reached while leeway remains refuses nothing either. `CanDevelop()` is
+`IsWithinDevelopRange() && !IsDeveloping()`, which is why a development already running is the last
+gate a caller is told about rather than the first.
+
 Research `levelPrerequisites` join the same authored graph as upgrades and structures, with native
 `GetRequirementLevel()` as the check level.
 

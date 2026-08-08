@@ -1760,9 +1760,10 @@ public class ResearchSO : ILevelable
     public bool IsBelowArtificialMaxLevel() => belowArtificialMaxLevel;
     public bool IsBelowMaxInvestmentLevel() => !IsComplete();
 
-    // The game develops on leeway OR on being below both caps, never on all three together.
+    // The game asks the price before the level requirements, and develops on leeway OR on being
+    // below both caps, never on all three together.
     public bool IsWithinDevelopRange() =>
-        !IsComplete() && MeetsLevelRequirements() &&
+        !IsComplete() && GetDevelopmentCost().HasEnough() && MeetsLevelRequirements() &&
         (StillHasLeeway() || (IsBelowArtificialMaxLevel() && IsBelowMaxInvestmentLevel()));
     public bool CanDevelop() => IsWithinDevelopRange() && !IsDeveloping();
     public void PurchaseLevel()

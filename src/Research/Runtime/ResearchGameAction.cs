@@ -117,9 +117,11 @@ internal sealed class ResearchGameAction : IDisposable
     }
 
     /// <summary>
-    /// Which native gate closed, in the order <c>ResearchSO.IsWithinDevelopRange</c> asks:
-    /// completion, affordability, level requirements, then leeway falling back to the artificial
-    /// and investment caps. <c>CanDevelop</c> adds the in-flight development on top of that.
+    /// Which native gate closed, in the order <c>ResearchSO.IsWithinDevelopRange</c> asks it:
+    /// <c>IsComplete()</c>, <c>GetDevelopmentCost().HasEnough()</c>,
+    /// <c>MeetsLevelRequirements()</c>, then <c>StillHasLeeway()</c> falling back to
+    /// <c>IsBelowArtificialMaxLevel() &amp;&amp; IsBelowMaxInvestmentLevel()</c>.
+    /// <c>CanDevelop()</c> adds <c>!IsDeveloping()</c> on top of that whole expression.
     /// Returns <c>Proceeded</c> when every gate is open and the zero came from somewhere else.
     /// </summary>
     private static ResearchPreflight DevelopBlocker(
