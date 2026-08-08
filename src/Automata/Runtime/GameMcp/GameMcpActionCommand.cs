@@ -530,10 +530,17 @@ internal static class GameMcpActionResultCodeNames
             (commandKind == GameMcpCommandKind.Purchase ||
              commandKind == GameMcpCommandKind.SpellLevel))
             return "action_family_unavailable";
-        if (code == SpellLevelActionResultCodes.ProgressionLocked)
-            return "progression_locked";
-        if (code == SpellLevelActionResultCodes.LevelNotAffordable)
-            return "level_not_affordable";
+        // Feature result-code numbers are namespaced per feature and deliberately reused across
+        // them, so a name is only correct beside the command kind that owns the vocabulary.
+        // Spell leveling shares 2048-2050 with the loadout codes, and an unscoped match named an
+        // empty snapshot slot "level_not_affordable" on a surface with no levels and no costs.
+        if (commandKind == GameMcpCommandKind.SpellLevel)
+        {
+            if (code == SpellLevelActionResultCodes.ProgressionLocked)
+                return "progression_locked";
+            if (code == SpellLevelActionResultCodes.LevelNotAffordable)
+                return "level_not_affordable";
+        }
         if (code == AutoCastActionResultCodes.ActionFamilyUnavailable)
             return "action_family_unavailable";
         if (code == AutoCastActionResultCodes.ManualPause) return "manual_pause";
@@ -743,6 +750,13 @@ internal static class GameMcpActionResultCodeNames
             if (code == ResearchActionResultCodes.PostCommitFault) return "post_commit_fault";
             if (code == ResearchActionResultCodes.VerificationFailed) return "verification_failed";
             if (code == ResearchActionResultCodes.AmountUnavailable) return "amount_unavailable";
+
+            // The same words the research row uses for the same native gate.
+            if (code == ResearchActionResultCodes.AlreadyMaxed) return "already_maxed";
+            if (code == ResearchActionResultCodes.Unaffordable) return "unaffordable";
+            if (code == ResearchActionResultCodes.RequirementsUnmet) return "requirements_unmet";
+            if (code == ResearchActionResultCodes.LeewayExhausted) return "research_leeway_exhausted";
+            if (code == ResearchActionResultCodes.AlreadyDeveloping) return "already_developing";
         }
         if (commandKind == GameMcpCommandKind.AlchemyLoadout)
         {

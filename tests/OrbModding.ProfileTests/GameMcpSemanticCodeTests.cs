@@ -23,6 +23,22 @@ public sealed class GameMcpSemanticCodeTests
             (GameMcpCommandKind.Harvest, PlotLifecycleActionResultCodes.QuantityUnavailable, "amount_unavailable"),
             (GameMcpCommandKind.Research, ResearchActionResultCodes.AmountUnavailable, "amount_unavailable"),
             (GameMcpCommandKind.Concept, AutoConceptActionResultCodes.AmountUnavailable, "amount_unavailable"),
+
+            // Feature code numbers repeat across features, so a name is only right beside the kind
+            // that owns it. These share 2048-2050 with spell leveling, and an empty snapshot slot
+            // once answered "level_not_affordable" on a surface with no levels and no costs.
+            (GameMcpCommandKind.Loadout, LoadoutActionResultCodes.SlotEmpty, "slot_empty"),
+            (GameMcpCommandKind.Loadout, LoadoutActionResultCodes.SlotOutOfRange, "slot_out_of_range"),
+            (GameMcpCommandKind.Loadout, LoadoutActionResultCodes.EntryUnavailable, "saved_entry_unavailable"),
+            (GameMcpCommandKind.SpellLevel, SpellLevelActionResultCodes.LevelNotAffordable, "level_not_affordable"),
+            (GameMcpCommandKind.SpellLevel, SpellLevelActionResultCodes.ProgressionLocked, "progression_locked"),
+
+            // The research action answers with the same words the research row publishes.
+            (GameMcpCommandKind.Research, ResearchActionResultCodes.AlreadyMaxed, "already_maxed"),
+            (GameMcpCommandKind.Research, ResearchActionResultCodes.Unaffordable, "unaffordable"),
+            (GameMcpCommandKind.Research, ResearchActionResultCodes.RequirementsUnmet, "requirements_unmet"),
+            (GameMcpCommandKind.Research, ResearchActionResultCodes.LeewayExhausted, "research_leeway_exhausted"),
+            (GameMcpCommandKind.Research, ResearchActionResultCodes.AlreadyDeveloping, "already_developing"),
         };
         foreach (var (kind, code, expected) in cases)
         {
