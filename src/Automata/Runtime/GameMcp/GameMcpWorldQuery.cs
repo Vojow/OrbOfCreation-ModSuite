@@ -197,6 +197,35 @@ internal static class GameMcpWorldQuery
     private static GameMcpValue ProjectListRow(
         GameWorldState world,
         GameMcpWorldCategory category,
+        object row) =>
+        WithOwnIdentity(category, ProjectListRowFields(world, category, row));
+
+    /// <summary>
+    /// A composite row's identity is its own. It has no addressable UUID, so it says so and
+    /// declares the category it really belongs to, instead of borrowing whichever nested entity it
+    /// happens to reference — an offer a caller took, spending a call on a refusal for one category
+    /// and silently fetching the wrong entity for another.
+    /// </summary>
+    private static GameMcpValue WithOwnIdentity(
+        GameMcpWorldCategory category,
+        GameMcpValue projected)
+    {
+        if (string.Equals(category.IdentityMode, "stable_entity_uuid", StringComparison.Ordinal))
+            return projected;
+        if (projected is GameMcpProjectedDomainValue domain)
+            return domain.WithoutAddressableIdentity();
+        if (projected is not GameMcpObject frozen) return projected;
+        var result = new JObject();
+        result.CopyFrom(frozen);
+        if (result["uuid"] is not null) return projected;
+        result["category"] = category.Name;
+        result["addressable"] = false;
+        return result.Freeze();
+    }
+
+    private static GameMcpValue ProjectListRowFields(
+        GameWorldState world,
+        GameMcpWorldCategory category,
         object row)
     {
         // The list row spells a level exactly as the row and the reference do: the badge the screen
@@ -2527,6 +2556,12 @@ internal static class GameMcpWorldQuery
     }
 
     private static GameMcpValue ProjectRow(
+        GameWorldState world,
+        GameMcpWorldCategory category,
+        object row) =>
+        WithOwnIdentity(category, ProjectRowFields(world, category, row));
+
+    private static GameMcpValue ProjectRowFields(
         GameWorldState world,
         GameMcpWorldCategory category,
         object row) =>

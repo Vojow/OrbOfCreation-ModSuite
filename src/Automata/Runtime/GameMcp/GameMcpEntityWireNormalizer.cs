@@ -162,6 +162,14 @@ internal static class GameMcpEntityWireNormalizer
     private static void PromoteNestedPrimaryIdentity(JObject item)
     {
         if (item["uuid"] is not null) return;
+
+        // A row that has said it has no addressable identity keeps that answer. Promoting a nested
+        // entity's UUID here is what made composite rows look fetchable under a foreign category.
+        if (item["addressable"] is JValue { Type: JTokenType.Boolean } addressable &&
+            !(bool)addressable)
+        {
+            return;
+        }
         var roles = new[]
         {
             "action", "recipe", "plotNode", "plot", "target", "owner", "reference",

@@ -67,12 +67,18 @@ internal static class GameMcpDocumentJsonEncoder
             result = complete;
             result["mcpCategory"] = source.Category;
             result["nativeType"] = source.NativeType;
+            if (!source.Addressable && result["uuid"] is null) result["addressable"] = false;
             return result;
         }
 
         result = new JObject();
         for (var index = 0; index < source.Paths.Length; index++)
             CopyPath(complete, result, source.Paths[index]);
+        if (!source.Addressable && result["uuid"] is null)
+        {
+            result["category"] = source.Category;
+            result["addressable"] = false;
+        }
         return result;
     }
 

@@ -837,7 +837,13 @@ public sealed class GameMcpWorldEnvelopeTests
         Assert.Null(result["status"]);
         Assert.Null(result["worldGeneration"]);
         var row = Assert.Single(result["rows"]!.Values<JObject>())!;
-        Assert.Equal(entityId.ToString("D"), (string?)row["uuid"]);
+
+        // The row is a price, not the priced entity. It says so instead of publishing the target's
+        // UUID as its own identity, which world_get would then refuse.
+        Assert.Null(row["uuid"]);
+        Assert.False((bool)row["addressable"]!);
+        Assert.Equal("purchase-costs", (string?)row["category"]);
+        Assert.Equal(entityId.ToString("D"), (string?)row["target"]!["uuid"]);
         Assert.Equal(resourceId.ToString("D"), (string?)row["resource"]!["uuid"]);
         Assert.Equal("250", (string?)row["cost"]);
         Assert.Equal("300", (string?)row["spendableAmount"]);

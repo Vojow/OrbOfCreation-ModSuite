@@ -202,18 +202,24 @@ internal sealed class GameMcpProjectedDomainValue : GameMcpValue
         object value,
         string[] paths,
         string category,
-        string nativeType)
+        string nativeType,
+        bool addressable = true)
     {
         Value = value ?? throw new ArgumentNullException(nameof(value));
         Paths = paths is null ? Array.Empty<string>() : (string[])paths.Clone();
         Category = category ?? string.Empty;
         NativeType = nativeType ?? string.Empty;
+        Addressable = addressable;
     }
 
     internal object Value { get; }
     internal string[] Paths { get; }
     internal string Category { get; }
     internal string NativeType { get; }
+    internal bool Addressable { get; }
+
+    internal GameMcpProjectedDomainValue WithoutAddressableIdentity() =>
+        new(Value, Paths, Category, NativeType, addressable: false);
 }
 
 internal sealed class GameMcpNull : GameMcpValue

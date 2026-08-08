@@ -195,6 +195,12 @@ public sealed class GameMcpSpellLoadoutTests
 
         var firstSummary = Assert.IsType<JObject>(rows[0]);
         Assert.Equal(0, (int)firstSummary["slotIndex"]!);
+
+        // A slot is not the recipe it holds. It says it has no addressable identity rather than
+        // publishing the recipe's UUID as its own, which world_get then refused.
+        Assert.Null(firstSummary["uuid"]);
+        Assert.False((bool)firstSummary["addressable"]!);
+        Assert.Equal("spell-slots", (string?)firstSummary["category"]);
         Assert.Equal(FirstInstanceId.ToString("D"), (string?)firstSummary["spellInstance"]!["uuid"]);
         Assert.Equal("Gather Knowledge", (string?)firstSummary["spellRecipe"]!["name"]);
         Assert.True((bool)firstSummary["occupied"]!);
