@@ -329,10 +329,16 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
             result.Properties().TakeWhile(property => property.Name != "description")
                 .All(property => property.Name is "worldGeneration" or "status" or "uuid" or
                     "name" or "category" or "nativeType"));
+        // Every predicate that applies ships, passing or not. Asserting only that each carries a
+        // boolean would hold just as well if the passing ones went back to being stripped, so the
+        // one that passes here is named: an undiscovered discoverable glyph can be discovered.
+        var predicates = Assert.IsType<JObject>(result["predicates"]);
         Assert.All(
-            Assert.IsType<JObject>(result["predicates"]).Properties(),
+            predicates.Properties(),
             predicate => Assert.Equal(
                 JTokenType.Boolean, predicate.Value["value"]?.Type));
+        Assert.True((bool)predicates["canDiscover"]!["value"]!);
+        Assert.False((bool)predicates["visible"]!["value"]!);
     }
 
     [Fact]
