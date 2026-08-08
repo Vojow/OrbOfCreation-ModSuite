@@ -219,8 +219,11 @@ deeper evaluated evidence. Purchase-cost rows are composite and therefore remain
 surface.
 
 A `structures` row publishes `level` as the number the attribute's own badge shows, the game's
-persisted `GetBaseLevel()`, and names work still in flight separately as `queuedLevels`; neither
-number is repeated under a second name. An `upgrades` row publishes `maxLevel` and `remainingLevels`
+persisted `GetBaseLevel()`, and names work still in flight separately as `queuedLevels`, which is
+always present because zero levels in flight is an answer; neither
+number is repeated under a second name. Both are exact counts on the wire: the badge draws
+`Utils.BeautifyInt`, so routing them through the large-magnitude renderer would round a
+2,136-level attribute to `2.14e3`. An `upgrades` row publishes `maxLevel` and `remainingLevels`
 only when the upgrade has a ceiling: a negative native maximum is the uncapped sentinel, so both
 fields are absent together rather than reading `0`. An exhausted upgrade reads `already_maxed` and
 publishes no `affordable`, because a level that cannot be bought has no price to be short of.

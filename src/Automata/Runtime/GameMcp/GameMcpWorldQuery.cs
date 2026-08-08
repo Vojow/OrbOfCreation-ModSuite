@@ -200,17 +200,17 @@ internal static class GameMcpWorldQuery
         object row)
     {
         // The list row spells a level exactly as the row and the reference do: the badge the screen
-        // shows, with work in flight named separately.
+        // shows, as the exact count it is rather than through the large-magnitude renderer, with
+        // work in flight named separately and always present.
         if (row is WorldStructure structure)
         {
             var projected = new JObject
             {
                 ["entityId"] = structure.EntityId.ToString("D"),
-                ["level"] = new GameMcpDomainValue(structure.Reading.Level),
+                ["level"] = structure.Reading.Quantity,
+                ["queuedLevels"] = structure.Reading.QueuedLevels.ToInt(),
                 ["enabled"] = !structure.Reading.Disabled,
             };
-            if (structure.Reading.QueuedLevels != 0)
-                projected["queuedLevels"] = new GameMcpDomainValue(structure.Reading.QueuedLevels);
             if (TryPurchaseAffordability(world, structure.EntityId, out var affordable))
                 projected["affordable"] = affordable;
             return projected.Freeze();
@@ -2561,15 +2561,17 @@ internal static class GameMcpWorldQuery
             ["category"] = "structures",
             ["nativeType"] = "StructureSO",
 
-            // The badge UIStructureItem renders is StructureSO.GetBaseLevel(), the persisted
-            // quantity; queued work shows beside it as "+N". Publishing level plus queued under
-            // this name would put a number on the wire that no screen shows.
-            ["level"] = new GameMcpDomainValue(structure.Reading.Level),
+            // The badge UIStructureItem renders is Utils.BeautifyInt(StructureSO.GetBaseLevel()),
+            // the persisted quantity as an exact count; while levels are developing the same badge
+            // switches to "+N" from GetQueuedQuantity(). Both are counts, not magnitudes: routing
+            // them through the game's large-number renderer rounded a 2,136-level attribute to
+            // 2.14e3 and made the wire disagree with the screen by up to five levels. Publishing
+            // level plus queued under one name would put a number on the wire that no screen shows.
+            ["level"] = structure.Reading.Quantity,
+            ["queuedLevels"] = structure.Reading.QueuedLevels.ToInt(),
             ["enabled"] = enabled,
             ["toggle"] = toggle,
         };
-        if (structure.Reading.QueuedLevels != 0)
-            result["queuedLevels"] = structure.Reading.QueuedLevels;
         return result.Freeze();
     }
 

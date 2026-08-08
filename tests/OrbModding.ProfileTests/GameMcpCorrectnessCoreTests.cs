@@ -772,7 +772,9 @@ public sealed class GameMcpCorrectnessCoreTests
         {
             Structures = PublicationTable<WorldStructure>.Create(new[]
             {
-                Structure(attributeId, 632, queued: 3),
+                // Four significant digits on purpose: the badge draws BeautifyInt, so a level the
+                // large-magnitude renderer would round to 2.14e3 has to reach the wire as 2136.
+                Structure(attributeId, 2136, queued: 3),
             }),
             CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
             {
@@ -791,12 +793,42 @@ public sealed class GameMcpCorrectnessCoreTests
         var listed = GameMcpTestHarness.Json(GameMcpWorldQuery.ListRows(
             GameMcpTestHarness.Context(world, 2101), "structures", 0, 10))["rows"]![0]!;
 
-        Assert.Equal("632", (string?)row["level"]);
-        Assert.Equal("3", (string?)row["queuedLevels"]);
+        Assert.Equal(2136, (int)row["level"]!);
+        Assert.Equal(3, (int)row["queuedLevels"]!);
         Assert.Null(row["committedLevel"]);
-        Assert.Equal("632", (string?)listed["level"]);
-        Assert.Equal("3", (string?)listed["queuedLevels"]);
+        Assert.Equal(2136, (int)listed["level"]!);
+        Assert.Equal(3, (int)listed["queuedLevels"]!);
         Assert.Null(listed["committedLevel"]);
+    }
+
+    [Fact]
+    public void AnAttributeWithNoWorkInFlightSaysSoInsteadOfDroppingTheKey()
+    {
+        var attributeId = Guid.Parse("f2000000-0000-0000-0000-000000000009");
+        var world = new GameWorldState
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 12, queued: 0),
+            }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus(
+                    "structures", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
+            }),
+            CollectedAtEpoch = 41,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+        };
+
+        var row = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            GameMcpTestHarness.Context(world, 2102),
+            "structures",
+            attributeId.ToString("D")))["row"]!;
+        var listed = GameMcpTestHarness.Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(world, 2102), "structures", 0, 10))["rows"]![0]!;
+
+        Assert.Equal(0, (int)row["queuedLevels"]!);
+        Assert.Equal(0, (int)listed["queuedLevels"]!);
     }
 
     [Fact]
