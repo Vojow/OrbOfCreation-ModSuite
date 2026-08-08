@@ -236,7 +236,7 @@ internal static class GameMcpWorldQuery
             var projected = new JObject
             {
                 ["entityId"] = structure.EntityId.ToString("D"),
-                ["level"] = structure.Reading.Quantity,
+                ["level"] = structure.Reading.Level.ToInt(),
                 ["queuedLevels"] = structure.Reading.QueuedLevels.ToInt(),
                 ["enabled"] = !structure.Reading.Disabled,
             };
@@ -2728,12 +2728,13 @@ internal static class GameMcpWorldQuery
             ["nativeType"] = "StructureSO",
 
             // The badge UIStructureItem renders is Utils.BeautifyInt(StructureSO.GetBaseLevel()),
-            // the persisted quantity as an exact count; while levels are developing the same badge
-            // switches to "+N" from GetQueuedQuantity(). Both are counts, not magnitudes: routing
-            // them through the game's large-number renderer rounded a 2,136-level attribute to
-            // 2.14e3 and made the wire disagree with the screen by up to five levels. Publishing
-            // level plus queued under one name would put a number on the wire that no screen shows.
-            ["level"] = structure.Reading.Quantity,
+            // which is what Reading.Level captures through GetPurchaseLevel; while levels are
+            // developing the same badge switches to "+N" from GetQueuedQuantity(). Both are counts,
+            // not magnitudes: routing them through the game's large-number renderer rounded a
+            // 2,136-level attribute to 2.14e3 and made the wire disagree with the screen by up to
+            // five levels. Publishing level plus queued under one name would put a number on the
+            // wire that no screen shows.
+            ["level"] = structure.Reading.Level.ToInt(),
             ["queuedLevels"] = structure.Reading.QueuedLevels.ToInt(),
             ["enabled"] = enabled,
             ["toggle"] = toggle,
@@ -4162,7 +4163,7 @@ internal static class GameMcpWorldQuery
             // The two counts the attribute's own badge owns, under the names every other surface
             // uses for them. Their sum has no badge, and a separate work-in-flight flag only
             // restates a queue the caller can already read.
-            result["level"] = structure.Reading.Quantity;
+            result["level"] = structure.Reading.Level.ToInt();
             result["queuedLevels"] = structure.Reading.QueuedLevels.ToInt();
             result["effectiveLevel"] = structure.EffectiveLevel;
             result["available"] = structure.Reading.Unlocked;
