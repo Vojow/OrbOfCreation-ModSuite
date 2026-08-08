@@ -519,7 +519,8 @@ The `plot-nodes` category is the tile catalog. `agromancy-plot-actions` enumerat
 `PlotNodeSO` / `PlotNodeActionSO` pair authored by the game, not only Auto Harvest's fruit and
 treasure collect pairs. Each row names both handles,
 shows the active quantity, and carries add/remove decisions. An available add includes the plot
-quantity consumed by one instance and the current maximum additional count. An unevaluated
+quantity consumed by one instance and the current maximum additional count, which is the game's own
+remaining-instance count and can exceed the 10,000 this verb accepts in one call. An unevaluated
 prerequisite latch omits `available` and reports `requiresLiveCheck:true`; the action boundary
 performs the exact native check instead of a read mutating the latch.
 
@@ -975,10 +976,11 @@ they are what the game will accept this instant.
 
 A **schema bound** is the range the JSON input schema declares, and it is the suite's own policy on
 what is worth sending in one call — not a native fact. `game_purchase` and `game_level` cap `amount`
-at 1,000, `game_alchemy` at 1,000,000, and `game_agromancy` at 10,000; the paging tools cap `limit`
+at 1,000, `game_concept` at 1,000,000, and `game_agromancy` at 10,000; the paging tools cap `limit`
 at 200 and `game_screenshot` caps `maxWidth` at 4,096 for response size; every other `amount`,
-`slot`, `offset`, and dial `value` declares `int.MaxValue` because the suite has no opinion there
-and the native bound decides. None of those four ceilings is read from the game, none of them is a
+`slot`, `offset`, and dial `value` — `game_alchemy` and `game_equipment` among them — declares
+`int.MaxValue` because the suite has no opinion there and the native bound decides. None of those
+four ceilings is read from the game, none of them is a
 running budget, and none of them appears in any response. A value inside the schema bound is
 therefore not admitted yet: the action boundary re-reads the native bound and refuses with
 `amount_unavailable` and the live `maximumAmount` when the two disagree.
@@ -986,7 +988,10 @@ therefore not admitted yet: the action boundary re-reads the native bound and re
 The two kinds never mix in one number. A published bound is native or it does not ship: an
 agromancy `maximumAdditional` is the game's remaining-instance count alone, never that count
 clamped by the tool's per-call ceiling, because a blend of the two is a third number that answers
-neither question.
+neither question. The consequence is that a published native bound is not always a sendable amount:
+a busy plot can advertise a `maximumAdditional` above `game_agromancy`'s 10,000 schema cap, and the
+over-ask is refused at schema validation rather than admitted and then refused natively. Send the
+smaller of the two and call again.
 
 ### Presence semantics
 
