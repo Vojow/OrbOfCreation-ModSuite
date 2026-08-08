@@ -128,6 +128,10 @@ public sealed class GameMcpRitualLifecycleTests
         Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
         Assert.Equal("5", (string?)cost["cost"]);
         Assert.Equal("80", (string?)cost["spendableAmount"]);
+
+        // The same per-row verdict every other cost row carries, so no caller compares two
+        // formatted magnitudes for itself.
+        Assert.True((bool)cost["affordable"]!);
         Assert.True((bool)row["cancelDuration"]!["available"]!);
     }
 

@@ -120,6 +120,27 @@ public sealed class GameMcpCastTests
         Assert.Equal(1, (int)delta["charges"]!["after"]!);
     }
 
+    [Fact]
+    public void A_toggle_spell_reports_it_is_running_even_when_the_fire_did_not_move_it()
+    {
+        var before = World(casting: true, cancellationEnabled: true, charges: 2);
+        var after = World(casting: true, cancellationEnabled: true, charges: 2);
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Cast, 9, 3, "fire", RecipeId, Guid.Empty,
+            "SpellRecipeSO", 1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 53));
+
+        var delta = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after, generation: 54),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3)));
+
+        // Publishing the pair only when it moved made a repeat fire silent, which a caller cannot
+        // tell from a response that never carries the fact.
+        Assert.True((bool)delta["active"]!["before"]!);
+        Assert.True((bool)delta["active"]!["after"]!);
+    }
+
     private static GameMcpCommand Command(GameMcpFrameContext before) => new(
         1,
         GameMcpCommandKind.Cast,

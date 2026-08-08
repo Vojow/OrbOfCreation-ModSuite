@@ -36,7 +36,7 @@ internal static class GameMcpWorldQuery
         {
             ["resourceRows"] = world.Resources.Count,
             ["unlockedStructures"] = CountUnlockedStructures(world),
-            ["purchasableUpgrades"] = CountPurchasableUpgrades(world),
+            ["affordableUpgrades"] = CountAffordableUpgrades(world),
         };
         result["progression"] = new JObject
         {
@@ -791,11 +791,14 @@ internal static class GameMcpWorldQuery
                 state.World.Snapshot, slotIndex, WorldSpellCostKind.Immediate);
             if (costs.Count > 0) result["costs"] = costs;
         }
-        if (hasBefore && prior.Casting != after.Casting)
+        // A toggle spell always says whether it is running. Publishing the pair only when it moved
+        // meant a second fire on an already-running spell said nothing, and silence there is
+        // indistinguishable from a response that does not carry the fact at all.
+        if (after.Toggled)
         {
             result["active"] = new JObject
             {
-                ["before"] = prior.Casting,
+                ["before"] = hasBefore ? prior.Casting : (bool?)null,
                 ["after"] = after.Casting,
             };
         }
@@ -2394,7 +2397,11 @@ internal static class GameMcpWorldQuery
         return count;
     }
 
-    private static int CountPurchasableUpgrades(GameWorldState world)
+    /// <summary>
+    /// Upgrades whose price is met right now. "Purchasable" was a third word for a fact the rows
+    /// already call <c>affordable</c>, next to a per-row <c>available</c> that means something else.
+    /// </summary>
+    private static int CountAffordableUpgrades(GameWorldState world)
     {
         var count = 0;
         for (var index = 0; index < world.Upgrades.Count; index++)
@@ -3593,7 +3600,7 @@ internal static class GameMcpWorldQuery
         var next = new JObject();
         if (recipe.Discovered)
         {
-            var coreUsable = SpellCoreUsable(world, in recipe);
+            var coreUsable = SpellCoreUsable(world, in recipe, out var coreReasonCode);
             var available = world.SpellWorkbench.HasEmptySlot && coreUsable;
             next["available"] = available;
             next["requiresGlyphLayout"] = true;
@@ -3605,7 +3612,7 @@ internal static class GameMcpWorldQuery
             else if (!world.SpellWorkbench.HasEmptySlot)
                 next["reasonCode"] = "loadout_full";
             else if (!coreUsable)
-                next["reasonCode"] = "core_glyphs_unavailable";
+                next["reasonCode"] = coreReasonCode;
         }
         else
         {
@@ -4225,21 +4232,44 @@ internal static class GameMcpWorldQuery
         return options;
     }
 
+    /// <summary>
+    /// Whether this recipe's core glyphs can carry a spell, and when they cannot, which fact stops
+    /// them. One code for four different facts told a player holding the glyph to go acquire it.
+    /// </summary>
     private static bool SpellCoreUsable(
         GameWorldState world,
-        in WorldSpellRecipe recipe)
+        in WorldSpellRecipe recipe,
+        out string reasonCode)
     {
-        if (recipe.CoreGlyphs.Count == 0) return false;
+        reasonCode = string.Empty;
+        if (recipe.CoreGlyphs.Count == 0)
+        {
+            reasonCode = "recipe_has_no_core_glyph";
+            return false;
+        }
         for (var index = 0; index < recipe.CoreGlyphs.Count; index++)
         {
             if (!WorldLookup.TryFind(
-                    world.Glyphs,
-                    recipe.CoreGlyphs[index].GlyphId,
-                    out var glyph) ||
-                !glyph.Learned ||
-                glyph.Level <= 0 ||
-                glyph.AugmentsSpells)
+                    world.Glyphs, recipe.CoreGlyphs[index].GlyphId, out var glyph))
+            {
+                reasonCode = "core_glyph_not_published";
                 return false;
+            }
+            if (!glyph.Learned)
+            {
+                reasonCode = "core_glyph_not_owned";
+                return false;
+            }
+            if (glyph.Level <= 0)
+            {
+                reasonCode = "core_glyph_not_leveled";
+                return false;
+            }
+            if (glyph.AugmentsSpells)
+            {
+                reasonCode = "core_glyph_augments_only";
+                return false;
+            }
         }
         return true;
     }
@@ -5052,9 +5082,17 @@ internal static class GameMcpWorldQuery
                 ["cost"] = new GameMcpDomainValue(
                     PlayerFacingCost(world, cost.ResourceId, cost.Cost)),
             };
+            var held = BigDouble.Zero;
             if (WorldLookup.TryFind(world.Resources, cost.ResourceId, out var resource))
+            {
+                held = resource.Reading.Quantity;
                 row["spendableAmount"] = new GameMcpDomainValue(
-                    SpendableAmount(world, cost.ResourceId, resource.Reading.Quantity));
+                    SpendableAmount(world, cost.ResourceId, held));
+            }
+
+            // Every other cost row in the surface says which line the player is short on; a ritual
+            // row left the caller to compare two formatted magnitudes itself.
+            row["affordable"] = CanAfford(world, cost.ResourceId, cost.Cost, held);
             result.Add(row);
         }
         return result;

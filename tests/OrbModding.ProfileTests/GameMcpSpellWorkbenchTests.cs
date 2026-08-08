@@ -140,7 +140,7 @@ public sealed class GameMcpSpellWorkbenchTests
 
     [Theory]
     [InlineData(false, 7, "loadout_full")]
-    [InlineData(true, 0, "core_glyphs_unavailable")]
+    [InlineData(true, 0, "core_glyph_not_leveled")]
     public void StructurallyUnavailableLoadoutAddWithholdsLayoutOptionsAndPriceClaims(
         bool hasEmptySlot,
         int coreLevel,

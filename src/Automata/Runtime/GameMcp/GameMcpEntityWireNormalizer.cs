@@ -296,9 +296,9 @@ internal static class GameMcpEntityWireNormalizer
         {
             return;
         }
+        // Where a name came from is a catalog-browsing fact and entity_catalog publishes it there.
+        // Stamped on every identity it followed refusals and commits around as noise.
         target["name"] = identity.Name;
-        if (identity.Source == EntityIdentityNameSource.LiveAssetName)
-            target["nameSource"] = "asset";
         if (identity.AssetName.Length > 0 &&
             !string.Equals(identity.AssetName, identity.Name, StringComparison.Ordinal))
             target["internalName"] = identity.AssetName;
