@@ -8,6 +8,17 @@ namespace OrbModding.Common.Runtime.World;
 
 internal readonly struct WorldSpellWorkbench
 {
+    /// <summary>
+    /// The floor the Casting screen's Output and Reserve dials admit, published beside their
+    /// maximum so the pair is never a ceiling on its own. Every value-select control in the game
+    /// floors at 1 — the seven <c>UIValueSelectButton.SetClamp</c> call sites that pass a literal
+    /// pass 1, and the one that computes its floor (<c>UIBrewingStation</c>) reads
+    /// <c>CraftingStructure.GetMinSelectedLevel()</c>. These two dials are authored controls whose
+    /// own clamp is serialized on the prefab rather than computed in IL, so this is the floor the
+    /// boundary enforces and the number its refusal sentence already names.
+    /// </summary>
+    internal const int MinimumDialLevel = 1;
+
     internal WorldSpellWorkbench(
         int equippedCount,
         int maximumEquipped,

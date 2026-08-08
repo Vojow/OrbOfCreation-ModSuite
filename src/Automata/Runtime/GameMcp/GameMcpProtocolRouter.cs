@@ -294,7 +294,8 @@ internal sealed class GameMcpProtocolRouter
             case "game_casting_dial":
                 builder.Key = RequireOneOf(arguments, "dial", "output", "reserve");
                 builder.Mode = builder.Key == "output" ? "set_output_level" : "set_reserve_level";
-                builder.Amount = RequiredInt(arguments, "value", 1, int.MaxValue);
+                builder.Amount = RequiredInt(
+                    arguments, "value", WorldSpellWorkbench.MinimumDialLevel, int.MaxValue);
                 break;
             case "game_spell_loadout":
                 builder.Mode = RequireOneOf(
@@ -721,7 +722,8 @@ internal sealed class GameMcpProtocolRouter
                     new JObject
                     {
                         ["dial"] = EnumSchema("output", "reserve"),
-                        ["value"] = IntegerSchema(1, int.MaxValue),
+                        ["value"] = IntegerSchema(
+                            WorldSpellWorkbench.MinimumDialLevel, int.MaxValue),
                     },
                     "dial", "value"),
                 readOnly: false,

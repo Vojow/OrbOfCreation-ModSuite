@@ -59,11 +59,13 @@ internal static class GameMcpWorldQuery
                 ["output"] = new JObject
                 {
                     ["current"] = world.SpellWorkbench.OutputLevel,
+                    ["minimum"] = WorldSpellWorkbench.MinimumDialLevel,
                     ["maximum"] = world.SpellWorkbench.MaximumOutputLevel,
                 },
                 ["reserve"] = new JObject
                 {
                     ["current"] = world.SpellWorkbench.ReserveLevel,
+                    ["minimum"] = WorldSpellWorkbench.MinimumDialLevel,
                     ["maximum"] = world.SpellWorkbench.MaximumReserveLevel,
                 },
             };
@@ -796,6 +798,7 @@ internal static class GameMcpWorldQuery
             ["dial"] = command.PayloadKey,
             ["before"] = output ? before?.OutputLevel : before?.ReserveLevel,
             ["after"] = output ? after.OutputLevel : after.ReserveLevel,
+            ["minimum"] = WorldSpellWorkbench.MinimumDialLevel,
             ["maximum"] = output ? after.MaximumOutputLevel : after.MaximumReserveLevel,
         }.Freeze();
     }

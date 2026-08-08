@@ -146,12 +146,13 @@ public sealed class GameMcpSpellCompositionTests
         var success = GameMcpTestHarness.Json(terminal.Project(command));
 
         Assert.Equal(
-            new[] { "status", "dial", "before", "after", "maximum" },
+            new[] { "status", "dial", "before", "after", "minimum", "maximum" },
             success.Properties().Select(property => property.Name));
         Assert.Equal("committed", (string?)success["status"]);
         Assert.Equal("output", (string?)success["dial"]);
         Assert.Equal(4, (int)success["before"]!);
         Assert.Equal(5, (int)success["after"]!);
+        Assert.Equal(1, (int)success["minimum"]!);
         Assert.Equal(12, (int)success["maximum"]!);
         Assert.Null(success["code"]);
         Assert.Null(success["preflight"]);

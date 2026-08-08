@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using OrbModding.Common;
 using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbAutomata;
 
@@ -101,11 +102,12 @@ internal sealed class SpellCompositionGameAction : IDisposable
                 "Player " + Name(action.Dial) + " state is not initialized in this lifecycle.");
         var current = native.ReadInt(variable);
         var maximum = native.ReadInt(ReadMaximumVariable(native, player, action.Dial));
-        if (action.Value < 1 || action.Value > maximum)
+        var minimum = WorldSpellWorkbench.MinimumDialLevel;
+        if (action.Value < minimum || action.Value > maximum)
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.LevelOutOfRange,
                 "Requested " + Name(action.Dial) + " " + action.Value +
-                " is outside the live native range 1.." + maximum + ".");
+                " is outside the live native range " + minimum + ".." + maximum + ".");
         if (current == action.Value)
             return SpellCompositionSubmission.Reject(
                 SpellCompositionPreflight.AlreadyInRequestedState,

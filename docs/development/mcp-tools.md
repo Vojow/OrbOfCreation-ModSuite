@@ -617,14 +617,15 @@ stanza, receipt poll, or post-mutation `world_get` is required.
 
 Output Level and Reserve Level are the two sibling global steppers on the Casting screen, not
 per-spell settings. `world_overview` carries them as `casting.output` and `casting.reserve`, each
-with `current` and the purchased `maximum`; the block is absent until the Output maximum is nonzero.
+with `current` and both bounds — `minimum` 1 and the purchased `maximum`; the block is absent until
+the Output maximum is nonzero.
 Raising a cap is an ordinary `game_purchase` against the corresponding upgrade UUID, so the dial
 tool only moves the value inside the live native range.
 
-`game_casting_dial(dial="output"|"reserve", value=N)` is the whole surface. `value` is a positive
-integer checked against the live native maximum at the action boundary, which reads the exact global
-`IntVariable` for that dial and verifies the requested value became observable. A committed result
-returns the changed dial as `before` and `after` plus its maximum.
+`game_casting_dial(dial="output"|"reserve", value=N)` is the whole surface. `value` runs from 1 to
+the live native maximum, which the action boundary reads from the exact global `IntVariable` for
+that dial before verifying the requested value became observable. A committed result returns the
+changed dial as `before` and `after` plus the same `minimum` and `maximum` the read publishes.
 
 There is deliberately no in-place augment editor. The visible game has none: glyph layout is chosen
 on the library candidate before add, and changing it is remove → relayout → re-add. A discovered
@@ -955,7 +956,7 @@ learned by attempting the action.
 Output Level and Reserve Level are single global variables. The boundary reads the exact global
 variable and its purchased maximum on the Unity main thread, rejects a value outside that live
 range, and verifies that the requested value became observable. Success is the exact requested
-global value; a committed result is the dial's `before` and `after` value plus its maximum.
+global value; a committed result is the dial's `before` and `after` value plus both bounds.
 
 `game_spell_loadout` requires `mode`. `staged` is a request-scoped main-thread read with no other
 arguments; it reports the exact current core/augment selection and never mutates it. For `preview`
