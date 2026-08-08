@@ -193,17 +193,17 @@ public sealed class GameMcpWorldQueryTests
             new GameMcpObjectBuilder
             {
                 ["rows"] = new GameMcpArrayBuilder(
-                    new GameMcpObjectBuilder { ["committedLevel"] = 1 },
+                    new GameMcpObjectBuilder { ["effectiveLevel"] = 1 },
                     new GameMcpObjectBuilder
                     {
-                        ["committedLevel"] = new GameMcpDomainValue(new BigDouble(1.57d, 2)),
+                        ["effectiveLevel"] = new GameMcpDomainValue(new BigDouble(1.57d, 2)),
                     }),
             }.Freeze(),
             GameMcpTestHarness.EntityCatalog);
         var rows = encoded["rows"]!.OfType<JObject>().ToArray();
 
-        Assert.Equal(1, (int)rows[0]["committedLevel"]!);
-        Assert.Equal(157, (int)rows[1]["committedLevel"]!);
+        Assert.Equal(1, (int)rows[0]["effectiveLevel"]!);
+        Assert.Equal(157, (int)rows[1]["effectiveLevel"]!);
     }
 
     [Fact]

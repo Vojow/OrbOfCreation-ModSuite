@@ -61,8 +61,12 @@ public sealed class GameMcpTargetingTests
             candidates.Select(candidate => (string?)candidate["uuid"]));
         Assert.Equal(new[] { "Alchemic Ability", "Alchemic Command" },
             candidates.Select(candidate => (string?)candidate["name"]));
-        Assert.Equal(3, (int)candidates[0]["committedLevel"]!);
+        Assert.Equal(3, (int)candidates[0]["level"]!);
+        Assert.Equal(0, (int)candidates[0]["queuedLevels"]!);
         Assert.Equal(5, (int)candidates[0]["effectiveLevel"]!);
+
+        // The sum of built and building levels has no badge and no name on the wire.
+        Assert.Null(candidates[0]["committedLevel"]);
         Assert.True((bool)candidates[0]["available"]!);
         Assert.True((bool)row["randomize"]!["available"]!);
         Assert.Null(row["cancel"]);

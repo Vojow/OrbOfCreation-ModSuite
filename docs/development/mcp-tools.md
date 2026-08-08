@@ -159,7 +159,7 @@ there is no `tools/list_changed` notification. The rows below are in `tools/list
 `world_overview` deliberately contains only facts a strategist normally wants before choosing a
 detailed read: collection completeness with total successfully read and skipped row counts,
 unavailable categories, resource-row count, unlocked
-structure count, purchasable-upgrade count, discovered/mastery-ready recipe
+structure count, affordable-upgrade count, discovered/mastery-ready recipe
 counts, available views, visible plots, current action/spell/concept/plot occupancy, and the two
 global casting dials with their purchased maximums. Exact rows remain in list/get/search.
 
@@ -221,7 +221,10 @@ the next bind, so no prior-save Unity reference or label survives.
 
 `world_list` and `world_get` use the same deliberate player-relevant row projection. Every entity
 row leads with its primary `uuid` and `name`; composite rows promote their actionable primary
-identity while retaining separately named secondary references. Rows then carry only the small set
+identity while retaining separately named secondary references. A composite row with no identity of
+its own — a spell slot, a cost row, a loadout section — never borrows a nested entity's `uuid` as
+though it were addressable: it names its `category` and says `addressable: false`, so a caller
+cannot hand that UUID back as the row's handle. Rows then carry only the small set
 of availability, unambiguous paid/bonus/total level, quantity, occupancy, readiness, or progress
 fields useful for comparing rows. Raw capture inputs, cached implementation fields,
 resource traits, rate inputs, and modifier structs stay out of world rows. `explain_entity` owns
@@ -254,9 +257,13 @@ across the whole surface, reads and commits alike:
 | `research` | `purchasedLevel` / `baseLevel` / `bonusLevel` / `totalLevel` | the game's four distinct level accessors | completion is judged on `baseLevel`, never on `totalLevel` |
 | `research` | `queuedLevels` | the develop decision's queue count | levels waiting, including the one in flight |
 | `rituals` | `setLevel.current` | the ritual's selected starting level | where the ritual's own starting-level control stands |
+| `game_targeting` candidates, `spell-slots` | `effectiveLevel` | the levelable's own current level accessor | what the entity currently *does*, granted levels included. Never a purchase coordinate: the price is set from `level` |
 
 No surface publishes the sum of built and building levels under a single name: the retired
-`committedLevel` was exactly that, and a number no screen shows cannot be checked against one.
+`committedLevel` was exactly that, and a number no screen shows cannot be checked against one. That
+holds on every surface, `game_targeting` candidates and the `explain_entity` research `cap` block
+included, and both name their levels waiting as `queuedLevels` like every other row. A separate
+work-in-flight flag beside that count is not published either — it only restates the count.
 
 `purchase-costs` is the only modifier-adjusted live cost category. Spell and alchemy cost rows are
 immediate/drain observations and are not mislabeled as purchase prices. Every displayed cost is in
@@ -373,10 +380,11 @@ metadata and applicable discovery predicates.
 
 ### Generic discovery decisions
 
-Every `alchemy-recipes`, `equipment`, `rituals`, `spell-recipes`, and `time-runes` row, plus each
-discoverable `glyphs` row, has one `discover` decision from the native `IDiscoverable` evaluator.
-Pool-unlocker glyphs instead expose prerequisite-backed `available` without advertising a discovery
-action their screen does not offer. A discovery decision names whether the entity
+Every `alchemy-recipes`, `equipment`, `rituals`, `spell-recipes`, `time-runes`, and `glyphs` row has
+one `discover` decision from the native `IDiscoverable` evaluator. A pool-unlocker glyph the game
+never offers to discover answers the same verb rather than omitting the block: `available: false`
+with `native_not_discoverable` and no costs, because a caller cannot tell a missing block from a
+glyph nobody evaluated. A discovery decision names whether the entity
 is visible, already discovered, required for downstream play, currently discoverable, and
 affordable. Its ordered `costs` pair each named resource's screen-formatted `cost` with the same
 canonical `spendableAmount` used everywhere else. Failed decision axes carry a stable reason;
@@ -453,8 +461,11 @@ native price before payment; success is the settled battle transition. `cancel_d
 already-running duration reward and does not claim to cancel a battle. `activate` and `end` are the
 two battle-boundary modes, so both report `activeBattle` and `wavesCompleted` as observed
 `{before, after}` changes and both carry the same `next` affordance block the other modes carry;
-`end` additionally reports the level the battle reached and the duration rewards it left running,
-because that is the moment its result exists. Selection, level, battle, and duration activity each
+`end` additionally reports the level the battle reached, the duration rewards it left running, and
+the two facts the game's own results modal shows: `result` as `succeeded` or `failed`, read from
+`RitualSO.IsFailedRun()`, and the `spoils` the run banked as named resource rows, empty array
+included. That is the moment its result exists, and it is a read of the run's own record rather than
+an inference from the waves count. Selection, level, battle, and duration activity each
 use one game-written outcome sentinel and never a resource ledger.
 
 ### Unified level controls
@@ -576,6 +587,12 @@ populated slot, and no overwrite mode exists. Optional native type must match th
 slot or active-section change from the settled world; usage capacity is admission only and no
 resource ledger is returned.
 
+A snapshot refusal answers in the snapshot's own words. A slot outside the live list carries
+`minimumSlot` and `maximumSlot` read from that list. Nothing staged is answered before the record is
+validated, because an empty active section has no entry that could fail a limit. A type slot is one
+artifact however deep its stack, matching native `EquipmentListVariable.GetTypesEquipped` against
+`EquipmentTypeSO.GetMaxTypeSlots`, which is the pair the game itself equips against.
+
 ### Challenge decision loop
 
 The `challenges` category is both the per-entity read and the pre-decision surface for
@@ -614,10 +631,12 @@ The MCP-only offer sequence is seven calls when two offers need explanations:
 
 1. `world_list(category="discovery-trees")` and choose a named Idle row whose
    `initiate.available` is true.
-2. Call `game_discover(mode="offer_initiate", uuid=...)`; its terminal response waits for and
-   returns the named ordered Choice offers.
-3. Call `offer_reroll` when `rerollAvailable=true`; its terminal response returns the replacement
-   offers.
+2. Call `game_discover(mode="offer_initiate", uuid=...)`; its terminal response is the running
+   craft. Both presses land in the tree's Crafting mode, and the game only rolls that craft into
+   Choice mode — filling the offer list — three seconds of game time later, so the offers are read
+   with the next `world_get` rather than waited for inside the call.
+3. Call `offer_reroll` when `rerollAvailable=true`; its terminal response is the restarted craft,
+   settled the same way.
 4. Call `explain_entity` for the candidates that require comparison. No catalog name joins are
    needed because every reference already carries its name.
 5. Call `offer_select` with that `offerUuid`; its terminal response includes the selected offer.
@@ -632,9 +651,12 @@ equipped runtime instance of that recipe, and the shared `loadBudget` of used/ma
 `fitsAnotherSpell`. An undiscovered recipe exposes `discover`, including the `surface` and the
 ordered `components` to submit; a discovered recipe exposes `loadoutAdd`. Discovery carries its
 named exact costs, spendable amounts, affordability, and stable false reason. Loadout add truthfully
-reports only structural admission (`loadout_full` or `core_glyphs_unavailable`) plus
-`requiresGlyphLayout:true`: its price depends on the explicit augments that have not yet been
-chosen. There is no selection step and no target-first `create`: the game exposes neither.
+reports only structural admission plus `requiresGlyphLayout:true`: its price depends on the explicit
+augments that have not yet been chosen. A structural refusal is `loadout_full`, or the one thing
+that is actually wrong with the core glyph — `recipe_has_no_core_glyph`, `core_glyph_not_published`,
+`core_glyph_not_owned`, `core_glyph_not_leveled`, or `core_glyph_augments_only`; the retired
+`core_glyphs_unavailable` covered all five under one word. There is no selection step and no
+target-first `create`: the game exposes neither.
 
 The MCP-only base-recipe sequence is:
 
@@ -826,18 +848,29 @@ null domain properties, and inapplicable axes are omitted.
 
 `game_navigate` is classified **UI-only, no gameplay/save mutation**. It is not read-only because
 selecting a screen, subtab, or plot commits live UI state. Success returns `activeScreen` and every
-independent `subtabStrips[{active,labels}]` state. A screen or subtab match refusal returns the exact
+independent `subtabStrips[{active,labels}]` state, read exactly once, from the settled destination.
+A hierarchy still assembling one frame after the click still carries the departed screen's strip, so
+it is never a source. If the navigation shell is gone by the time arrival settles, the response says
+`subtabStripsUnavailable` with that reason rather than publishing a strip nobody read. A screen or subtab match refusal returns the exact
 live label candidates it compared. A subtab refusal reached its screen before it failed, and its
 sentence says so: the screen change is a committed effect the caller can see in `activeScreen`. It carries no static mutation-scope label or counter ceremony. Navigation
 never authorizes a gameplay or save mutation.
 
 `suite_health` has no arguments or detail mode. It is compact text: scene, runtime availability,
-native-contract availability, the direct-craft plus crafting-instance binding health claimed by
+world publication, native-contract availability, the direct-craft plus crafting-instance binding
+health claimed by
 `game_craft`, modal-dismiss binding health, emergency STOP, then feature and service names grouped
 by state and reason code. Seven identical NotReady features therefore occupy one line, not seven objects. It
 returns no structured payload because none of those labels is a handle for another call. It reads
 those owners only for the requested operation and reports no MCP
 queue internals.
+
+Runtime availability is a fact about the session, not about the scene, and the report says so.
+The ServiceCycle runtime is created once, on the first frame the host admits it, and released only
+when the plugin is destroyed, so the same scene answers `unavailable` before that frame and
+`available` ever after; the reason names the session, never a scene property. Whether a world is
+published is the separate question, and the `world:` line answers it: the current publication's
+generation and lifecycle, or `not published`.
 
 An empty clean category means the save has no rows. A skipped native row normally makes exact
 queries for the whole category unavailable. The deliberate exception is an unmodeled entity
@@ -893,11 +926,23 @@ sentence was written from, so the two can never disagree.
 | `switch_blocked` | The game refuses a loadout swap right now (`LoadoutManager.CanSwapLoadouts()`) | `game_loadout select`, the `canSelect` read |
 | `saved_entry_unavailable` | A saved snapshot's stored entry cannot be restored | `game_loadout snapshot_save`, `game_loadout snapshot_load` |
 | `screen_match_failed` / `subtab_match_failed` | The exact label matched zero or several live entries | `game_navigate` |
+| `no_pending_target` | No target selection is open. The verb exists and the submitted target was never the problem, so no entity-ownership hint refines it | `game_targeting` |
+| `requirements_unmet` / `research_leeway_exhausted` / `already_developing` | The develop gate the read side already names, on the mutation that hit it | `game_research develop` |
+| `recipe_has_no_core_glyph` / `core_glyph_not_published` / `core_glyph_not_owned` / `core_glyph_not_leveled` / `core_glyph_augments_only` | The one thing wrong with the recipe's core glyph, replacing the single `core_glyphs_unavailable` that covered all five | `spell-recipes` loadout-add decisions |
+| `native_not_discoverable` | The game never offers this entity a discovery action | `discover` decisions, pool-unlocker glyphs |
 | `projection_refused` | The suite's own resource-rate policy refuses the assignment; the game did not | `game_concept` |
 | `native_rejected` | The game refused and the published world does not explain why | any native mutation, reserved for exactly that case |
 
+A refusal code is scoped to the command that owns the vocabulary. Feature result-code numbers are
+namespaced per feature and deliberately reused across them, so the same number means different
+things to different commands and an unscoped match names the wrong one.
+
 `native_rejected` is the last resort, not the default: a refusal the read side can already account
-for answers with that account's own code. `investment_unavailable` is retired — the game never
+for answers with that account's own code. A mutation refused by a gate the read side already
+explains adopts that read's code and words rather than inventing a second name for it —
+`game_research develop` answers `already_maxed`, `unaffordable`, `requirements_unmet`,
+`research_leeway_exhausted`, or `already_developing`, which are the research row's own.
+`investment_unavailable` is retired — the game never
 consults the resource fill list for develop admission — and `amount_unavailable` is the name for an
 exact-amount over-ask.
 
@@ -910,6 +955,33 @@ carrying the field says in prose which of the two capped it, because a caller th
 as a budget stopped five admissible calls short. Read-side `maximumAmount` (consumable stock, an
 agromancy add, an equipment equip or unequip) carries the same meaning for the next call.
 
+### Where a bound comes from
+
+Every numeric input has two different kinds of limit and they are not interchangeable.
+
+A **native bound** is the game's own limit on a control, read live from the native member that owns
+it. Native bounds are published in pairs — a value never ships with only its ceiling — and appear in
+both the read and the committed response: `casting.output`/`casting.reserve` carry `minimum` and
+`maximum`, a ritual's `setLevel` carries `current` with the same pair, a snapshot slot refusal
+carries `minimumSlot` and `maximumSlot` read from the live list the sentence was written from, and
+`maximumAmount` is the live per-call admission ceiling described above. A caller can act on these:
+they are what the game will accept this instant.
+
+A **schema bound** is the range the JSON input schema declares, and it is the suite's own policy on
+what is worth sending in one call — not a native fact. `game_purchase` and `game_level` cap `amount`
+at 1,000, `game_alchemy` at 1,000,000, and `game_agromancy` at 10,000; the paging tools cap `limit`
+at 200 and `game_screenshot` caps `maxWidth` at 4,096 for response size; every other `amount`,
+`slot`, `offset`, and dial `value` declares `int.MaxValue` because the suite has no opinion there
+and the native bound decides. None of those four ceilings is read from the game, none of them is a
+running budget, and none of them appears in any response. A value inside the schema bound is
+therefore not admitted yet: the action boundary re-reads the native bound and refuses with
+`amount_unavailable` and the live `maximumAmount` when the two disagree.
+
+The two kinds never mix in one number. A published bound is native or it does not ship: an
+agromancy `maximumAdditional` is the game's remaining-instance count alone, never that count
+clamped by the tool's per-call ceiling, because a blend of the two is a third number that answers
+neither question.
+
 ### Presence semantics
 
 A field or collection is absent when the suite did not collect it, and the response says so with a
@@ -917,7 +989,24 @@ named `…Unavailable` fact rather than by silence. A collection that was collec
 empty is present and empty. `internalName` is present exactly when the asset name differs from the
 display name, on a row and on a reference from another row's field alike; a reference carries UUID,
 name, and that conditional `internalName`, while a row adds the classifying facts a row needs
-(`nameSource`, `nativeType`, `category`).
+(`nativeType`, `category`). Where a name came from is a catalog-browsing fact: `nameSource` is an
+`entity_catalog` field and appears on no world row.
+
+Absence therefore never doubles as a value. Every key that once used it to mean "no" now says so:
+
+| Key | Absent means | Present-and-false/empty means |
+| --- | --- | --- |
+| `predicates.<slot>` | the predicate does not apply to this entity | published with its `value` and `reasonCode`, passing or not |
+| `affordable` | the row has no price to be short of — an exhausted upgrade, or a row the world publishes no cost for | `false`: the named resources fall short |
+| `discover` | nothing: every glyph carries the block | `available:false` with the reason, including `native_not_discoverable` for a glyph the game never offers |
+| `maxLevel` / `remainingLevels` | the entity is uncapped — a negative native maximum — on `world_list` and `world_get` alike | a real ceiling and the distance left to it |
+| `queuedLevels` | nothing: every level-bearing row carries it | `0`: nothing is in flight |
+| `spoils` | nothing: `game_ritual end` always carries the array | `[]`: the run banked nothing |
+| `openModals` | **deliberate progressive disclosure**: no modal is covering the board. `openModalsUnavailable` with a reason appears when the read itself failed, so silence is never a failed read | the game-written title of every open `UIModal` |
+
+`openModals` is the one key whose absence is still a value, and it is a documented choice rather
+than a gap: an empty array on every screen read would spend bytes on the ordinary case to describe
+the rare one.
 
 A committed purchase reports the two counts the screen owns, `level` and `queuedLevels`, each as a
 `{before, after}` pair. Which one moved is the answer: a level that lands immediately moves the
@@ -998,8 +1087,9 @@ discovered. Payment deltas, reroll values, counters, flags, timers, list cleanup
 cleanup are neither outcome gates nor response data. This matters when a cost is below the ULP of a
 very large `BigDouble` amount: an unchanged amount cannot disprove a transition the game visibly
 performed. On success, payment is presumed and completely omitted. Initiate/reroll wait for the
-ordinary collector to publish the resulting Choice state and return its named ordered offers;
-select returns the selected state; confirm returns Idle plus the next initiate costs. Failures
+ordinary collector to publish the Crafting state their press produces; the offer list is filled by
+the tree's own timed increment three seconds of game time later and is therefore outside any settle
+budget. Select returns the selected state; confirm returns Idle plus the next initiate costs. Failures
 name only the failed admission or missing transition and the fact that explains it.
 
 `game_cast` uses the visible spell button's native route. `fire` starts a ready spell, `release`
@@ -1010,13 +1100,17 @@ player's Cancellable Spells setting to allow the press. Its one outcome sentinel
 casting state changing from active to inactive. The settled response is only the named recipe,
 slot, and observed `active` before/after change; a refusal names the binding setting or live spell
 state. Detailed `spell-slots` rows expose `toggleOff.available` so the setting never has to be
-learned by attempting the action.
+learned by attempting the action. `fire` on a toggle spell reports the same `active` pair whether
+or not the press moved it: whether a toggle is running is the fact that mode is about, and a pair
+that appears only on change cannot distinguish a spell that was already on from one that never
+started.
 
 `game_casting_dial` requires `dial` plus a positive `value` and takes no UUID at all, because both
 Output Level and Reserve Level are single global variables. The boundary reads the exact global
 variable and its purchased maximum on the Unity main thread, rejects a value outside that live
 range, and verifies that the requested value became observable. Success is the exact requested
-global value; a committed result is the dial's `before` and `after` value plus both bounds.
+global value; a committed result names the `dial` it moved — the screen has two — plus its `before`
+and `after` value and both bounds.
 
 `game_spell_loadout` requires `mode`. `staged` is a request-scoped main-thread read with no other
 arguments; it reports the exact current core/augment selection and never mutates it. For `preview`

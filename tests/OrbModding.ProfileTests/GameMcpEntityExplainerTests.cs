@@ -290,6 +290,10 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         Assert.Equal(1, (int)cap["totalLevel"]!);
         Assert.Equal(1, (int)cap["effectiveCap"]!);
         Assert.True((bool)cap["nativeComplete"]!);
+
+        // Levels waiting are the research row's own number; their sum with the built ones is not.
+        Assert.Equal(0, (int)cap["queuedLevels"]!);
+        Assert.Null(cap["committedLevel"]);
     }
 
     [Fact]

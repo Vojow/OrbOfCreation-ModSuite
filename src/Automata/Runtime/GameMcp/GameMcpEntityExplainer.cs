@@ -720,8 +720,6 @@ internal static class GameMcpEntityExplainer
                  WorldLookup.TryFind(world.Research, id, out var research))
         {
             var slack = research.Modifiers.LeewayPoints.ToInt();
-            var committed = research.BaseLevel + research.QueuedLevels +
-                (research.IsDeveloping ? 1 : 0);
             // Leeway blocks only together with the caps: native develops on leeway OR on being
             // below both caps, so an exhausted leeway beside an open cap is not a blocker.
             var leeway = Blocker(
@@ -745,7 +743,7 @@ internal static class GameMcpEntityExplainer
                         : !research.BelowMaxInvestmentLevel
                             ? "research_investment_cap_reached"
                             : "below_research_cap");
-            cap["committedLevel"] = committed;
+            cap["queuedLevels"] = GameMcpWorldQuery.ResearchQueuedLevels(in research);
             cap["purchasedLevel"] = research.PurchasedLevels;
             cap["baseLevelExcludingBonus"] = research.BaseLevel;
             cap["bonusLevel"] = research.BonusLevel;

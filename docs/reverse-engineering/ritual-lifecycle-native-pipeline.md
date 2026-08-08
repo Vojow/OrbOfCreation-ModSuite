@@ -78,6 +78,14 @@ ritual hides it, and finally clears `BattleManager.activeRitual`. Native
 UUID currently stored in that variable and verifies the single game-written outcome
 `IsInCombat() == false`. The results modal is a native consequence, not a second postcondition.
 
+What that modal shows is nevertheless the game's own record of the run, and both halves of it are
+readable state rather than a second sentinel. `RitualSO.IsFailedRun()` is `wavesCompleted < 5` — a
+hard five, not `GetRequiredWaves()` — and `RitualSO.End()` reads it before clearing `inBattle`,
+branching to the negative popup and `RefundActivationCost()`. The banked resources are
+`RitualSO.currentSpoils`, a `List<SpoilsRecordEntry>` whose entries expose a `resource` property and
+a `quantity` field, enumerated for display by `GetSpoilsNodes()`. World collection reads both, so
+`end` publishes the verdict and the spoils from the settled world rather than from the waves count.
+
 ## Preconditions and risk
 
 Every mutation resolves UUID plus exact `RitualSO`, requires discovery, a current lifecycle, the
@@ -106,8 +114,8 @@ fails closed; no accounting receipt or refund inference is assembled.
 6. Activate an affordable ritual; verify the payment shown on screen, battle entry, enemy wave,
    and settled `inBattle` transition. Payment is observed live but is not a verifier gate.
 7. While the battle is active, call `end` with another ritual and verify it refuses; then call it
-   with the active ritual and verify the battle ends, results open, and settled `inBattle` becomes
-   false.
+   with the active ritual and verify the battle ends, results open, settled `inBattle` becomes
+   false, and the reported verdict and spoils match the results modal.
 8. Complete a duration ritual, confirm its Cancel button is visible, call `cancel_duration`, and
    verify the effect disappears and the settled duration state becomes inactive.
 9. Attempt `cancel_duration` on a non-duration or inactive ritual and verify an ordinary refusal.

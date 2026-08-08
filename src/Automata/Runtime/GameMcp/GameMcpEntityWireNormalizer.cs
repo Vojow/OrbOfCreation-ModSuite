@@ -396,7 +396,7 @@ internal static class GameMcpEntityWireNormalizer
 
     private static bool IsBoundedCardinal(string field) => field switch
     {
-        "level" or "levels" or "committedLevel" or "effectiveLevel" or
+        "level" or "levels" or "effectiveLevel" or
         "queuedLevels" or "maximumLevel" or "remainingLevels" or "baseLevel" or
         "bonusLevel" or "totalLevel" or "purchasedLevel" or "purchasedLevels" or
         "freeLevels" or "baseLevelExcludingBonus" or "effectiveCap" or "artificialCap" or

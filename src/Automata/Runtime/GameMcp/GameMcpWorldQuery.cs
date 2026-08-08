@@ -1716,7 +1716,7 @@ internal static class GameMcpWorldQuery
     /// collected, and otherwise the game's own <c>GetQueuedLevels()</c> composition — the queued
     /// levels plus the one in flight.
     /// </summary>
-    private static int ResearchQueuedLevels(in WorldResearch research) =>
+    internal static int ResearchQueuedLevels(in WorldResearch research) =>
         research.Decision.Available
             ? research.Decision.QueuedLevels
             : Math.Max(research.QueuedLevels + (research.IsDeveloping ? 1 : 0), 0);
@@ -2868,8 +2868,11 @@ internal static class GameMcpWorldQuery
             result["reasonCode"] = reason;
             return result.Freeze();
         }
-        result["maximumAdditional"] = Math.Min(
-            action.MaximumRemainingInstances, Math.Max(10_000 - active, 0));
+        // The game's own remaining-instance count, and nothing else. Folding the tool schema's
+        // per-call ceiling in here produced a third number that was neither bound: with the list
+        // nearly full it under-reported what the game admits, and the schema's ceiling is a
+        // per-call limit rather than a running budget in the first place.
+        result["maximumAdditional"] = action.MaximumRemainingInstances;
         result["plotQuantityCost"] = action.ElementCost;
         return result.Freeze();
     }
@@ -4124,10 +4127,13 @@ internal static class GameMcpWorldQuery
         {
             var structure = world.Structures[index];
             if (structure.EntityId != id) continue;
-            result["committedLevel"] = structure.CommittedLevel;
+            // The two counts the attribute's own badge owns, under the names every other surface
+            // uses for them. Their sum has no badge, and a separate work-in-flight flag only
+            // restates a queue the caller can already read.
+            result["level"] = structure.Reading.Quantity;
+            result["queuedLevels"] = structure.Reading.QueuedLevels.ToInt();
             result["effectiveLevel"] = structure.EffectiveLevel;
             result["available"] = structure.Reading.Unlocked;
-            if (structure.HasWorkInFlight) result["workInFlight"] = true;
             break;
         }
         return result.Freeze();

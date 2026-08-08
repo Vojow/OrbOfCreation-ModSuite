@@ -75,7 +75,9 @@ control, refuses and says so in the same sentence that reports the panel is now 
 live control, or more than one closed panel offering one, enumerates what it found. No save data,
 file, timer, scene coroutine, or secondary receipt is inspected.
 
-Success is returned before scene teardown as `status: committed, scene: Start`. The later scene
+Success is returned before scene teardown as `status: committed, scene: Start`, with the two
+controls the action operated named as the game names them: `pressedControl`, and `openedPanel`
+which is empty when the control was already on screen. The later scene
 transition advances the shared lifecycle generation; that boundary clears the identity catalog,
 world references, action bindings, leases, and every other lifecycle-retained object through the
 ordinary scene-transition observer. The MCP does not wait for a post-transition world because the
@@ -89,7 +91,8 @@ operation that owns the response is itself destroyed by that transition.
    before the screen changes.
 2a. Repeat with that panel already open and require the same terminal response without a second
    open.
-3. Require the response to contain only `status: committed` and `scene: Start`.
+3. Require the response to contain only `status: committed`, `scene: Start`, the pressed
+   control's name, and the opened panel's name — empty on the already-open repeat.
 4. Observe the native fade/loading presentation and arrival on `Start`.
 5. Confirm a newly connected MCP read reports `Start` and no retained Main-world publication.
 6. Continue the selected save and confirm the manual-save event preserved a harmless disposable
