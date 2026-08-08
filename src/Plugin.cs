@@ -2266,8 +2266,12 @@ public sealed class Plugin : BaseUnityPlugin
                 kind,
                 out reason)))
         {
-            var code = "unsupported_action_target";
-            if (GameMcpEntityCapabilityMap.TryOwningTool(
+            // Nothing pending is not an unsupported target: the verb exists, the screen just has
+            // no selection open. That is the whole answer, so no entity-ownership hint refines it.
+            var noPendingTarget = kind == GameMcpCommandKind.Targeting &&
+                !GameMcpEntityCapabilityMap.HasPendingTargetSelection(context.World.Snapshot);
+            var code = noPendingTarget ? "no_pending_target" : "unsupported_action_target";
+            if (!noPendingTarget && GameMcpEntityCapabilityMap.TryOwningTool(
                     context.World.Snapshot,
                     targetId,
                     out var owningCategory,

@@ -136,6 +136,28 @@ public sealed class GameMcpTargetingTests
         mode == "submit" ? "StructureSO" : "TargetingManager+TargetLink",
         1, string.Empty, string.Empty, false, false);
 
+    [Fact]
+    public void NothingPendingIsItsOwnRefusalRatherThanAnUnsupportedTarget()
+    {
+        var operation = GameMcpProtocolRouter.BuildOperation(
+            "game_targeting", new JObject { ["mode"] = "randomize" });
+        var world = World() with
+        {
+            Targeting = PublicationTable<WorldTargetingRequest>.Create(
+                Array.Empty<WorldTargetingRequest>()),
+        };
+
+        // The verb exists and the target is fine; the screen simply has no selection open, and
+        // "unsupported_action_target" sent a caller looking for a different target.
+        Assert.False(Plugin.TryPrepareGameMcpCommand(
+            new GameMcpFrameOperation(1, operation),
+            GameMcpTestHarness.Context(world),
+            out _,
+            out var failure));
+        Assert.Equal("no_pending_target", failure.Code);
+        Assert.Contains("no target selection", failure.Reason, StringComparison.Ordinal);
+    }
+
     private static GameWorldState World()
     {
         var candidates = PublicationTable<WorldTargetingCandidate>.Create(new[]

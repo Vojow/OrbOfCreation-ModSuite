@@ -286,9 +286,17 @@ internal static class GameMcpEntityCapabilityMap
         return false;
     }
 
+    /// <summary>
+    /// Whether the game has one target selection waiting for input. Nothing pending is a fact
+    /// about the screen, not about the submitted target, so it earns its own refusal code.
+    /// </summary>
+    internal static bool HasPendingTargetSelection(GameWorldState world) =>
+        world is not null && Supports("targeting", GameMcpCommandKind.Targeting) &&
+        world.Targeting.Count == 1;
+
     private static bool TargetingTarget(GameWorldState world, Guid target, out string reason)
     {
-        if (!Supports("targeting", GameMcpCommandKind.Targeting) || world.Targeting.Count != 1)
+        if (!HasPendingTargetSelection(world))
         {
             reason = "There is no target selection waiting for input.";
             return false;
