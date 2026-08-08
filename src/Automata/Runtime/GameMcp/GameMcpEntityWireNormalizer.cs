@@ -153,7 +153,6 @@ internal static class GameMcpEntityWireNormalizer
             NormalizeToken(property.Value, catalog);
         }
 
-        RemovePassingPredicates(item);
         DeduplicateChildIdentity(item, "state");
         PromoteNestedPrimaryIdentity(item);
         PromoteIdentity(item);
@@ -345,22 +344,6 @@ internal static class GameMcpEntityWireNormalizer
     {
         if (item[field] is JValue { Type: JTokenType.String } value)
             item[field] = Snake((string?)value ?? string.Empty);
-    }
-
-    private static void RemovePassingPredicates(JObject item)
-    {
-        if (item["predicates"] is not JObject predicates) return;
-        foreach (var property in new List<JProperty>(predicates.Properties()))
-        {
-            if (property.Value is not JObject predicate ||
-                predicate["value"]?.Type != JTokenType.Boolean ||
-                (bool)predicate["value"]! != true)
-            {
-                continue;
-            }
-            property.Remove();
-        }
-        if (!predicates.HasValues) item.Remove("predicates");
     }
 
     private static void DeduplicateChildIdentity(JObject item, string field)

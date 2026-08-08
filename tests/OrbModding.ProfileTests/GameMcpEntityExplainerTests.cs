@@ -112,23 +112,23 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
         Assert.Null(readySpell["worldGeneration"]);
         Assert.Null(readySpell["lifecycleGeneration"]);
         Assert.Equal(3, (int)readySpell["state"]!["masteryLevel"]!);
-        Assert.Null(readySpell["predicates"]!["visible"]);
-        Assert.Null(readySpell["predicates"]!["available"]);
+        // A predicate that holds is published holding. Dropping the passing ones made absence mean
+        // "true" on one key and "this entity has no such predicate" on the next.
+        Assert.True(Predicate(readySpell, "visible"));
+        Assert.True(Predicate(readySpell, "available"));
         Assert.False(Predicate(readySpell, "canDiscover"));
-        Assert.Null(readySpell["predicates"]!["canUse"]);
-        Assert.Null(waitingSpell["predicates"]!["canDiscover"]);
+        Assert.True(Predicate(readySpell, "canUse"));
+        Assert.True(Predicate(waitingSpell, "canDiscover"));
         Assert.False(Predicate(waitingSpell, "canUse"));
-        Assert.Null(readyResearch["predicates"]);
+        Assert.True(Predicate(readyResearch, "available"));
         Assert.False(Predicate(blockedResearch, "available"));
         Assert.False(Predicate(blockedResearch, "canDevelop"));
-        Assert.Null(readyCrafting["predicates"]);
+        Assert.True(Predicate(readyCrafting, "visible"));
         Assert.False(Predicate(blockedCrafting, "visible"));
         Assert.False(Predicate(blockedCrafting, "available"));
         Assert.False(Predicate(blockedCrafting, "canPurchase"));
         Assert.Null(readySpell["predicates"]!["canDevelop"]);
         Assert.Null(readySpell["predicates"]!["canPurchase"]);
-        Assert.Null(readyResearch["predicates"]);
-        Assert.Null(readyCrafting["predicates"]);
         Assert.Null(readySpell["requirements"]);
         Assert.Null(readySpell["purchase"]);
 
@@ -325,10 +325,10 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
             result.Properties().TakeWhile(property => property.Name != "description")
                 .All(property => property.Name is "worldGeneration" or "status" or "uuid" or
                     "name" or "category" or "nativeType"));
-        Assert.DoesNotContain(
+        Assert.All(
             Assert.IsType<JObject>(result["predicates"]).Properties(),
-            predicate => predicate.Value["value"]?.Type == JTokenType.Boolean &&
-                (bool)predicate.Value["value"]!);
+            predicate => Assert.Equal(
+                JTokenType.Boolean, predicate.Value["value"]?.Type));
     }
 
     [Fact]
