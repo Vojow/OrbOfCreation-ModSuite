@@ -80,11 +80,41 @@ UUID currently stored in that variable and verifies the single game-written outc
 
 What that modal shows is nevertheless the game's own record of the run, and both halves of it are
 readable state rather than a second sentinel. `RitualSO.IsFailedRun()` is `wavesCompleted < 5` — a
-hard five, not `GetRequiredWaves()` — and `RitualSO.End()` reads it before clearing `inBattle`,
-branching to the negative popup and `RefundActivationCost()`. The banked resources are
-`RitualSO.currentSpoils`, a `List<SpoilsRecordEntry>` whose entries expose a `resource` property and
-a `quantity` field, enumerated for display by `GetSpoilsNodes()`. World collection reads both, so
-`end` publishes the verdict and the spoils from the settled world rather than from the waves count.
+hard five, not `GetRequiredWaves()`. The banked resources are `RitualSO.currentSpoils`, a
+`List<SpoilsRecordEntry>` whose entries expose a `resource` property and a `quantity` field,
+enumerated for display by `GetSpoilsNodes()`.
+
+Both survive the transition they describe, which is what makes them settled reads rather than
+values that have to be captured before the mutation. `RitualSO.End()` reads the verdict first and
+writes neither field:
+
+```
+RitualSO.End() : void
+  call   RitualSO.IsFailedRun()        // verdict read first, held across everything below
+  stfld  RitualSO.inBattle = 0
+  call   ResourceFillList.CompleteSlots()
+  call   RitualSO.GainInstantRewards()
+  branch on the held verdict:
+    failed    → UIPopupText.Create(negative "Ritual" node) ; RitualSO.RefundActivationCost() ; ret
+    succeeded → observers.Update("activation")
+                stfld RitualSO.critLevel = 0 ; echoLevel = 0 ; chainLevel = 0
+                … GetCritReport / GetEchoReport / GetMaxChainLength …
+                RitualSO.InitiateDurationEffects()
+                stfld RitualSO.reachedLevel = Max(reachedLevel, GetCurrentLevel())
+                onCompleteEvents.ForEach(…) ; IsAtFurthestLevel() → ApplyPermanentRewards()
+```
+
+`wavesCompleted` is written by exactly three methods — `AdvanceWave()` (`+1`), `Initiate()` (`0`)
+and `ResetData()` (`0`, uncalled in this build) — plus save load. `currentSpoils` is assigned only
+by `Initiate()` (a fresh list), `ResetData()` and save load. `Initiate()` runs from
+`BattleManager.StartRitual`, so the run's verdict and its spoils stand until the *next* activation
+clears them. World collection reads both, so `end` publishes the verdict and the spoils from the
+settled world rather than from a waves count or from a pre-mutation copy.
+
+That is also why ordinary `rituals` read rows carry neither: on a ritual that has never run,
+`wavesCompleted` is `0` and `IsFailedRun()` therefore reads true, so a row-level verdict would
+report a failure for every ritual nobody has played. The verdict belongs to the transition that
+produced it, and only `end` reports one.
 
 ## Preconditions and risk
 

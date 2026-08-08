@@ -193,11 +193,12 @@ public sealed class GameMcpRitualLifecycleTests
     [Fact]
     public void Settled_end_delta_reports_the_battle_result_and_what_is_possible_next()
     {
+        // RitualSO.End() writes neither wavesCompleted nor currentSpoils — only the next Initiate()
+        // clears them — so a run stopped on its first wave still reads 1 after the battle ends.
         var before = World(
-            selected: true, level: 4, activeInstances: 0, inBattle: true, wavesCompleted: 7);
+            selected: true, level: 4, activeInstances: 0, inBattle: true, wavesCompleted: 1);
         var after = World(
-            selected: true, level: 4, activeInstances: 2, inBattle: false, wavesCompleted: 0,
-            failedRun: true,
+            selected: true, level: 4, activeInstances: 2, inBattle: false, wavesCompleted: 1,
             spoils: new[] { new WorldRitualSpoil(ResourceId, new BigDouble(12)) });
         var command = new GameMcpCommand(1, GameMcpCommandKind.RitualLifecycle,
             9, 3, "end", RitualId, Guid.Empty, "RitualSO",
@@ -208,8 +209,8 @@ public sealed class GameMcpRitualLifecycleTests
             GameMcpTestHarness.Context(after, generation: 96), command,
             GameMcpCommandResult.Committed("committed", 9, 3)), after);
 
-        Assert.Equal(7, (int)delta["wavesCompleted"]!["before"]!);
-        Assert.Equal(0, (int)delta["wavesCompleted"]!["after"]!);
+        Assert.Equal(1, (int)delta["wavesCompleted"]!["before"]!);
+        Assert.Equal(1, (int)delta["wavesCompleted"]!["after"]!);
         Assert.Equal(5, (int)delta["reachedLevel"]!);
         Assert.Equal(2, (int)delta["activeInstances"]!);
 
@@ -226,15 +227,40 @@ public sealed class GameMcpRitualLifecycleTests
         Assert.True((bool)delta["next"]!["activate"]!["available"]!);
     }
 
+    [Fact]
+    public void A_cleared_run_ends_with_the_verdict_its_own_results_modal_shows()
+    {
+        var before = World(
+            selected: true, level: 4, activeInstances: 0, inBattle: true, wavesCompleted: 6);
+        var after = World(
+            selected: true, level: 4, activeInstances: 0, inBattle: false, wavesCompleted: 7,
+            spoils: new[] { new WorldRitualSpoil(ResourceId, new BigDouble(30)) });
+        var command = new GameMcpCommand(1, GameMcpCommandKind.RitualLifecycle,
+            9, 3, "end", RitualId, Guid.Empty, "RitualSO",
+            1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 97));
+
+        var delta = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after, generation: 98), command,
+            GameMcpCommandResult.Committed("committed", 9, 3)), after);
+
+        Assert.Equal(7, (int)delta["wavesCompleted"]!["after"]!);
+        Assert.Equal("succeeded", (string?)delta["result"]);
+        Assert.Equal("30", (string?)Assert.Single(delta["spoils"]!.Values<JObject>())!["amount"]);
+    }
+
     private static GameWorldState World(
         bool selected,
         int level,
         int activeInstances,
         bool inBattle = false,
         int wavesCompleted = 0,
-        bool failedRun = false,
         WorldRitualSpoil[]? spoils = null)
     {
+        // The verdict is never an independent fixture input: RitualSO.IsFailedRun() is
+        // wavesCompleted < 5, so a world that sets the two separately can assert a result the wave
+        // count it publishes contradicts.
+        var failedRun = wavesCompleted < 5;
         var activation = selected
             ? PublicationTable<WorldRitualCost>.Create(new[]
                 { new WorldRitualCost(ResourceId, new BigDouble(5)) })

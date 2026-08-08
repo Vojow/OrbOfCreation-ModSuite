@@ -464,9 +464,12 @@ two battle-boundary modes, so both report `activeBattle` and `wavesCompleted` as
 `end` additionally reports the level the battle reached, the duration rewards it left running, and
 the two facts the game's own results modal shows: `result` as `succeeded` or `failed`, read from
 `RitualSO.IsFailedRun()`, and the `spoils` the run banked as named resource rows, empty array
-included. That is the moment its result exists, and it is a read of the run's own record rather than
-an inference from the waves count. Selection, level, battle, and duration activity each
-use one game-written outcome sentinel and never a resource ledger.
+included. Both are settled reads and not pre-mutation copies: `RitualSO.End()` writes neither
+`wavesCompleted` nor `currentSpoils`, and the next `Initiate()` is what clears them, so the run's
+record outlives the transition that ends it. Only `end` reports them — a `rituals` row and an
+`activate` carry neither, because `wavesCompleted < 5` is also true of every ritual nobody has
+played. Selection, level, battle, and duration activity each use one game-written outcome sentinel
+and never a resource ledger.
 
 ### Unified level controls
 
@@ -1001,7 +1004,7 @@ Absence therefore never doubles as a value. Every key that once used it to mean 
 | `discover` | nothing: every glyph carries the block | `available:false` with the reason, including `native_not_discoverable` for a glyph the game never offers |
 | `maxLevel` / `remainingLevels` | the entity is uncapped — a negative native maximum — on `world_list` and `world_get` alike | a real ceiling and the distance left to it |
 | `queuedLevels` | nothing: every level-bearing row carries it | `0`: nothing is in flight |
-| `spoils` | nothing: `game_ritual end` always carries the array | `[]`: the run banked nothing |
+| `spoils` / `result` | on a `rituals` read row, that a run's verdict and its banked resources belong to the `end` that produced them: `RitualSO.IsFailedRun()` is `wavesCompleted < 5`, so a row-level verdict would report a failure for every ritual nobody has played. `game_ritual end` always carries both | `[]`: the run banked nothing |
 | `openModals` | **deliberate progressive disclosure**: no modal is covering the board. `openModalsUnavailable` with a reason appears when the read itself failed, so silence is never a failed read | the game-written title of every open `UIModal` |
 
 `openModals` is the one key whose absence is still a value, and it is a documented choice rather
