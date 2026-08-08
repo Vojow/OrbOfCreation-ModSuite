@@ -278,12 +278,12 @@ public sealed class GameMcpEntityExplainerTests : IDisposable
 
         var predicates = result["predicates"]!;
         Assert.False((bool)predicates["available"]!["value"]!);
-        Assert.Equal("research_complete", (string?)predicates["available"]!["reasonCode"]);
+        Assert.Equal("already_maxed", (string?)predicates["available"]!["reasonCode"]);
         Assert.False((bool)predicates["canDevelop"]!["value"]!);
-        Assert.Equal("research_complete", (string?)predicates["canDevelop"]!["reasonCode"]);
+        Assert.Equal("already_maxed", (string?)predicates["canDevelop"]!["reasonCode"]);
         var cap = result["blockers"]!["cap"]!;
         Assert.True((bool)cap["blocked"]!);
-        Assert.Equal("research_complete", (string?)cap["reasonCode"]);
+        Assert.Equal("already_maxed", (string?)cap["reasonCode"]);
         Assert.Equal(1, (int)cap["purchasedLevel"]!);
         Assert.Equal(1, (int)cap["baseLevelExcludingBonus"]!);
         Assert.Equal(0, (int)cap["bonusLevel"]!);

@@ -144,21 +144,23 @@ internal static class GameMcpEntityExplainer
                     "native_hidden");
                 result["available"] = Verdict(
                     research.Available,
-                    research.Complete ? "research_complete" : "native_unavailable");
-                // ResearchSO.IsWithinDevelopRange's own gates, in its own order. Leeway and the two
-                // caps are one gate: native develops on leeway OR on being below both caps, so an
-                // exhausted leeway beside an open cap is not what refused.
+                    research.Complete ? "already_maxed" : "native_unavailable");
+                // ResearchSO.IsWithinDevelopRange's own gates, in its own order, under the same
+                // words the research row uses for them. Leeway and the two caps are one gate:
+                // native develops on leeway OR on being below both caps, so an exhausted leeway
+                // beside an open cap is not what refused. CanDevelop() adds !IsDeveloping() on top
+                // of the whole expression, so a running development is asked last.
                 var reason = research.Complete
-                    ? "research_complete"
-                    : research.IsDeveloping
-                        ? "already_developing"
-                        : !research.MeetsLevelRequirements
-                            ? "level_requirements_unmet"
-                            : !research.StillHasLeeway &&
-                              !(research.BelowArtificialMaxLevel && research.BelowMaxInvestmentLevel)
-                                ? "research_leeway_exhausted"
-                                : !research.WithinDevelopRange
-                                    ? "native_development_range_refused"
+                    ? "already_maxed"
+                    : !research.MeetsLevelRequirements
+                        ? "requirements_unmet"
+                        : !research.StillHasLeeway &&
+                          !(research.BelowArtificialMaxLevel && research.BelowMaxInvestmentLevel)
+                            ? "research_leeway_exhausted"
+                            : !research.WithinDevelopRange
+                                ? "native_development_range_refused"
+                                : research.IsDeveloping
+                                    ? "already_developing"
                                     : research.CanDevelop
                                         ? "can_develop"
                                         : "native_can_develop_refused";
@@ -737,7 +739,7 @@ internal static class GameMcpEntityExplainer
                 research.Complete || !research.BelowArtificialMaxLevel ||
                     !research.BelowMaxInvestmentLevel,
                 research.Complete
-                    ? "research_complete"
+                    ? "already_maxed"
                     : !research.BelowArtificialMaxLevel
                         ? "artificial_research_cap_reached"
                         : !research.BelowMaxInvestmentLevel

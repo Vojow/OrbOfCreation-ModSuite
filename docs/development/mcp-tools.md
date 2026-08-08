@@ -932,6 +932,10 @@ sentence was written from, so the two can never disagree.
 | `automation_full` | Every automation slot on the queue is in use. Only a queue genuinely out of room answers this; an undiscovered recipe answers `hidden_or_undiscovered` | `explain_entity`/`world_get` crafting rows, `game_craft automate` |
 | `switch_blocked` | The game refuses a loadout swap right now (`LoadoutManager.CanSwapLoadouts()`) | `game_loadout select`, the `canSelect` read |
 | `saved_entry_unavailable` | A saved snapshot's stored entry cannot be restored | `game_loadout snapshot_save`, `game_loadout snapshot_load` |
+| `slot_empty` | The named snapshot slot holds nothing to load or clear | `game_loadout snapshot_load`, `game_loadout snapshot_clear` |
+| `slot_occupied` | The named snapshot slot already holds a record; clear it before saving over it | `game_loadout snapshot_save` |
+| `slot_out_of_range` | The slot index is outside the live snapshot list. Carries `minimumSlot` and `maximumSlot` | every `game_loadout` snapshot mode |
+| `active_section_empty` | Nothing is staged in the active Equipment or Alchemy section, so there is nothing to save | `game_loadout snapshot_save` |
 | `screen_match_failed` / `subtab_match_failed` | The exact label matched zero or several live entries | `game_navigate` |
 | `no_pending_target` | No target selection is open. The verb exists and the submitted target was never the problem, so no entity-ownership hint refines it | `game_targeting` |
 | `requirements_unmet` / `research_leeway_exhausted` / `already_developing` | The develop gate the read side already names, on the mutation that hit it | `game_research develop` |
