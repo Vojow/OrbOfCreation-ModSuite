@@ -109,12 +109,12 @@ internal sealed class ReturnToMenuGameAction : IDisposable
                         "The game's panel is now open and was not closed again, and it shows no " +
                         "interactable Back to Main Menu control.");
                 }
-                return Execute(native, live[0], flash);
+                return Execute(native, live[0], flash, native.ControlName(panel!));
             }
             if (!_tryCaptureMutationPermit())
                 return Reject(ReturnToMenuPreflight.MutationPermitUnavailable,
                     _readOwnershipFailure());
-            return Execute(native, live[0], flash);
+            return Execute(native, live[0], flash, string.Empty);
         }
         catch (Exception exception) when (IsExpected(exception))
         {
@@ -140,22 +140,24 @@ internal sealed class ReturnToMenuGameAction : IDisposable
     private static ReturnToMenuSubmission Execute(
         ReturnToMenuNativeBindings native,
         object button,
-        object flash)
+        object flash,
+        string openedPanel)
     {
         var stage = ReturnToMenuNativeStage.NativeCallback;
+        var pressed = native.ControlName(button);
         try
         {
             native.BackToMenu(button);
             stage = ReturnToMenuNativeStage.Verification;
             return native.FlashActive(flash)
-                ? Verified()
+                ? Verified(pressed, openedPanel)
                 : Fault(ReturnToMenuPreflight.VerificationFailed, stage,
                     NativeMutationOutcome.PostconditionFailed,
                     "The game did not start its screen transition.");
         }
         catch (Exception exception) when (IsExpected(exception))
         {
-            if (native.FlashActive(flash)) return Verified();
+            if (native.FlashActive(flash)) return Verified(pressed, openedPanel);
             return Fault(ReturnToMenuPreflight.PostCommitFault, stage,
                 NativeMutationOutcome.ExecutionThrew,
                 "The native Back to Main Menu callback threw before the screen transition started: " +
@@ -226,10 +228,12 @@ internal sealed class ReturnToMenuGameAction : IDisposable
         ReturnToMenuPreflight preflight,
         string reason) => ReturnToMenuSubmission.Reject(preflight, reason);
 
-    private static ReturnToMenuSubmission Verified() =>
+    private static ReturnToMenuSubmission Verified(string pressedControl, string openedPanel) =>
         new(ReturnToMenuPreflight.Proceeded, ReturnToMenuNativeStage.Verification,
             NativeMutationOutcome.Verified, new NativeMutationCallOutcome(1, 1, 1),
-            "The game accepted the return to its Start screen.");
+            "The game accepted the return to its Start screen.",
+            pressedControl,
+            openedPanel);
 
     private static ReturnToMenuSubmission Fault(
         ReturnToMenuPreflight preflight,

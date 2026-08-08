@@ -144,8 +144,12 @@ public sealed class GameMcpReturnToMenuTests
         Assert.Equal("committed", result.Status);
         Assert.Equal(1, button.manualSave.RaiseCalls);
         Assert.True(UIScreenFlash.instance.ActiveForTests);
-        Assert.Equal(new[] { "status", "scene" },
+        Assert.Equal(new[] { "status", "scene", "pressedControl", "openedPanel" },
             json.Properties().Select(property => property.Name));
         Assert.Equal("Start", (string?)json["scene"]);
+
+        // The control was already on screen here, so the verb opened nothing and says so.
+        Assert.Equal("Back to Menu", (string?)json["pressedControl"]);
+        Assert.Equal(string.Empty, (string?)json["openedPanel"]);
     }
 }

@@ -834,7 +834,15 @@ internal sealed class AutomataServiceCycleRuntime : IAutomataServiceCycleRuntime
         var submission = _returnToMenu.Submit(in action);
         var result = ReturnToMenuActionResultMapper.Map(in submission);
         var details = submission.Verified
-            ? new GameMcpObjectBuilder { ["scene"] = "Start" }.Freeze()
+            ? new GameMcpObjectBuilder
+            {
+                ["scene"] = "Start",
+                ["pressedControl"] = submission.PressedControl,
+
+                // Empty says the control was already on screen. This is the one verb that operates
+                // a second control to reach its own, and only the verb can see which.
+                ["openedPanel"] = submission.OpenedPanel,
+            }.Freeze()
             : new GameMcpObjectBuilder().Freeze();
         return GameMcpCommandResult.FromAction(in result, command.Kind, lifecycle,
             configurationGeneration, submission.Reason, details);

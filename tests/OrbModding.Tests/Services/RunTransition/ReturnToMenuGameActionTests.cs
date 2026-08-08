@@ -27,6 +27,8 @@ public sealed class ReturnToMenuGameActionTests
         Assert.Equal(1, _button.manualSave.RaiseCalls);
         Assert.True(UIScreenFlash.instance.ActiveForTests);
         Assert.Equal(ReturnToMenuNativeStage.Verification, result.Stage);
+        Assert.Equal("Back to Menu", result.PressedControl);
+        Assert.Equal(string.Empty, result.OpenedPanel);
     }
 
     [Fact]
@@ -87,6 +89,10 @@ public sealed class ReturnToMenuGameActionTests
         Assert.True(panel.IsOpen());
         Assert.Equal(1, control.manualSave.RaiseCalls);
         Assert.True(UIScreenFlash.instance.ActiveForTests);
+
+        // Both steps are the caller's to audit: the panel this opened and the control it pressed.
+        Assert.Equal("Settings", result.OpenedPanel);
+        Assert.Equal("Back to Main Menu", result.PressedControl);
     }
 
     [Fact]

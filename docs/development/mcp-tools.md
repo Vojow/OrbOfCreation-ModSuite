@@ -1204,7 +1204,9 @@ and never by caption — and then presses the control. A panel that will not ope
 without one interactable control, refuses in a sentence that also states the panel is now open. The
 response is completed as soon as the native screen
 fade becomes active, before scene teardown can invalidate the HTTP operation. Its compact success
-is `status: committed, scene: Start`; the scene transition then clears every lifecycle-retained
+is `status: committed, scene: Start, pressedControl, openedPanel` — the two controls the tool
+operated, named as the game names them, with an empty `openedPanel` when the control was already on
+screen and no panel had to be raised; the scene transition then clears every lifecycle-retained
 world, identity, binding, and lease through the ordinary lifecycle observer. The tool cannot choose
 a save, suppress the save event, select another scene, or run while another transition is active.
 
