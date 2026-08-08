@@ -578,8 +578,20 @@ public sealed class GameMcpProtocolSurfaceTests
             traceWriterRevision: 0,
             writableConfiguration: Array.Empty<GameMcpWritableSettingDescriptor>(),
             modalDismissAvailable: true);
-        Assert.Contains("game_modal: available", Plugin.ProjectGameMcpHealthText(modalAvailable),
+        var withoutRuntime = Plugin.ProjectGameMcpHealthText(modalAvailable);
+        Assert.Contains("game_modal: available", withoutRuntime, StringComparison.Ordinal);
+
+        // The runtime outlives every scene change, so a scene name alone answered the same question
+        // both ways in one session. The absent runtime is named as a session fact, and the world the
+        // verdict describes is identified.
+        Assert.Contains("world: not published", withoutRuntime, StringComparison.Ordinal);
+        Assert.Contains(
+            "runtime reason: the ServiceCycle runtime has not been created in this session yet",
+            withoutRuntime,
             StringComparison.Ordinal);
+        var withWorld = Plugin.ProjectGameMcpHealthText(
+            GameMcpTestHarness.Context(new GameWorldState(), generation: 1207));
+        Assert.Contains("world: generation 1207, lifecycle 9", withWorld, StringComparison.Ordinal);
 
         var tool = Assert.Single(
             GameMcpAcceptanceFixture.Tools(),

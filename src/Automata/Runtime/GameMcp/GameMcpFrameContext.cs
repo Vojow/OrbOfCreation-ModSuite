@@ -74,8 +74,14 @@ internal sealed class GameMcpFrameContext
     internal bool ModalDismissAvailable { get; }
     internal string ModalDismissUnavailableReason { get; }
     internal bool RuntimeAvailable => Runtime is not null;
+
+    /// <summary>
+    /// Why the runtime is absent. It is created once, on the first frame the host admits it, and
+    /// released only when the plugin is destroyed — so its absence is a fact about this session, not
+    /// about the scene. Calling it a scene property is what let one scene answer both ways.
+    /// </summary>
     internal string RuntimeNotAvailableReason => Runtime is null
-        ? "the ServiceCycle runtime has not published a world in this scene"
+        ? "the ServiceCycle runtime has not been created in this session yet"
         : string.Empty;
 }
 

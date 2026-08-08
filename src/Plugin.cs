@@ -1825,6 +1825,15 @@ public sealed class Plugin : BaseUnityPlugin
             .AppendLine(GameMcpDllSha256)
             .Append("scene: ").AppendLine(GameMcpTextFormatter.Plain(context.SceneName))
             .Append("runtime: ").AppendLine(context.RuntimeAvailable ? "available" : "unavailable")
+            // The scene name alone cannot tell a caller which run a verdict describes: the runtime
+            // outlives every scene change, so the same scene answered both ways across one session.
+            // The world and lifecycle generations are what actually move, so they are published.
+            .Append("world: ").AppendLine(context.World is { } published
+                ? "generation " +
+                    published.Generation.Value.ToString(CultureInfo.InvariantCulture) +
+                    ", lifecycle " +
+                    context.LifecycleGeneration.ToString(CultureInfo.InvariantCulture)
+                : "not published")
             .Append("native contracts: ").AppendLine(
                 context.NativeContractsAvailable ? "available" : "unavailable")
             .Append("game_craft: ").AppendLine(
