@@ -377,7 +377,11 @@ internal sealed class GameMcpProtocolRouter
                     "select", "deselect", "set_level", "activate", "cancel_duration", "end");
                 builder.Uuid = RequireUuid(arguments, "uuid");
                 if (builder.Mode == "set_level")
-                    builder.Amount = checked(RequiredInt(arguments, "level", 0, int.MaxValue - 1) + 1);
+                    builder.Amount = checked(RequiredInt(
+                        arguments,
+                        "level",
+                        WorldRitualDecision.NativeMinimumStartingLevel,
+                        int.MaxValue - 1) + 1);
                 break;
             case "game_level":
                 builder.Mode = RequireOneOf(arguments, "mode", "purchase", "bonus");
@@ -875,7 +879,8 @@ internal sealed class GameMcpProtocolRouter
                         ["mode"] = EnumSchema(
                             "select", "deselect", "set_level", "activate", "cancel_duration", "end"),
                         ["uuid"] = StringSchema("Published RitualSO UUID."),
-                        ["level"] = IntegerSchema(0, int.MaxValue - 1),
+                        ["level"] = IntegerSchema(
+                            WorldRitualDecision.NativeMinimumStartingLevel, int.MaxValue - 1),
                     },
                     "mode", "uuid"),
                     ModeRule("select", forbidden: new[] { "level" }),

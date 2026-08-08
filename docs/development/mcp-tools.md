@@ -394,7 +394,8 @@ read or changed.
 ### Ritual lifecycle
 
 Ritual discovery remains `game_discover(surface="devote")`. Once discovered, a `rituals` detail
-row reports the selected Ritual, current/reached/maximum starting level, battle state, and active
+row reports the selected Ritual, the reached level, the starting-level control as `current` with
+both its `minimum` and `maximum`, battle state, and active
 duration-reward state. Only the selected row carries activation and completion prices in the same
 player-facing units as the Ritual panel and the eventual resource spend;
 unselected rows do not publish a speculative ledger. `setLevel`, `activate`, and
@@ -402,8 +403,12 @@ unselected rows do not publish a speculative ledger. `setLevel`, `activate`, and
 decision.
 
 `game_ritual(mode="select"|"deselect"|"activate"|"end"|"cancel_duration", uuid=...)` reproduces the
-corresponding visible Ritual control. `mode="set_level"` also requires the zero-based `level`
-shown by the Ritual screen. The old runestone-selection manager methods are empty/null-returning in
+corresponding visible Ritual control. `mode="set_level"` also requires the `level` the Ritual
+screen's starting-level selector shows, which runs from 1 to the row's `setLevel.maximum`:
+`UIRitual` clamps that selector to `1..RitualSO.GetMaxSelectedLevel()`, so 1 is a starting level and
+0 is not, even though the setter behind the control would accept it. A level outside that range is
+refused with `level_out_of_range` carrying `minimumAmount` and `maximumAmount` — the same two
+numbers its sentence names. The old runestone-selection manager methods are empty/null-returning in
 v1.0.5 and are deliberately absent. Activation revalidates the selected Ritual and the screen's
 native price before payment; success is the settled battle transition. `cancel_duration` ends an
 already-running duration reward and does not claim to cancel a battle. `activate` and `end` are the

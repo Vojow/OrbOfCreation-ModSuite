@@ -9,6 +9,11 @@ internal static class GameMcpRitualLifecycleProjection
         var result = new GameMcpObjectBuilder();
         if (submission.CallOutcome.MutationAttempts > 0)
             result["missingOutcome"] = "requested Ritual transition";
+
+        // A refusal whose sentence names a floor and a ceiling carries both as numbers, read from
+        // the admission capture the sentence was written from.
+        if (submission.MinimumAmount >= 0) result["minimumAmount"] = submission.MinimumAmount;
+        if (submission.MaximumAmount >= 0) result["maximumAmount"] = submission.MaximumAmount;
         return result.Freeze();
     }
 }

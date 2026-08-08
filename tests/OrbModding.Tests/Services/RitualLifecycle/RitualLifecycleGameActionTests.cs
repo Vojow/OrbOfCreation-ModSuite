@@ -58,6 +58,25 @@ public sealed class RitualLifecycleGameActionTests : IDisposable
     }
 
     [Fact]
+    public void Starting_level_refuses_below_the_native_control_floor_and_names_both_bounds()
+    {
+        var ritual = Ritual();
+        ritual.NativeMaximumSelectedLevel = 7;
+        Register(ritual);
+        RitualManager.instance!.selectedRitual.ToggleValue(ritual);
+        ritual.selectedLevel = 3;
+        using var boundary = Boundary();
+
+        var refused = Submit(boundary, ritual, RitualLifecycleActionKind.SetLevel, level: 0);
+
+        Assert.Equal(RitualLifecyclePreflight.LevelOutOfRange, refused.Preflight);
+        Assert.Equal(1, refused.MinimumAmount);
+        Assert.Equal(7, refused.MaximumAmount);
+        Assert.Contains("between 1 and 7", refused.Reason, StringComparison.Ordinal);
+        Assert.Equal(3, ritual.selectedLevel);
+    }
+
+    [Fact]
     public void Activate_revalidates_and_pays_the_screen_cost_before_the_manager_callback()
     {
         var ritual = Ritual();

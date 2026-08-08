@@ -4874,6 +4874,10 @@ internal static class GameMcpWorldQuery
         };
         if (selected && !ritual.ForceLevel)
         {
+            // Both bounds, from the same native control: the jump-start selector is clamped to
+            // 1..RitualSO.GetMaxSelectedLevel(), and a caller that only ever saw the ceiling had no
+            // way to discover that 0 is not a starting level the game offers.
+            level["minimum"] = WorldRitualDecision.NativeMinimumStartingLevel;
             level["maximum"] = ritual.Decision.MaximumStartingLevel;
             if (anyBattleActive) level["reasonCode"] = "ritual_battle_active";
         }

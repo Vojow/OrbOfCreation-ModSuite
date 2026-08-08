@@ -179,6 +179,17 @@ internal readonly struct WorldRitualCost
 
 internal readonly struct WorldRitualDecision
 {
+    /// <summary>
+    /// The floor the ritual's own starting-level control clamps to.
+    /// <c>UIRitual.RenderContent()</c> calls
+    /// <c>UIValueSelectButton.SetClamp(1, RitualSO.GetMaxSelectedLevel())</c>, and the control's
+    /// decrement is <c>Math.Max(value - change, minValue)</c>, so 1 is the lowest starting level
+    /// the game offers. The data-layer setter <c>RitualSO.ChangeStartingLevel</c> clamps to
+    /// <c>Math.Min(max, Math.Max(value, 0))</c> and therefore accepts 0 — which is why this bound
+    /// has to come from the control the player presses, not from the setter behind it.
+    /// </summary>
+    internal const int NativeMinimumStartingLevel = 1;
+
     private readonly PublicationTable<WorldRitualCost>? _activationCosts;
     private readonly PublicationTable<WorldRitualCost>? _completionCosts;
 
@@ -191,7 +202,7 @@ internal readonly struct WorldRitualDecision
         PublicationTable<WorldRitualCost> completionCosts)
     {
         Selected = selected;
-        MaximumStartingLevel = Math.Max(maximumStartingLevel, 0);
+        MaximumStartingLevel = Math.Max(maximumStartingLevel, NativeMinimumStartingLevel);
         UsageRequirementsMet = usageRequirementsMet;
         ActivationAffordable = activationAffordable;
         _activationCosts = activationCosts ?? throw new ArgumentNullException(nameof(activationCosts));

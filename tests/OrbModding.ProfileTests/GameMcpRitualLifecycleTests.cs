@@ -72,6 +72,45 @@ public sealed class GameMcpRitualLifecycleTests
     }
 
     [Fact]
+    public void Set_level_refuses_the_level_the_native_minus_button_cannot_reach()
+    {
+        var tool = Assert.Single(GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "game_ritual");
+        Assert.Equal(1, (int)tool["inputSchema"]!["properties"]!["level"]!["minimum"]!);
+
+        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
+        var response = router.Handle(GameMcpAcceptanceFixture.Request(1, "tools/call",
+            new JObject
+            {
+                ["name"] = "game_ritual",
+                ["arguments"] = new JObject
+                {
+                    ["mode"] = "set_level",
+                    ["uuid"] = RitualId.ToString("D"),
+                    ["level"] = 0,
+                },
+            }));
+
+        Assert.Contains(
+            "level must be between 1 and",
+            response.Body!["error"]!.ToString(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Selected_ritual_publishes_both_bounds_of_the_native_starting_level_control()
+    {
+        var world = World(selected: true, level: 4, activeInstances: 1);
+        var response = Json(GameMcpWorldQuery.GetRow(
+            GameMcpTestHarness.Context(world, generation: 803),
+            "rituals", RitualId.ToString("D")).Freeze(), world);
+
+        var setLevel = response["row"]!["setLevel"]!;
+        Assert.Equal(1, (int)setLevel["minimum"]!);
+        Assert.Equal(8, (int)setLevel["maximum"]!);
+    }
+
+    [Fact]
     public void Selected_ritual_detail_carries_only_the_live_next_decisions_and_named_costs()
     {
         var world = World(selected: true, level: 4, activeInstances: 1);

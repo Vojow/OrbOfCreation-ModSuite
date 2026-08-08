@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using OrbModding.Common;
+using OrbModding.Common.Runtime.World;
 
 namespace OrbAutomata;
 
@@ -130,10 +131,14 @@ internal sealed class RitualLifecycleGameAction : IDisposable
                         return Reject(RitualLifecyclePreflight.LevelLocked,
                             "This ritual fixes its starting level at " +
                             native.ForceLevelValue(ritual) + ".");
-                    var maximum = Math.Max(native.MaximumSelectedLevel(ritual), 0);
-                    if (action.Level < 0 || action.Level > maximum)
-                        return Reject(RitualLifecyclePreflight.LevelOutOfRange,
-                            "The ritual starting level must be between 0 and " + maximum + ".");
+                    var minimum = WorldRitualDecision.NativeMinimumStartingLevel;
+                    var maximum = Math.Max(native.MaximumSelectedLevel(ritual), minimum);
+                    if (action.Level < minimum || action.Level > maximum)
+                        return RitualLifecycleSubmission.RejectLevelOutOfRange(
+                            "The ritual starting level must be between " + minimum + " and " +
+                            maximum + ".",
+                            minimum,
+                            maximum);
                     if (native.SelectedLevel(ritual) == action.Level)
                         return Reject(RitualLifecyclePreflight.AlreadyInRequestedState,
                             "The ritual starting level is already " + action.Level + ".");
