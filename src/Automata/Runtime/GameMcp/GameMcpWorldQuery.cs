@@ -4827,7 +4827,7 @@ internal static class GameMcpWorldQuery
         AddLevelDecision(world, result, glyph.LevelDecision,
             glyph.Learned,
             "not_available");
-        if (glyph.Discoverable) AddDiscoveryDecision(world, result, glyph.Discovery);
+        AddDiscoveryDecision(world, result, glyph.Discovery, glyph.Discoverable);
         return result.Freeze();
     }
 
@@ -5145,26 +5145,34 @@ internal static class GameMcpWorldQuery
         return result;
     }
 
+    /// <summary>
+    /// The discovery verdict, present wherever the concept applies to the row's kind. An entity the
+    /// game never routes through discovery still answers the verb — silence there read as
+    /// "not discovered yet", which is the opposite of the truth for a glyph learned by prerequisite.
+    /// </summary>
     private static void AddDiscoveryDecision(
         GameWorldState world,
         JObject result,
-        WorldDiscoverableDecision decision)
+        WorldDiscoverableDecision decision,
+        bool nativeDiscoverable = true)
     {
-        var available = decision.Visible && decision.CanDiscover &&
+        var available = nativeDiscoverable && decision.Visible && decision.CanDiscover &&
             !decision.Discovered && decision.Affordable;
         var discover = new JObject { ["available"] = available };
         if (!available)
         {
             discover["reasonCode"] = decision.Discovered
                 ? "already_discovered"
-                : !decision.Visible
-                    ? "not_visible"
-                    : !decision.CanDiscover
-                        ? "native_discovery_refused"
-                        : "unaffordable";
+                : !nativeDiscoverable
+                    ? "native_not_discoverable"
+                    : !decision.Visible
+                        ? "not_visible"
+                        : !decision.CanDiscover
+                            ? "native_discovery_refused"
+                            : "unaffordable";
         }
-        if (decision.Visible && !decision.Discovered && decision.CanDiscover &&
-            decision.Costs.Count > 0)
+        if (nativeDiscoverable && decision.Visible && !decision.Discovered &&
+            decision.CanDiscover && decision.Costs.Count > 0)
         {
             var costs = new JArray();
             for (var index = 0; index < decision.Costs.Count; index++)

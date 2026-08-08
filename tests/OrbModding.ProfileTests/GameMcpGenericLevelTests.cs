@@ -146,7 +146,12 @@ public sealed class GameMcpGenericLevelTests
 
         Assert.True((bool)glyph["available"]!);
         Assert.False((bool)glyph["discovered"]!);
-        Assert.Null(glyph["discover"]);
+
+        // An absent block read as "not discovered yet", the opposite of the truth here: this glyph
+        // is owned already and the game never routes it through discovery at all.
+        Assert.False((bool)glyph["discover"]!["available"]!);
+        Assert.Equal("native_not_discoverable", (string?)glyph["discover"]!["reasonCode"]);
+        Assert.Null(glyph["discover"]!["costs"]);
     }
 
     private static JObject Row(
