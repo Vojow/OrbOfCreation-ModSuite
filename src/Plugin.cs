@@ -2923,10 +2923,9 @@ public sealed class Plugin : BaseUnityPlugin
             }
             details["plotNodeUuid"] = command.TargetId.ToString("D");
         }
-        var settledSubtabs = CaptureSubtabs();
-        details["subtabStrips"] = ProjectGameMcpSubtabStrips(
-            settledSubtabs.Select(
-                subtab => (subtab.StripKey, subtab.Label, subtab.Active)));
+        // The strips are read once, after arrival settles, in one place. Reading them here — a
+        // single frame after the subtab click, with the destination still assembling — is what let
+        // the departed screen's strip ride along and made identical navigations disagree.
         var result = GadgetCommitted(
             "navigation_arrived",
             details);
@@ -2980,9 +2979,21 @@ public sealed class Plugin : BaseUnityPlugin
             capture = false;
         }
         else if (string.Equals(result.Status, "committed", StringComparison.Ordinal) &&
-                 _uiShell is not null && _uiShell.IsAlive)
+                 (_uiShell is null || !_uiShell.IsAlive))
         {
-            var tabs = _uiShell.CaptureNativeTabsForGameMcp();
+            result = GadgetCommitted(
+                "navigation_arrived",
+                new GameMcpObjectBuilder
+                {
+                    ["scene"] = SceneManager.GetActiveScene().name,
+                    ["subtabStripsUnavailable"] =
+                        "The navigation shell was no longer alive after the destination settled.",
+                });
+            capture = false;
+        }
+        else if (string.Equals(result.Status, "committed", StringComparison.Ordinal))
+        {
+            var tabs = _uiShell!.CaptureNativeTabsForGameMcp();
             var activeTab = tabs.FirstOrDefault(tab => tab.Active);
             var subtabs = CaptureSubtabs();
             var details = new GameMcpObjectBuilder
