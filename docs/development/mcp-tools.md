@@ -1033,7 +1033,13 @@ assembled any other way would be suite arithmetic wearing a transaction's name. 
 after the commit is what prices the next one.
 
 `remaining` is read from the settled world in the same spendable coordinate every cost row's
-`spendableAmount` uses, which is headroom for a bandwidth resource rather than stored quantity.
+`spendableAmount` uses. It does not have to equal the same resource's `amount` on a `resources` row,
+and where the two differ it is not drift: `remaining` is spendable amount, which a **bandwidth**
+resource reports as the headroom left rather than the stock held, while a row's `amount` is the
+displayed quantity, which an **inverted** resource reports counting down from its cap. The two
+traits are independent, so either key can be the larger one depending on which traits the resource
+carries. When the settled world publishes no row for that resource the key is absent and
+`remainingUnavailable` names the reason, because zero is a balance and "not collected" is not.
 
 There is no delta field: the difference between two worlds also contains every income stream and
 every other spender in that window, so it is not a price and is not computed. On a volatile resource

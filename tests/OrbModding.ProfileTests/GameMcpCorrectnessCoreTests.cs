@@ -756,6 +756,62 @@ public sealed class GameMcpCorrectnessCoreTests
         Assert.Null(paid["cost"]);
     }
 
+    [Fact]
+    public void APurchaseWhoseSettledResourceRowIsMissingNamesThatRatherThanReportingZero()
+    {
+        var attributeId = Guid.Parse("f2000000-0000-0000-0000-000000000011");
+        var resourceId = Guid.Parse("f2000000-0000-0000-0000-000000000012");
+        var before = new GameWorldState
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 632),
+            }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                Stock(resourceId, 110),
+            }),
+            PurchaseCosts = PublicationTable<WorldPurchaseCost>.Create(new[]
+            {
+                new WorldPurchaseCost(attributeId, resourceId, new BigDouble(2)),
+            }),
+        };
+        var command = new GameMcpCommand(
+            1,
+            GameMcpCommandKind.Purchase,
+            expectedLifecycleGeneration: 9,
+            expectedConfigurationGeneration: 3,
+            mode: "structure",
+            targetId: attributeId,
+            secondaryId: Guid.Empty,
+            derivedNativeType: "StructureSO",
+            amount: 1,
+            payloadKey: string.Empty,
+            payloadValue: string.Empty,
+            capture: false,
+            saveCapture: false,
+            frameContext: GameMcpTestHarness.Context(before));
+        var after = before with
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 633),
+            }),
+            Resources = PublicationTable<WorldResource>.Empty,
+        };
+
+        var delta = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3)));
+
+        var paid = Assert.IsType<JObject>(Assert.Single(delta["paid"]!.Values<JObject>()));
+        Assert.Null(paid["remaining"]);
+        Assert.Equal(
+            "resource_not_published",
+            (string?)paid["remainingUnavailable"]!["reasonCode"]);
+    }
+
     /// <summary>
     /// An idle game's income routinely outruns a price between admission and settlement. The price
     /// is what the action was admitted at, so it survives a settled balance that went up.

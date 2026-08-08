@@ -706,13 +706,24 @@ internal static class GameMcpWorldQuery
         for (var index = start; index < start + count; index++)
         {
             var cost = before.PurchaseCosts[index];
-            paid.Add(new JObject
+            var row = new JObject
             {
                 ["resource"] = cost.ResourceId.ToString("D"),
                 ["costPerLevel"] = new GameMcpDomainValue(AdmittedCost(before, in cost)),
-                ["remaining"] = new GameMcpDomainValue(
-                    SpendableAmount(after, cost.ResourceId, BigDouble.Zero)),
-            });
+            };
+
+            // Zero is a balance. A settled world that carries no row for this resource has not told
+            // us the player is broke, so the absence is named instead of spent as a number.
+            if (TryFindResource(after, cost.ResourceId, out var settled))
+                row["remaining"] = new GameMcpDomainValue(
+                    WorldResourceCoordinate.SpendableAmount(in settled));
+            else
+                row["remainingUnavailable"] = new JObject
+                {
+                    ["reasonCode"] = "resource_not_published",
+                    ["reason"] = "the settled world carries no row for this resource",
+                };
+            paid.Add(row);
         }
         if (paid.Count == 0) return projected;
         var result = new JObject();
