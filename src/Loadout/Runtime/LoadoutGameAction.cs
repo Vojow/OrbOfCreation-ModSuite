@@ -98,8 +98,9 @@ internal sealed class LoadoutGameAction : IDisposable
             else
             {
                 if (!TryFindSnapshot(native, manager, action.TargetId, action.Slot,
-                        out target, out snapshotIsAlchemy, out var preflight, out var reason))
-                    return Reject(preflight, reason);
+                        out target, out snapshotIsAlchemy, out var refusal))
+                    return refusal;
+                var reason = string.Empty;
                 var empty = IsSnapshotEmpty(native, target!, snapshotIsAlchemy);
                 if (action.Kind == LoadoutActionKind.SnapshotSave && !empty)
                     return Reject(LoadoutPreflight.SlotOccupied,
@@ -107,15 +108,19 @@ internal sealed class LoadoutGameAction : IDisposable
                 if (action.Kind is LoadoutActionKind.SnapshotLoad or LoadoutActionKind.SnapshotClear && empty)
                     return Reject(LoadoutPreflight.SlotEmpty,
                         "Snapshot slot " + action.Slot + " is empty.");
-                if (action.Kind == LoadoutActionKind.SnapshotSave &&
-                    !TryValidateActive(native, manager, snapshotIsAlchemy, out reason))
-                    return Reject(LoadoutPreflight.EntryUnavailable, reason);
+
+                // Nothing staged is answered before the record is validated. A save reads the
+                // active section, and an empty one has no entry that could fail a limit — the
+                // ordering, not the checks, is what made an empty section claim it overflowed.
                 if (action.Kind == LoadoutActionKind.SnapshotSave &&
                     IsActiveSectionEmpty(native, manager, snapshotIsAlchemy))
                     return Reject(LoadoutPreflight.ActiveSectionEmpty,
                         "There is nothing staged in the active " +
                         (snapshotIsAlchemy ? "Alchemy" : "Equipment") +
                         " section to save.");
+                if (action.Kind == LoadoutActionKind.SnapshotSave &&
+                    !TryValidateActive(native, manager, snapshotIsAlchemy, out reason))
+                    return Reject(LoadoutPreflight.EntryUnavailable, reason);
                 if (action.Kind == LoadoutActionKind.SnapshotLoad)
                 {
                     if (!TryValidateSnapshot(native, manager, target!, snapshotIsAlchemy, out reason))
@@ -335,7 +340,12 @@ internal sealed class LoadoutGameAction : IDisposable
                 !_equipment.TryValidateStoredEntry(item, quantity,
                     out var type, out var typeMaximum, out var cost, out reason) ||
                 type is null || cost is null) return false;
-            AddType(typeCounts, type, quantity, typeMaximum);
+            // A type slot is one artifact, however deep its stack. Native
+            // EquipmentListVariable.GetTypesEquipped counts list entries and
+            // EquipmentTypeSO.GetMaxTypeSlots bounds that count, while StackableListVariable.Stack
+            // adds an item to the list once and its quantity to a separate record. Counting stacks
+            // here refused live sections the game itself equipped.
+            AddType(typeCounts, type, 1, typeMaximum);
             targetCost = native.AddCost(targetCost,
                 native.MultiplyCost(cost, new BigDouble(quantity)));
         }
@@ -448,7 +458,7 @@ internal sealed class LoadoutGameAction : IDisposable
 
     private static bool TryFindSnapshot(LoadoutNativeBindings native, object manager,
         Guid ownerId, int slot, out object? snapshot, out bool alchemy,
-        out LoadoutPreflight preflight, out string reason)
+        out LoadoutSubmission refusal)
     {
         var owner = native.AlchemySnapshots(manager);
         alchemy = true;
@@ -461,26 +471,28 @@ internal sealed class LoadoutGameAction : IDisposable
         if (owner is null || native.Identity(owner) != ownerId)
         {
             snapshot = null;
-            preflight = LoadoutPreflight.IdentityUnavailable;
-            reason = "That Equipment or Alchemy snapshot list is not present in the current game.";
+            refusal = Reject(LoadoutPreflight.IdentityUnavailable,
+                "That Equipment or Alchemy snapshot list is not present in the current game.");
             return false;
         }
         var values = alchemy
             ? native.AlchemySnapshotValues(owner)
             : native.EquipmentSnapshotValues(owner);
-        if (slot < 0 || slot >= (values?.Count ?? 0))
+        var count = values?.Count ?? 0;
+        if (slot < 0 || slot >= count)
         {
             snapshot = null;
-            preflight = LoadoutPreflight.SlotOutOfRange;
-            reason = (values?.Count ?? 0) == 0
-                ? "This save owns zero snapshot slots."
-                : "The snapshot slot must be between 0 and " +
-                    ((values?.Count ?? 0) - 1) + ".";
+            refusal = LoadoutSubmission.RejectSlotOutOfRange(
+                count == 0
+                    ? "This save owns zero snapshot slots."
+                    : "The snapshot slot must be between 0 and " + (count - 1) + ".",
+                count == 0 ? -1 : 0,
+                count - 1);
             return false;
         }
         snapshot = values![slot];
-        preflight = LoadoutPreflight.ContractUnavailable;
-        reason = snapshot is null ? "The requested snapshot slot is unavailable." : string.Empty;
+        refusal = Reject(LoadoutPreflight.ContractUnavailable,
+            "The requested snapshot slot is unavailable.");
         return snapshot is not null;
     }
 
