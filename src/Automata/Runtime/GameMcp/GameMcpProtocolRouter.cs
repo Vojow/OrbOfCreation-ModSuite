@@ -584,7 +584,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "entity_catalog",
                 "Search live entity catalog",
-                "Search every UUID loaded in the game's runtime registry by native type, internal asset name, and available player-facing display name, including loaded entities hidden by progression. limit is an upper bound: a page also stops at a 12 KB response budget, so wide rows come back short. nextOffset is present exactly when more rows remain, and is the offset to resume from.",
+                "Search every UUID loaded in the game's runtime registry by native type, internal asset name, and available player-facing display name, including loaded entities hidden by progression. Rows page in UUID order, which is not world_search's category order. limit is an upper bound: a page also stops at a 12 KB response budget, so wide rows come back short. nextOffset is present exactly when more rows remain, and is the offset to resume from.",
                 ObjectSchema(
                     new JObject
                     {
@@ -606,7 +606,7 @@ internal sealed class GameMcpProtocolRouter
             Tool(
                 "world_search",
                 "Search published entities",
-                "Search stable-UUID entity categories only. Composite diagnostic categories are intentionally excluded; use world_list for those rows and their localized partiality evidence. limit is an upper bound: a page also stops at a 12 KB response budget, so wide rows come back short. nextOffset is present exactly when more rows remain, and is the offset to resume from.",
+                "Search stable-UUID entity categories only: an entity the published world has no row for is not here, and a query also matches a category's own name and native type. Composite diagnostic categories are intentionally excluded; use world_list for those rows and their localized partiality evidence. Rows page category by category in world_list order, which is not entity_catalog's UUID order. limit is an upper bound: a page also stops at a 12 KB response budget, so wide rows come back short. nextOffset is present exactly when more rows remain, and is the offset to resume from.",
                 ObjectSchema(
                     new JObject
                     {

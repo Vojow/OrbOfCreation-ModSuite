@@ -5650,60 +5650,6 @@ internal static class GameMcpWorldQuery
         return true;
     }
 
-    private static GameMcpValue ProjectScanRow(
-        GameWorldState world,
-        GameMcpWorldCategory category,
-        object row) =>
-        row is WorldResource resource
-            ? ProjectResource(world, in resource)
-            : row is WorldStructure structure
-            ? ProjectStructure(in structure)
-            : row is WorldUpgrade upgrade
-            ? ProjectUpgrade(in upgrade)
-            : row is WorldPurchaseCost purchaseCost
-            ? ProjectPurchaseCost(world, in purchaseCost).Freeze()
-            : row is WorldCraftingRecipe craftingRecipe
-            ? ProjectCraftingRecipe(world, in craftingRecipe)
-            : row is WorldDiscoveryTree tree
-            ? ProjectDiscoveryTree(world, in tree)
-            : row is WorldSpellRecipe spellRecipe
-            ? ProjectSpellRecipe(world, in spellRecipe)
-            : row is WorldAlchemyRecipe alchemyRecipe
-            ? ProjectAlchemyRecipe(world, in alchemyRecipe)
-            : row is WorldEquipment equipment
-            ? ProjectEquipment(world, in equipment)
-            : row is WorldAlchemyInstance alchemyInstance
-            ? ProjectAlchemyInstance(world, in alchemyInstance)
-            : row is WorldChallenge challenge
-            ? ProjectChallenge(world, in challenge)
-            : row is WorldGlyph glyph
-            ? ProjectGlyph(world, in glyph)
-            : row is WorldRitual ritual
-            ? ProjectRitual(world, in ritual)
-            : row is WorldTimeRune timeRune
-            ? ProjectTimeRune(world, in timeRune)
-            : row is WorldSpellSlot spellSlot
-            ? ProjectSpellSlot(world, in spellSlot)
-            : row is WorldTargetingRequest targeting
-            ? ProjectTargeting(world, in targeting)
-            : row is WorldConsumable consumable
-            ? ProjectConsumable(world, in consumable)
-            : row is WorldResearch research
-            ? ProjectResearch(world, in research)
-            : row is WorldConceptRecipe conceptRecipe
-            ? ProjectConceptRecipe(world, in conceptRecipe)
-            : row is WorldCraftingStation station
-            ? ProjectCraftingStation(world, in station)
-            : row is WorldPlayerLoadout playerLoadout
-            ? ProjectPlayerLoadout(world, in playerLoadout)
-            : row is WorldSnapshotLoadout snapshotLoadout
-            ? ProjectSnapshotLoadout(world, in snapshotLoadout)
-            : new GameMcpProjectedDomainValue(
-                row,
-                category.ScanFields,
-                category.Name,
-                category.ExpectedNativeType);
-
     private static bool Matches(
         GameWorldState world,
         GameMcpWorldCategory category,

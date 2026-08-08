@@ -193,6 +193,16 @@ its only page bound.
 `world_search` deduplicates by entity identity before paging, so one entity that matches in two
 categories occupies one row and one page slot.
 
+The two search tools page in different orders and are not interchangeable at the same offset.
+`world_search` walks the published world category by category in `world_list` order and, inside a
+category, in publication order; `entity_catalog` walks the whole live registry in UUID order. They
+also answer different questions: `world_search` sees only entities the published world carries a row
+for and additionally matches a category's own name and native type, so a category name selects every
+row in it, while `entity_catalog` sees every loaded UUID — including the ones no world row covers,
+which read `category=not-world-projected` — and matches only that entity's own identity fields.
+Equal totals for one query mean the query happened to select the same set, not that the tools have
+the same scope.
+
 `entity_catalog` complements `world_search` with the game's complete live runtime identity registry.
 At the first stable Playing world capture after `RuntimeReady`, the suite validates and copies that
 registry once for the lifecycle. Searches cover UUID, exact runtime type, Unity asset name, and
