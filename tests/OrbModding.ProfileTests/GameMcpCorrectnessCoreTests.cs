@@ -921,10 +921,17 @@ public sealed class GameMcpCorrectnessCoreTests
         var listed = GameMcpTestHarness.Json(
             GameMcpWorldQuery.ListRows(context, "upgrades", 0, 10));
         var rows = listed["rows"]!.Values<JObject>().ToArray();
+        Assert.Null(rows[0]!["maxLevel"]);
         Assert.Null(rows[0]!["remainingLevels"]);
+        Assert.Equal(10, (int)rows[1]!["maxLevel"]!);
         Assert.Equal(0, (int)rows[1]!["remainingLevels"]!);
         Assert.Equal("already_maxed", (string?)rows[1]!["reasonCode"]);
         Assert.Null(rows[1]!["affordable"]);
+
+        // A caller paging the list must read the ceiling the same way a get would: absent on
+        // both surfaces means uncapped, never means the leaner surface dropped it.
+        Assert.Equal(0, (int)rows[0]!["queuedLevels"]!);
+        Assert.Equal((int?)exhausted["maxLevel"], (int?)rows[1]!["maxLevel"]);
     }
 
     [Fact]

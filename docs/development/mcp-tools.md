@@ -225,7 +225,9 @@ number is repeated under a second name. Both are exact counts on the wire: the b
 `Utils.BeautifyInt`, so routing them through the large-magnitude renderer would round a
 2,136-level attribute to `2.14e3`. An `upgrades` row publishes `maxLevel` and `remainingLevels`
 only when the upgrade has a ceiling: a negative native maximum is the uncapped sentinel, so both
-fields are absent together rather than reading `0`. An exhausted upgrade reads `already_maxed` and
+fields are absent together rather than reading `0`. `world_list` and `world_get` publish that pair
+and `queuedLevels` identically, so an absent ceiling means uncapped on either surface and never
+means the list dropped it. An exhausted upgrade reads `already_maxed` and
 publishes no `affordable`, because a level that cannot be bought has no price to be short of.
 
 Every purchasable counts levels, and no two of them count the same thing. One name means one thing

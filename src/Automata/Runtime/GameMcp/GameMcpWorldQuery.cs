@@ -250,18 +250,23 @@ internal static class GameMcpWorldQuery
             {
                 ["entityId"] = upgrade.EntityId.ToString("D"),
                 ["level"] = upgrade.Reading.Level,
+                ["queuedLevels"] = upgrade.Reading.QueuedLevels,
             };
-            if (upgrade.Reading.QueuedLevels != 0)
-                projected["queuedLevels"] = upgrade.Reading.QueuedLevels;
 
-            // An exhausted upgrade has no next level, so it has no price to be short of and no
-            // ceiling distance left to report. An unbounded one has no ceiling at all.
+            // An exhausted upgrade has no next level, so it has no price to be short of.
             if (!upgrade.IsExhausted &&
                 TryPurchaseAffordability(world, upgrade.EntityId, out var upgradeAffordable))
             {
                 projected["affordable"] = upgradeAffordable;
             }
-            if (upgrade.IsBounded) projected["remainingLevels"] = upgrade.RemainingLevels;
+
+            // The ceiling and the distance to it travel together on every surface, so a row
+            // missing them means the upgrade is uncapped and never means this surface is lean.
+            if (upgrade.IsBounded)
+            {
+                projected["maxLevel"] = upgrade.Reading.MaxLevel;
+                projected["remainingLevels"] = upgrade.RemainingLevels;
+            }
             projected["available"] = upgrade.Reading.Available && !upgrade.IsExhausted;
             if (upgrade.IsExhausted) projected["reasonCode"] = "already_maxed";
             return projected.Freeze();
