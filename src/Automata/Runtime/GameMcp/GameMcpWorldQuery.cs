@@ -2145,7 +2145,12 @@ internal static class GameMcpWorldQuery
             if (tree.EntityId != treeId) continue;
             return mode switch
             {
-                "initiate" or "reroll" => tree.ActionMode == 2 && tree.CurrentOfferIds.Count > 0,
+                // Initiate and reroll both end in DiscoveryTreeSO.EnterCraftingMode, and the offer
+                // list only appears three seconds of game time later, when IncrementCrafting rolls
+                // the tree into choice mode. Waiting for the offers made every one of these calls
+                // report a timeout for a mutation that had already landed; crafting mode is what
+                // the press itself produces.
+                "initiate" or "reroll" => tree.ActionMode == 1,
                 "select" => tree.ActionMode == 2 && tree.SelectedChoiceId == offerId,
                 "confirm" => tree.ActionMode == 0 && tree.SelectedChoiceId == Guid.Empty,
                 _ => true,

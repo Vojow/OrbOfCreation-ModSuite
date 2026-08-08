@@ -132,6 +132,60 @@ public sealed class GameMcpDiscoveryTreeOfferTests
         Assert.Single(projected.Properties());
     }
 
+    [Theory]
+    [InlineData("initiate")]
+    [InlineData("reroll")]
+    public void InitiateAndRerollSettleOnTheCraftTheyStartNotTheOffersItProduces(string mode)
+    {
+        var treeId = Guid.Parse("d88aa06b-7a71-4db4-a293-d27ab21befd8");
+        var completedAt = DateTime.UtcNow.Ticks;
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.DiscoveryTreeOffer, 9, 3, mode, treeId, Guid.Empty,
+            "DiscoveryTreeSO", 1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(
+                Tree(treeId, actionMode: 0), generation: 41));
+
+        // Native's InitiateCraftingMode and RerollChoices both end in EnterCraftingMode; the offers
+        // only land three seconds later, well past the settle budget, so waiting on them reported a
+        // timeout for every mutation that in fact committed.
+        var crafting = GameMcpTestHarness.Context(
+            Tree(treeId, actionMode: 1, collectedAtUtcTicks: completedAt + 1), generation: 42);
+
+        Assert.True(GameMcpPostStateSettlement.IsReady(crafting, 41, completedAt, command));
+        Assert.False(GameMcpPostStateSettlement.IsReady(
+            GameMcpTestHarness.Context(
+                Tree(treeId, actionMode: 0, collectedAtUtcTicks: completedAt + 1),
+                generation: 42),
+            41, completedAt, command));
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectPostState(
+            crafting, "discovery-trees", treeId));
+        Assert.Equal("crafting", (string?)response["mode"]);
+        Assert.Null(response["offers"]);
+    }
+
+    private static GameWorldState Tree(
+        Guid treeId,
+        int actionMode,
+        long collectedAtUtcTicks = 0) => new()
+        {
+            CollectedAtEpoch = 7,
+            CollectedAtUtcTicks = collectedAtUtcTicks,
+            DiscoveryTrees = PublicationTable<WorldDiscoveryTree>.Create(new[]
+            {
+                new WorldDiscoveryTree(
+                    treeId, true, actionMode, BigDouble.Zero, 2, false, Guid.Empty,
+                    Array.Empty<Guid>(), false, true,
+                    Array.Empty<WorldDiscoveryTreeCost>(), Guid.Empty, Guid.Empty,
+                    0, 0, false, 0, 3, true, true, false),
+            }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus(
+                    "discovery-trees", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
+            }),
+        };
+
     [Fact]
     public void WorldGetAndOfferAdmissionShareTheSameDiscoveryTreeIdentityAndNativeType()
     {
