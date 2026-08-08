@@ -2070,7 +2070,12 @@ public sealed class Plugin : BaseUnityPlugin
                 mode = "create";
         }
         else if (kind == GameMcpCommandKind.SpellComposition)
+        {
             nativeType = "IntVariable";
+
+            // Two dials share one screen, so the committed response names the one it moved.
+            payloadKey = request.Key;
+        }
         else if (kind == GameMcpCommandKind.SpellLoadout)
         {
             nativeType = "Spell";

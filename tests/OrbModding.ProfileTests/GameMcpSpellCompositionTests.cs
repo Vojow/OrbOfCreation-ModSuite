@@ -120,6 +120,25 @@ public sealed class GameMcpSpellCompositionTests
         Assert.Equal("9e6", (string?)drain["spendableAmount"]);
     }
 
+    [Theory]
+    [InlineData("output")]
+    [InlineData("reserve")]
+    public void ThePreparedCommandCarriesTheDialTheCallerNamed(string dial)
+    {
+        var operation = GameMcpProtocolRouter.BuildOperation(
+            "game_casting_dial",
+            new JObject { ["dial"] = dial, ["value"] = 5 });
+
+        // Two dials share one screen, so the response can only name the one it moved if the
+        // prepared command carries it. It reached the projection empty and printed an empty dial.
+        Assert.True(Plugin.TryPrepareGameMcpCommand(
+            new GameMcpFrameOperation(1, operation),
+            GameMcpTestHarness.Context(World()),
+            out var command,
+            out var failure), failure?.Reason);
+        Assert.Equal(dial, command.PayloadKey);
+    }
+
     [Fact]
     public void CommittedMutationReturnsOnlyTheSettledDialDelta()
     {
