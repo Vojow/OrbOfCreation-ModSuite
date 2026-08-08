@@ -1020,9 +1020,14 @@ internal static class GameMcpWorldQuery
                 // The results modal says "Ritual failed." in words and lists the spoils. Both are
                 // native facts, so the response carries the same verdict the game showed rather
                 // than leaving a caller to infer one from a wave count that cannot distinguish a
-                // clean win from a run stopped on the last wave.
-                postState["result"] = current.FailedRun ? "failed" : "succeeded";
-                postState["spoils"] = ProjectRitualSpoils(current.Spoils);
+                // clean win from a run stopped on the last wave. Only the mode that ends a run
+                // reports one: the battle flag would also hand a verdict and an empty spoils list
+                // to an activate whose settled capture has not flipped inBattle yet.
+                if (command.Mode == "end")
+                {
+                    postState["result"] = current.FailedRun ? "failed" : "succeeded";
+                    postState["spoils"] = ProjectRitualSpoils(current.Spoils);
+                }
             }
 
             // Every other ritual mode answers with what the caller can do next. End is the mode that

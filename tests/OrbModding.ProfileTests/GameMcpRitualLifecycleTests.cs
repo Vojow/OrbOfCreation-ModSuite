@@ -249,6 +249,28 @@ public sealed class GameMcpRitualLifecycleTests
         Assert.Equal("30", (string?)Assert.Single(delta["spoils"]!.Values<JObject>())!["amount"]);
     }
 
+    [Fact]
+    public void Activate_reports_the_battle_it_started_and_never_a_verdict_for_it()
+    {
+        // An activate whose settled capture has not flipped inBattle yet takes the same branch as
+        // end. Gating on the battle flag answered it with a verdict and an empty spoils list for a
+        // run that is starting; the mode is what says whether a result exists.
+        var before = World(selected: true, level: 4, activeInstances: 0, wavesCompleted: 3);
+        var after = World(selected: true, level: 4, activeInstances: 0, wavesCompleted: 0);
+        var command = new GameMcpCommand(1, GameMcpCommandKind.RitualLifecycle,
+            9, 3, "activate", RitualId, Guid.Empty, "RitualSO",
+            1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 99));
+
+        var delta = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after, generation: 100), command,
+            GameMcpCommandResult.Committed("committed", 9, 3)), after);
+
+        Assert.False((bool)delta["activeBattle"]!["after"]!);
+        Assert.Null(delta["result"]);
+        Assert.Null(delta["spoils"]);
+    }
+
     private static GameWorldState World(
         bool selected,
         int level,
