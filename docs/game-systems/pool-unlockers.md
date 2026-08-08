@@ -17,3 +17,7 @@ Discoveries; see [discovery-pricing.md](discovery-pricing.md).
 The socketable augment is called a glyph too. The reliable test is what it does — unlockers expand
 what you can later roll, augments change a spell you already own. See
 [vocabulary.md](vocabulary.md).
+
+**Code shape:** the Spellcraft picker asks `GlyphSO.IsAvailable()`. Discoverable glyphs answer
+from their discovery state; non-discoverable pool unlockers answer from their authored `Learn X`
+prerequisite. The raw glyph discovery field is therefore not a universal learned-state signal.

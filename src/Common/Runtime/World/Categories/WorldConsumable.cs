@@ -1,4 +1,5 @@
 using System;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 
 namespace OrbModding.Common.Runtime.World;
 
@@ -21,7 +22,8 @@ internal readonly struct RawConsumableSample : IWorldEntity
         bool canBeRandomized,
         bool hasDuration,
         double durationBase,
-        bool queueOnStart)
+        bool queueOnStart,
+        bool canFire)
     {
         ConsumableId = consumableId;
         Visible = visible;
@@ -39,6 +41,7 @@ internal readonly struct RawConsumableSample : IWorldEntity
         HasDuration = hasDuration;
         DurationBase = durationBase;
         QueueOnStart = queueOnStart;
+        CanFire = canFire;
     }
 
     public Guid EntityId => ConsumableId;
@@ -58,6 +61,7 @@ internal readonly struct RawConsumableSample : IWorldEntity
     internal bool HasDuration { get; }
     internal double DurationBase { get; }
     internal bool QueueOnStart { get; }
+    internal bool CanFire { get; }
 }
 
 /// <summary>
@@ -83,7 +87,10 @@ internal readonly struct WorldConsumable : IWorldEntity
         bool canBeRandomized,
         bool hasDuration,
         double durationBase,
-        bool queueOnStart)
+        bool queueOnStart,
+        bool canFire = false,
+        bool immediateCostsAffordable = false,
+        bool usageCostsAffordable = false)
     {
         ConsumableId = consumableId;
         Visible = visible;
@@ -102,6 +109,9 @@ internal readonly struct WorldConsumable : IWorldEntity
         HasDuration = hasDuration;
         DurationBase = durationBase;
         QueueOnStart = queueOnStart;
+        CanFire = canFire;
+        ImmediateCostsAffordable = immediateCostsAffordable;
+        UsageCostsAffordable = usageCostsAffordable;
     }
 
     internal Guid ConsumableId { get; }
@@ -153,6 +163,13 @@ internal readonly struct WorldConsumable : IWorldEntity
     internal double DurationBase { get; }
 
     internal bool QueueOnStart { get; }
+
+    /// <summary>The game's complete immediate-use verdict at capture time.</summary>
+    internal bool CanFire { get; }
+
+    internal bool ImmediateCostsAffordable { get; }
+
+    internal bool UsageCostsAffordable { get; }
 }
 
 /// <summary>A consumable's cached modifier records — what using one is currently worth.</summary>
@@ -207,6 +224,7 @@ internal sealed class WorldConsumableBinder : WorldRowBinder<RawConsumableSample
     private Func<object, bool>? _hasDuration;
     private Func<object, double>? _durationBase;
     private Func<object, bool>? _queueOnStart;
+    private Func<object, bool>? _canFire;
 
     internal override string Category => "consumables";
 
@@ -235,6 +253,7 @@ internal sealed class WorldConsumableBinder : WorldRowBinder<RawConsumableSample
         _hasDuration = bind.Field<bool>("hasDuration");
         _durationBase = bind.Field<double>("durationBase");
         _queueOnStart = bind.Field<bool>("queueOnStart");
+        _canFire = bind.Call<bool>("CanFire");
         return bind.Failure;
     }
 
@@ -260,14 +279,25 @@ internal sealed class WorldConsumableBinder : WorldRowBinder<RawConsumableSample
             _canBeRandomized!(entity),
             _hasDuration!(entity),
             _durationBase!(entity),
-            _queueOnStart!(entity));
+            _queueOnStart!(entity),
+            _canFire!(entity));
 }
 
 internal sealed class WorldConsumableDeriver : WorldRowDeriver<RawConsumableSample, WorldConsumable>
 {
     private readonly int _maximumCarryLoad;
+    private readonly PublicationTable<WorldConsumableCost> _costs;
+    private readonly PublicationTable<WorldResource> _resources;
 
-    internal WorldConsumableDeriver(int maximumCarryLoad) => _maximumCarryLoad = maximumCarryLoad;
+    internal WorldConsumableDeriver(
+        int maximumCarryLoad,
+        PublicationTable<WorldConsumableCost> costs,
+        PublicationTable<WorldResource> resources)
+    {
+        _maximumCarryLoad = maximumCarryLoad;
+        _costs = costs;
+        _resources = resources;
+    }
 
     internal override WorldConsumable Derive(in RawConsumableSample sample)
     {
@@ -289,6 +319,22 @@ internal sealed class WorldConsumableDeriver : WorldRowDeriver<RawConsumableSamp
             sample.CanBeRandomized,
             sample.HasDuration,
             sample.DurationBase,
-            sample.QueueOnStart);
+            sample.QueueOnStart,
+            sample.CanFire,
+            Affordable(sample.ConsumableId, WorldConsumableCostKind.Consume),
+            Affordable(sample.ConsumableId, WorldConsumableCostKind.Usage));
+    }
+
+    private bool Affordable(Guid consumableId, WorldConsumableCostKind kind)
+    {
+        if (!WorldConsumableCostLookup.TryFindRange(
+                _costs, consumableId, kind, out var start, out var count)) return true;
+        for (var index = start; index < start + count; index++)
+        {
+            var cost = _costs[index];
+            if (!WorldLookup.TryFind(_resources, cost.ResourceId, out var resource) ||
+                !OwnedMasteryCostMath.HasAmount(in resource, cost.Amount)) return false;
+        }
+        return true;
     }
 }

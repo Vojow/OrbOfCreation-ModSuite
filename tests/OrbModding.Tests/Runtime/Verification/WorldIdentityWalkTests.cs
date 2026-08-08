@@ -74,20 +74,34 @@ public sealed class WorldIdentityWalkTests
     /// is that edge several times over, one row per instance the plot holds. <c>PlotAuthoring</c>,
     /// <c>PlotPhaseDescriptors</c> and <c>EffectBlocks</c> are all second readings of an entity the
     /// plot and action tables already claim, said about the entity rather than as it. So is
-    /// <c>EntityRequirements</c>, whose rows are conditions on an upgrade or a structure the two
-    /// purchasable categories already own. <c>ActionQueueSlots</c> is a position in a list, which is
-    /// no entity at all. <c>MasteryExperience</c> is an ordered input journal keyed by sequence; its
+    /// <c>EntityRequirements</c>, whose rows are conditions on an upgrade, structure, or prerequisite
+    /// link already owned elsewhere. <c>PrerequisiteLinkTiers</c> is the volatile state for each
+    /// `(link, tier)` relation, and its link identity belongs to the authored catalog. <c>ActionQueueSlots</c>
+    /// is a position in a list, which is no entity at all. <c>MasteryExperience</c> is an ordered input journal keyed by sequence; its
     /// source identity points at a recipe or equipment row that already owns that identity.
     /// <c>ConsumableTypes</c>, <c>ConsumableCosts</c>, <c>ConsumableUsages</c>, and
     /// <c>ConsumableCounts</c> are relation rows keyed by a consumable the primary table already
     /// owns. Their secondary identities or levels describe one edge or stock tier rather than a
-    /// second entity namespace. <c>PurchaseViewRoutes</c> likewise holds authored edges between a
+    /// second entity namespace. <c>CraftingDecisions</c>, <c>CraftingDecisionCosts</c>, and
+    /// <c>CraftingQueueEntries</c> are the
+    /// current execution route and price evidence keyed by a recipe the crafting-recipe table
+    /// already owns. <c>PurchaseViewRoutes</c> likewise holds authored edges between a
     /// candidate, list, and view whose identities belong to their primary tables.
-    /// <c>CollectionCategories</c> is availability evidence about one collector pass, not a native
+    /// <c>CraftingStationOptions</c> and <c>CraftingStationDrains</c> describe selectors and costs
+    /// keyed by a runtime station whose own row owns the identity. <c>CollectionCategories</c> is
+    /// <c>PlayerLoadoutEntries</c>, <c>SnapshotSlots</c>, and <c>SnapshotEntries</c> are saved-entry
+    /// and owner/slot relations keyed by the player or snapshot-list rows that own their UUIDs.
+    /// <c>HarvestElementControls</c>, <c>HarvestActionControls</c>, and
+    /// <c>HarvestLifecycleCosts</c> are list-state and cost relations keyed by harvest elements,
+    /// actions, and resources whose identities come from their primary tables or the live catalog.
+    /// <c>CollectionCategories</c> is
+    /// availability evidence about one collector pass, not a native
     /// row and not a second identity namespace. <c>ScribeWork</c>,
     /// <c>StructureEnchantments</c>, <c>ScrollTargets</c>, and
     /// <c>ScrollTargetEvidence</c> are relationship or evidence rows keyed by recipes, structures,
     /// Scrolls, and enchantments whose owning tables already carry those identities.
+    /// <c>Targeting</c> is the one current request and its candidate edges; its candidates are
+    /// structures already owned by the structures table, while the request itself has no UUID.
     /// <para>
     /// <c>ActionQueues</c> is not among them: a queue is a list variable with a uuid of its own that
     /// no other category collects, so it is walked like any other entity.
@@ -108,17 +122,32 @@ public sealed class WorldIdentityWalkTests
         "ConsumableCosts",
         "ConsumableUsages",
         "ConsumableCounts",
+        "CraftingDecisions",
+        "CraftingDecisionCosts",
+        "CraftingQueueEntries",
         "ConceptRecipes",
         "AlchemyInstances",
         "AlchemyCosts",
+        "AlchemyUsageCosts",
         "ScribeWork",
         "StructureEnchantments",
         "ScrollTargets",
         "ScrollTargetEvidence",
+        "Targeting",
         "PlotAuthoring",
         "PlotPhaseDescriptors",
         "EffectBlocks",
         "EntityRequirements",
+        "RequirementNativeVerdicts",
+        "PrerequisiteLinkTiers",
+        "CraftingStationOptions",
+        "CraftingStationDrains",
+        "PlayerLoadoutEntries",
+        "SnapshotSlots",
+        "SnapshotEntries",
+        "HarvestElementControls",
+        "HarvestActionControls",
+        "HarvestLifecycleCosts",
         "SpellAuthoredCosts",
         "SpellRelations",
     };

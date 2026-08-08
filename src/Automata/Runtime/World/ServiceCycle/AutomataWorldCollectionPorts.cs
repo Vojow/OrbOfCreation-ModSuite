@@ -62,6 +62,7 @@ internal sealed class AutomataWorldCapturePort : IAutomataWorldCapturePort
     {
         frame.CollectedAtFrame = _readFrameIdentity();
         frame.CollectedAtEpoch = _readLifecycleEpoch();
+        frame.EntityIdentities = EntityIdentityCatalog.Shared.Capture(frame.CollectedAtEpoch);
         var report = _collector.Collect(frame);
         Announce(in report);
         return report;

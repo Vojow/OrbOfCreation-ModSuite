@@ -20,6 +20,22 @@ contract fails loudly and enumerably at audit time, before anything acts. An und
 dependency on UI state fails per-screen, per-session, invisibly. When a choice exists, take
 the risk the manifest can see.
 
+### Perf-debug inspection exception
+
+The Game MCP is a debugger, not an ordinary service or a production gameplay dependency. A
+parameterized tooltip, inspected panel, active-screen catalog, fixed probe, or framebuffer cannot be
+truthfully published as general world state. A perf-debug MCP operation may read that exact fact
+directly provided the HTTP worker submits one immutable operation, Unity performs the read on its
+main thread, the result is native-free and terminal, and no gameplay mutation occurs. UI state
+changes such as navigation or opening an inspected tooltip are classified and audited as UI
+mutations, not called read-only.
+
+This exception does not permit speculative capture. There is no periodic MCP snapshot, cache warm,
+hidden navigation, or “freshness” loop. Broadly reusable changing facts go into `GameWorldState`;
+authored graphs are build-time or lifecycle-structural; genuinely parameterized UI facts are read
+only for the request that names them. See
+[Game MCP frame operations](game-mcp-frame-operations.md).
+
 ## Reads and owned math
 
 - Compute what we can; collect what we cannot. Collection cost is a real budget: every native
@@ -35,6 +51,39 @@ the risk the manifest can see.
   Either the collector performs the declared revalidation the UI would perform, or the value
   is published as stale-capable and no action may be authorized by it. "Works when the screen
   is open" is never an accepted state.
+
+### Live entity identity catalog
+
+`RuntimeIdentityRegistryBinding` is the one Common-owned binding for
+`IdScriptableObject.RuntimeLookup` and `IdScriptableObject.GetGuid()`. Typed registry resolution and
+the identity catalog share it; no feature, MCP surface, diagnostic, or log owns another registry or
+UUID-to-name reader.
+
+The first shared world capture after `RuntimeReady` in a Playing generation enumerates that registry
+once on Unity's main thread. The pass records lifecycle generation and registry count before and
+after enumeration, requires every value's `GetGuid()` to equal its dictionary key, and copies only
+UUID, exact runtime type, `TooltipableObject.GetName()` when applicable, and the Unity asset name.
+One entity's name accessor may fail without discarding other identity-correct rows. Any lifecycle or
+count instability discards the entire candidate and retries on a later ordinary capture; an identity
+contradiction or total binding failure publishes an empty unavailable catalog and reports one error
+for that lifecycle. Names never block world publication, a feature, or a mutation.
+
+The successful table is UUID-sorted and immutable. One snapshot reference is attached to every
+`GameWorldState` in that lifecycle and placed in a Common latest-wins holder for non-world
+presentation consumers; it is not rebuilt per publication and its rows are not copied into entity
+categories. A lifecycle transition first replaces both views with an unbound empty snapshot, so no
+Unity asset or name survives save/load, reset, NG+, or scene-generation replacement.
+
+`EntityIdentityFormatter` is the sole rendering facade and never reflects or touches Unity. Its
+total fallback ladder is live display name, live asset name, generated `KnownEntities` diagnostic
+name before the live bind only, then bare canonical UUID. Rendered labels always retain the UUID.
+After bind, a missing label reports one UUID-only warning per `(generation, UUID)` and does not fall
+back to authored bootstrap metadata. MCP entity references, refusal receipts, feature diagnostics,
+logs, and traces all use this same substrate; names remain diagnostics and never identity authority.
+
+Portable and installed-contract gates prove this shape and its exact native members. Stability of
+the live registry at `RuntimeReady` remains a supervised promotion check; this lane does not claim
+live UAT and does not launch the game.
 
 ## Boundary validators and freshness classes
 
@@ -84,9 +133,10 @@ declares:
   a resolution failure is impossible mid-transaction;
 - its **preflights**, each with its freshness class;
 - the **mutation** itself;
-- its **expected evidence** — exact deltas, verified before/after;
-- its **failure story** — what quarantines, what blocks, and what the health surface says
-  when postconditions fail.
+- its **postcondition** — the single simplest observable check that the requested transition
+  landed on the requested target (see below);
+- its **failure story** — what blocks, what the health surface says when the postcondition
+  fails, and, for automation consumers only, what quarantines.
 
 Mutation entry points, in strict order of preference:
 
@@ -96,9 +146,8 @@ Mutation entry points, in strict order of preference:
    `PlotNodeActionInstanceListVariable.AddInstance`.
 2. **A disciplined re-drive** when the composite exists only inside a UI handler body.
    `SpellLevelNativeAdapter` is the reference implementation: every member prebound and
-   validated before the first mutation is possible, the sequence wrapped in exact
-   before/after verification, and irreversible steps (payments) preflighted hardest and
-   taken last.
+   validated before the first mutation is possible, the outcome verified by the simplest
+   observable check, and irreversible steps (payments) preflighted hardest and taken last.
 3. Invoking UI handler methods: **never.**
 
 One evaluation round per world reading; any attempted round raises the world-gate floor.
@@ -127,3 +176,100 @@ carries its own cooldown, retry timer, or candidate memory.
   reinventing it.
 - Bespoke per-feature variants of already-solved problems (binding, verification, freshness
   handling, asset capture) are findings, not style choices.
+- The Game MCP owns transport only. All stateful tools cross its single post-pump frame-operation
+  inbox; an empty inbox performs no projection, health read, native read, or authority refresh.
+
+## Postconditions: one simplest sentinel
+
+A GameAction verifies its outcome with the single simplest observable check that the requested
+transition happened to the requested target: stable UUID plus expected native type, plus one
+outcome fact — a loadout add checks for the new spell instance, a purchase checks the new level.
+Nothing else is computed. Payment deltas, resource balances, counters, timers, and flags are not
+gathered as receipt evidence; code that computes values nothing acts on is deleted, not tolerated.
+Most actions succeed, the boundary is designed for that, and a layer of paranoia bookkeeping is a
+finding, not a safety margin. In particular, an accounting fact can never veto, downgrade, or
+quarantine an outcome the game observably performed — a sub-ULP native `BigDouble` subtraction
+cannot disprove a transition that happened.
+
+After a native exception, capture the simplest available after-state before classifying: if the
+requested identity and outcome are observable, the action committed and the exception rides along
+as its explanation; if the outcome is absent or the target ambiguous after a mutation began, fail
+closed. Admission checks still prevent unaffordable or otherwise ineligible attempts — this rule
+defines what a postcondition is, not preflight authority.
+
+## MCP responses: worked, or why not
+
+A success says the action worked and, when the settlement window delivers it, what changed — the
+settled post-state a caller would otherwise need a follow-up read for. Nothing else: no request
+echoes, no zero counters, no empty collections, no receipts, no expected/observed generation
+pairs, no verbosity options. Absence means not applicable, and each tool has one response shape.
+
+A refusal or fault answers with the exact reason a caller can act on, plus only the facts that
+explain that reason. Explaining a failure is not dumping a dossier: an audit stanza that ships
+with every failure regardless of relevance is ceremony, and ceremony is deleted.
+
+## The wire speaks the screen's language
+
+What the MCP returns matches what the player sees: a screenshot and the MCP answer for the same
+screen agree on names and numbers. Reads answer `available`/`unavailable`; mutations answer
+`committed`/`refused`/`faulted`. Every entity reference carries the stable UUID plus the
+player-facing name, category or type when relevant, and the internal name only when it differs.
+Magnitudes render the way the player recognizes them from the screen; native numeric sentinels
+become field absence, never plausible values. Resource and cost rows use one canonical spendable
+`amount`; collector and factor internals stay off the player surface.
+
+The format is the simplest one that carries the signal. Compact text is the default whenever an
+agent reads it faster than structured data; JSON is for responses whose handles feed the next
+call. One vocabulary, one spelling, one numeric rendering per concept, whatever the media.
+
+Every read operation pins one immutable publication for its whole answer, but the wire does not
+expose its internal generation counter. Action schemas and results likewise carry no generation:
+the GameAction revalidates live, and settlement accepts only a world captured after the action.
+
+## The UI defines the verb surface
+
+The native player UI defines the MCP action vocabulary. A compiled manager or UI handler is not by
+itself permission to expose a verb: the player must actually be offered that choice. Discovery is
+therefore component composition followed by native resolution and confirmation; transient discovery
+offers are modes of that same discovery namespace. A loaded spell has no in-place glyph editor, so
+glyph layout is chosen before loadout add and baked into the new spell. Casting Output and Reserve
+are global dials, not per-spell state. Whenever the MCP cannot bind the exact visible sibling, it
+returns `contract_unavailable` rather than substituting a nearby native path.
+
+Spell-loadout add is the concrete complete-candidate case. On the Unity main thread the shared
+GameAction builds a temporary spell at the recipe's selected level, bakes the requested glyph
+multiset into it, and follows the visible recipe button's gate order: non-level duration/toggle
+requirements; authored usage requirements (with the UI's selected-augment override); computed
+usage-budget affordability; an empty loadout slot; and unique-spell compatibility. Creation-cost
+affordability is then re-read from the exact core-plus-augment composition. After acquiring its
+mutation permit, the boundary stages the live selection, reruns those mutable gates, performs the
+cost, invokes native creation, and commits only when a new spell with the requested recipe identity
+and exact baked glyph multiset is observable. The player's staged Spellcraft selection is restored
+to what it was before the action, on every outcome including success. Duplicate request rows count
+cumulatively against each glyph's native usable maximum. Core-component spell discovery remains
+independently bound, but both verbs use the same complete lifecycle binding set and native recipe
+resolver.
+
+Generic compose discovery uses the same component-first rule without retaining a rendered UI page.
+The existing category traversal publishes each `IDiscoverable.GetGlyphRecipe()` and
+`GetResourceRecipe()` beside its native discovery decision. Preview resolves only among the authored
+outputs for the requested player surface and reproduces the UI resolver's count-plus-membership
+comparison; zero matches or multiple matches refuse rather than guessing. Confirm carries that
+server-derived output and the submitted composition into the canonical GameAction. On the Unity main
+thread, before its mutation permit or payment, the action resolves every component by UUID and exact
+`GlyphSO`/`ResourceSO` type and rereads both recipe lists from the exact output. A changed or partial
+composition refuses. The caller never supplies or selects an output UUID the UI did not expose.
+
+Every MCP gameplay action still uses its capability's canonical GameAction and live Unity-main-thread
+revalidation. A failed player-driven attempt returns its exact failure and leaves no MCP-owned
+lifecycle quarantine; the next request revalidates live again. This does not relax automation safety
+policy, and MCP capability registration does not depend on whether the owning automation is enabled.
+
+All committed gameplay actions pass through one post-state settlement path. It waits up to one
+second for a shared world captured after the action completed, then delegates to one
+command-to-world delta projector. The successful response returns only what changed. If no such
+publication arrives, the response stays `committed` and emits one exceptional
+`postStateUnavailable` fact with `reasonCode=post_state_timeout`; it never labels an older world as
+committed state and never adds a ceremonial lag explanation. Domain-specific readiness may
+strengthen the shared predicate only when the requested outcome itself requires it, as the casting
+dials and discovery events do.

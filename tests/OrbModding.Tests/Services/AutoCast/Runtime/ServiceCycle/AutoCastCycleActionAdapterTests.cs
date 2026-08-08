@@ -236,10 +236,81 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
     }
 
     [Fact]
+    public void AnActiveToggleUsesTheSameFireRouteAsTheUiAndCommitsWhenItStopsCasting()
+    {
+        var spell = Equip(Ember);
+        spell.ToggledSpell = true;
+        spell.NativeCasting = true;
+
+        var result = Execute(ToggleOff(0, Ember));
+
+        Assert.Equal(ServiceActionDisposition.Committed, result.Disposition);
+        Assert.Equal(CommonActionResultCodes.Committed, result.Code);
+        Assert.Equal(1, spell.FireCalls);
+        Assert.False(spell.NativeCasting);
+    }
+
+    [Theory]
+    [InlineData(false, true, 3080)]
+    [InlineData(true, false, 3081)]
+    public void ToggleOffRefusesWhenTheSlotIsNotAnActiveToggle(
+        bool toggleable,
+        bool casting,
+        int expectedCode)
+    {
+        var spell = Equip(Ember);
+        spell.ToggledSpell = toggleable;
+        spell.NativeCasting = casting;
+
+        var result = Execute(ToggleOff(0, Ember));
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(expectedCode, result.Code.Value);
+        Assert.Equal(0, spell.FireCalls);
+    }
+
+    [Fact]
+    public void ToggleOffRefusesWhenThePlayersCancellationSettingDisablesTheUiPath()
+    {
+        var spell = Equip(Ember);
+        spell.ToggledSpell = true;
+        spell.NativeCasting = true;
+        global::SettingsManager.CancellableSpells = false;
+
+        var result = Execute(ToggleOff(0, Ember));
+
+        Assert.Equal(ServiceActionDisposition.Rejected, result.Disposition);
+        Assert.Equal(AutoCastActionResultCodes.CancellationDisabled, result.Code);
+        Assert.Equal(0, spell.FireCalls);
+        Assert.True(spell.NativeCasting);
+    }
+
+    [Fact]
+    public void ToggleOffFaultsAndBlocksWhenTheNativeFireRouteLeavesTheToggleActive()
+    {
+        var spell = Equip(Ember);
+        spell.ToggledSpell = true;
+        spell.NativeCasting = true;
+        spell.SuppressToggleOff = true;
+        var natives = new AutoCastNativeAdapter();
+
+        var first = Execute(ToggleOff(0, Ember), natives: natives);
+        Assert.Equal(ServiceActionDisposition.Faulted, first.Disposition);
+        Assert.Equal(1, spell.FireCalls);
+        Assert.True(spell.NativeCasting);
+
+        spell.SuppressToggleOff = false;
+        var second = Execute(ToggleOff(0, Ember), natives: natives);
+        Assert.Equal(ServiceActionDisposition.Faulted, second.Disposition);
+        Assert.Equal(1, spell.FireCalls);
+        Assert.True(spell.NativeCasting);
+    }
+
+    [Fact]
     public void ACastResolvesEveryTargetRequestItOpens()
     {
         var spell = Equip(Ember);
-        var target = new object();
+        var target = new StructureSO();
         global::TargetingManager.AvailableTarget = target;
         spell.RequestsOnFire = 2;
 
@@ -315,6 +386,9 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
     private static AutoCastCycleAction Release(int slotIndex, Guid spellId) =>
         new(AutoCastActionKind.ReleaseCharge, slotIndex, spellId, PlannedEpoch);
 
+    private static AutoCastCycleAction ToggleOff(int slotIndex, Guid spellId) =>
+        new(AutoCastActionKind.ToggleOff, slotIndex, spellId, PlannedEpoch);
+
     private static global::Spell Equip(Guid spellId)
     {
         var spell = new global::Spell(new global::SpellRecipeSO { uuid = spellId.ToString("D") });
@@ -366,6 +440,7 @@ public sealed class AutoCastCycleActionAdapterTests : IDisposable
     {
         global::SpellManager.instance = new global::SpellManager();
         global::SpellManager.NativeCanCast = true;
+        global::SettingsManager.CancellableSpells = true;
         global::TargetingManager.Reset();
         global::Spell.FireSignal = AutoCastManualSignal.NotifySpellFire;
     }

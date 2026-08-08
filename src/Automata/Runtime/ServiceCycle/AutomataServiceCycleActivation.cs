@@ -22,8 +22,11 @@ internal interface IAutomataServiceCycleRuntime : IDisposable
     void InvalidateLifecycle();
     AutomataDiagnosticsRuntimeEvidence CaptureDiagnostics();
 #if SERVICE_CYCLE_PROFILE
-    GameMcpRuntimeState CaptureGameMcpState();
+    AutomataRuntimeFrameFacts CaptureFrameFacts(bool includeServices);
     GameMcpCommandResult ExecuteGameMcp(GameMcpCommand command);
+    SpellWorkbenchPricePreview PreviewSpellWorkbench(
+        in SpellWorkbenchPricePreviewRequest request);
+    SpellWorkbenchStagedLayout ReadStagedSpellWorkbench();
 #endif
 }
 
@@ -123,14 +126,16 @@ internal sealed class AutomataServiceCycleActivation : IDisposable
     }
 
 #if SERVICE_CYCLE_PROFILE
-    internal bool TryCaptureGameMcpState(out GameMcpRuntimeState state)
+    internal bool TryCaptureFrameFacts(
+        bool includeServices,
+        out AutomataRuntimeFrameFacts state)
     {
         if (_disposed || _runtime is null)
         {
             state = null!;
             return false;
         }
-        state = _runtime.CaptureGameMcpState();
+        state = _runtime.CaptureFrameFacts(includeServices);
         return true;
     }
 
@@ -146,6 +151,34 @@ internal sealed class AutomataServiceCycleActivation : IDisposable
             return false;
         }
         result = _runtime.ExecuteGameMcp(command);
+        return true;
+    }
+
+    internal bool TryPreviewSpellWorkbench(
+        in SpellWorkbenchPricePreviewRequest request,
+        out SpellWorkbenchPricePreview preview)
+    {
+        if (_disposed || _runtime is null)
+        {
+            preview = SpellWorkbenchPricePreview.Refused(
+                SpellWorkbenchPreflight.ContractUnavailable,
+                "The ServiceCycle runtime is not active in this scene.");
+            return false;
+        }
+        preview = _runtime.PreviewSpellWorkbench(in request);
+        return true;
+    }
+
+    internal bool TryReadStagedSpellWorkbench(out SpellWorkbenchStagedLayout layout)
+    {
+        if (_disposed || _runtime is null)
+        {
+            layout = SpellWorkbenchStagedLayout.Unavailable(
+                SpellWorkbenchPreflight.ContractUnavailable,
+                "The ServiceCycle runtime is not active in this scene.");
+            return false;
+        }
+        layout = _runtime.ReadStagedSpellWorkbench();
         return true;
     }
 #endif

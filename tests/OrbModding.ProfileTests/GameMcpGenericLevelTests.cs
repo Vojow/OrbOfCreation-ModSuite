@@ -1,0 +1,293 @@
+using System;
+using System.Linq;
+using Newtonsoft.Json.Linq;
+using OrbAutomata.GameMcp;
+using OrbModding.Common;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.World;
+using Xunit;
+
+namespace OrbModding.ProfileTests;
+
+public sealed class GameMcpGenericLevelTests
+{
+    private static readonly Guid EquipmentTypeId = Guid.Parse("fb000000-0000-0000-0000-000000000001");
+    private static readonly Guid GlyphId = Guid.Parse("fb000000-0000-0000-0000-000000000002");
+    private static readonly Guid ResourceTypeId = Guid.Parse("fb000000-0000-0000-0000-000000000003");
+    private static readonly Guid TimeRuneId = Guid.Parse("fb000000-0000-0000-0000-000000000004");
+    private static readonly Guid CostResourceId = Guid.Parse("fb000000-0000-0000-0000-000000000005");
+
+    [Fact]
+    public void Tool_exposes_one_subject_and_the_two_real_level_list_controls()
+    {
+        var tool = Assert.Single(GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "game_level");
+
+        Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
+        Assert.Equal(new[] { "mode", "uuid", "amount" },
+            tool["inputSchema"]!["required"]!.Values<string>());
+        Assert.Equal(new[] { "purchase", "bonus" },
+            tool["inputSchema"]!["properties"]!["mode"]!["enum"]!.Values<string>());
+        Assert.Null(tool["inputSchema"]!["properties"]!["expectedNativeType"]);
+        var operation = GameMcpProtocolRouter.BuildOperation("game_level", new JObject
+        {
+            ["mode"] = "purchase",
+            ["uuid"] = GlyphId.ToString("D"),
+            ["amount"] = 2,
+        });
+        Assert.Equal(GameMcpOperationClass.Gameplay, operation.Classification);
+    }
+
+    [Fact]
+    public void Every_owned_level_category_publishes_the_native_next_decision()
+    {
+        var world = World(total: 5, bonus: 2, purchaseAffordable: false);
+
+        var equipment = Row(world, "equipment-types", EquipmentTypeId);
+        var glyph = Row(world, "glyphs", GlyphId);
+        var resourceType = Row(world, "resource-types", ResourceTypeId);
+        var timeRune = Row(world, "time-runes", TimeRuneId);
+
+        AssertDecision(equipment, supportsBonus: true);
+        AssertDecision(glyph, supportsBonus: true);
+        AssertDecision(resourceType, supportsBonus: true);
+        AssertDecision(timeRune, supportsBonus: false);
+        var cost = Assert.Single(glyph["purchase"]!["costs"]!.Values<JObject>());
+        Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
+        Assert.Equal("5", (string?)cost["cost"]);
+        Assert.Equal("80", (string?)cost["spendableAmount"]);
+    }
+
+    [Fact]
+    public void Settled_delta_is_observed_from_the_new_world_for_each_level_kind()
+    {
+        var before = World(total: 5, bonus: 2, purchaseAffordable: true);
+        var afterPaid = World(
+            total: 6, bonus: 2, purchaseAffordable: true, maximumUsages: 4);
+        var afterBonus = World(total: 6, bonus: 3, purchaseAffordable: true, maximumUsages: 4);
+        var purchase = Command("purchase", before);
+        var bonus = Command("bonus", before);
+
+        var paidDelta = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(afterPaid, generation: 902), purchase,
+            GameMcpCommandResult.Committed("committed", 9, 3)), afterPaid);
+        var bonusDelta = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(afterBonus, generation: 903), bonus,
+            GameMcpCommandResult.Committed("committed", 9, 3)), afterBonus);
+
+        Assert.Equal(3, (int)paidDelta["paidLevel"]!["before"]!);
+        Assert.Equal(4, (int)paidDelta["paidLevel"]!["after"]!);
+        Assert.Equal(2, (int)bonusDelta["bonusLevel"]!["before"]!);
+        Assert.Equal(3, (int)bonusDelta["bonusLevel"]!["after"]!);
+        Assert.Equal(6, (int)bonusDelta["totalLevel"]!["after"]!);
+
+        // The glyph screen counts uses, so the count it draws travels with the level that bought it.
+        Assert.Equal(3, (int)paidDelta["usableCount"]!["before"]!);
+        Assert.Equal(4, (int)paidDelta["usableCount"]!["after"]!);
+        Assert.Equal(4, (int)bonusDelta["usableCount"]!["after"]!);
+    }
+
+    [Fact]
+    public void Listed_glyph_levels_match_the_row_for_a_bonus_levelled_glyph()
+    {
+        var world = World(total: 5, bonus: 2, purchaseAffordable: false);
+        var listed = Json(GameMcpWorldQuery.ListRows(
+            GameMcpTestHarness.Context(world, generation: 901), "glyphs", 0, 10).Freeze(), world);
+        var row = Row(world, "glyphs", GlyphId);
+
+        var entry = Assert.Single(listed["rows"]!.Values<JObject>())!;
+        Assert.Equal(3, (int)entry["paidLevel"]!);
+        Assert.Equal(2, (int)entry["bonusLevel"]!);
+        Assert.Equal(5, (int)entry["totalLevel"]!);
+        Assert.Equal((int)row["paidLevel"]!, (int)entry["paidLevel"]!);
+        Assert.Equal((int)row["bonusLevel"]!, (int)entry["bonusLevel"]!);
+        Assert.Equal((int)row["totalLevel"]!, (int)entry["totalLevel"]!);
+    }
+
+    /// <summary>
+    /// A glyph with no authored <c>levelingCost</c> is levelled by the game for nothing:
+    /// <c>ResourceCostList.HasEnough()</c> is true over an empty list, and a levelable's cost
+    /// button never performs a cost. The wire says so instead of dropping the array.
+    /// </summary>
+    [Fact]
+    public void A_glyph_the_game_levels_for_nothing_publishes_an_empty_cost_list_and_says_so()
+    {
+        var glyph = Row(
+            World(5, 2, purchaseAffordable: true, levelsAreFree: true), "glyphs", GlyphId);
+
+        Assert.True((bool)glyph["purchase"]!["available"]!);
+        Assert.Empty(glyph["purchase"]!["costs"]!.Values<JObject>());
+        Assert.True((bool)glyph["purchase"]!["free"]!);
+    }
+
+    [Fact]
+    public void Hidden_or_unlearned_rows_never_advertise_level_purchase()
+    {
+        var world = World(5, 2, purchaseAffordable: true,
+            glyphLearned: false, resourceTypeHidden: true);
+
+        var glyph = Row(world, "glyphs", GlyphId);
+        var resourceType = Row(world, "resource-types", ResourceTypeId);
+
+        Assert.False((bool)glyph["available"]!);
+        Assert.False((bool)glyph["purchase"]!["available"]!);
+        Assert.Equal("not_available", (string?)glyph["purchase"]!["reasonCode"]);
+        Assert.False((bool)resourceType["purchase"]!["available"]!);
+        Assert.Equal("hidden", (string?)resourceType["purchase"]!["reasonCode"]);
+    }
+
+    [Fact]
+    public void PrerequisiteLearnedGlyphIsAvailableWithoutClaimingDiscovery()
+    {
+        var glyph = Row(
+            World(5, 2, purchaseAffordable: true, glyphDiscoverable: false),
+            "glyphs",
+            GlyphId);
+
+        Assert.True((bool)glyph["available"]!);
+        Assert.False((bool)glyph["discovered"]!);
+
+        // An absent block read as "not discovered yet", the opposite of the truth here: this glyph
+        // is owned already and the game never routes it through discovery at all.
+        Assert.False((bool)glyph["discover"]!["available"]!);
+        Assert.Equal("native_not_discoverable", (string?)glyph["discover"]!["reasonCode"]);
+        Assert.Null(glyph["discover"]!["costs"]);
+    }
+
+    private static JObject Row(
+        GameWorldState world,
+        string category,
+        Guid id) =>
+        Json(GameMcpWorldQuery.GetRow(
+            GameMcpTestHarness.Context(world, generation: 901),
+            category, id.ToString("D")).Freeze(), world)["row"] as JObject ??
+        throw new InvalidOperationException("row was unavailable");
+
+    private static void AssertDecision(JObject row, bool supportsBonus)
+    {
+        Assert.Equal(supportsBonus ? 3 : 5, (int)row["paidLevel"]!);
+        Assert.Equal(5, (int)row["totalLevel"]!);
+        Assert.False((bool)row["purchase"]!["available"]!);
+        Assert.False((bool)row["purchase"]!["affordable"]!);
+        Assert.Equal("unaffordable", (string?)row["purchase"]!["reasonCode"]);
+        if (supportsBonus)
+        {
+            Assert.Equal(2, (int)row["bonusLevel"]!);
+            Assert.True((bool)row["bonus"]!["available"]!);
+        }
+        else
+        {
+            Assert.Null(row["bonusLevel"]);
+            Assert.Null(row["bonus"]);
+        }
+    }
+
+    private static GameMcpCommand Command(string mode, GameWorldState before) =>
+        new(1, GameMcpCommandKind.GenericLevel,
+            9, 3, mode, GlyphId, Guid.Empty, "GlyphSO",
+            1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 901));
+
+    private static GameWorldState World(
+        int total,
+        int bonus,
+        bool purchaseAffordable,
+        bool glyphLearned = true,
+        bool glyphDiscoverable = true,
+        bool resourceTypeHidden = false,
+        bool levelsAreFree = false,
+        int maximumUsages = 3)
+    {
+        var paidCosts = levelsAreFree
+            ? PublicationTable<WorldLevelableCost>.Empty
+            : PublicationTable<WorldLevelableCost>.Create(new[]
+                { new WorldLevelableCost(CostResourceId, new BigDouble(5)) });
+        var bonusCosts = PublicationTable<WorldLevelableCost>.Create(new[]
+            { new WorldLevelableCost(CostResourceId, new BigDouble(2)) });
+        var withBonus = new WorldLevelableDecision(total, bonus, true,
+            purchaseAffordable, paidCosts, true, true, true, bonusCosts);
+        var withoutBonus = new WorldLevelableDecision(total, 0, true,
+            purchaseAffordable, paidCosts, false, false, false,
+            PublicationTable<WorldLevelableCost>.Empty);
+        var equipmentType = new WorldEquipmentType(
+            EquipmentTypeId, total - bonus, bonus, 1, new BigDouble(4),
+            new BigDouble(8), 0, 0, withBonus);
+        var glyph = new WorldGlyph(GlyphId, total - bonus, bonus, 0, glyphLearned,
+            glyphDiscoverable, false, false, false, false, 0, BigDouble.Zero,
+            BigDouble.Zero, BigDouble.Zero, maximumUsages, levelDecision: withBonus);
+        var resourceType = new WorldResourceType(
+            resourceTypeId: ResourceTypeId,
+            level: total - bonus,
+            freeLevels: bonus,
+            specialHidden: resourceTypeHidden,
+            ignoreAudit: false,
+            ignoreEffects: false,
+            auditHasMaxQuantity: false,
+            rateModModifiers: 0,
+            maxQuantityModModifiers: 0,
+            maxQuantityRateModModifiers: 0,
+            qualityModModifiers: 0,
+            gainRateModModifiers: 0,
+            drainModModifiers: 0,
+            lossPercentModModifiers: 0,
+            restModModifiers: 0,
+            splashRateModifiers: 0,
+            splashRateMaxPercentModifiers: 0,
+            splashRateInterestModifiers: 0,
+            splashRateMissingModifiers: 0,
+            splashRateLifetimeModifiers: 0,
+            rawMaxQuantityModifiers: 0,
+            attributeCostModModifiers: 0,
+            reservationModModifiers: 0,
+            reverberateModModifiers: 0,
+            reverberateTimeModModifiers: 0,
+            replenishRatioModifiers: 0,
+            replenishTimeModModifiers: 0,
+            decayRatioModifiers: 0,
+            decayTimeModModifiers: 0,
+            levelDecision: withBonus);
+        var timeRune = new WorldTimeRune(TimeRuneId, true, total, 0,
+            BigDouble.Zero, 1, false, true, BigDouble.Zero, BigDouble.Zero,
+            BigDouble.Zero, BigDouble.Zero, levelDecision: withoutBonus);
+        var rateInputs = default(RawResourceRateInputs);
+        var traits = default(RawResourceTraits);
+        var modifiers = default(RawResourceModifiers);
+        var reading = new RawResourceSample(CostResourceId, new BigDouble(80),
+            new BigDouble(100), true, BigDouble.Zero, BigDouble.Zero,
+            new BigDouble(100), new BigDouble(100), BigDouble.Zero, BigDouble.Zero,
+            BigDouble.Zero, false, false, false, 0, Guid.Empty,
+            in rateInputs, in traits, in modifiers);
+        var resource = new WorldResource(in reading, true, new BigDouble(20), 0.8,
+            false, new BigDouble(80), BigDouble.Zero);
+        var identities = GameMcpTestHarness.EntityCatalog.Rows.AsSpan().ToArray().Concat(new[]
+        {
+            new EntityIdentityName(EquipmentTypeId, "EquipmentTypeSO", "Artifacts", "artifacts"),
+            new EntityIdentityName(GlyphId, "GlyphSO", "Echo Glyph", "echo_glyph"),
+            new EntityIdentityName(ResourceTypeId, "ResourceTypeSO", "Alchemy Materials", "alchemy_materials"),
+            new EntityIdentityName(TimeRuneId, "TimeRuneSO", "Quickening", "quickening"),
+            new EntityIdentityName(CostResourceId, "ResourceSO", "Knowledge", "knowledge"),
+        }).OrderBy(row => row.EntityId).ToArray();
+        return new GameWorldState
+        {
+            CollectedAtEpoch = 9,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+            EntityIdentities = EntityIdentityCatalogSnapshot.Bound(9, identities),
+            EquipmentTypes = PublicationTable<WorldEquipmentType>.Create(new[] { equipmentType }),
+            Glyphs = PublicationTable<WorldGlyph>.Create(new[] { glyph }),
+            ResourceTypes = PublicationTable<WorldResourceType>.Create(new[] { resourceType }),
+            TimeRunes = PublicationTable<WorldTimeRune>.Create(new[] { timeRune }),
+            Resources = PublicationTable<WorldResource>.Create(new[] { resource }),
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                Collected("equipment types"), Collected("glyphs"),
+                Collected("resource types"), Collected("time runes"), Collected("resources"),
+            }),
+        };
+    }
+
+    private static WorldCollectionCategoryStatus Collected(string category) =>
+        new(category, WorldCategoryOutcome.Collected, 1, 0, string.Empty);
+
+    private static JObject Json(GameMcpValue value, GameWorldState world) =>
+        Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(value, world.EntityIdentities));
+}

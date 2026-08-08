@@ -1,0 +1,507 @@
+using System;
+using System.Linq;
+using BepInEx.Configuration;
+using Newtonsoft.Json.Linq;
+using OrbAutomata;
+using OrbAutomata.GameMcp;
+using OrbModding.Common;
+using OrbModding.Common.Runtime.ServiceCycle.Contracts;
+using OrbModding.Common.Runtime.World;
+using Xunit;
+
+namespace OrbModding.ProfileTests;
+
+public sealed class GameMcpSpellWorkbenchTests
+{
+    private static readonly Guid RecipeId =
+        Guid.Parse("36375616-7476-4748-8c20-ba628933bea5");
+    private static readonly Guid FirstGlyphId =
+        Guid.Parse("81894d9f-4e91-43da-9f47-2a97d77a2294");
+    private static readonly Guid SecondGlyphId =
+        Guid.Parse("0f38b02c-b81a-4fcd-9e07-73e09bd38dee");
+    private static readonly Guid ResourceId =
+        Guid.Parse("eda26ca0-afcc-4fc3-9d8a-eb279123353d");
+    private static readonly Guid AugmentGlyphId =
+        Guid.Parse("95b05e80-e0e8-45d2-b510-5d9d8d7d9b70");
+
+    [Fact]
+    public void OutputFirstWorkbenchToolIsAbsentFromThePlayerSurface()
+    {
+        Assert.DoesNotContain(GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "game_spell_workbench");
+        var tool = Assert.Single(
+            GameMcpAcceptanceFixture.Tools(),
+            candidate => (string?)candidate["name"] == "game_discover");
+
+        Assert.False((bool)tool["annotations"]!["readOnlyHint"]!);
+        var schema = tool["inputSchema"]!;
+        Assert.Equal(
+            new[] { "mode" },
+            schema["required"]!.Values<string>().ToArray());
+        Assert.Equal(
+            new[] { "preview", "confirm", "offer_initiate", "offer_select", "offer_confirm", "offer_reroll" },
+            schema["properties"]!["mode"]!["enum"]!.Values<string>().ToArray());
+        Assert.Null(schema["properties"]!["expectedNativeType"]);
+        Assert.Null(schema["properties"]!["worldGeneration"]);
+        Assert.Null(schema["properties"]!["detail"]);
+        Assert.Null(schema["properties"]!["verbosity"]);
+    }
+
+    [Fact]
+    public void ConfirmRequiresSurfaceAndComponentsNotAnOutputRecipe()
+    {
+        var router = new GameMcpProtocolRouter(new GameMcpFrameInbox());
+        var response = router.Handle(GameMcpAcceptanceFixture.Request(
+            1,
+            "tools/call",
+            new JObject
+            {
+                ["name"] = "game_discover",
+                ["arguments"] = new JObject { ["mode"] = "confirm" },
+            }));
+
+        Assert.Equal(-32602, (int)response.Body!["error"]!["code"]!);
+        var errors = response.Body["error"]!["data"]!["validationErrors"]!
+            .Values<JObject>().ToArray();
+        Assert.Equal(new[] { "surface", "components" },
+            errors.Select(error => (string?)error["field"]));
+        Assert.All(errors, error => Assert.Equal("missing_required", (string?)error["code"]));
+    }
+
+    [Fact]
+    public void ListIsLeanWhileGetExposesTheComponentFirstDiscoveryDecision()
+    {
+        var context = GameMcpTestHarness.Context(World(
+            discovered: false,
+            discoveryAffordable: true,
+            hasEmptySlot: true));
+
+        var list = GameMcpTestHarness.Json(
+            GameMcpWorldQuery.ListRows(context, "spell-recipes", 0, 10));
+        var listed = Assert.Single(list["rows"]!.Values<JObject>())!;
+        var get = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context, "spell-recipes", RecipeId.ToString("D")));
+        var exact = (JObject)get["row"]!;
+
+        Assert.Equal("Gather Knowledge", (string?)listed["name"]);
+        Assert.Equal(0, (int)listed["masteryLevel"]!);
+        Assert.False((bool)listed["discovered"]!);
+        Assert.Equal("spell-recipes", (string?)listed["category"]);
+        Assert.Null(listed["discover"]);
+        Assert.True((bool)exact["discover"]!["available"]!);
+        Assert.True((bool)exact["discover"]!["affordable"]!);
+        Assert.Equal("spellcraft", (string?)exact["discover"]!["surface"]);
+        Assert.Equal(
+            new[] { "Brew", "Insight" },
+            exact["discover"]!["components"]!.Values<JObject>()
+                .Select(component => (string?)component!["component"]!["name"]));
+        Assert.All(
+            exact["discover"]!["components"]!.Values<JObject>(),
+            component => Assert.Equal(1, (int)component!["count"]!));
+        var glyphs = exact["coreGlyphs"]!.Values<JObject>().ToArray();
+        Assert.Equal(new[] { "Brew", "Insight" },
+            glyphs.Select(glyph => (string?)glyph!["glyph"]!["name"]));
+        Assert.Equal(new[] { "7", "3" },
+            glyphs.Select(glyph => (string?)glyph!["ownedLevel"]));
+        var cost = Assert.Single(exact["discover"]!["costs"]!.Values<JObject>())!;
+        Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
+        Assert.Equal("4.4e3", (string?)cost["cost"]);
+        Assert.Equal("9e6", (string?)cost["spendableAmount"]);
+    }
+
+    [Fact]
+    public void DiscoveredRecipePublishesTheExactLoadoutAddDecisionAndCurrentHoldings()
+    {
+        var context = GameMcpTestHarness.Context(World(
+            discovered: true,
+            discoveryAffordable: true,
+            hasEmptySlot: true,
+            equipped: true));
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context, "spell-recipes", RecipeId.ToString("D")));
+        var row = response["row"]!;
+
+        Assert.Null(row["selected"]);
+        Assert.Null(row["select"]);
+        Assert.True((bool)row["loadoutAdd"]!["available"]!);
+        Assert.True((bool)row["loadoutAdd"]!["requiresGlyphLayout"]!);
+        Assert.Null(row["loadoutAdd"]!["affordable"]);
+        Assert.Null(row["loadoutAdd"]!["reasonCode"]);
+        Assert.Null(row["loadoutAdd"]!["costs"]);
+        Assert.Single(row["loadoutAdd"]!["augmentOptions"]!.Values<JObject>());
+        Assert.Equal(1, (int)row["loadBudget"]!["used"]!);
+        Assert.Equal(3, (int)row["loadBudget"]!["maximum"]!);
+        Assert.True((bool)row["loadBudget"]!["fitsAnotherSpell"]!);
+        var equipped = Assert.Single(row["equipped"]!.Values<JObject>())!;
+        Assert.Equal(0, (int)equipped["slot"]!);
+        Assert.Equal("Gather Knowledge", (string?)equipped["spellInstance"]!["name"]);
+    }
+
+    [Theory]
+    [InlineData(false, 7, "loadout_full")]
+    [InlineData(true, 0, "core_glyph_not_leveled")]
+    public void StructurallyUnavailableLoadoutAddWithholdsLayoutOptionsAndPriceClaims(
+        bool hasEmptySlot,
+        int coreLevel,
+        string reasonCode)
+    {
+        var context = GameMcpTestHarness.Context(World(
+            discovered: true,
+            discoveryAffordable: true,
+            hasEmptySlot,
+            coreLevel: coreLevel));
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context, "spell-recipes", RecipeId.ToString("D")));
+        var decision = response["row"]!["loadoutAdd"]!;
+
+        Assert.False((bool)decision["available"]!);
+        Assert.Equal(reasonCode, (string?)decision["reasonCode"]);
+        Assert.Null(decision["augmentOptions"]);
+        Assert.Null(decision["affordable"]);
+        Assert.Null(decision["costs"]);
+    }
+
+    [Fact]
+    public void ExplicitLayoutPreviewReturnsNamedNativePriceAndShortResource()
+    {
+        var preview = SpellWorkbenchPricePreview.Priced(
+            RecipeId,
+            new[] { new SpellWorkbenchPricePreviewCost(ResourceId, new BigDouble(4400)) },
+            affordable: false,
+            ResourceId);
+
+        var response = GameMcpTestHarness.Json(
+            GameMcpSpellWorkbenchProjection.ProjectPricePreview(in preview));
+
+        Assert.Equal("available", (string?)response["status"]);
+        Assert.Equal("Gather Knowledge", (string?)response["recipe"]!["name"]);
+        var cost = Assert.Single(response["costs"]!.Values<JObject>());
+        Assert.Equal("Knowledge", (string?)cost["resource"]!["name"]);
+        Assert.Equal("4.4e3", (string?)cost["cost"]);
+        Assert.False((bool)response["affordable"]!);
+        Assert.Equal("Knowledge", (string?)response["shortResource"]!["name"]);
+    }
+
+    [Fact]
+    public void ExplicitLayoutPreviewRefusalCarriesOnlyTheActionableReason()
+    {
+        var preview = SpellWorkbenchPricePreview.Refused(
+            SpellWorkbenchPreflight.WrongSelection,
+            "The exact live glyph layout does not resolve to the requested spell.");
+
+        var response = GameMcpTestHarness.Json(
+            GameMcpSpellWorkbenchProjection.ProjectPricePreview(in preview));
+
+        Assert.Equal(
+            new[] { "status", "reasonCode", "reason" },
+            response.Properties().Select(property => property.Name));
+        Assert.Equal("unavailable", (string?)response["status"]);
+        Assert.Equal("wrong_selection", (string?)response["reasonCode"]);
+        Assert.Contains("does not resolve", (string?)response["reason"]);
+    }
+
+    [Fact]
+    public void UnavailableDiscoveryNamesTheNativeVisibilityPredicateWithoutSelectionCeremony()
+    {
+        var context = GameMcpTestHarness.Context(World(
+            discovered: false,
+            discoveryAffordable: true,
+            hasEmptySlot: true,
+            discoveryVisible: false));
+
+        var response = GameMcpTestHarness.Json(GameMcpWorldQuery.GetRow(
+            context, "spell-recipes", RecipeId.ToString("D")));
+        var row = response["row"]!;
+
+        Assert.False((bool)row["discover"]!["available"]!);
+        Assert.Equal("not_visible", (string?)row["discover"]!["reasonCode"]);
+        Assert.Null(row["selected"]);
+        Assert.Null(row["select"]);
+    }
+
+    [Fact]
+    public void SuccessIsOnlyNamedPostStateWhileFailuresNameTheMissingOutcome()
+    {
+        var submission = new SpellWorkbenchSubmission(
+            SpellWorkbenchPreflight.Proceeded,
+            SpellWorkbenchNativeStage.Verification,
+            NativeMutationOutcome.Verified,
+            new NativeMutationCallOutcome(1, 1, 1),
+            "the requested recipe is discovered");
+        var mapped = SpellWorkbenchActionResultMapper.Map(in submission);
+        var before = World(
+            discovered: false,
+            discoveryAffordable: true,
+            hasEmptySlot: true);
+        var after = World(
+            discovered: true,
+            discoveryAffordable: true,
+            hasEmptySlot: true);
+        var command = Command("discover", "spellcraft", before);
+        var terminal = GameMcpCommandResult.FromAction(
+            in mapped,
+            command.Kind,
+            9,
+            3,
+            submission.Reason,
+            GameMcpSpellWorkbenchProjection.Project(in submission));
+        terminal = terminal.WithDetails(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after), command, terminal));
+
+        var success = GameMcpTestHarness.Json(terminal.Project(command));
+        Assert.Equal(new[]
+            {
+                "status", "uuid", "name", "internalName", "category", "nativeType",
+                "discovered", "surface",
+            },
+            success.Properties().Select(property => property.Name));
+        Assert.Equal("committed", (string?)success["status"]);
+        Assert.Equal("Gather Knowledge", (string?)success["name"]);
+        Assert.False((bool)success["discovered"]!["before"]!);
+        Assert.True((bool)success["discovered"]!["after"]!);
+        Assert.Equal("spellcraft", (string?)success["surface"]);
+        Assert.Null(success["preflight"]);
+        Assert.Null(success["before"]);
+        Assert.Null(success["after"]);
+        Assert.Null(success["receipt"]);
+        Assert.DoesNotContain("payment", success.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        var refusedSubmission = SpellWorkbenchSubmission.Reject(
+            SpellWorkbenchPreflight.WrongSelection,
+            "the selected recipe changed");
+        var refusal = GameMcpTestHarness.Json(
+            GameMcpSpellWorkbenchProjection.Project(in refusedSubmission));
+        Assert.Empty(refusal.Properties());
+
+        var failedSubmission = new SpellWorkbenchSubmission(
+            SpellWorkbenchPreflight.VerificationFailed,
+            SpellWorkbenchNativeStage.Verification,
+            NativeMutationOutcome.PostconditionFailed,
+            new NativeMutationCallOutcome(1, 1, 0),
+            "the target was not discovered");
+        var failure = GameMcpTestHarness.Json(
+            GameMcpSpellWorkbenchProjection.Project(in failedSubmission));
+        Assert.Equal("requested spell workbench transition",
+            (string?)failure["missingOutcome"]);
+        Assert.Single(failure.Properties());
+    }
+
+    [Fact]
+    public void SettledProjectorReportsObservedDiscoveryAndLoadoutChanges()
+    {
+        var undiscovered = World(
+            discovered: false,
+            discoveryAffordable: true,
+            hasEmptySlot: true);
+        var discoveryCommand = Command("discover", before: undiscovered);
+        var terminal = GameMcpCommandResult.Committed(
+            "committed",
+            9,
+            3);
+
+        var unchanged = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(undiscovered), discoveryCommand, terminal));
+
+        Assert.False((bool)unchanged["discovered"]!["before"]!);
+        Assert.False((bool)unchanged["discovered"]!["after"]!);
+        Assert.Null(unchanged["surface"]);
+
+        var beforeAdd = World(
+            discovered: true,
+            discoveryAffordable: true,
+            hasEmptySlot: true);
+        var afterAdd = World(
+            discovered: true,
+            discoveryAffordable: true,
+            hasEmptySlot: true,
+            equipped: true);
+        var addCommand = Command("create", before: beforeAdd);
+        var added = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(afterAdd), addCommand, terminal));
+
+        Assert.Equal(0, (int)added["slot"]!["after"]!);
+        Assert.Equal(0, (int)added["loadBudget"]!["used"]!["before"]!);
+        Assert.Equal(1, (int)added["loadBudget"]!["used"]!["after"]!);
+        Assert.Equal(3, (int)added["loadBudget"]!["maximum"]!);
+        Assert.Null(added["discovered"]);
+    }
+
+    [Fact]
+    public void ReadAdmissionAndActionUseOneSpellRecipeCapability()
+    {
+        var world = World(
+            discovered: false,
+            discoveryAffordable: true,
+            hasEmptySlot: true);
+
+        Assert.True(GameMcpEntityCapabilityMap.Contains(
+            world,
+            RecipeId,
+            GameMcpCommandKind.SpellWorkbench,
+            out var reason), reason);
+        Assert.True(GameMcpEntityCapabilityMap.Supports(
+            "spell-recipes",
+            GameMcpCommandKind.SpellWorkbench));
+    }
+
+    [Fact]
+    public void LocalhostMcpOwnsSpellWorkbenchOnlyForTheCurrentOperation()
+    {
+        var registry = new ActionFamilyOwnershipRegistry();
+        var configuration = BepInExAutomataConfiguration.Bind(new ConfigFile()).Current;
+        using var ownership = new AutomataActionFamilyOwnership(registry);
+
+        ownership.Refresh(configuration, lifecycleReady: true);
+        Assert.False(ownership.TryCaptureSpellWorkbenchMutationPermit());
+
+        Assert.True(ownership.TryBeginGameMcpOperation(
+            GameMcpCommandKind.SpellWorkbench,
+            "discover",
+            out var scope,
+            out var reason), reason);
+        using (scope)
+            Assert.True(ownership.TryCaptureSpellWorkbenchMutationPermit());
+        Assert.False(ownership.TryCaptureSpellWorkbenchMutationPermit());
+        Assert.Equal(
+            "action_family_unavailable",
+            GameMcpActionResultCodeNames.Name(
+                SpellWorkbenchActionResultCodes.MutationPermitUnavailable,
+                GameMcpCommandKind.SpellWorkbench));
+    }
+
+    private static GameMcpCommand Command(
+        string mode,
+        string payloadKey = "",
+        GameWorldState? before = null) => new(
+        1,
+        GameMcpCommandKind.SpellWorkbench,
+        9,
+        3,
+        mode,
+        RecipeId,
+        Guid.Empty,
+        "SpellRecipeSO",
+        1,
+        payloadKey,
+        string.Empty,
+        false,
+        false,
+        frameContext: before is null ? null : GameMcpTestHarness.Context(before));
+
+    private static GameWorldState World(
+        bool discovered,
+        bool discoveryAffordable,
+        bool hasEmptySlot,
+        bool equipped = false,
+        bool discoveryVisible = true,
+        bool canDiscover = true,
+        int coreLevel = 7)
+    {
+        var glyphs = PublicationTable<WorldSpellRecipeGlyph>.Create(new[]
+        {
+            new WorldSpellRecipeGlyph(0, FirstGlyphId),
+            new WorldSpellRecipeGlyph(1, SecondGlyphId),
+        });
+        var discoveryCosts = PublicationTable<WorldDiscoverableCost>.Create(new[]
+        {
+            new WorldDiscoverableCost(
+                ResourceId,
+                new BigDouble(4.4d, 3),
+                new BigDouble(9d, 6)),
+        });
+        return new GameWorldState
+        {
+            CollectedAtEpoch = 9,
+            CollectedAtUtcTicks = DateTime.UtcNow.Ticks,
+            CollectionCategories = PublicationTable<WorldCollectionCategoryStatus>.Create(new[]
+            {
+                new WorldCollectionCategoryStatus(
+                    "spell-recipes", WorldCategoryOutcome.Collected, 1, 0, string.Empty),
+            }),
+            SpellRecipes = PublicationTable<WorldSpellRecipe>.Create(new[]
+            {
+                new WorldSpellRecipe(
+                    RecipeId,
+                    discovered,
+                    0,
+                    BigDouble.Zero,
+                    0,
+                    false,
+                    false,
+                    false,
+                    0,
+                    1d,
+                    1,
+                    false,
+                    BigDouble.One,
+                    BigDouble.One,
+                    BigDouble.One,
+                    BigDouble.One,
+                    BigDouble.One,
+                    BigDouble.One,
+                    false,
+                    glyphs,
+                    discoveryCosts,
+                    discoveryAffordable,
+                    new WorldDiscoverableDecision(
+                        discoveryVisible,
+                        canDiscover,
+                        discovered,
+                        required: false,
+                        affordable: discoveryAffordable,
+                        costs: discoveryCosts)),
+            }),
+            Glyphs = PublicationTable<WorldGlyph>.Create(new[]
+            {
+                Glyph(SecondGlyphId, 3),
+                Glyph(FirstGlyphId, coreLevel),
+                Glyph(AugmentGlyphId, 1, augmentsSpells: true),
+            }),
+            SpellWorkbench = new WorldSpellWorkbench(
+                equipped ? 1 : 0,
+                3,
+                hasEmptySlot),
+            SpellSlots = equipped
+                ? PublicationTable<WorldSpellSlot>.Create(new[]
+                {
+                    new WorldSpellSlot(
+                        0,
+                        Guid.NewGuid(),
+                        RecipeId,
+                        true,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        true,
+                        true,
+                        true,
+                        1,
+                        1,
+                        BigDouble.Zero),
+                })
+                : PublicationTable<WorldSpellSlot>.Empty,
+        };
+    }
+
+    private static WorldGlyph Glyph(Guid id, int level, bool augmentsSpells = false) => new(
+        id,
+        level,
+        0,
+        0,
+        true,
+        true,
+        false,
+        augmentsSpells,
+        false,
+        false,
+        0,
+        BigDouble.Zero,
+        BigDouble.Zero,
+        BigDouble.Zero,
+        maximumUsages: 1);
+}

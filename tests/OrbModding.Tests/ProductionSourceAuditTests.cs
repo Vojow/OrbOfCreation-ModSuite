@@ -39,6 +39,30 @@ public sealed class ProductionSourceAuditTests
             "Production C# source must not vary for game stubs: " + string.Join(", ", offenders));
     }
 
+    [Fact]
+    public void GameMcpProjectionsLeaveWireCodeNormalizationToTheEncoder()
+    {
+        var projectionRoot = Path.Combine(
+            FindRepositoryRoot(), "src", "Automata", "Runtime", "GameMcp");
+        var offenders = new List<string>();
+        foreach (var path in Directory.EnumerateFiles(
+                     projectionRoot, "*Projection.cs", SearchOption.TopDirectoryOnly))
+        {
+            var lineNumber = 0;
+            foreach (var line in File.ReadLines(path))
+            {
+                lineNumber++;
+                if (line.Contains("GameMcpEntityWireNormalizer.Snake(", StringComparison.Ordinal))
+                    offenders.Add(Path.GetFileName(path) + ":" + lineNumber);
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "MCP projections must publish domain vocabulary; the one wire encoder owns code normalization: " +
+            string.Join(", ", offenders));
+    }
+
     private static string FindRepositoryRoot()
     {
         foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })

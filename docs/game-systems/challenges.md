@@ -8,6 +8,10 @@ shape and deliberately not the numbers — treat specifics as unknown rather tha
 - New offers are fetched with the **New Challenges** button; they arrive Inactive and are activated
   per row. Multiple challenges run at once, and a fourth challenge slot exists; the exact slot
   count and how slots unlock are unrecorded.
+- **Fetching is free once, then costs a reroll.** The first fetch of a run is free; every later one
+  spends one of a limited number of challenge rerolls, and a fetch replaces the whole offer list.
+- **There are two offer lists.** The Time > Challenges screen and the reset modal each fetch their
+  own, so what the reset modal offers is not the Time screen's list refreshed.
 - Any active challenge can be **abandoned**, and a completed one shows a **Passed** state.
 
 Challenges do more than scale numbers: they can **modify requirements**, applying as passive

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OrbAutomata;
 using Xunit;
 using OrbModding.Common;
@@ -37,10 +38,19 @@ public sealed class GameWorldCollectorTests : IDisposable
         FakeStructure.All.Clear();
         FakeUpgrade.All.Clear();
         FakeResearch.All.Clear();
+        FakePrerequisiteLink.All.Clear();
+        FakeGameManager.currentFrame = 0;
         FakeNumber.All.Clear();
         FakeCount.All.Clear();
         FakeFlag.All.Clear();
         FakePlayerGlobals.Reset();
+        FakeTargetingManager.Reset();
+        FakeConsumableInventory.Reset();
+        FakeChallengeManager.instance = new FakeChallengeManager();
+        FakePersistentResetManager.instance = new FakePersistentResetManager();
+        FakeSettingsManager.QueueMode = false;
+        FakeSettingsManager.CancellableSpells = true;
+        FakeGlobalVariables.SetMultiBuy(1);
         WorldCategoryFakes.Clear();
     }
 
@@ -59,6 +69,8 @@ public sealed class GameWorldCollectorTests : IDisposable
             ["StructureSO"] = typeof(FakeStructure),
             ["UpgradeSO"] = typeof(FakeUpgrade),
             ["ResearchSO"] = typeof(FakeResearch),
+            ["PrerequisiteLinkSO"] = typeof(FakePrerequisiteLink),
+            ["GameManager"] = typeof(FakeGameManager),
             ["DoubleVariable"] = typeof(FakeNumber),
             ["IntVariable"] = typeof(FakeCount),
             ["BoolVariable"] = typeof(FakeFlag),
@@ -70,7 +82,22 @@ public sealed class GameWorldCollectorTests : IDisposable
             // Not categories: the frame-wide globals reader resolves these two by name, and a
             // collector that cannot reach them silently prices every structure at parity.
             ["Player"] = typeof(FakePlayerGlobals),
+            ["GlobalVariables"] = typeof(FakeGlobalVariables),
             ["ValueModifierRecord"] = typeof(FakeModifierRecord),
+            ["TargetingManager"] = typeof(FakeTargetingManager),
+            ["TargetingManager+TargetLink"] = typeof(FakeTargetingManager.TargetLink),
+            ["ITooltipable"] = typeof(IFakeTooltipable),
+            ["EffectResultInfo"] = typeof(FakeTargetingResultInfo),
+            ["Inventory"] = typeof(FakeConsumableInventory),
+            ["ConsumableRefListVariable"] = typeof(FakeConsumableRefListVariable),
+            ["UICraftingPage"] = typeof(FakeCraftingPage),
+            ["ChallengeManager"] = typeof(FakeChallengeManager),
+            ["PersistentResetManager"] = typeof(FakePersistentResetManager),
+            ["ChallengeListVariable"] = typeof(FakeChallengeList),
+            ["SettingsManager"] = typeof(FakeSettingsManager),
+            ["ResearchTypeSO"] = typeof(FakeResearchType),
+            ["ResourceFillList"] = typeof(FakeResearchFillList),
+            ["ResourceFillList+ResourceFillEntry"] = typeof(FakeResearchFillList.ResourceFillEntry),
         };
 
         foreach (var pair in WorldCategoryFakes.ByTypeName) byName[pair.Key] = pair.Value;
@@ -144,9 +171,10 @@ public sealed class GameWorldCollectorTests : IDisposable
         var world = collector.Build();
 
         Assert.True(report.IsComplete, report.Describe());
-        // Five primary entities plus two Scribe queues and eight complete zero-candidate
-        // Scroll-target evidence rows.
-        Assert.Equal(17, report.TotalSampled);
+        // Five primary entities, two purchase-view relations, three live prerequisite-verdict
+        // rows, two Scribe queues, eight complete zero-candidate Scroll-target evidence rows,
+        // one frame-local challenge-decision context row, and the two empty snapshot-list owners.
+        Assert.Equal(23, report.TotalSampled);
 
         Assert.True(WorldLookup.TryFind(world.Resources, mana, out var resource));
         Assert.Equal(60d, resource.Reading.Quantity.ToDouble());
@@ -175,6 +203,340 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     [Fact]
+    public void Equipment_rows_publish_the_exact_native_loadout_decision_and_usage_holdings()
+    {
+        var resource = new FakeResource
+        {
+            Identity = Guid.NewGuid(),
+            Quantity = 80d,
+            quality = new FakeModifierRecord(100d),
+        };
+        FakeResource.All.Add(resource);
+        var type = new FakeEquipmentType
+        {
+            Identity = Guid.NewGuid(),
+            maxTypeSlots = new FakeModifierRecord(2d),
+        };
+        FakeEquipmentType.All.Add(type);
+        var equipment = new FakeEquipment
+        {
+            Identity = Guid.NewGuid(),
+            isCreated = true,
+            equipmentType = type,
+            maximumStacks = 4,
+            usageCost = new FakeCraftingResourceCostList
+            {
+                maximumCostTimes = new BigDouble(3),
+            }.With(resource, new BigDouble(20)),
+        };
+        FakeEquipment.All.Add(equipment);
+        FakeEquipmentManager.instance.equippedEquipment.maximum = 3;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var equipmentRows = collector.Build().Equipment;
+        Assert.Equal(1, equipmentRows.Count);
+        var row = equipmentRows[0];
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(row.Loadout.Available, row.Loadout.UnavailableReason);
+        Assert.Equal(type.Identity, row.Loadout.EquipmentTypeId);
+        Assert.Equal(0, row.Loadout.EquippedStacks);
+        Assert.Equal(4, row.Loadout.MaximumStacks);
+        Assert.Equal(3, row.Loadout.MaximumEquipAmount);
+        Assert.Equal(0, row.Loadout.MaximumUnequipAmount);
+        Assert.True(row.Loadout.UsageAffordable);
+        Assert.Equal(1, row.Loadout.Costs.Count);
+        var cost = row.Loadout.Costs[0];
+        Assert.Equal(resource.Identity, cost.ResourceId);
+        Assert.Equal(0, cost.Cost.CompareTo(new BigDouble(20)));
+    }
+
+    [Fact]
+    public void UnifiedLevelRowsPublishEachConcreteTypesLiveNextDecision()
+    {
+        var resource = new FakeResource
+        {
+            Identity = Guid.NewGuid(),
+            Quantity = new BigDouble(20),
+            Visible = true,
+        };
+        FakeResource.All.Add(resource);
+        FakeCraftingResourceCostList Cost(int amount) =>
+            new FakeCraftingResourceCostList { affordabilityUsesResourceAmounts = true }
+                .With(resource, new BigDouble(amount));
+
+        var equipment = new FakeEquipmentType
+        {
+            level = 3,
+            freeLevels = 2,
+            LevelCost = Cost(5),
+            BonusLevelCost = Cost(7),
+        };
+        var glyph = new FakeGlyph
+        {
+            level = 4,
+            freeLevels = 1,
+            discovered = false,
+            NativeAvailable = true,
+            LevelCost = Cost(6),
+            BonusLevelCost = Cost(8),
+        };
+        var resourceType = new FakeResourceType
+        {
+            level = 5,
+            freeLevels = 3,
+            LevelCost = Cost(9),
+            BonusLevelCost = Cost(10),
+        };
+        var timeRune = new FakeTimeRune
+        {
+            level = 6,
+            LevelCost = Cost(11),
+        };
+        FakeEquipmentType.All.Add(equipment);
+        FakeGlyph.All.Add(glyph);
+        FakeResourceType.All.Add(resourceType);
+        FakeTimeRune.All.Add(timeRune);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.EquipmentTypes, equipment.Identity, out var equipmentRow));
+        AssertLevelDecision(equipmentRow.LevelDecision, 5, 2, 5, 7);
+        Assert.True(WorldLookup.TryFind(world.Glyphs, glyph.Identity, out var glyphRow));
+        Assert.True(glyphRow.Learned);
+        Assert.False(glyphRow.Discovered);
+        AssertLevelDecision(glyphRow.LevelDecision, 5, 1, 6, 8);
+        Assert.True(WorldLookup.TryFind(world.ResourceTypes, resourceType.Identity, out var resourceTypeRow));
+        AssertLevelDecision(resourceTypeRow.LevelDecision, 8, 3, 9, 10);
+        Assert.True(WorldLookup.TryFind(world.TimeRunes, timeRune.Identity, out var timeRuneRow));
+        AssertLevelDecision(timeRuneRow.LevelDecision, 6, 0, 11, null);
+    }
+
+    [Fact]
+    public void CraftingRecipesPublishNativeVerdictsAndConcreteRecipeEdgesTogether()
+    {
+        var recipeId = Guid.Parse("b1b7d331-587a-4b4c-87cf-4a8f57c8256b");
+        var type = new FakeCraftingRecipeType { Identity = Guid.NewGuid() };
+        var input = new FakeResource
+        {
+            Identity = Guid.NewGuid(),
+            Quantity = 80d,
+            quality = new FakeModifierRecord(100d),
+            maxQuantity = new FakeModifierRecord(100d),
+            usage = new FakeModifierRecord(4d),
+            drain = new FakeModifierRecord(1.5d),
+            bandwidthResource = true,
+            Visible = true,
+        };
+        var generated = new FakeResource
+        {
+            Identity = Guid.NewGuid(),
+            Quantity = 12d,
+            quality = new FakeModifierRecord(100d),
+            maxQuantity = new FakeModifierRecord(50d),
+            Visible = true,
+        };
+        var sigil = new FakeConsumable { Identity = Guid.NewGuid() };
+        var completion = new FakeScribeInstantBlock();
+        completion.effectScripts.Add(new FakeScribeConsumableGainEffect { consumable = sigil });
+        var recipe = new FakeScribeRecipe
+        {
+            Identity = recipeId,
+            visible = false,
+            canBuy = false,
+            startingQuantity = new BigDouble(2d),
+            useQuantityAsLevel = true,
+            timeToComplete = 9.5d,
+            recipeCost = new FakeCraftingResourceCostList().With(input, new BigDouble(3d)),
+            generatedResources = new FakeCraftingResourceCostList
+            {
+                withinCapacity = false,
+            }.With(generated, new BigDouble(7d)),
+        };
+        recipe.craftingTypes.Add(type);
+        recipe.completeEffects.Add(completion);
+        recipe.engagementEffects.Add(new FakeCraftingEngagementBlock
+        {
+            necessaryDrainRatio = new BigDouble(0.75d),
+        });
+        FakeCraftingRecipeType.All.Add(type);
+        FakeResource.All.Add(input);
+        FakeResource.All.Add(generated);
+        FakeConsumable.All.Add(sigil);
+        FakeScribeRecipe.All.Add(recipe);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.CraftingRecipes, recipeId, out var row));
+        Assert.False(row.Reading.Visible);
+        Assert.Equal("hidden_or_undiscovered", row.Reading.VisibilityReasonCode);
+        Assert.False(row.Reading.CanBuyAtStartingQuantity);
+        Assert.Equal("native_can_buy_refused", row.Reading.NativePurchaseReasonCode);
+        Assert.Equal(2d, row.Reading.StartingQuantity.ToDouble());
+        Assert.True(row.Reading.UseQuantityAsLevel);
+        Assert.Equal(9.5d, row.Reading.TimeToComplete);
+        Assert.False(row.Reading.OutputWithinCapacity);
+        Assert.Equal("output_capacity_blocked", row.Reading.OutputCapacityReasonCode);
+
+        var typeLink = Assert.Single(row.Types.AsSpan().ToArray());
+        Assert.Equal(type.Identity, typeLink.TypeId);
+
+        var resourceRows = row.Resources.AsSpan().ToArray();
+        Assert.Equal(2, resourceRows.Length);
+        var cost = Assert.Single(resourceRows, item =>
+            item.Kind == WorldCraftingRecipeResourceKind.AuthoredInput);
+        Assert.Equal(input.Identity, cost.ResourceId);
+        Assert.Equal(3d, cost.Amount.ToDouble());
+        Assert.True(cost.ResourceStateAvailable);
+        Assert.True(cost.Visible);
+        Assert.True(cost.BandwidthResource);
+        Assert.Equal(80d, cost.TrueQuantity.ToDouble());
+        Assert.True(cost.IsCapped);
+        Assert.Equal(100d, cost.Capacity.ToDouble());
+        Assert.Equal(4d, cost.Usage.ToDouble());
+        Assert.Equal(1.5d, cost.Drain.ToDouble());
+        var output = Assert.Single(resourceRows, item =>
+            item.Kind == WorldCraftingRecipeResourceKind.GeneratedOutput);
+        Assert.Equal(generated.Identity, output.ResourceId);
+        Assert.Equal(7d, output.Amount.ToDouble());
+
+        var consumable = Assert.Single(row.ConsumableOutputs.AsSpan().ToArray());
+        Assert.Equal(sigil.Identity, consumable.ConsumableId);
+        Assert.Equal("native_effect_scaling", consumable.QuantitySource);
+        var drain = Assert.Single(row.DrainBlocks.AsSpan().ToArray());
+        Assert.Equal(0.75d, drain.NecessaryRatio.ToDouble());
+        Assert.True(drain.Blocked);
+        Assert.Equal("engagement_drain_limited", drain.ReasonCode);
+    }
+
+    [Fact]
+    public void PersistentChallengeRequirementAdjustmentUsesTheNativeVerdictAndKeepsItsSource()
+    {
+        var improvedScribing = Guid.NewGuid();
+        var focusImprovedScribing = Guid.NewGuid();
+        var authoredModifier = Guid.NewGuid();
+        var challenge = new global::ChallengeSO();
+        challenge.SetGuid(focusImprovedScribing);
+
+        var requirementsAdjust = new FakeModifierRecord(0d);
+        requirementsAdjust.passiveModifiers[authoredModifier] = new FakeValueModifier(
+            FakeModifierKind.Raw,
+            -5d,
+            order: 0,
+            reference: challenge);
+        FakeResearch.All.Add(new FakeResearch
+        {
+            Identity = improvedScribing,
+            level = 10,
+            requirementsAdjust = requirementsAdjust,
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.Research, improvedScribing, out var research));
+        Assert.Equal(10, research.BaseRequirementLevel);
+        Assert.Equal(5, research.EffectiveRequirementLevel);
+        Assert.Equal(-5, research.RequirementLevelAdjustment);
+
+        var adjustment = Assert.Single(research.RequirementAdjustments.AsSpan().ToArray());
+        Assert.Equal(authoredModifier, adjustment.ModifierId);
+        Assert.Equal(focusImprovedScribing, adjustment.SourceId);
+        Assert.Equal("ChallengeSO", adjustment.SourceNativeType);
+        Assert.Equal((int)FakeModifierKind.Raw, adjustment.ModifierType);
+        Assert.Equal(-5d, adjustment.Amount.ToDouble());
+        Assert.Equal(0, adjustment.Order);
+        Assert.True(adjustment.Passive);
+    }
+
+    [Fact]
+    public void ResearchDecisionPublishesNativeCostHoldingsInvestmentAndBonusCapacityTogether()
+    {
+        var resource = new FakeResource { Identity = Guid.NewGuid(), Quantity = new BigDouble(80) };
+        var type = new FakeResearchType
+        {
+            Identity = Guid.NewGuid(),
+            RemainingFreeBonusLevels = 2,
+            CurrentInvestmentLevel = 1,
+            MaxInvestmentLevel = 5,
+        };
+        var fill = new FakeResearchFillList.ResourceFillEntry
+        {
+            resource = resource,
+            Quantity = new BigDouble(40),
+            Capacity = new BigDouble(100),
+        };
+        var research = new FakeResearch
+        {
+            Identity = Guid.NewGuid(),
+            maxLevel = 10,
+            researchCost = new FakeCraftingResourceCostList().With(resource, new BigDouble(20)),
+        };
+        research.researchTypes.Add(type);
+        research.resourceFillList.entries.Add(fill);
+        FakeResource.All.Add(resource);
+        FakeResearch.All.Add(research);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.Research, research.Identity, out var row));
+        Assert.True(row.Decision.Available);
+        Assert.Equal(1, row.Decision.LevelsAvailable);
+        var cost = Assert.Single(row.Decision.DevelopmentCosts.AsSpan().ToArray());
+        Assert.Equal(resource.Identity, cost.ResourceId);
+        Assert.Equal(20d, cost.Cost.ToDouble());
+        Assert.Equal(80d, cost.Amount.ToDouble());
+        var investment = Assert.Single(row.Decision.Investment.AsSpan().ToArray());
+        Assert.Equal(40d, investment.Invested.ToDouble());
+        var typeDecision = Assert.Single(row.Decision.ResearchTypes.AsSpan().ToArray());
+        Assert.Equal(type.Identity, typeDecision.ResearchTypeId);
+        Assert.Equal(2, typeDecision.RemainingBonusLevels);
+    }
+
+    [Fact]
+    public void ResearchQueueDecisionReportsOnlyTheAffordableAcceptedCostPrefix()
+    {
+        var resource = new FakeResource { Identity = Guid.NewGuid(), Quantity = new BigDouble(15) };
+        var research = new FakeResearch
+        {
+            Identity = Guid.NewGuid(),
+            maxLevel = 10,
+            researchCost = new FakeCraftingResourceCostList
+            {
+                affordabilityUsesResourceAmounts = true,
+            }.With(resource, new BigDouble(10)),
+        };
+        FakeSettingsManager.QueueMode = true;
+        FakeGlobalVariables.SetMultiBuy(3);
+        FakeResource.All.Add(resource);
+        FakeResearch.All.Add(research);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.Research, research.Identity, out var row));
+        Assert.True(row.Decision.QueueMode);
+        Assert.Equal(1, row.Decision.LevelsAvailable);
+        var cost = Assert.Single(row.Decision.DevelopmentCosts.AsSpan().ToArray());
+        Assert.Equal(10d, cost.Cost.ToDouble());
+        Assert.Equal(15d, cost.Amount.ToDouble());
+    }
+
+    [Fact]
     public void AStructuresDisabledEffectFlagIsPublished()
     {
         var active = Guid.NewGuid();
@@ -195,28 +557,149 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EveryCategoryTheGamePersistsStateForIsWalked()
     {
-        // The scope claim, asserted rather than described. Forty-eight passes: the four categories
+        // The scope claim, asserted rather than described. The union includes every mission verb
+        // reader plus main's raw-fact and structural owned-math readers.
         // the suite started with, four global-variable registries, twenty-six more the game persists
         // per-entity state for, the harvest elements' own resources — which are not in the resource
         // registry and would otherwise be reachable from nothing — the structure and upgrade cost
         // lists, the authored effects, each plot's authoring and each action's completion blocks,
-        // each purchasable entity's per-level conditions, which are second walks of registries rather
-        // than registries of their own, the plot-and-action pairs, which belong to neither side, and
+        // each purchasable entity's lifecycle-authored per-level conditions plus their separately
+        // refreshed live native verdicts, prerequisite links' volatile native gates, and crafting
+        // recipes' separately refreshed live state and player-action decisions, which are second
+        // walks of cached lifecycle bindings rather than registries of their own, the challenge
+        // decision context captured from its managers in the same frame, the
+        // plot-and-action pairs, which belong to neither side, and
         // the two that belong to no per-type registry at all and are reached by uuid: the action
-        // queues, the equipped spell loadout, and the paired Concept registries. A pass that quietly stopped covering one would show
+        // queues, the equipped spell loadout, the paired Concept registries, and the current
+        // targeting request, plus the two ordered consumable lists, their frame-local use gate, and
+        // the runtime Brewing Station selector/lifecycle surface.
+        // A pass that quietly stopped covering one would show
         // up only as a consumer finding nothing where there was something.
         var report = Collector().Collect();
 
-        Assert.Equal(48, report.Categories.Length);
+        Assert.Equal(61, report.Categories.Length);
         Assert.True(report.IsComplete, report.Describe());
 
         // A few named explicitly, one per shape: a mastery track, a state machine, a lone flag, and a
         // levelled grouping type.
         foreach (var category in
-                 new[] { "resources", "harvest resources", "time runes", "challenges", "views", "purchase view relations", "resource types", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell authored graph", "concept instances", "plot authoring", "effect blocks", "entity requirements" })
+                 new[] { "resources", "harvest resources", "harvest lifecycle", "time runes", "challenges", "challenge decisions", "views", "purchase view relations", "resource types", "crafting recipes", "crafting recipe state", "crafting decisions", "recipe books", "modifier variables", "structure costs", "upgrade costs", "plot actions", "action queues", "spell slots", "spell workbench", "spell authored graph", "ordinary alchemy loadout", "concept instances", "crafting stations", "loadouts", "targeting", "consumable inventory", "plot authoring", "effect blocks", "entity requirements", "requirement native verdicts", "prerequisite link states" })
         {
             Assert.Equal(WorldCategoryOutcome.Collected, report.For(category).Outcome);
         }
+    }
+
+    [Fact]
+    public void Brewing_station_selection_lifecycle_and_drain_are_published_together()
+    {
+        var first = new FakeCraftingStationTooltipable { Identity = Guid.NewGuid() };
+        var second = new FakeCraftingStationTooltipable { Identity = Guid.NewGuid() };
+        var output = new FakeCraftingStationTooltipable { Identity = Guid.NewGuid() };
+        var resource = new FakeResource { Identity = Guid.NewGuid(), Quantity = 20d, Visible = true };
+        FakeResource.All.Add(resource);
+        var firstElement = new FakeCraftingStationElement { tooltipable = first };
+        var secondElement = new FakeCraftingStationElement { tooltipable = second, available = false };
+        var outputElement = new FakeCraftingStationElement { tooltipable = output };
+        var structure = new FakeCraftingStructure
+        {
+            ingredientLists =
+            {
+                new FakeCraftingStationElementList { elements = { firstElement } },
+                new FakeCraftingStationElementList { elements = { secondElement } },
+            },
+        };
+        var station = new FakeCraftingStation
+        {
+            reference = structure,
+            recipeId = new FakeCraftingStationGuid(Guid.NewGuid()),
+            firstIngredient = firstElement,
+            secondIngredient = secondElement,
+            output = outputElement,
+            outputOptions = { outputElement },
+            loaded = true,
+            active = true,
+            level = 4,
+            minimumLevel = 2,
+            maximumLevel = 7,
+            drain = new FakeCraftingResourceCostList().With(resource, new BigDouble(3)),
+        };
+        structure.instances.value.Add(station);
+        FakeCraftingStructure.All.Add(structure);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldCraftingStationLookup.TryFind(world.CraftingStations, station.Identity, out var row));
+        Assert.Equal(structure.Identity, row.StructureTypeId);
+        Assert.Equal(first.Identity, row.FirstIngredientId);
+        Assert.Equal(second.Identity, row.SecondIngredientId);
+        Assert.Equal(output.Identity, row.OutputId);
+        Assert.True(row.Loaded);
+        Assert.True(row.Active);
+        Assert.Equal(4, row.Level);
+        Assert.True(WorldCraftingStationLookup.TryFindOptions(
+            world.CraftingStationOptions, station.Identity, out _, out var optionCount));
+        Assert.Equal(3, optionCount);
+        Assert.True(WorldCraftingStationLookup.TryFindDrains(
+            world.CraftingStationDrains, station.Identity, out var drainStart, out var drainCount));
+        Assert.Equal(1, drainCount);
+        Assert.Equal(resource.Identity, world.CraftingStationDrains[drainStart].ResourceId);
+        Assert.Equal(3d, world.CraftingStationDrains[drainStart].Amount.ToDouble());
+    }
+
+    [Fact]
+    public void Player_loadouts_and_snapshot_slots_are_collected_with_named_entry_identities()
+    {
+        var spellRecipe = new FakeSpellRecipe { discovered = true };
+        var equipment = new FakeEquipment { isCreated = true };
+        var alchemy = new FakeAlchemyRecipe { discovered = true };
+        FakeSpellRecipe.All.Add(spellRecipe);
+        FakeEquipment.All.Add(equipment);
+        FakeAlchemyRecipe.All.Add(alchemy);
+
+        var player = new FakePlayerLoadout
+        {
+            isSelected = true,
+            saveEquipment = true,
+            saveAlchemy = true,
+        };
+        player.GetLabel().SetName("Boss setup");
+        player.spells.Add(new FakeSpell
+        {
+            guidContainer = new FakeReferencedEntity { Identity = Guid.NewGuid() },
+            spellReference = spellRecipe,
+        });
+        player.equipment.Set(equipment, 2);
+        player.alchemy.Set(alchemy, 3);
+        FakeLoadoutManager.instance.playerLoadouts.value.Add(player);
+
+        var equipmentSnapshot = new FakeEquipmentSnapshot();
+        var equipmentRecord = new FakeLoadoutRecord<FakeEquipment>();
+        equipmentRecord.Set(equipment, 2);
+        equipmentSnapshot.SaveSnapshot(equipmentRecord);
+        FakeLoadoutManager.instance.equipmentLoadouts.value.Add(equipmentSnapshot);
+        FakeLoadoutManager.instance.alchemyLoadouts.value.Add(new FakeAlchemySnapshot());
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLoadoutLookup.TryFindPlayer(world.PlayerLoadouts,
+            player.Identity, out var published));
+        Assert.Equal("Boss setup", published.Name);
+        Assert.True(published.Selected);
+        Assert.Equal(3, world.PlayerLoadoutEntries.Count);
+        Assert.Contains(world.PlayerLoadoutEntries.AsSpan().ToArray(),
+            row => row.Kind == WorldLoadoutEntryKind.Spell &&
+                   row.ReferenceId == spellRecipe.Identity);
+        Assert.Contains(world.SnapshotSlots.AsSpan().ToArray(),
+            row => row.OwnerId == FakeLoadoutManager.instance.equipmentLoadouts.Identity &&
+                   row.Slot == 0 && row.Populated);
+        Assert.Contains(world.SnapshotEntries.AsSpan().ToArray(),
+            row => row.EntryId == equipment.Identity && row.Quantity == 2);
     }
 
     [Fact]
@@ -299,6 +782,93 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         // Same mastery level on both: readiness is its own fact, not one the level implies.
         Assert.Equal(readyRow.MasteryLevel, bankingRow.MasteryLevel);
+    }
+
+    [Fact]
+    public void SpellDiscoveryAndLoadoutCapacityArePublishedFromTheirOwningNativeSurfaces()
+    {
+        var first = new FakeGlyph { Identity = Guid.NewGuid(), level = 7, discovered = true };
+        var second = new FakeGlyph { Identity = Guid.NewGuid(), level = 3, discovered = true };
+        var discoveryResource = new FakeSpellWorkbenchResource
+        {
+            Identity = Guid.NewGuid(),
+            amount = new BigDouble(9d, 6),
+        };
+        var recipe = new FakeSpellRecipe
+        {
+            Identity = Guid.NewGuid(),
+            discovered = false,
+            coreRecipe = { first, second },
+            discoveryCost = new FakeSpellWorkbenchCostList
+            {
+                affordable = true,
+                costs =
+                {
+                    new FakeSpellWorkbenchCost
+                    {
+                        resource = discoveryResource,
+                        amount = new BigDouble(4.4d, 3),
+                    },
+                },
+            },
+        };
+        FakeGlyph.All.Add(first);
+        FakeGlyph.All.Add(second);
+        FakeSpellRecipe.All.Add(recipe);
+
+        var manager = new FakeSpellManager();
+        manager.activeSpells.maximum = 3;
+        manager.activeSpells.value.Add(new FakeSpell());
+        FakeSpellManager.instance = manager;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.SpellRecipes, recipe.Identity, out var recipeRow));
+        Assert.Equal(new[] { first.Identity, second.Identity },
+            recipeRow.CoreGlyphs.AsSpan().ToArray().Select(glyph => glyph.GlyphId));
+        var discoveryCost = Assert.Single(recipeRow.DiscoveryCosts.AsSpan().ToArray());
+        Assert.Equal(discoveryResource.Identity, discoveryCost.ResourceId);
+        Assert.Equal(4400d, discoveryCost.Cost.ToDouble());
+        Assert.Equal(9e6, discoveryCost.AvailableAmount.ToDouble());
+        Assert.True(recipeRow.DiscoveryAffordable);
+
+        Assert.Equal(1, world.SpellWorkbench.EquippedCount);
+        Assert.Equal(3, world.SpellWorkbench.MaximumEquipped);
+        Assert.True(world.SpellWorkbench.HasEmptySlot);
+        Assert.Equal(1, world.SpellWorkbench.OutputLevel);
+        Assert.Equal(100, world.SpellWorkbench.MaximumOutputLevel);
+        Assert.Equal(1, world.SpellWorkbench.ReserveLevel);
+        Assert.Equal(100, world.SpellWorkbench.MaximumReserveLevel);
+    }
+
+    [Fact]
+    public void GenericDiscoveryPublishesTheAuthoredGlyphAndResourceRecipeOnceWithItsDecision()
+    {
+        var glyphComponent = new global::GlyphSO();
+        glyphComponent.SetGuid(Guid.NewGuid());
+        var resourceComponent = new global::ResourceSO();
+        resourceComponent.SetGuid(Guid.NewGuid());
+        var output = new FakeGlyph
+        {
+            Identity = Guid.NewGuid(),
+            NativeAvailable = true,
+            NativeDiscoverVisible = true,
+            NativeCanDiscover = true,
+        };
+        output.genericDiscoveryGlyphs.Add(glyphComponent);
+        output.genericDiscoveryResources.Add(resourceComponent);
+        FakeGlyph.All.Add(output);
+
+        var collector = Collector();
+        collector.Collect();
+        var world = collector.Build();
+
+        var row = Assert.Single(world.Glyphs.AsSpan().ToArray());
+        Assert.Equal(glyphComponent.GetGuid(), Assert.Single(row.Discovery.GlyphRecipe.AsSpan().ToArray()));
+        Assert.Equal(resourceComponent.GetGuid(), Assert.Single(row.Discovery.ResourceRecipe.AsSpan().ToArray()));
     }
 
     [Fact]
@@ -611,6 +1181,55 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(WorldLookup.TryFind(world.AlchemyRecipes, recipe.Identity, out var row));
         Assert.Equal(-1d, recipe.maxUsageSlots.GetValue().ToDouble());
         Assert.Equal(5d, row.ResolvedMaxUsageSlots.ToDouble());
+    }
+
+    [Fact]
+    public void OrdinaryAlchemyPublishesTheOrderedClickDecisionAndUsageHoldings()
+    {
+        var resource = new FakeResource
+        {
+            Identity = Guid.NewGuid(),
+            Quantity = 80d,
+            maxQuantity = new FakeModifierRecord(100d),
+            Visible = true,
+        };
+        FakeResource.All.Add(resource);
+        var type = new FakeAlchemyType { Identity = KnownEntities.Alchemy.Uuid };
+        FakeAlchemyType.All.Add(type);
+        var recipe = new FakeAlchemyRecipe
+        {
+            Identity = Guid.NewGuid(),
+            coreType = type,
+            discovered = true,
+            freeUsageSlots = new FakeModifierRecord(1d),
+            maxUsageSlots = new FakeModifierRecord(5d),
+            usageCost = new FakeCraftingResourceCostList()
+                .With(resource, new BigDouble(5d)),
+        };
+        FakeAlchemyRecipe.All.Add(recipe);
+        FakeAlchemyManager.instance.activeAlchemy.value.Add(new FakeAlchemyInstance(recipe)
+        {
+            quantity = 1,
+            queuedQuantity = 2,
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldAlchemyLoadoutLookup.TryFind(
+            world.AlchemyLoadout, recipe.Identity, out var decision));
+        Assert.Equal(0, decision.Position);
+        Assert.Equal(1, decision.Amount);
+        Assert.Equal(2, decision.TargetAmount);
+        Assert.Equal(3, decision.MaximumAdd);
+        Assert.Equal(2, decision.TargetAmount);
+        Assert.True(WorldAlchemyLoadoutLookup.TryFindCostRange(
+            world.AlchemyUsageCosts, recipe.Identity, out var start, out var count));
+        Assert.Equal(1, count);
+        Assert.Equal(resource.Identity, world.AlchemyUsageCosts[start].ResourceId);
+        Assert.Equal(5d, world.AlchemyUsageCosts[start].Amount.ToDouble());
     }
 
     [Fact]
@@ -1065,6 +1684,29 @@ public sealed class GameWorldCollectorTests : IDisposable
         }
     }
 
+    [Fact]
+    public void PendingTargetRequestPublishesEveryEligibleStructureInNativeOrder()
+    {
+        var owner = new FakeStructure { Identity = Guid.NewGuid() };
+        var first = new FakeStructure { Identity = Guid.NewGuid(), Level = 3 };
+        var second = new FakeStructure { Identity = Guid.NewGuid(), Level = 7 };
+        FakeStructure.All.AddRange(new[] { owner, first, second });
+        FakeTargetingManager.Current = new FakeTargetingManager.TargetLink(owner, first, second);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        var request = Assert.Single(world.Targeting.AsSpan().ToArray());
+        Assert.Equal(owner.GetName(), request.OwnerName);
+        Assert.True(request.CancelAvailable);
+        Assert.Equal(new[] { first.Identity, second.Identity },
+            request.Candidates.AsSpan().ToArray().Select(candidate => candidate.StructureId));
+        Assert.Equal(new[] { 0, 1 },
+            request.Candidates.AsSpan().ToArray().Select(candidate => candidate.Position));
+    }
+
     // The member shape each binder requires, stated once. Field names that a binder reads as fields
     // are spelled exactly as the game spells them; everything else is reached through an accessor, so
     // the property names here are free to read well.
@@ -1088,7 +1730,55 @@ public sealed class GameWorldCollectorTests : IDisposable
         public List<FakeUpgrade> GetAll() => FakeUpgrade.All;
     }
 
-    private sealed class FakeStructure : FakeIdRegistry
+    private sealed class FakeConsumableRefListVariable
+    {
+        public List<FakeConsumable?> value = new();
+        public int Maximum = 4;
+        public int GetMax() => Maximum;
+    }
+
+    private sealed class FakeConsumableInventory
+    {
+        internal static FakeConsumableInventory _instance = new();
+        internal static bool CanUse = true;
+        public FakeConsumableRefListVariable allConsumables = new();
+        public FakeConsumableRefListVariable hotBar = new();
+        public static bool CanUseConsumable() => CanUse;
+
+        internal static void Reset()
+        {
+            _instance = new FakeConsumableInventory();
+            CanUse = true;
+        }
+    }
+
+    private sealed class FakeTargetingResultInfo { }
+
+    private static class FakeTargetingManager
+    {
+        internal static TargetLink? Current;
+        public static bool IsTargeting() => Current is not null;
+        public static TargetLink? GetTargetingLink() => Current;
+        internal static void Reset() => Current = null;
+
+        internal sealed class TargetLink
+        {
+            private readonly List<IFakeTooltipable> targets;
+            private readonly IFakeTooltipable owner;
+            private readonly FakeScribeBaseTargetSelection selection = new();
+            private readonly FakeTargetingResultInfo resultInfo = new();
+            internal TargetLink(IFakeTooltipable owner, params IFakeTooltipable[] targets)
+            {
+                this.owner = owner;
+                this.targets = new List<IFakeTooltipable>(targets);
+            }
+            public List<IFakeTooltipable> GetAllTargets() => new(targets);
+            public IFakeTooltipable GetOwner() => owner;
+            public FakeScribeBaseTargetSelection GetTargetSelection() => selection;
+        }
+    }
+
+    private sealed class FakeStructure : FakeIdRegistry, IFakeTooltipable, IFakeScribeTargetable
     {
         public static readonly List<FakeStructure> All = new();
 
@@ -1133,6 +1823,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         public int GetQueuedQuantity() => Queued;
 
         public bool IsAvailable() => Available;
+
+        public string GetName() => "Structure " + Identity.ToString("D");
     }
 
     /// <summary>A structure's authored cost, shaped as the game shapes it: a list wrapper.</summary>
@@ -1183,6 +1875,28 @@ public sealed class GameWorldCollectorTests : IDisposable
         public bool IsAvailable() => Available;
     }
 
+    private sealed class FakePrerequisiteLink
+    {
+        public sealed class LinkDefinition
+        {
+            public FakePrerequisites prerequisites = new();
+            public bool isActiveEnabled = true;
+            public bool isPassiveEnabled;
+            public long currentFrame = -1;
+        }
+
+        public static readonly List<FakePrerequisiteLink> All = new();
+        public Guid Identity = Guid.NewGuid();
+        public List<LinkDefinition> linkTiers = new();
+
+        public Guid GetGuid() => Identity;
+    }
+
+    private static class FakeGameManager
+    {
+        public static long currentFrame;
+    }
+
     /// <summary>
     /// What an upgrade holds instead of a modifier list: a reference that resolves either to one it
     /// names or to a shared standard. The resolution is behind GetValue() on both paths.
@@ -1221,6 +1935,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         public bool isActive;
         public bool flagged;
         public bool Available = true;
+        public FakePrerequisites levelPrerequisites = new();
         public bool hiddenLevel;
         public int levelVisibilityRange = 2;
         public int requiredStagesCached;
@@ -1231,10 +1946,118 @@ public sealed class GameWorldCollectorTests : IDisposable
         public FakeModifierRecord power = new(100d);
         public FakeModifierRecord maxLevelCap = new(0d);
         public FakeModifierRecord leewayPoints = new(0d);
+        public List<FakeResearchType> researchTypes = new();
+        public FakeCraftingResourceCostList researchCost = new();
+        public FakeResearchFillList resourceFillList = new();
 
         public Guid GetGuid() => Identity;
 
         public bool IsAvailable() => Available;
+
+        public bool IsVisible() => Available;
+
+        public bool IsComplete() => maxLevel > 0 && GetBaseLevel() >= maxLevel;
+
+        public bool CanDevelop() => IsWithinDevelopRange() && !isDeveloping;
+
+        public bool IsWithinDevelopRange() =>
+            !IsComplete() && MeetsLevelRequirements() && StillHasLeeway() &&
+            IsBelowArtificialMaxLevel() && IsBelowMaxInvestmentLevel();
+
+        public bool IsWithinDevelopRangeAt(int atLevel) => IsWithinDevelopRange();
+
+        public bool HasMaxLevel() => maxLevel > 0;
+
+        public bool MeetsLevelRequirements() =>
+            levelPrerequisites.Check(new Requirements.ConditionInfo(GetRequirementLevel()));
+
+        public bool StillHasLeeway() => true;
+
+        public bool IsBelowArtificialMaxLevel() => true;
+
+        public bool IsBelowMaxInvestmentLevel() => !IsComplete();
+
+        public int GetPurchasedLevels() => level;
+
+        public int GetBaseLevel() => level;
+
+        public int GetBonusLevels() => 0;
+
+        public int GetLevel() => GetBaseLevel() + GetBonusLevels();
+
+        public int GetArtificialMaxLevel() => 0;
+
+        public int GetRequirementLevel() => requirementsAdjust.AdjustRawLevel(GetBaseLevel());
+
+        public int GetQueuedLevels() => queuedLevels + (isDeveloping ? 1 : 0);
+
+        public int GetCurrentInvestmentLevel() => level + GetQueuedLevels();
+
+        public BigDouble GetCurrentTime() => resourceFillList.GetAverageRatio() * GetRequiredTime();
+
+        public BigDouble GetRemainingTime() =>
+            (BigDouble.One - resourceFillList.GetLowestRatio()) * GetRequiredTime();
+
+        public BigDouble GetTimeRatio() => GetCurrentTime() / GetRequiredTime();
+
+        public BigDouble GetRequiredTime() => requiredTimeCached == BigDouble.Zero
+            ? new BigDouble(researchTime)
+            : requiredTimeCached;
+
+        public bool CanApplyBonusLevels() =>
+            researchTypes.Exists(type => type.GetRemainingFreeBonusLevels() > 0);
+
+        public int GetFreeBonusLevelsLeft() => researchTypes.Count == 0
+            ? 0
+            : researchTypes.Max(type => type.GetRemainingFreeBonusLevels());
+
+        public FakeCraftingResourceCostList GetDevelopmentCost() => researchCost;
+
+        public FakeCraftingResourceCostList GetDevelopmentCostAtLevel(int atLevel) =>
+            researchCost.Multiply(BigDouble.One);
+    }
+
+    private static class FakeSettingsManager
+    {
+        public static bool QueueMode;
+        public static bool CancellableSpells = true;
+        public static bool IsResearchQueueMode() => QueueMode;
+        public static bool CanCancelSpells() => CancellableSpells;
+    }
+
+    private sealed class FakeResearchType
+    {
+        public Guid Identity = Guid.NewGuid();
+        public int RemainingFreeBonusLevels { get; set; }
+        public int CurrentInvestmentLevel { get; set; }
+        public int MaxInvestmentLevel { get; set; }
+        public Guid GetGuid() => Identity;
+        public int GetRemainingFreeBonusLevels() => RemainingFreeBonusLevels;
+        public int GetCurrentInvestmentLevel() => CurrentInvestmentLevel;
+        public int GetMaxInvestmentLevel() => MaxInvestmentLevel;
+    }
+
+    internal sealed class FakeResearchFillList
+    {
+        public List<ResourceFillEntry> entries = new();
+        public BigDouble GetAverageRatio() => entries.Count == 0
+            ? BigDouble.Zero
+            : entries.Select(entry => entry.GetQuantity() / entry.GetCapacity())
+                .Aggregate(BigDouble.Zero, (sum, value) => sum + value) / new BigDouble(entries.Count);
+        public BigDouble GetLowestRatio() => entries.Count == 0
+            ? BigDouble.Zero
+            : entries.Select(entry => entry.GetQuantity() / entry.GetCapacity()).Min();
+
+        internal sealed class ResourceFillEntry
+        {
+            public FakeResource resource = new();
+            public BigDouble Quantity;
+            public BigDouble Capacity = BigDouble.One;
+            public FakeResource get_resource() => resource;
+            public BigDouble GetQuantity() => Quantity;
+            public BigDouble GetCapacity() => Capacity;
+            public BigDouble GetRemaining() => BigDouble.Max(Capacity - Quantity, BigDouble.Zero);
+        }
     }
 
     /// <summary>
@@ -1253,7 +2076,7 @@ public sealed class GameWorldCollectorTests : IDisposable
         public Guid GetGuid() => Identity;
     }
 
-    private sealed class FakeCount
+    internal sealed class FakeCount
     {
         public static readonly List<FakeCount> All = new();
 
@@ -1261,7 +2084,38 @@ public sealed class GameWorldCollectorTests : IDisposable
         public FakeModifierRecord value = new(0d);
         public bool isPercentVariable;
 
+        internal FakeCount()
+        {
+        }
+
+        internal FakeCount(int amount) => value = new FakeModifierRecord(amount);
+
         public Guid GetGuid() => Identity;
+        public int AsInt() => (int)value.GetValue().ToDouble();
+        public void SetValue(int amount) => value = new FakeModifierRecord(amount);
+    }
+
+    private static class FakeGlobalVariables
+    {
+        private static readonly FakeCount MultiBuy = new(1);
+        private static readonly List<object> LoadoutIcons = new() { new object(), new object() };
+        private static readonly List<object> LoadoutColors = new() { new object(), new object() };
+
+        public static FakeCount GetMultiBuy() => MultiBuy;
+        public static List<object> GetCustomSprites() => LoadoutIcons;
+        public static List<object> GetCustomColors() => LoadoutColors;
+
+        public static void SetMultiBuy(int amount) => MultiBuy.SetValue(amount);
+    }
+
+    internal sealed class FakeCraftingPage : UnityEngine.Object
+    {
+        public FakeScribeRecipeList availableRecipes = new();
+        public FakeScribeInstanceList craftingQueueInstances = new();
+        public FakeScribeInstanceList craftingAutomationInstances =
+            new() { isAutoList = true };
+        public FakeCount craftMode = new(0);
+        public FakeCraftingRecipeType mainCraftType = new();
     }
 
     private sealed class FakeFlag
@@ -1272,9 +2126,41 @@ public sealed class GameWorldCollectorTests : IDisposable
         public bool value;
 
         public Guid GetGuid() => Identity;
+        public bool GetValue() => value;
+        public void SetValue(bool next) => value = next;
         public bool initialValue;
         public bool isSaved;
         public int observerId;
+    }
+
+    private sealed class FakeChallengeList
+    {
+        public List<FakeChallenge> value = new();
+        public int Maximum = 3;
+        public int GetMax() => Maximum;
+        public bool IsChallengeRestricted(FakeChallenge challenge) => false;
+    }
+
+    private sealed class FakeChallengeManager
+    {
+        public static FakeChallengeManager instance = new();
+        public FakeChallengeList preferredChallenges = new();
+        public FakeChallengeList activeChallenges = new();
+    }
+
+    private sealed class FakePersistentResetManager
+    {
+        public static FakePersistentResetManager instance = new();
+        public FakeResource persistentResource = new();
+        public FakeCount persistValue = new(0);
+        public FakeCount persistValueNew = new(0);
+        public FakeCount persistValueLast = new(0);
+        public FakeCount persistentResetCount = new(0);
+        public FakeChallengeList activeChallenges = new();
+        public FakeCount challengeRerollsLeft = new(1);
+        public FakeCount challengeRerollsMax = new(1);
+        public FakeFlag hasCompleteWorldCycle = new() { value = true };
+        public FakeFlag hasFetchedChallenges = new();
     }
 
     /// <summary>
@@ -1428,6 +2314,70 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(0, world.Resources.Count);
     }
 
+    [Fact]
+    public void Harvest_element_and_action_controls_publish_active_counts_and_native_costs()
+    {
+        var resource = new FakeResource
+        {
+            Identity = Guid.NewGuid(),
+            Quantity = new BigDouble(20),
+            maxQuantity = new FakeModifierRecord(100d),
+            Visible = true,
+        };
+        FakeResource.All.Add(resource);
+        var element = new FakeHarvestElement { masteryLevel = 3, MaximumAdditional = 7 };
+        element.Resource.maxQuantity = new FakeModifierRecord(100d);
+        element.usageCost.costs.Add(new FakeCraftingResourceTuple
+        {
+            resource = resource,
+            valueBig = new BigDouble(4),
+        });
+        var action = new FakeHarvestAction { NextDrainPercent = new BigDouble(150) };
+        action.DrainCost.costs.Add(new FakeCraftingResourceTuple
+        {
+            resource = resource,
+            valueBig = new BigDouble(3),
+        });
+        var prototype = new FakeHarvestActionInstance
+        {
+            Element = element,
+            Action = action,
+            Maximum = 4,
+        };
+        element.ActionInstances.Add(prototype);
+        FakeHarvestElement.All.Add(element);
+        WorldCategoryFakes.ActiveHarvestElements.SetStacks(element, 2);
+        WorldCategoryFakes.ActiveHarvestActions.value.Add(new FakeHarvestActionInstance
+        {
+            Element = element,
+            Action = action,
+            Maximum = 4,
+            instances = 1,
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        var elementControl = Assert.Single(world.HarvestElementControls.AsSpan().ToArray());
+        Assert.Equal(2, elementControl.Active);
+        Assert.Equal(7, elementControl.MaximumAdditional);
+        Assert.True(elementControl.AddAvailable);
+        var actionControl = Assert.Single(world.HarvestActionControls.AsSpan().ToArray());
+        Assert.Equal(action.Identity, actionControl.ActionId);
+        Assert.Equal(1, actionControl.Active);
+        Assert.Equal(4, actionControl.Maximum);
+        Assert.True(actionControl.AddAvailable);
+        Assert.Equal(2, world.HarvestLifecycleCosts.Count);
+        Assert.Contains(world.HarvestLifecycleCosts.AsSpan().ToArray(), cost =>
+            cost.Kind == WorldHarvestLifecycleCostKind.ElementUsage &&
+            cost.Amount == new BigDouble(4));
+        Assert.Contains(world.HarvestLifecycleCosts.AsSpan().ToArray(), cost =>
+            cost.Kind == WorldHarvestLifecycleCostKind.NextActionDrain &&
+            cost.Amount == new BigDouble(4.5));
+    }
+
     /// <summary>
     /// A single-valued reference travels as the identity of what it points at, never as the object.
     /// The alchemy type's selected level is the case that motivated the rule: the game holds the
@@ -1487,6 +2437,52 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(levelling.Identity, resource.Reading.LevelVariableId);
     }
 
+    [Fact]
+    public void DiscoveryTreesPublishExactDecisionCostsAndOrderedOfferIdentities()
+    {
+        var currency = new FakeResource { Quantity = new BigDouble(563, 22) };
+        var idle = new FakeDiscoveryTree
+        {
+            actionMode = FakeState.Idle,
+            rerollsLeft = 1,
+            hasRemainingDiscovery = true,
+            nextItemCost = new FakeDiscoveryCostList { affordable = true },
+        };
+        idle.nextItemCost.costs.Add(
+            new FakeDiscoveryCost(currency, new BigDouble(11, 23)));
+
+        var firstOffer = Guid.NewGuid();
+        var secondOffer = Guid.NewGuid();
+        var choice = new FakeDiscoveryTree
+        {
+            actionMode = FakeState.Done,
+            rerollsLeft = 2,
+            hasRemainingDiscovery = true,
+        };
+        choice.currentChoiceIds.Add(new FakeGuidContainer(firstOffer));
+        choice.currentChoiceIds.Add(new FakeGuidContainer(secondOffer));
+        FakeDiscoveryTree.All.Add(idle);
+        FakeDiscoveryTree.All.Add(choice);
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldLookup.TryFind(world.DiscoveryTrees, idle.Identity, out var idleRow));
+        Assert.True(idleRow.Visible);
+        Assert.True(idleRow.NextItemAffordable);
+        Assert.Equal(1, idleRow.NextItemCosts.Count);
+        Assert.Equal(currency.Identity, idleRow.NextItemCosts[0].ResourceId);
+        Assert.Equal(new BigDouble(11, 23), idleRow.NextItemCosts[0].Amount);
+        Assert.Equal(new BigDouble(563, 22), idleRow.NextItemCosts[0].AvailableAmount);
+
+        Assert.True(WorldLookup.TryFind(world.DiscoveryTrees, choice.Identity, out var choiceRow));
+        Assert.Equal(2, choiceRow.CurrentOfferIds.Count);
+        Assert.Equal(firstOffer, choiceRow.CurrentOfferIds[0]);
+        Assert.Equal(secondOffer, choiceRow.CurrentOfferIds[1]);
+    }
+
     /// <summary>
     /// The tick's fixed timestep is read during collection, not during derivation:
     /// <c>Time.fixedDeltaTime</c> is main-thread-only and Build is the half that may run anywhere.
@@ -1523,6 +2519,8 @@ public sealed class GameWorldCollectorTests : IDisposable
     {
         var idle = Guid.NewGuid();
         var ticking = Guid.NewGuid();
+        var knowledge = new FakeResource { Quantity = new BigDouble(80) };
+        FakeResource.All.Add(knowledge);
 
         FakeRitual.All.Add(new FakeRitual
         {
@@ -1530,7 +2528,7 @@ public sealed class GameWorldCollectorTests : IDisposable
             discovered = true,
             durationRewardBlocks = { new object() },
         });
-        FakeRitual.All.Add(new FakeRitual
+        var selected = new FakeRitual
         {
             Identity = ticking,
             discovered = true,
@@ -1541,9 +2539,24 @@ public sealed class GameWorldCollectorTests : IDisposable
             echoLevel = 1,
             chainLevel = 3,
             battleTotalWeight = new BigDouble(4200d),
+            wavesCompleted = 3,
             ritualInstances = new List<object> { new(), new() },
             durationRewardBlocks = { new object() },
-        });
+            currentSpoils =
+            {
+                new FakeSpoilsRecordEntry(knowledge, new BigDouble(12)),
+            },
+            maximumSelectedLevel = 12,
+            activationCost = new FakeCraftingResourceCostList()
+                .With(knowledge, new BigDouble(5)),
+            completionCost = new FakeCraftingResourceCostList()
+                .With(knowledge, new BigDouble(2)),
+            completionCostMod = new ValueModifierRecord(new BigDouble(100d)).Dirty(),
+        };
+        selected.completionCostPerLevel.variable!.value.modifiers.Add(
+            new FakeValueModifier(FakeModifierKind.Raw, 1d, order: 0));
+        FakeRitual.All.Add(selected);
+        FakeRitualManager.instance.selectedRitual.value = selected;
 
         var collector = Collector();
         var report = collector.Collect();
@@ -1560,6 +2573,13 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, quiet.DurationRewardBlocks);
 
         Assert.True(WorldLookup.TryFind(world.Rituals, ticking, out var running));
+        Assert.True(running.Decision.Selected);
+        Assert.Equal(12, running.Decision.MaximumStartingLevel);
+        Assert.True(running.Decision.ActivationAffordable);
+        Assert.Equal(1, running.Decision.ActivationCosts.Count);
+        Assert.Equal(1, running.Decision.CompletionCosts.Count);
+        Assert.Equal(new BigDouble(5), running.Decision.ActivationCosts[0].Cost);
+        Assert.Equal(new BigDouble(9), running.Decision.CompletionCosts[0].Cost);
         Assert.True(running.InBattle);
         Assert.Equal(2, running.ActiveInstances);
         Assert.Equal(7, running.SelectedLevel);
@@ -1568,6 +2588,14 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, running.EchoLevel);
         Assert.Equal(3, running.ChainLevel);
         Assert.Equal(4200d, running.BattleTotalWeight.ToDouble());
+
+        // The results screen's own two facts. A run that has ended leaves no other record of the
+        // verdict End() showed or of what it banked, and neither is derivable from a wave count.
+        Assert.True(running.FailedRun);
+        Assert.Equal(1, running.Spoils.Count);
+        Assert.Equal(knowledge.GetGuid(), running.Spoils[0].ResourceId);
+        Assert.Equal(new BigDouble(12), running.Spoils[0].Quantity);
+        Assert.Equal(0, quiet.Spoils.Count);
     }
 
     /// <summary>
@@ -1605,6 +2633,46 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(4, row.MaxCreatedLevel);
         Assert.Equal(12, row.MaximumCarryLoad);
         Assert.Equal(150d, row.Modifiers.PrepSpeed.ToDouble());
+    }
+
+    [Fact]
+    public void ConsumableInventoryPublishesBothOrderedListsAndFrameLocalUseAdmission()
+    {
+        var first = new FakeConsumable { Identity = Guid.NewGuid(), visible = true, quantity = 2 };
+        var second = new FakeConsumable { Identity = Guid.NewGuid(), visible = true, quantity = 1 };
+        FakeConsumable.All.Add(first);
+        FakeConsumable.All.Add(second);
+        FakeConsumableInventory._instance.allConsumables.value.Add(first);
+        FakeConsumableInventory._instance.allConsumables.value.Add(null);
+        FakeConsumableInventory._instance.allConsumables.value.Add(second);
+        FakeConsumableInventory._instance.allConsumables.Maximum = 12;
+        FakeConsumableInventory._instance.hotBar.value.Add(second);
+        FakeConsumableInventory._instance.hotBar.Maximum = 4;
+        FakeConsumableInventory.CanUse = false;
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.False(world.ConsumableInventory.CanUse);
+        Assert.Equal(12, world.ConsumableInventory.InventoryMaximum);
+        Assert.Equal(4, world.ConsumableInventory.HotbarMaximum);
+        var slots = world.ConsumableInventory.Slots.AsSpan().ToArray();
+        Assert.Equal(4, slots.Length);
+        Assert.Equal(
+            new[] { first.Identity, Guid.Empty, second.Identity, second.Identity },
+            slots.Select(slot => slot.ConsumableId));
+        Assert.Equal(
+            new[]
+            {
+                WorldConsumableListKind.Inventory,
+                WorldConsumableListKind.Inventory,
+                WorldConsumableListKind.Inventory,
+                WorldConsumableListKind.Hotbar,
+            },
+            slots.Select(slot => slot.List));
+        Assert.Equal(4, report.For("consumable inventory").Sampled);
     }
 
     [Fact]
@@ -1762,9 +2830,42 @@ public sealed class GameWorldCollectorTests : IDisposable
 
         var row = world.PurchaseCosts[start];
         Assert.Equal(water, row.ResourceId);
+        Assert.Equal(100d, row.BaseExactAmount.ToDouble(), 6);
+        Assert.Equal(730.8d, row.EffectiveExactAmount.ToDouble(), 6);
         Assert.Equal(730.8d, row.Amount.ToDouble(), 6);
         Assert.Equal(3, row.ExactGroupedLevels);
         Assert.Equal(2208.6d, row.ExactGroupedAmount.ToDouble(), 6);
+        Assert.True(row.AffordabilityEvaluated);
+        Assert.Equal(500d, row.AvailableAmount.ToDouble(), 6);
+        Assert.Equal(730.8d, row.CombinedEffectiveAmount.ToDouble(), 6);
+        Assert.False(row.ResourceAffordable);
+        Assert.Equal("insufficient_quantity", row.ResourceAffordabilityReasonCode);
+        Assert.False(row.Affordable);
+        Assert.Equal("insufficient_quantity", row.AffordabilityReasonCode);
+
+        var sources = row.ModifierSources.AsSpan().ToArray();
+        Assert.Equal(10, sources.Length);
+        Assert.Equal(
+            new[]
+            {
+                "resource.attribute_cost_modifier",
+                "resource.quality",
+                "player.attribute_quality_bonus",
+                "resource.effective_attribute_cost",
+                "structure.cost_per_quantity",
+                "structure.cost_scaling",
+                "structure.passive_cost",
+                "structure.active_cost",
+                "player.structure_cost",
+                "structure.committed_quantity",
+            },
+            sources.Select(source => source.Name).ToArray());
+        var perQuantity = sources.Single(source => source.Name == "structure.cost_per_quantity");
+        Assert.Equal(modifier.Identity, perQuantity.SourceId);
+        Assert.Equal("ValueModifierVariable", perQuantity.SourceNativeType);
+        Assert.True(perQuantity.HasModifierType);
+        Assert.Equal((int)FakeModifierKind.Raw, perQuantity.ModifierType);
+        Assert.Equal(0.5d, perQuantity.Value.ToDouble(), 6);
     }
 
     /// <summary>
@@ -1855,6 +2956,14 @@ public sealed class GameWorldCollectorTests : IDisposable
         }
 
         Assert.Equal(600d, total, 6);
+
+        for (var index = start; index < start + count; index++)
+        {
+            Assert.True(world.PurchaseCosts[index].AffordabilityEvaluated);
+            Assert.True(world.PurchaseCosts[index].ResourceAffordable);
+            Assert.True(world.PurchaseCosts[index].Affordable);
+            Assert.Equal("affordable", world.PurchaseCosts[index].AffordabilityReasonCode);
+        }
 
         Assert.True(WorldPurchaseCostLookup.TryFindRange(world.PurchaseCosts, second, out _, out var otherCount));
         Assert.Equal(1, otherCount);
@@ -2169,7 +3278,104 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(WorldPurchaseCostLookup.TryFindRange(world.PurchaseCosts, insight, out var start, out var count));
         Assert.Equal(1, count);
         Assert.Equal(water, world.PurchaseCosts[start].ResourceId);
+        Assert.Equal(50d, world.PurchaseCosts[start].BaseExactAmount.ToDouble(), 6);
         Assert.Equal(200000d, world.PurchaseCosts[start].Amount.ToDouble(), 6);
+        Assert.Equal(
+            new[]
+            {
+                "upgrade.priced_level",
+                "upgrade.resource_cost_per_level.modifier",
+                "upgrade.resource_cost_per_level.exponent",
+            },
+            world.PurchaseCosts[start].ModifierSources.AsSpan().ToArray()
+                .Select(source => source.Name)
+                .ToArray());
+    }
+
+    /// <summary>
+    /// Duplicate authored rows paid in one resource are one affordability obligation. This is the
+    /// same stricter-than-native aggregation Auto Buy uses, not two independent checks which would
+    /// each pass while their combined payment fails.
+    /// </summary>
+    [Fact]
+    public void DuplicateResourceCostsUseTheSharedExactCombinerForAffordability()
+    {
+        var water = Guid.NewGuid();
+        var cauldron = Guid.NewGuid();
+        var modifier = new FakeModifierVariable
+        {
+            Identity = Guid.NewGuid(),
+            value = new FakeValueModifier(FakeModifierKind.Raw, 0d, order: 0),
+        };
+        FakeModifierVariable.All.Add(modifier);
+        FakeResource.All.Add(new FakeResource { Identity = water, Quantity = 100d });
+        FakeStructure.All.Add(new FakeStructure
+        {
+            Identity = cauldron,
+            costPerQuantity = new FakeModifierRef { variable = modifier },
+            baseCost = CostOf((water, 40d), (water, 70d)),
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldPurchaseCostLookup.TryFindRange(
+            world.PurchaseCosts, cauldron, out var start, out var count));
+        Assert.Equal(2, count);
+        for (var index = start; index < start + count; index++)
+        {
+            var row = world.PurchaseCosts[index];
+            Assert.Equal(110d, row.CombinedEffectiveAmount.ToDouble(), 6);
+            Assert.Equal(100d, row.AvailableAmount.ToDouble(), 6);
+            Assert.False(row.ResourceAffordable);
+            Assert.False(row.Affordable);
+            Assert.Equal("insufficient_quantity", row.AffordabilityReasonCode);
+        }
+    }
+
+    [Fact]
+    public void BandwidthPurchaseAffordabilityUsesHeadroomRatherThanHoldings()
+    {
+        var bandwidth = Guid.NewGuid();
+        var cauldron = Guid.NewGuid();
+        var modifier = new FakeModifierVariable
+        {
+            Identity = Guid.NewGuid(),
+            value = new FakeValueModifier(FakeModifierKind.Raw, 0d, order: 0),
+        };
+        FakeModifierVariable.All.Add(modifier);
+        FakeResource.All.Add(new FakeResource
+        {
+            Identity = bandwidth,
+            Quantity = 80d,
+            bandwidthResource = true,
+            maxQuantity = new FakeModifierRecord(100d),
+        });
+        FakeStructure.All.Add(new FakeStructure
+        {
+            Identity = cauldron,
+            costPerQuantity = new FakeModifierRef { variable = modifier },
+            baseCost = CostOf((bandwidth, 30d)),
+        });
+
+        var collector = Collector();
+        var report = collector.Collect();
+        var world = collector.Build();
+
+        Assert.True(report.IsComplete, report.Describe());
+        Assert.True(WorldPurchaseCostLookup.TryFindRange(
+            world.PurchaseCosts, cauldron, out var start, out _));
+        var row = world.PurchaseCosts[start];
+        Assert.Equal(80d, world.Resources.AsSpan().ToArray()
+            .Single(resource => resource.EntityId == bandwidth).TrueQuantity.ToDouble(), 6);
+        Assert.Equal(20d, row.AvailableAmount.ToDouble(), 6);
+        Assert.Equal(30d, row.CombinedEffectiveAmount.ToDouble(), 6);
+        Assert.False(row.ResourceAffordable);
+        Assert.False(row.Affordable);
+        Assert.Equal("insufficient_bandwidth", row.ResourceAffordabilityReasonCode);
+        Assert.Equal("insufficient_bandwidth", row.AffordabilityReasonCode);
     }
 
     /// <summary>
@@ -2800,8 +4006,16 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void TheEquippedLoadoutIsPublishedByThePositionACastIsAddressedBy()
     {
-        var fireball = new FakeSpellRecipe { discovered = true };
+        var fireball = new FakeSpellRecipe { discovered = true, masteryLevel = 5 };
         FakeSpellRecipe.All.Add(fireball);
+        var echo = new FakeGlyph
+        {
+            Identity = Guid.NewGuid(),
+            discovered = true,
+            augmentsSpells = true,
+            maxUsages = new FakeModifierRecord(3d),
+        };
+        FakeGlyph.All.Add(echo);
 
         var water = Guid.NewGuid();
         var mana = Guid.NewGuid();
@@ -2814,9 +4028,16 @@ public sealed class GameWorldCollectorTests : IDisposable
             currentCharges = 2,
             maximumCharges = 3,
             cooldownRemaining = new BigDouble(4d, 0),
+            outputLevel = 4,
+            effectiveLevel = 6,
+            requiredMasteryLevel = 3,
+            durationSpell = true,
+            usageRequirementsMet = false,
             cost = new FakeSpellCostList().With(water, 50d),
             drainCost = new FakeSpellCostList().With(mana, 7d),
         };
+        equipped.augmentGlyphs.Add(echo);
+        equipped.augmentGlyphs.Add(echo);
 
         var loadout = new FakeSpellLoadout();
         loadout.value.Add(equipped);
@@ -2841,6 +4062,16 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(2, first.CurrentCharges);
         Assert.Equal(3, first.MaximumCharges);
         Assert.Equal(4d, first.CooldownRemaining.ToDouble());
+        Assert.Equal(4, first.OutputLevel);
+        Assert.Equal(6, first.EffectiveLevel);
+        Assert.Equal(3, first.RequiredMasteryLevel);
+        Assert.Equal(5, first.RecipeMasteryLevel);
+        Assert.True(first.DurationSpell);
+        Assert.False(first.UsageRequirementsMet);
+        Assert.True(first.CancellationEnabled);
+        var applied = Assert.Single(first.AugmentGlyphs.AsSpan().ToArray());
+        Assert.Equal(echo.Identity, applied.GlyphId);
+        Assert.Equal(2, applied.Quantity);
 
         // The empty position keeps its index rather than sliding down into the hole's place.
         Assert.False(WorldSpellSlotLookup.TryFind(world.SpellSlots, 1, out _));
@@ -2878,6 +4109,7 @@ public sealed class GameWorldCollectorTests : IDisposable
     [Fact]
     public void EachSlotCarriesTheGamesOwnAnswerForEveryStateItDistinguishes()
     {
+        FakeSettingsManager.CancellableSpells = false;
         FakeSpellManager.NativeCanCast = false;
         var loadout = new FakeSpellLoadout();
         loadout.value.Add(new FakeSpell
@@ -2911,7 +4143,9 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.True(busy.Chargeable);
         Assert.False(busy.CastReady);
         Assert.False(busy.ChargeAvailable);
+        Assert.False(busy.CanRemove);
         Assert.False(busy.ResourcesCovered);
+        Assert.False(busy.CancellationEnabled);
 
         // An occupant with no recipe behind it still publishes a row: the slot is filled, and a
         // consumer that cannot name what is in it should see that rather than see nothing.
@@ -2928,6 +4162,10 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.False(idle.Toggled);
         Assert.False(idle.CasterAvailable);
         Assert.True(idle.CastReady);
+        Assert.True(idle.CanRemove);
+        Assert.False(idle.CancellationEnabled);
+        Assert.Equal(1, loadout.value[0]!.CanRemoveCalls);
+        Assert.Equal(1, loadout.value[1]!.CanRemoveCalls);
     }
 
     /// <summary>
@@ -3120,6 +4358,27 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(WorldCategoryOutcome.Collected, report.For("resources").Outcome);
     }
 
+    private static void AssertLevelDecision(
+        WorldLevelableDecision decision,
+        int total,
+        int bonus,
+        int paidCost,
+        int? bonusCost)
+    {
+        Assert.Equal(total, decision.TotalLevel);
+        Assert.Equal(bonus, decision.BonusLevels);
+        Assert.True(decision.CanPurchase);
+        Assert.True(decision.PurchaseAffordable);
+        Assert.Equal((double)paidCost,
+            Assert.Single(decision.PaidCosts.AsSpan().ToArray()).Amount.ToDouble());
+        Assert.Equal(bonusCost.HasValue, decision.SupportsBonus);
+        if (!bonusCost.HasValue) return;
+        Assert.True(decision.BonusResourcesVisible);
+        Assert.True(decision.BonusAffordable);
+        Assert.Equal((double)bonusCost.Value,
+            Assert.Single(decision.BonusCosts.AsSpan().ToArray()).Amount.ToDouble());
+    }
+
     private static FakeCostList CostOf(params (Guid Resource, double Amount)[] entries)
     {
         var list = new FakeCostList();
@@ -3165,12 +4424,11 @@ public sealed class GameWorldCollectorTests : IDisposable
     }
 
     /// <summary>
-    /// A player that cannot be bound costs the globals, not the pass. They feed five terms out of a
-    /// chain of a dozen; failing the whole collection over them would take away every category to
-    /// protect one number.
+    /// A player that cannot be bound still leaves unrelated rows usable, but the spell workbench
+    /// now fails closed because output level is required pre-decision state for composition.
     /// </summary>
     [Fact]
-    public void AnUnbindablePlayerLeavesTheGlobalsAtZeroRatherThanFailingThePass()
+    public void AnUnbindablePlayerLocalizesFailureToTheSpellWorkbench()
     {
         var mana = Guid.NewGuid();
         FakeResource.All.Add(OverflowingResource(mana));
@@ -3178,7 +4436,8 @@ public sealed class GameWorldCollectorTests : IDisposable
         var collector = Collector(("Player", null));
         var report = collector.Collect();
 
-        Assert.True(report.IsComplete, report.Describe());
+        Assert.False(report.IsComplete);
+        Assert.Equal(WorldCategoryOutcome.Unavailable, report.For("spell workbench").Outcome);
         Assert.True(WorldLookup.TryFind(collector.Build().Resources, mana, out var row));
         Assert.False(BigDouble.IsNaN(row.TrueRate) || BigDouble.IsInfinity(row.TrueRate));
     }
@@ -3205,13 +4464,22 @@ public sealed class GameWorldCollectorTests : IDisposable
     /// every test that does not speak about quality prices exactly as it did before the discount was
     /// read at all.
     /// </remarks>
-    private static class FakePlayerGlobals
+    private sealed class FakePlayerGlobals
     {
+        private static readonly FakePlayerGlobals _instance = new();
         private static FakeGlobalVariable _overflow = new(200d);
         private static FakeGlobalVariable _overflowLoss = new(100d);
         private static FakeGlobalVariable _resetTimePassed = new(60d);
         private static FakeGlobalVariable _structureCost = new(100d);
         private static FakeGlobalVariable _attributeQualityBonus = new(0d);
+        private FakeCount spellOutputLevel = new(1);
+        public FakeCount maxSpellOutputLevel = new(100);
+        private FakeCount reserveLevel = new(1);
+        public FakeCount maxReserveLevel = new(100);
+
+        private FakePlayerGlobals()
+        {
+        }
 
         /// <summary>Back to the game's authored values, so one test cannot set another's globals.</summary>
         internal static void Reset()
@@ -3221,6 +4489,10 @@ public sealed class GameWorldCollectorTests : IDisposable
             _resetTimePassed = new FakeGlobalVariable(60d);
             _structureCost = new FakeGlobalVariable(100d);
             _attributeQualityBonus = new FakeGlobalVariable(0d);
+            _instance.spellOutputLevel = new FakeCount(1);
+            _instance.maxSpellOutputLevel = new FakeCount(100);
+            _instance.reserveLevel = new FakeCount(1);
+            _instance.maxReserveLevel = new FakeCount(100);
         }
 
         internal static void SetOverflow(double percent) => _overflow = new FakeGlobalVariable(percent);
@@ -3240,6 +4512,9 @@ public sealed class GameWorldCollectorTests : IDisposable
         public static FakeGlobalVariable GetStructureCost() => _structureCost;
 
         public static FakeGlobalVariable GetAttributeQualityBonus() => _attributeQualityBonus;
+
+        public static FakeCount GetSpellOutputLevel() => _instance.spellOutputLevel;
+        public static FakeCount GetReserveLevel() => _instance.reserveLevel;
     }
 
     private sealed class FakeGlobalVariable

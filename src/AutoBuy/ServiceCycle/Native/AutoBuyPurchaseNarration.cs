@@ -11,7 +11,7 @@ internal static class AutoBuyPurchaseNarration
     /// submitted. A missing native surface is an actionable anomaly.
     /// </summary>
     public static string QueueRoomUnavailable(AutoBuyCandidateKind kind, Guid uuid) =>
-        $"Auto Buy failed to purchase {kind} {uuid:D}: queue room unavailable.";
+        $"Auto Buy failed to purchase {kind} {EntityIdentityFormatter.Format(uuid)}: queue room unavailable.";
 
     /// <summary>
     /// Returns one warning for a refusal that requires attention, or null for successful and ordinary
@@ -29,7 +29,7 @@ internal static class AutoBuyPurchaseNarration
             return null;
         }
 
-        var candidate = $"{kind} {uuid:D}";
+        var candidate = $"{kind} {EntityIdentityFormatter.Format(uuid)}";
         return submission.Preflight switch
         {
             AutoBuyPurchasePreflight.CandidateUnavailable =>

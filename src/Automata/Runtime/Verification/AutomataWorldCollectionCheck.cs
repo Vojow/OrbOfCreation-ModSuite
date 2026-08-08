@@ -567,7 +567,7 @@ internal sealed class AutomataWorldCollectionCheck
             if (first.Length == 0)
             {
                 first =
-                    $"{Describe(entity, entityId)}: " +
+                    $"{Describe(entityId)}: " +
                     $"ours=[type {published.ModifierType} amount {published.Amount} order {published.Order}] " +
                     $"theirs=[type {theirType} amount {theirAmount} order {theirOrder}]";
             }
@@ -818,7 +818,7 @@ internal sealed class AutomataWorldCollectionCheck
                     {
                         falseExclusions++;
                         if (namedFalseExclusions.Count < 3)
-                            namedFalseExclusions.Add($"{Describe(entity, entityId)} [{bucket}]");
+                            namedFalseExclusions.Add($"{Describe(entityId)} [{bucket}]");
                     }
                 }
 
@@ -841,7 +841,7 @@ internal sealed class AutomataWorldCollectionCheck
                     if (worstOffender.Length == 0)
                     {
                         worstOffender =
-                            $"{Describe(entity, entityId)} priced {ours.Count} resources, " +
+                            $"{Describe(entityId)} priced {ours.Count} resources, " +
                             $"the game prices {theirs.Count}";
                     }
 
@@ -856,7 +856,7 @@ internal sealed class AutomataWorldCollectionCheck
                         if (worstOffender.Length == 0)
                         {
                             worstOffender =
-                                $"{Describe(entity, entityId)} prices {entry.Key}, the game does not";
+                                $"{Describe(entityId)} prices {entry.Key}, the game does not";
                         }
 
                         continue;
@@ -874,7 +874,7 @@ internal sealed class AutomataWorldCollectionCheck
 
                     worstError = error;
                     worstOffender =
-                        $"{Describe(entity, entityId)} {entry.Key}: " +
+                        $"{Describe(entityId)} {entry.Key}: " +
                         $"ours={entry.Value} theirs={theirAmount}";
                     worstEntity = entity;
                     worstEntityId = entityId;
@@ -890,7 +890,7 @@ internal sealed class AutomataWorldCollectionCheck
                 else if (firstEligibilityGap.Length == 0)
                 {
                     firstEligibilityGap =
-                        $"{Describe(entity, entityId)}: ours={ourEnough} theirs={theirEnough}";
+                        $"{Describe(entityId)}: ours={ourEnough} theirs={theirEnough}";
                 }
             }
         }
@@ -1024,7 +1024,7 @@ internal sealed class AutomataWorldCollectionCheck
         if (!WorldLookup.TryFind(world.Structures, entityId, out var structure)) return;
 
         var reading = structure.Reading;
-        _lines.Add($"  Worst offender term by term — {Describe(entity, entityId)}, resource {resourceId}:");
+        _lines.Add($"  Worst offender term by term — {Describe(entityId)}, resource {EntityIdentityFormatter.Format(resourceId)}:");
 
         ReportAuthoredBase(entity, structureType, resourceId);
         ReportAttributeCostMod(world, entity, structureType, resourceId);
@@ -1311,10 +1311,11 @@ internal sealed class AutomataWorldCollectionCheck
             if (combined == BigDouble.Zero) continue;
             if (!TryFindResource(world, resourceId, out var resource)) return false;
 
-            var spendable = resource.Reading.Traits.BandwidthResource
-                ? resource.Headroom
-                : resource.TrueQuantity;
-            if (spendable.CompareTo(combined) < 0) return false;
+            // This side of the differential deliberately mirrors AutoBuyCycleEvaluator's current
+            // exact comparison. The native side applies bandwidth snapping; a difference between
+            // them must remain visible here until the evaluator policy is ruled separately.
+            if (WorldResourceCoordinate.NativeCostAmount(in resource).CompareTo(combined) < 0)
+                return false;
         }
 
         return true;
@@ -1339,11 +1340,8 @@ internal sealed class AutomataWorldCollectionCheck
     }
 
     /// <summary>An entity named the way an operator reads it, falling back to the identity.</summary>
-    private static string Describe(object entity, Guid entityId)
-    {
-        var name = ReflectionUtil.ReadDisplayName(entity);
-        return string.IsNullOrWhiteSpace(name) ? entityId.ToString() : $"{name} ({entityId})";
-    }
+    private static string Describe(Guid entityId) =>
+        EntityIdentityFormatter.Format(entityId);
 
     /// <summary>
     /// The members needed to ask the game what an entity costs and whether the player can pay.

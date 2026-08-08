@@ -70,11 +70,16 @@ internal sealed class GameWorldCollector
     private readonly WorldPlotActionReader _plotActions;
     private readonly WorldActionQueueReader _actionQueues;
     private readonly WorldSpellSlotReader _spellSlots;
+    private readonly WorldSpellWorkbenchReader _spellWorkbench;
+    private readonly WorldTargetingReader _targeting;
     private readonly WorldAlchemyInstanceReader _alchemyInstances;
+    private readonly WorldAlchemyLoadoutReader _alchemyLoadout;
     private readonly WorldPlotAuthoringReader _plotAuthoring;
     private readonly WorldEffectBlockReader _effectBlocks;
     private readonly WorldEntityRequirementReader _entityRequirements;
     private readonly WorldPurchaseViewRelationReader _purchaseViewRelations;
+    private readonly WorldRequirementNativeVerdictReader _requirementNativeVerdicts;
+    private readonly WorldPrerequisiteLinkTierReader _prerequisiteLinkTiers;
     private readonly IWorldMasteryExperienceSource _masteryExperience;
     private readonly WorldCategoryReader<WorldAlchemyRecipe, WorldAlchemyRecipe> _alchemyRecipes;
     private readonly WorldCategoryReader<WorldAlchemyType, WorldAlchemyType> _alchemyTypes;
@@ -86,16 +91,24 @@ internal sealed class GameWorldCollector
     private readonly WorldCategoryReader<WorldEquipmentType, WorldEquipmentType> _equipmentTypes;
     private readonly WorldCategoryReader<WorldResourceType, WorldResourceType> _resourceTypes;
     private readonly WorldCategoryReader<WorldCraftingRecipeType, WorldCraftingRecipeType> _craftingRecipeTypes;
+    private readonly WorldCraftingRecipeAuthoringReader _craftingRecipeAuthoring;
+    private readonly WorldCraftingRecipeReader _craftingRecipes;
+    private readonly WorldCraftingDecisionReader _craftingDecisions;
+    private readonly WorldCraftingStationReader _craftingStations;
+    private readonly WorldLoadoutReader _loadouts;
     private readonly WorldCategoryReader<WorldHarvestElement, WorldHarvestElement> _harvestElements;
     private readonly WorldCategoryReader<RawHarvestResourceSample, WorldHarvestResource> _harvestResources;
+    private readonly WorldHarvestLifecycleReader _harvestLifecycle;
     private readonly WorldCategoryReader<WorldTimeRune, WorldTimeRune> _timeRunes;
     private readonly WorldCategoryReader<WorldGlyph, WorldGlyph> _glyphs;
     private readonly WorldConsumableReader _consumables;
+    private readonly WorldConsumableInventoryReader _consumableInventory;
     private readonly WorldScribeRelationReader _scribeRelations;
     private readonly WorldCategoryReader<WorldRitual, WorldRitual> _rituals;
     private readonly WorldCategoryReader<WorldAchievement, WorldAchievement> _achievements;
     private readonly WorldCategoryReader<WorldAdvancement, WorldAdvancement> _advancements;
     private readonly WorldCategoryReader<WorldChallenge, WorldChallenge> _challenges;
+    private readonly WorldChallengeContextReader _challengeContext;
     private readonly WorldCategoryReader<WorldThoughtStream, WorldThoughtStream> _thoughtStreams;
     private readonly WorldCategoryReader<WorldTutorial, WorldTutorial> _tutorials;
     private readonly WorldCategoryReader<WorldView, WorldView> _views;
@@ -211,7 +224,7 @@ internal sealed class GameWorldCollector
         _resources = Reader(new WorldResourceBinder(), resolveType, static frame => frame.Resources);
         _structures = Reader(new WorldStructureBinder(), resolveType, static frame => frame.Structures);
         _upgrades = Reader(new WorldUpgradeBinder(), resolveType, static frame => frame.Upgrades);
-        _research = Reader(new WorldResearchBinder(), resolveType, static frame => frame.Research);
+        _research = Reader(new WorldResearchBinder(resolveType), resolveType, static frame => frame.Research);
         _doubleVariables = Reader(new WorldDoubleVariableBinder(), resolveType, static frame => frame.DoubleVariables);
         _intVariables = Reader(new WorldIntVariableBinder(), resolveType, static frame => frame.IntVariables);
         _boolVariables = Reader(new WorldBoolVariableBinder(), resolveType, static frame => frame.BoolVariables);
@@ -222,22 +235,30 @@ internal sealed class GameWorldCollector
         _spellLevelCosts = new WorldMasteryCostReader(resolveType);
         _spellGraph = new WorldSpellGraphReader(resolveType("SpellRecipeSO"));
         _spellTypes = Reader(new WorldSpellTypeBinder(), resolveType, static frame => frame.SpellTypes);
-        _equipment = Reader(new WorldEquipmentBinder(), resolveType, static frame => frame.Equipment);
-        _equipmentTypes = Reader(new WorldEquipmentTypeBinder(), resolveType, static frame => frame.EquipmentTypes);
-        _resourceTypes = Reader(new WorldResourceTypeBinder(), resolveType, static frame => frame.ResourceTypes);
+        _equipment = Reader(new WorldEquipmentBinder(resolveType), resolveType, static frame => frame.Equipment);
+        _equipmentTypes = Reader(new WorldEquipmentTypeBinder(resolveType), resolveType, static frame => frame.EquipmentTypes);
+        _resourceTypes = Reader(new WorldResourceTypeBinder(resolveType), resolveType, static frame => frame.ResourceTypes);
         _craftingRecipeTypes = Reader(new WorldCraftingRecipeTypeBinder(), resolveType, static frame => frame.CraftingRecipeTypes);
+        _craftingRecipes = new WorldCraftingRecipeReader(resolveType);
+        _craftingDecisions = new WorldCraftingDecisionReader(resolveType);
+        _craftingStations = new WorldCraftingStationReader(resolveType);
+        _loadouts = new WorldLoadoutReader(resolveType);
+        _craftingRecipeAuthoring = new WorldCraftingRecipeAuthoringReader(_craftingRecipes);
         _harvestElements = Reader(new WorldHarvestElementBinder(), resolveType, static frame => frame.HarvestElements);
         _harvestResources = Reader(new WorldHarvestResourceBinder(), resolveType, static frame => frame.HarvestResources);
-        _timeRunes = Reader(new WorldTimeRuneBinder(), resolveType, static frame => frame.TimeRunes);
-        _glyphs = Reader(new WorldGlyphBinder(), resolveType, static frame => frame.Glyphs);
+        _harvestLifecycle = new WorldHarvestLifecycleReader(resolveType);
+        _timeRunes = Reader(new WorldTimeRuneBinder(resolveType), resolveType, static frame => frame.TimeRunes);
+        _glyphs = Reader(new WorldGlyphBinder(resolveType), resolveType, static frame => frame.Glyphs);
         _consumables = new WorldConsumableReader(
             resolveType("ConsumableSO"),
             resolveType("IdScriptableObject"));
+        _consumableInventory = new WorldConsumableInventoryReader(resolveType);
         _scribeRelations = new WorldScribeRelationReader(resolveType);
-        _rituals = Reader(new WorldRitualBinder(), resolveType, static frame => frame.Rituals);
+        _rituals = Reader(new WorldRitualBinder(resolveType), resolveType, static frame => frame.Rituals);
         _achievements = Reader(new WorldAchievementBinder(), resolveType, static frame => frame.Achievements);
         _advancements = Reader(new WorldAdvancementBinder(), resolveType, static frame => frame.Advancements);
         _challenges = Reader(new WorldChallengeBinder(), resolveType, static frame => frame.Challenges);
+        _challengeContext = new WorldChallengeContextReader(resolveType);
         _thoughtStreams = Reader(new WorldThoughtStreamBinder(), resolveType, static frame => frame.ThoughtStreams);
         _tutorials = Reader(new WorldTutorialBinder(), resolveType, static frame => frame.Tutorials);
         _views = Reader(new WorldViewBinder(), resolveType, static frame => frame.Views);
@@ -259,18 +280,30 @@ internal sealed class GameWorldCollector
             resolveType("IdScriptableObject"),
             resolveType("SpellListVariable"),
             resolveType);
+        _spellWorkbench = new WorldSpellWorkbenchReader(resolveType);
+        _targeting = new WorldTargetingReader(resolveType);
         _alchemyInstances = new WorldAlchemyInstanceReader(
             resolveType("IdScriptableObject"),
             resolveType(KnownEntities.ActiveConcepts.ManagedTypeName),
             resolveType(KnownEntities.ConceptRecipes.ManagedTypeName),
             resolveType);
+        _alchemyLoadout = new WorldAlchemyLoadoutReader(resolveType);
         _plotAuthoring = new WorldPlotAuthoringReader(resolveType("PlotNodeSO"));
         _effectBlocks = new WorldEffectBlockReader(resolveType("PlotNodeActionSO"), resolveType);
         _entityRequirements = new WorldEntityRequirementReader(
-            resolveType("UpgradeSO"), resolveType("StructureSO"), resolveType("AlchemyRecipeSO"));
+            resolveType("UpgradeSO"),
+            resolveType("StructureSO"),
+            resolveType("ResearchSO"),
+            resolveType("PrerequisiteLinkSO"),
+            resolveType("AlchemyRecipeSO"));
         _purchaseViewRelations = new WorldPurchaseViewRelationReader(
             resolveType,
             productionPurchaseTopology);
+        _requirementNativeVerdicts = new WorldRequirementNativeVerdictReader(
+            _entityRequirements);
+        _prerequisiteLinkTiers = new WorldPrerequisiteLinkTierReader(
+            resolveType("PrerequisiteLinkSO"),
+            resolveType("GameManager"));
 
         _readers = new IWorldCategoryReader[]
         {
@@ -278,14 +311,23 @@ internal sealed class GameWorldCollector
             _doubleVariables, _intVariables, _boolVariables, _modifierVariables,
             _alchemyRecipes, _alchemyTypes, _spellRecipes, _spellLevelCosts, _spellGraph, _spellTypes,
             _equipment, _equipmentTypes, _resourceTypes, _craftingRecipeTypes,
-            _harvestElements, _harvestResources, _timeRunes, _glyphs, _consumables,
+            _craftingRecipeAuthoring, _craftingRecipes,
+            _craftingDecisions,
+            _craftingStations,
+            _loadouts,
+            _harvestElements, _harvestResources, _harvestLifecycle, _timeRunes, _glyphs, _consumables,
+            _consumableInventory,
             _scribeRelations,
-            _rituals, _achievements, _advancements, _challenges,
+            _rituals, _achievements, _advancements, _challenges, _challengeContext,
             _thoughtStreams, _tutorials, _views, _plotNodeActions,
             _passiveAbilities, _characters, _discoveryTrees, _plotNodes,
             _recipeBooks, _treasurePools, _purchaseCosts, _upgradeCosts, _plotActions,
-            _actionQueues, _spellSlots, _alchemyInstances, _plotAuthoring, _effectBlocks,
-            _entityRequirements, _purchaseViewRelations,
+            _spellWorkbench,
+            _targeting,
+            _actionQueues, _spellSlots, _alchemyInstances, _alchemyLoadout,
+            _plotAuthoring, _effectBlocks,
+            _entityRequirements, _purchaseViewRelations, _requirementNativeVerdicts,
+            _prerequisiteLinkTiers,
         };
 
         _isStructural = new bool[_readers.Length];
@@ -297,7 +339,11 @@ internal sealed class GameWorldCollector
                 ReferenceEquals(_readers[index], _effectBlocks) ||
                 ReferenceEquals(_readers[index], _spellGraph) ||
                 ReferenceEquals(_readers[index], _entityRequirements) ||
-                ReferenceEquals(_readers[index], _purchaseViewRelations);
+                ReferenceEquals(_readers[index], _purchaseViewRelations) ||
+                ReferenceEquals(_readers[index], _craftingRecipeTypes) ||
+                ReferenceEquals(_readers[index], _craftingRecipeAuthoring) ||
+                ReferenceEquals(_readers[index], _purchaseCosts) ||
+                ReferenceEquals(_readers[index], _upgradeCosts);
         }
     }
 
@@ -347,6 +393,7 @@ internal sealed class GameWorldCollector
         if (frame is null) throw new ArgumentNullException(nameof(frame));
 
         _claimed.Clear();
+        var structuralIsCurrent = IsStructuralReadingCurrent(frame);
         frame.FixedDeltaTime = _readFixedDeltaTime();
         frame.FrameGlobals = _rateGlobals.Read(frame.FixedDeltaTime);
         frame.MasteryExperience.Reset();
@@ -354,7 +401,7 @@ internal sealed class GameWorldCollector
 
         // Two readers append here, so neither may reset it: whichever ran second would discard the
         // other's rows, and which that is depends on traversal order rather than on anything stated.
-        frame.PurchaseCosts.Reset();
+        if (!structuralIsCurrent) frame.PurchaseCosts.Reset();
         frame.ModifierPrograms.Reset();
         frame.ModifierProgramEntries.Reset();
 
@@ -363,7 +410,6 @@ internal sealed class GameWorldCollector
         // pass suspect and a report that still called itself complete would be lying about all of
         // them. When nothing degraded the row is absent and the report is exactly as it was.
         var degradation = _rateGlobals.Degradation;
-        var structuralIsCurrent = IsStructuralReadingCurrent(frame);
         var reports = new WorldCategoryReport[_readers.Length + (degradation.Length == 0 ? 0 : 1)];
         if (degradation.Length > 0)
         {

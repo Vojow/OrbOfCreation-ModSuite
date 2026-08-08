@@ -65,7 +65,12 @@ internal readonly struct RawStructureSample : IWorldEntity
     /// </summary>
     internal Guid StructureTypeId { get; }
 
-    /// <summary>Levels already owned. The game persists this as the structure's <c>quantity</c>.</summary>
+    /// <summary>
+    /// Levels already owned, from <c>StructureSO.GetPurchaseLevel()</c> — the accessor that
+    /// forwards to <c>GetBaseLevel()</c>, which is the number the attribute's badge draws and the
+    /// count the purchase-cost chain scales by. Every published level reads this, never the
+    /// <see cref="Quantity"/> field behind it.
+    /// </summary>
     internal BigDouble Level { get; }
 
     /// <summary>Levels bought and still developing. Paid for, not yet effective.</summary>
@@ -104,7 +109,10 @@ internal readonly struct RawStructureSample : IWorldEntity
     /// </summary>
     internal float QueueTimeTotal { get; }
 
-    /// <summary>Levels owned, as the persisted integer. <see cref="Level"/> is the same count.</summary>
+    /// <summary>
+    /// The persisted <c>quantity</c> field. <see cref="Level"/> is what the accessor over it
+    /// returns, and only the accessor is a contract; nothing published reads this directly.
+    /// </summary>
     internal int Quantity { get; }
 
     /// <summary>The game's own debug flag for this entry.</summary>

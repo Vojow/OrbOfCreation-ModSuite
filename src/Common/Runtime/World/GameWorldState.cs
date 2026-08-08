@@ -35,6 +35,13 @@ namespace OrbModding.Common.Runtime.World;
 public sealed record GameWorldState
 {
     /// <summary>
+    /// Names and runtime types from the stable game registry, captured once for this lifecycle. This
+    /// is the exact Common latest-wins catalog reference, not a per-world copy or category join.
+    /// </summary>
+    internal EntityIdentityCatalogSnapshot EntityIdentities { get; init; } =
+        EntityIdentityCatalogSnapshot.Unbound(0);
+
+    /// <summary>
     /// The result of attempting each world category in this exact collection. A zero-row category is
     /// only a fact about the save when its matching row says it was collected cleanly.
     /// </summary>
@@ -91,6 +98,20 @@ public sealed record GameWorldState
     internal PublicationTable<WorldSpellRecipe> SpellRecipes { get; init; } =
         PublicationTable<WorldSpellRecipe>.Empty;
 
+    /// <summary>The native equipped-loadout capacity and global casting dials for this world.</summary>
+    internal WorldSpellWorkbench SpellWorkbench { get; init; } = new(
+        0,
+        0,
+        false,
+        0,
+        0,
+        0,
+        0);
+
+    /// <summary>The native current target request, empty when the game is not targeting.</summary>
+    internal PublicationTable<WorldTargetingRequest> Targeting { get; init; } =
+        PublicationTable<WorldTargetingRequest>.Empty;
+
     /// <summary>Authored cast, recharge, channel, and repeated-effect scalars for every spell.</summary>
     internal PublicationTable<WorldSpellRecipeAuthoring> SpellRecipeAuthoring { get; init; } =
         PublicationTable<WorldSpellRecipeAuthoring>.Empty;
@@ -129,6 +150,45 @@ public sealed record GameWorldState
     internal PublicationTable<WorldCraftingRecipeType> CraftingRecipeTypes { get; init; } =
         PublicationTable<WorldCraftingRecipeType>.Empty;
 
+    /// <summary>
+    /// Every concrete crafting recipe with authored inputs/outputs and current native visibility,
+    /// purchase, output-capacity, bandwidth, and engagement-drain evidence.
+    /// </summary>
+    internal PublicationTable<WorldCraftingRecipe> CraftingRecipes { get; init; } =
+        PublicationTable<WorldCraftingRecipe>.Empty;
+
+    /// <summary>Exact next manual-craft decision and authored queue routing per recipe.</summary>
+    internal PublicationTable<WorldCraftingDecision> CraftingDecisions { get; init; } =
+        PublicationTable<WorldCraftingDecision>.Empty;
+
+    internal PublicationTable<WorldCraftingDecisionCost> CraftingDecisionCosts { get; init; } =
+        PublicationTable<WorldCraftingDecisionCost>.Empty;
+
+    /// <summary>Ordered visible manual and automatic crafting queue contents.</summary>
+    internal PublicationTable<WorldCraftingQueueEntry> CraftingQueueEntries { get; init; } =
+        PublicationTable<WorldCraftingQueueEntry>.Empty;
+
+    /// <summary>Runtime Brewing Stations and the choices exposed by their owning screen.</summary>
+    internal PublicationTable<WorldCraftingStation> CraftingStations { get; init; } =
+        PublicationTable<WorldCraftingStation>.Empty;
+
+    internal PublicationTable<WorldCraftingStationOption> CraftingStationOptions { get; init; } =
+        PublicationTable<WorldCraftingStationOption>.Empty;
+
+    internal PublicationTable<WorldCraftingStationDrain> CraftingStationDrains { get; init; } =
+        PublicationTable<WorldCraftingStationDrain>.Empty;
+
+    internal PublicationTable<WorldPlayerLoadout> PlayerLoadouts { get; init; } =
+        PublicationTable<WorldPlayerLoadout>.Empty;
+    internal PublicationTable<WorldLoadoutEntry> PlayerLoadoutEntries { get; init; } =
+        PublicationTable<WorldLoadoutEntry>.Empty;
+    internal PublicationTable<WorldSnapshotLoadout> SnapshotLoadouts { get; init; } =
+        PublicationTable<WorldSnapshotLoadout>.Empty;
+    internal PublicationTable<WorldSnapshotSlot> SnapshotSlots { get; init; } =
+        PublicationTable<WorldSnapshotSlot>.Empty;
+    internal PublicationTable<WorldSnapshotEntry> SnapshotEntries { get; init; } =
+        PublicationTable<WorldSnapshotEntry>.Empty;
+
     internal PublicationTable<WorldHarvestElement> HarvestElements { get; init; } =
         PublicationTable<WorldHarvestElement>.Empty;
 
@@ -139,6 +199,18 @@ public sealed record GameWorldState
     /// </summary>
     internal PublicationTable<WorldHarvestResource> HarvestResources { get; init; } =
         PublicationTable<WorldHarvestResource>.Empty;
+
+    /// <summary>Active-count and admission facts for the player's harvest element list.</summary>
+    internal PublicationTable<WorldHarvestElementControl> HarvestElementControls { get; init; } =
+        PublicationTable<WorldHarvestElementControl>.Empty;
+
+    /// <summary>Active-count and admission facts for every offered element/action pair.</summary>
+    internal PublicationTable<WorldHarvestActionControl> HarvestActionControls { get; init; } =
+        PublicationTable<WorldHarvestActionControl>.Empty;
+
+    /// <summary>Only the costs that can affect the player's next harvest-list decision.</summary>
+    internal PublicationTable<WorldHarvestLifecycleCost> HarvestLifecycleCosts { get; init; } =
+        PublicationTable<WorldHarvestLifecycleCost>.Empty;
 
     internal PublicationTable<WorldTimeRune> TimeRunes { get; init; } =
         PublicationTable<WorldTimeRune>.Empty;
@@ -164,6 +236,10 @@ public sealed record GameWorldState
     /// <summary>Every levelled inventory bucket owned by each consumable.</summary>
     internal PublicationTable<WorldConsumableCount> ConsumableCounts { get; init; } =
         PublicationTable<WorldConsumableCount>.Empty;
+
+    /// <summary>The player's ordered consumable inventory and hotbar plus live use admission.</summary>
+    internal WorldConsumableInventory ConsumableInventory { get; init; } =
+        WorldConsumableInventory.Empty;
 
     /// <summary>The complete contents of the audited Scribe recipe registry.</summary>
     internal PublicationTable<WorldScribeRecipe> ScribeRecipes { get; init; } =
@@ -200,6 +276,9 @@ public sealed record GameWorldState
 
     internal PublicationTable<WorldChallenge> Challenges { get; init; } =
         PublicationTable<WorldChallenge>.Empty;
+
+    /// <summary>Ordered challenge selections/offers and the next fetch decision from the same frame.</summary>
+    internal WorldChallengeContext ChallengeContext { get; init; }
 
     internal PublicationTable<WorldThoughtStream> ThoughtStreams { get; init; } =
         PublicationTable<WorldThoughtStream>.Empty;
@@ -306,6 +385,14 @@ public sealed record GameWorldState
     internal PublicationTable<WorldAlchemyCost> AlchemyCosts { get; init; } =
         PublicationTable<WorldAlchemyCost>.Empty;
 
+    /// <summary>The ordinary alchemy list and next native click decision, keyed by recipe.</summary>
+    internal PublicationTable<WorldAlchemyLoadoutDecision> AlchemyLoadout { get; init; } =
+        PublicationTable<WorldAlchemyLoadoutDecision>.Empty;
+
+    /// <summary>Per-active-stack resource use for each ordinary alchemy recipe.</summary>
+    internal PublicationTable<WorldAlchemyUsageCost> AlchemyUsageCosts { get; init; } =
+        PublicationTable<WorldAlchemyUsageCost>.Empty;
+
     /// <summary>
     /// What each plot's author decided about it. Keyed by plot rather than keyed <em>as</em> a plot,
     /// so the plot's identity stays claimed exactly once.
@@ -325,8 +412,8 @@ public sealed record GameWorldState
         PublicationTable<WorldEffectBlock>.Empty;
 
     /// <summary>
-    /// Every authored condition on an entity's next level, keyed by the entity it gates and read
-    /// through <see cref="WorldEntityRequirementLookup"/>.
+    /// Every authored condition and explicit group on an entity's next level, keyed by the entity or
+    /// prerequisite-link tier it gates and read through <see cref="WorldEntityRequirementLookup"/>.
     /// </summary>
     /// <remarks>
     /// The game's own answer takes a level argument — <c>prerequisitesPerLevel.Check(level)</c> — so
@@ -334,9 +421,25 @@ public sealed record GameWorldState
     /// be, and everything they compare against is already a row in this same snapshot, which is what
     /// lets a worker reach the verdict without asking the game. An entity with no row here authored no
     /// per-level condition, which is the game's own unconditional pass rather than a gap in the read.
+    /// Link tiers additionally carry a container-root row so an authored empty tier cannot be confused
+    /// with a selected tier that does not exist.
     /// </remarks>
     internal PublicationTable<WorldEntityRequirement> EntityRequirements { get; init; } =
         PublicationTable<WorldEntityRequirement>.Empty;
+
+    /// <summary>
+    /// Native parameterized prerequisite verdicts captured on the Unity thread at the exact check
+    /// level recorded in each row. These are differential oracles for worker-owned evaluation, not
+    /// whole-entity availability latches.
+    /// </summary>
+    internal PublicationTable<WorldRequirementNativeVerdict> RequirementNativeVerdicts { get; init; } =
+        PublicationTable<WorldRequirementNativeVerdict>.Empty;
+
+    /// <summary>
+    /// The live active-link and passive-cache gates for every authored prerequisite-link tier.
+    /// </summary>
+    internal PublicationTable<WorldPrerequisiteLinkTier> PrerequisiteLinkTiers { get; init; } =
+        PublicationTable<WorldPrerequisiteLinkTier>.Empty;
 
     internal PublicationTable<WorldTreasurePool> TreasurePools { get; init; } =
         PublicationTable<WorldTreasurePool>.Empty;

@@ -6,8 +6,6 @@ using OrbModding.Common;
 using OrbModding.Common.Runtime.Configuration;
 using OrbMentor;
 #if SERVICE_CYCLE_PROFILE
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using OrbAutomata.GameMcp;
 #endif
 
@@ -268,24 +266,21 @@ internal sealed class BepInExAutomataConfiguration
         }
     }
 
-    internal string CaptureGameMcpWritableSettings()
+    internal GameMcpWritableSettingDescriptor[] CreateGameMcpWritableSchema()
     {
-        var result = new JArray();
         var entries = GameMcpWritableEntries();
+        var result = new GameMcpWritableSettingDescriptor[entries.Length];
         for (var index = 0; index < entries.Length; index++)
         {
             var entry = entries[index];
-            result.Add(new JObject
-            {
-                ["section"] = entry.Definition.Section,
-                ["key"] = entry.Definition.Key,
-                ["settingType"] = entry.SettingType.FullName ?? entry.SettingType.Name,
-                ["serializedValue"] = entry.GetSerializedValue(),
-                ["description"] = entry.Description.Description ?? string.Empty,
-                ["constraints"] = GameMcpConfigurationValuePolicy.Describe(entry),
-            });
+            result[index] = new GameMcpWritableSettingDescriptor(
+                entry.Definition.Section,
+                entry.Definition.Key,
+                entry.SettingType.FullName ?? entry.SettingType.Name,
+                entry.Description.Description ?? string.Empty,
+                GameMcpConfigurationValuePolicy.Describe(entry));
         }
-        return result.ToString(Formatting.None);
+        return result;
     }
 
     private ConfigEntryBase[] GameMcpWritableEntries() =>

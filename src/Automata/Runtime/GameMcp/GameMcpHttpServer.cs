@@ -26,14 +26,13 @@ internal sealed class GameMcpHttpServer : IDisposable
     private int _disposed;
 
     private GameMcpHttpServer(
-        GameMcpStateStore state,
-        GameMcpCommandBus commands,
+        GameMcpFrameInbox operations,
         int port,
         Action<string> logInfo,
         Action<string> logError)
     {
         if (port is <= 0 or > 65535) throw new ArgumentOutOfRangeException(nameof(port));
-        _router = new GameMcpProtocolRouter(state, commands);
+        _router = new GameMcpProtocolRouter(operations);
         _logInfo = logInfo ?? throw new ArgumentNullException(nameof(logInfo));
         _logError = logError ?? throw new ArgumentNullException(nameof(logError));
         Port = port;
@@ -54,15 +53,14 @@ internal sealed class GameMcpHttpServer : IDisposable
     internal bool IsListening => Volatile.Read(ref _disposed) == 0 && _listener.IsListening;
 
     internal static GameMcpHttpServer? TryStart(
-        GameMcpStateStore state,
-        GameMcpCommandBus commands,
+        GameMcpFrameInbox operations,
         Action<string> logInfo,
         Action<string> logError,
         int port = DefaultPort)
     {
         try
         {
-            var server = new GameMcpHttpServer(state, commands, port, logInfo, logError);
+            var server = new GameMcpHttpServer(operations, port, logInfo, logError);
             logInfo(
                 "Game MCP streamable HTTP server listening on " + server.Endpoint +
                 " (loopback only, protocol " + GameMcpProtocolRouter.LatestProtocolVersion + ").");
@@ -126,6 +124,7 @@ internal sealed class GameMcpHttpServer : IDisposable
 
     private void Handle(HttpListenerContext context)
     {
+        GameMcpFrameThreadBoundary.AssertTransportWorkAllowed("HTTP request handling");
         try
         {
             if (!IsEndpoint(context.Request.Url))
@@ -250,6 +249,7 @@ internal sealed class GameMcpHttpServer : IDisposable
 
     private static string ReadBody(HttpListenerRequest request)
     {
+        GameMcpFrameThreadBoundary.AssertTransportWorkAllowed("HTTP body reading");
         if (request.ContentLength64 > MaximumRequestBytes)
             throw new InvalidDataException("The MCP request exceeds the 1 MiB limit.");
         using var memory = request.ContentLength64 > 0
@@ -271,6 +271,7 @@ internal sealed class GameMcpHttpServer : IDisposable
 
     private static void WriteJson(HttpListenerResponse response, int statusCode, JObject body)
     {
+        GameMcpFrameThreadBoundary.AssertTransportWorkAllowed("HTTP response writing");
         var bytes = new UTF8Encoding(false).GetBytes(body.ToString(Formatting.None));
         response.StatusCode = statusCode;
         response.ContentType = "application/json; charset=utf-8";
@@ -282,6 +283,7 @@ internal sealed class GameMcpHttpServer : IDisposable
 
     private static void WriteEmpty(HttpListenerResponse response, int statusCode)
     {
+        GameMcpFrameThreadBoundary.AssertTransportWorkAllowed("HTTP response writing");
         response.StatusCode = statusCode;
         response.ContentLength64 = 0;
         response.OutputStream.Close();

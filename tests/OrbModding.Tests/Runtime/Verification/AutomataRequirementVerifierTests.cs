@@ -145,6 +145,8 @@ public sealed class AutomataRequirementVerifierTests : IDisposable
     {
         global::UpgradeSO.All.Clear();
         global::StructureSO.All.Clear();
+        global::PrerequisiteLinkSO.All.Clear();
+        global::GameManager.currentFrame = 0;
         global::AlchemyRecipeSO.All.Clear();
     }
 

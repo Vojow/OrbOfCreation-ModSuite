@@ -223,7 +223,7 @@ internal sealed class AutoBuyCycleActionAdapter : IAutoBuyCycleActionPort
             ex is InvalidOperationException || ex is TargetException || ex is MemberAccessException)
         {
             Plugin.Log?.LogAutomataWarning(
-                $"Auto Buy failed to purchase {action.Kind} {action.Uuid:D}: adapter fault ({ex.GetBaseException().Message}).");
+                $"Auto Buy failed to purchase {action.Kind} {EntityIdentityFormatter.Format(action.Uuid)}: adapter fault ({ex.GetBaseException().Message}).");
             return ServiceActionResult.Faulted(CommonActionResultCodes.AdapterFault);
         }
 

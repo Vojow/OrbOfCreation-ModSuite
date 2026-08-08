@@ -13,7 +13,7 @@ configuration, world state and strategy and nothing else — is stated in
 ## The pipeline
 
 ```
-45 category readers over the game's registries
+55 category readers over the game's registries
         │  Unity thread, once per 250 ms
         ▼
 GameWorldCollector ──fills──► GameWorldCycleFrame
@@ -35,6 +35,9 @@ ServiceCaptureContext.World  and  IServiceCycleWorkerDefinition.Evaluate(…, wo
 - **Frame** carries raw samples across the thread boundary. It cannot be the collector, because a
   service frame is structurally forbidden from storing delegates and the collector is almost entirely
   delegates.
+- **Identity catalog** validates and copies the live runtime registry once per lifecycle on the
+  Unity thread. The frame and derived world carry that exact immutable snapshot reference; later
+  250-millisecond captures neither enumerate it again nor copy its rows into category tables.
 - **Deriver** turns samples into rows — the ported half of the game's own math, including the full
   resource rate chain — on the worker, holding no native surface to reach for. It is pure and total:
   unreadable arithmetic fails neutral, so a NaN operand yields uncapped, zero-headroom output rather
@@ -72,7 +75,7 @@ itself was replaced ([W55](world-collection-decisions.md)).
 
 **A missing member degrades one category, not the pass.** Binding failures are reported per category in
 `WorldCollectionReport` with the member that could not be found, and a build that renamed one field
-still publishes the other forty-four. Degradation is per-term and never neutral-by-default
+still publishes the other fifty-four. Degradation is per-term and never neutral-by-default
 ([W28](world-collection-decisions.md)).
 
 ## D16 — The suite owns transcribed economy math, gated by an assembly hash
@@ -182,7 +185,7 @@ collected and the list half is not:
 | Discovery tree | the discovered-identity list |
 
 This is stated rather than silently omitted, because a consumer that assumed a row described its entity
-completely would be wrong about exactly the part that says how many are in stock. Three cases that look
+completely would be wrong about exactly the part that says how many are in stock. Four cases that look
 like they belong on that list do not:
 
 - **A consumable's stock count.** The save record stores a `consumableCounts` list and derives the total
@@ -194,6 +197,13 @@ like they belong on that list do not:
   collection does not write ([W35](world-collection-decisions.md)).
 - **A plot's action instances.** They travel, one row each in `PlotActionInstances`, keyed by the pair
   and by the instance's position in the plot's own list — that position is the plot's, not a queue's.
+- **A crafting recipe's authored edges and evaluated blockers.** `CraftingRecipes` is one entity row
+  per concrete `CraftingRecipeSO`, with immutable nested tables for its crafting types, authored
+  resource inputs, generated resource outputs, consumable completion outputs, and engagement-drain
+  blocks. The Unity-thread reader invokes the native visibility, starting-quantity purchase,
+  generated-output capacity, and necessary-drain evaluators through lifecycle-compiled bindings and
+  copies only their values; the worker then enriches each resource edge from the already-derived
+  `Resources` table in the same frame, never following a retained native reference.
 
 **The live action queue** is collected — a queue is a list variable carrying its own uuid — and what is
 deliberately absent is not the reading but the *authority*. A collected reading may shape a plan and
@@ -245,13 +255,25 @@ readers, derivers), `NativeAccessorBinder.cs` (member binding), `GameWorldCollec
 owner of the 45-reader array), `GameWorldStateDeriver.cs` (the four derived row kinds — resource,
 structure, upgrade, plot node).
 
-Three readers are **structural**: plot authoring, effect blocks, and entity requirements describe what
-the game's authors wrote rather than what the player has done, so they re-read only when the frame
-arrives under a lifecycle epoch this collector has not already read for.
+Seven readers are **structural**: plot authoring, effect blocks, entity requirement graphs, crafting
+recipe types, crafting recipe authored edges, structure costs, and upgrade costs describe what the
+game's authors wrote rather than what the player has done, so they re-read only when the frame
+arrives under a lifecycle epoch this collector has not already read for. Immutable output tables are
+still derived on the worker for every publication — only the repeated Unity/native traversal is
+skipped. Their paired live facts remain ordinary 250-millisecond collection: prerequisite-link and
+native requirement verdicts, crafting visibility/purchase/capacity/drain verdicts, resources, active
+modifier inputs, and affordability. The field-by-field ownership table is in
+[Game MCP frame operations](game-mcp-frame-operations.md#data-lifetime-and-owner-inventory).
+
+The live entity-name catalog follows an even narrower lifecycle contract: it binds at the first
+stable Playing capture after `RuntimeReady`, then reuses one UUID-sorted snapshot until lifecycle
+replacement. It is attached metadata, not a fourth ServiceCycle publication and not a 250-ms reader;
+its registry and fallback rules are normative in the
+[game boundary doctrine](game-boundary-doctrine.md#live-entity-identity-catalog).
 
 Most tables are one row per entity and are walked by the identity check. Which tables the walk skips is
 stated in exactly one place — `NotIdentityTables` in
-`tests/OrbModding.Tests/Runtime/Verification/WorldIdentityWalkTests.cs`, currently 23 names — because
+`tests/OrbModding.Tests/Runtime/Verification/WorldIdentityWalkTests.cs`, currently 29 names — because
 every second reading of an entity another table already claims lands there. Five exclusions have reasons
 worth knowing:
 
@@ -267,12 +289,18 @@ worth knowing:
   `ActionQueues` is walked like any other identity table, while `ActionQueueSlots` is keyed by queue and
   index and is exempt. Neither is reached by a registry walk — both queues resolve by uuid through the
   identity registry, which keeps the action-manager singleton out of the collector.
-- **Entity requirements.** `WorldEntityRequirement.cs` reads every upgrade's and structure's per-level
-  prerequisite container, so a row is one condition keyed by an entity its own category already claimed.
+- **Entity requirements.** `WorldEntityRequirement.cs` reads every upgrade's, structure's, and
+  research entry's per-level prerequisite container, so a row is one condition keyed by an entity its
+  own category already claimed.
   Its list is `[SerializeReference]`, so accessors compile per concrete condition class on first sight,
   and a class that does not bind yields a row of kind `Unknown` rather than none — an unmodelled
   condition must be visible as a requirement nobody can evaluate rather than as an entity with no
-  requirements ([W58](world-collection-decisions.md)).
+  requirements ([W58](world-collection-decisions.md)). Beside the authored graph, one non-identity
+  table carries the native parameterized `Check(ConditionInfo)` verdict and its exact input level for
+  every upgrade, structure, and research entry — a same-generation differential oracle, never a
+  replacement for the graph and never an admission result; the explainer fails loud if its graph
+  verdict disagrees. How that overload differs from the parameterless latch is recorded in
+  [requirements](../reverse-engineering/requirements.md).
 - **Spell slots and costs.** `WorldSpellSlot.cs` publishes the equipped loadout and `WorldSpellCost.cs`
   what casting out of it costs, both from one reader, because a slot's price is only answerable from the
   same equipped instance the slot was read from. Neither is identity-keyed: a position may be unfilled

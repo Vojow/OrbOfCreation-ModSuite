@@ -37,6 +37,7 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
         BigDouble maxUsageSlots,
         BigDouble cachedCompletionTime,
         BigDouble requiredExperience,
+        WorldDiscoverableDecision discovery = default,
         int currentLevel = 1)
     {
         RecipeId = recipeId;
@@ -69,6 +70,7 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
         ResolvedMaxUsageSlots = maxUsageSlots;
         CachedCompletionTime = cachedCompletionTime;
         RequiredExperience = requiredExperience;
+        Discovery = discovery;
         CurrentLevel = currentLevel;
     }
 
@@ -163,6 +165,8 @@ internal readonly struct WorldAlchemyRecipe : IWorldEntity
     /// orphan <c>AlchemyRecipeSO.cachedRequiredXp</c> field.
     /// </summary>
     internal BigDouble RequiredExperience { get; }
+
+    internal WorldDiscoverableDecision Discovery { get; }
 }
 
 internal static class WorldAlchemyRecipeDeriver
@@ -208,7 +212,7 @@ internal static class WorldAlchemyRecipeDeriver
                 sample.EffectLevels, sample.OverdrivePower, sample.OverdriveSpeed,
                 sample.OverdriveDrainCostMod, sample.OverdriveXpRate, sample.FreeUsageSlots,
                 sample.ResolvedMaxUsageSlots, sample.CachedCompletionTime,
-                sample.RequiredExperience, level);
+                sample.RequiredExperience, sample.Discovery, level);
         }
     }
 }
@@ -245,6 +249,7 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
     private Func<object, int>? _maxUsageSlots;
     private Func<object, BigDouble>? _cachedCompletionTime;
     private Func<object, BigDouble>? _requiredExperience;
+    private WorldDiscoverableBinding? _discovery;
 
     internal override string Category => "alchemy recipes";
 
@@ -283,7 +288,8 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
         _maxUsageSlots = bind.Call<int>("GetMaxUsageSlots");
         _cachedCompletionTime = bind.Field<BigDouble>("cachedCompletionTime");
         _requiredExperience = bind.Call<BigDouble>("GetRequiredExperience");
-        return bind.Failure;
+        _discovery = new WorldDiscoverableBinding(type, TypeName);
+        return Join(bind.Failure, _discovery.Failure);
     }
 
     internal override WorldAlchemyRecipe Read(object entity) =>
@@ -317,5 +323,9 @@ internal sealed class WorldAlchemyRecipeBinder : WorldPlainBinder<WorldAlchemyRe
             _freeUsageSlots!(entity),
             new BigDouble(_maxUsageSlots!(entity)),
             _cachedCompletionTime!(entity),
-            _requiredExperience!(entity));
+            _requiredExperience!(entity),
+            _discovery!.Read(entity));
+
+    private static string Join(string left, string right) =>
+        left.Length == 0 ? right : right.Length == 0 ? left : left + "; " + right;
 }

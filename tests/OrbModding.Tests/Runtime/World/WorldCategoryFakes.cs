@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OrbModding.Common;
 
 namespace OrbModding.Tests.Runtime.World;
@@ -25,7 +26,9 @@ internal static class WorldCategoryFakes
     {
         ["AlchemyRecipeSO"] = typeof(FakeAlchemyRecipe),
         ["AlchemyTypeSO"] = typeof(FakeAlchemyType),
+        ["AlchemyManager"] = typeof(FakeAlchemyManager),
         ["AlchemyInstanceListVariable"] = typeof(FakeAlchemyInstanceList),
+        ["AlchemyInstance"] = typeof(FakeAlchemyInstance),
         ["AlchemyRecipeListVariable"] = typeof(FakeAlchemyRecipeList),
         ["InstanceScalingSO"] = typeof(FakeInstanceScaling),
         ["ModifierListRef"] = typeof(FakeModifierListRef),
@@ -34,16 +37,33 @@ internal static class WorldCategoryFakes
         ["ValueModifierRecord"] = typeof(FakeModifierRecord),
         ["GlobalValues"] = typeof(FakeGlobalValues),
         ["SpellRecipeSO"] = typeof(FakeSpellRecipe),
+        ["Spell"] = typeof(FakeSpell),
+        ["SpellManager"] = typeof(FakeSpellManager),
         ["SpellTypeSO"] = typeof(FakeSpellType),
         ["EquipmentSO"] = typeof(FakeEquipment),
         ["EquipmentTypeSO"] = typeof(FakeEquipmentType),
+        ["EquipmentManager"] = typeof(FakeEquipmentManager),
+        ["EquipmentListVariable"] = typeof(FakeEquipmentList),
         ["ResourceTypeSO"] = typeof(FakeResourceType),
         ["CraftingRecipeTypeSO"] = typeof(FakeCraftingRecipeType),
         ["CraftingRecipeSO"] = typeof(FakeScribeRecipe),
+        ["CraftingStructureSO"] = typeof(FakeCraftingStructure),
+        ["CraftingStructure"] = typeof(FakeCraftingStation),
+        ["CraftingStructureListVariable"] = typeof(FakeCraftingStationList),
+        ["CraftingStructureSO+TypeListElement"] = typeof(FakeCraftingStationElementList),
+        ["CraftingStructureSO+TypeElement"] = typeof(FakeCraftingStationElement),
+        ["ITooltipable"] = typeof(IFakeTooltipable),
+        ["TooltipableObject"] = typeof(FakeCraftingStationTooltipable),
         ["CraftingRecipeListVariable"] = typeof(FakeScribeRecipeList),
         ["CraftingInstanceListVariable"] = typeof(FakeScribeInstanceList),
         ["CraftingInstance"] = typeof(FakeScribeInstance),
+        ["ResourceCostList"] = typeof(FakeCraftingResourceCostList),
+        ["ResourceTuple"] = typeof(FakeCraftingResourceTuple),
         ["HarvestElementSO"] = typeof(FakeHarvestElement),
+        ["HarvestActionSO"] = typeof(FakeHarvestAction),
+        ["HarvestActionInstance"] = typeof(FakeHarvestActionInstance),
+        ["HarvestElementListVariable"] = typeof(FakeHarvestElementList),
+        ["HarvestActionInstanceListVariable"] = typeof(FakeHarvestActionList),
         ["TimeRuneSO"] = typeof(FakeTimeRune),
         ["GlyphSO"] = typeof(FakeGlyph),
         ["ConsumableSO"] = typeof(FakeConsumable),
@@ -53,6 +73,7 @@ internal static class WorldCategoryFakes
         ["ScalingInfo"] = typeof(FakeScribeScalingInfo),
         ["BigDouble"] = typeof(BigDouble),
         ["InstantEffectBlock"] = typeof(FakeScribeInstantBlock),
+        ["EffectBlock"] = typeof(FakeCraftingEffectBlock),
         ["IInstantEffectScript"] = typeof(IFakeScribeInstantScript),
         ["ConsumableSO+ConsumableGainEffect"] = typeof(FakeScribeConsumableGainEffect),
         ["RequestTargetEffectScript"] = typeof(FakeScribeRequestTargetEffect),
@@ -62,6 +83,8 @@ internal static class WorldCategoryFakes
         ["Targeting.ITargetable"] = typeof(IFakeScribeTargetable),
         ["EnchantmentSO+EnchantItemScript"] = typeof(FakeScribeEnchantItemScript),
         ["RitualSO"] = typeof(FakeRitual),
+        ["RitualManager"] = typeof(FakeRitualManager),
+        ["RitualVariable"] = typeof(FakeRitualVariable),
         ["AchievementSO"] = typeof(FakeAchievement),
         ["AdvancementSO"] = typeof(FakeAdvancement),
         ["ChallengeSO"] = typeof(FakeChallenge),
@@ -86,7 +109,15 @@ internal static class WorldCategoryFakes
         // Nor is the equipped loadout: Spell belongs to no per-type registry either, so the list
         // holding it is reached by uuid the same way and the slots are read out of that list.
         ["SpellListVariable"] = typeof(FakeSpellLoadout),
-        ["SpellManager"] = typeof(FakeSpellManager),
+        ["LoadoutManager"] = typeof(FakeLoadoutManager),
+        ["PlayerLoadoutListVariable"] = typeof(FakePlayerLoadoutListVariable),
+        ["PlayerLoadout"] = typeof(FakePlayerLoadout),
+        ["PlayerLoadout+LoadoutLabel"] = typeof(FakePlayerLoadout.LoadoutLabel),
+        ["AlchemySnapshotListVariable"] = typeof(FakeAlchemySnapshotListVariable),
+        ["EquipmentSnapshotListVariable"] = typeof(FakeEquipmentSnapshotListVariable),
+        ["AlchemySnapshot"] = typeof(FakeAlchemySnapshot),
+        ["EquipmentSnapshot"] = typeof(FakeEquipmentSnapshot),
+        ["Stacked.StackedIdRecord`1"] = typeof(FakeLoadoutRecord<>),
 
         // Not categories either: an effect block's one modifier and one script are read past their
         // counts, and the lists holding them are typed as interfaces, so the two kinds the suite
@@ -100,18 +131,25 @@ internal static class WorldCategoryFakes
     {
         FakeAlchemyRecipe.All.Clear();
         FakeAlchemyType.All.Clear();
+        FakeAlchemyManager.instance = new FakeAlchemyManager();
         FakeSpellRecipe.All.Clear();
+        FakeSpellManager.instance = null;
+        FakeLoadoutManager.instance = new FakeLoadoutManager();
         FakeSpellType.All.Clear();
         FakeSpellManager.NativeCanCast = true;
         FakeEquipment.All.Clear();
+        FakeEquipmentManager.instance = new FakeEquipmentManager();
         FakeEquipmentType.All.Clear();
         FakeResourceType.All.Clear();
         FakeCraftingRecipeType.All.Clear();
+        FakeScribeRecipe.All.Clear();
+        FakeCraftingStructure.All.Clear();
         FakeHarvestElement.All.Clear();
         FakeTimeRune.All.Clear();
         FakeGlyph.All.Clear();
         FakeConsumable.All.Clear();
         FakeRitual.All.Clear();
+        FakeRitualManager.instance = new FakeRitualManager();
         FakeAchievement.All.Clear();
         FakeAdvancement.All.Clear();
         FakeChallenge.All.Clear();
@@ -127,7 +165,9 @@ internal static class WorldCategoryFakes
         FakeTreasurePool.All.Clear();
         FakeModifierVariable.All.Clear();
         FakeIdRegistry.RuntimeLookup.Clear();
+        UnityEngine.Resources.Objects.Clear();
         SeedScribeRelations();
+        SeedHarvestLifecycle();
     }
 
     private static void SeedScribeRelations()
@@ -170,6 +210,19 @@ internal static class WorldCategoryFakes
             FakeIdRegistry.RuntimeLookup[scrollId] = scroll;
         }
     }
+
+    internal static FakeHarvestElementList ActiveHarvestElements { get; private set; } = new();
+    internal static FakeHarvestActionList ActiveHarvestActions { get; private set; } = new();
+
+    private static void SeedHarvestLifecycle()
+    {
+        ActiveHarvestElements = new FakeHarvestElementList();
+        ActiveHarvestActions = new FakeHarvestActionList();
+        FakeIdRegistry.RuntimeLookup[Guid.Parse("5a9f8001-3ae2-4799-86b6-5198763e0fe2")] =
+            ActiveHarvestElements;
+        FakeIdRegistry.RuntimeLookup[Guid.Parse("e4a9d4c3-61cc-4f94-bab9-7bc8e841cc32")] =
+            ActiveHarvestActions;
+    }
 }
 
 /// <summary>
@@ -201,22 +254,251 @@ internal sealed class FakeScribeRecipeList
 
 internal sealed class FakeScribeRecipe
 {
+    public static readonly List<FakeScribeRecipe> All = new();
+
     public Guid Identity = Guid.NewGuid();
     public List<FakeCraftingRecipeType> craftingTypes = new();
+    public FakeCraftingResourceCostList recipeCost = new();
+    public FakeCraftingResourceCostList generatedResources = new();
+    public List<FakeCraftingEngagementBlock> engagementEffects = new();
     public List<FakeScribeInstantBlock> completeEffects = new();
     public bool useQuantityAsLevel = false;
+    public double timeToComplete;
+    public bool visible = true;
+    public bool canBuy = true;
+    public BigDouble startingQuantity = BigDouble.One;
+    public FakeCraftingRecipeType MainType = new();
 
     public Guid GetGuid() => Identity;
-    public bool IsVisible() => true;
+    public bool IsVisible() => visible;
+    public BigDouble GetStartingQuantity() => startingQuantity;
+    public bool CanBuy() => visible && canBuy;
+    public bool CanBuyAt(BigDouble quantity) =>
+        canBuy && quantity.CompareTo(BigDouble.Zero) > 0;
+    public BigDouble GetPurchaseQuantity(BigDouble previousQuantity) =>
+        useQuantityAsLevel ? startingQuantity : BigDouble.One;
+    public FakeCraftingResourceCostList GetTotalCost(
+        BigDouble previousQuantity,
+        BigDouble purchasedQuantity) => recipeCost;
+    public FakeCraftingRecipeType GetMainType() => MainType;
+}
+
+internal sealed class FakeCraftingResourceCostList
+{
+    public List<FakeCraftingResourceTuple> costs = new();
+    public bool withinCapacity = true;
+    public bool affordable = true;
+    public bool affordabilityUsesResourceAmounts;
+    public BigDouble maximumCostTimes = new(int.MaxValue);
+
+    public bool IsWithinCapacity() => withinCapacity;
+    public bool HasEnough() => affordable &&
+        (!affordabilityUsesResourceAmounts || costs.All(cost =>
+            cost.resource is not null &&
+            cost.valueBig.CompareTo(cost.resource.GetTrueQuantity()) <= 0));
+    public bool AllResourcesVisible() => costs.All(cost => cost.resource?.Visible == true);
+    public BigDouble MaximumCostTimes() => maximumCostTimes;
+    public bool IsEmpty() => costs.Count == 0;
+    public List<FakeCraftingResourceTuple> GetEntries() => costs;
+
+    public FakeCraftingResourceCostList Multiply(BigDouble factor)
+    {
+        var result = new FakeCraftingResourceCostList
+        {
+            withinCapacity = withinCapacity,
+            affordable = affordable,
+            affordabilityUsesResourceAmounts = affordabilityUsesResourceAmounts,
+        };
+        for (var index = 0; index < costs.Count; index++)
+            result.costs.Add(new FakeCraftingResourceTuple
+            {
+                resource = costs[index].resource,
+                valueBig = costs[index].valueBig * factor,
+            });
+        return result;
+    }
+
+    public FakeCraftingResourceCostList Add(FakeCraftingResourceCostList other)
+    {
+        affordable &= other.affordable;
+        affordabilityUsesResourceAmounts |= other.affordabilityUsesResourceAmounts;
+        for (var index = 0; index < other.costs.Count; index++)
+        {
+            var incoming = other.costs[index];
+            var existing = costs.FindIndex(row => ReferenceEquals(row.resource, incoming.resource));
+            if (existing < 0)
+                costs.Add(new FakeCraftingResourceTuple
+                    { resource = incoming.resource, valueBig = incoming.valueBig });
+            else
+                costs[existing].valueBig += incoming.valueBig;
+        }
+        return this;
+    }
+
+    public FakeCraftingResourceCostList Subtract(FakeCraftingResourceCostList other)
+    {
+        var result = new FakeCraftingResourceCostList
+        {
+            withinCapacity = withinCapacity,
+            affordable = affordable,
+            affordabilityUsesResourceAmounts = affordabilityUsesResourceAmounts,
+        };
+        foreach (var entry in costs)
+            result.costs.Add(new FakeCraftingResourceTuple
+                { resource = entry.resource, valueBig = entry.valueBig });
+        foreach (var entry in other.costs)
+        {
+            var existing = result.costs.FindIndex(row => ReferenceEquals(row.resource, entry.resource));
+            if (existing < 0)
+                result.costs.Add(new FakeCraftingResourceTuple
+                    { resource = entry.resource, valueBig = -entry.valueBig });
+            else
+                result.costs[existing].valueBig -= entry.valueBig;
+        }
+        return result;
+    }
+
+    internal FakeCraftingResourceCostList With(FakeResource resource, BigDouble amount)
+    {
+        costs.Add(new FakeCraftingResourceTuple { resource = resource, valueBig = amount });
+        return this;
+    }
+}
+
+internal sealed class FakeCraftingResourceTuple
+{
+    public FakeResource? resource;
+    public BigDouble valueBig;
+
+    public BigDouble GetValue() => valueBig;
+}
+
+internal interface IFakeTooltipable
+{
+    string GetName();
+}
+
+internal sealed class FakeCraftingStationTooltipable : IFakeTooltipable
+{
+    public Guid Identity = Guid.NewGuid();
+
+    public Guid GetGuid() => Identity;
+    public string GetName() => string.Empty;
+}
+
+internal sealed class FakeCraftingStationElement
+{
+    public IFakeTooltipable? tooltipable;
+    public bool available = true;
+
+    public IFakeTooltipable? GetTooltipable() => tooltipable;
+
+    public bool IsAvailable() => available;
+}
+
+internal sealed class FakeCraftingStationElementList
+{
+    public List<FakeCraftingStationElement> elements = new();
+
+    public List<FakeCraftingStationElement> GetElements() => elements;
+}
+
+internal sealed class FakeCraftingStation
+{
+    public Guid Identity = Guid.NewGuid();
+    public FakeCraftingStructure? reference;
+    public FakeCraftingStationGuid recipeId = new(Guid.Empty);
+    public FakeCraftingStationElement? firstIngredient;
+    public FakeCraftingStationElement? secondIngredient;
+    public FakeCraftingStationElement? output;
+    public List<FakeCraftingStationElement> outputOptions = new();
+    public FakeCraftingResourceCostList drain = new();
+    public bool loaded;
+    public bool active;
+    public int level = 1;
+    public int minimumLevel = 1;
+    public int maximumLevel = 1;
+
+    public Guid GetGuid() => Identity;
+
+    public FakeCraftingStructure? get_reference() => reference;
+
+    public FakeCraftingStationElement? GetIngredient(int slot) =>
+        slot == 0 ? firstIngredient : secondIngredient;
+
+    public FakeCraftingStationElement? GetOutput() => output;
+
+    public List<FakeCraftingStationElement> GetOutputList() => outputOptions;
+
+    public bool IsOutputVisible(FakeCraftingStationElement element) => element.IsAvailable();
+
+    public bool IsLoaded() => loaded;
+
+    public bool IsActive() => active;
+
+    public int GetLevel() => level;
+
+    public int GetMinSelectedLevel() => minimumLevel;
+
+    public int GetMaxSelectedLevel() => maximumLevel;
+
+    public FakeCraftingResourceCostList GetCurrentDrain() => drain;
+}
+
+internal sealed class FakeCraftingStationGuid
+{
+    private readonly Guid _guid;
+
+    internal FakeCraftingStationGuid(Guid guid) => _guid = guid;
+}
+
+internal sealed class FakeCraftingStructure
+{
+    public static readonly List<FakeCraftingStructure> All = new();
+
+    public Guid Identity = Guid.NewGuid();
+    public FakeCraftingStationList instances = new();
+    public List<FakeCraftingStationElementList> ingredientLists = new();
+
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeCraftingStationList
+{
+    public List<FakeCraftingStation> value = new();
+
+    public List<FakeCraftingStation> GetAll() => value;
+}
+
+internal class FakeCraftingEffectBlock
+{
+    public BigDouble necessaryDrainRatio = BigDouble.One;
+
+    private BigDouble GetEffectNecessaryDrainRatio() => necessaryDrainRatio;
+}
+
+internal sealed class FakeCraftingEngagementBlock : FakeCraftingEffectBlock
+{
 }
 
 internal sealed class FakeScribeInstanceList
 {
+    public Guid Identity = Guid.NewGuid();
     public List<FakeScribeInstance> value = new();
     public bool isAutoList;
     public int Maximum = 4;
 
     public int GetMax() => Maximum;
+    public Guid GetGuid() => Identity;
+    public bool HasEmptySpot() => value.Count < Maximum;
+
+    public BigDouble GetQuantity(FakeScribeRecipe recipe)
+    {
+        var quantity = BigDouble.Zero;
+        for (var index = 0; index < value.Count; index++)
+            if (value[index].RecipeId == recipe.Identity) quantity += value[index].Quantity;
+        return quantity;
+    }
 }
 
 internal sealed class FakeScribeInstance
@@ -225,9 +507,11 @@ internal sealed class FakeScribeInstance
     public BigDouble Quantity = BigDouble.Zero;
     public bool Automatic = false;
     public bool Expired = false;
+    public int AutomationQuantity = 0;
 
     public Guid GetGuidReference() => RecipeId;
     public BigDouble GetQuantity() => Quantity;
+    public int GetAutomationQuantity() => AutomationQuantity;
     public bool IsAuto() => Automatic;
     public bool IsExpired() => Expired;
 }
@@ -277,6 +561,8 @@ internal sealed class FakeScribeEnchantmentInstance
 
 internal sealed class FakeScribeScalingInfo
 {
+    public BigDouble DrainCostMod = new(100);
+    public BigDouble GetDrainCostMod() => DrainCostMod;
     public static FakeScribeScalingInfo Basic(BigDouble level) => new();
 }
 
@@ -411,9 +697,14 @@ internal struct FakeValueModifier
     public BigDouble adjustReal;
     public FakeModifierKind type;
     public int order;
+    public global::IdScriptableObject? reference;
 
-    internal FakeValueModifier(FakeModifierKind type, double amount, int order)
-        : this(type, new BigDouble(amount), order)
+    internal FakeValueModifier(
+        FakeModifierKind type,
+        double amount,
+        int order,
+        global::IdScriptableObject? reference = null)
+        : this(type, new BigDouble(amount), order, reference)
     {
     }
 
@@ -422,11 +713,16 @@ internal struct FakeValueModifier
     /// and this game's modifiers live past 1e308, so a fake that could only be built from a double
     /// could not exercise the range the fold exists for.
     /// </summary>
-    internal FakeValueModifier(FakeModifierKind type, BigDouble amount, int order = 0)
+    internal FakeValueModifier(
+        FakeModifierKind type,
+        BigDouble amount,
+        int order = 0,
+        global::IdScriptableObject? reference = null)
     {
         this.type = type;
         adjustReal = amount;
         this.order = order;
+        this.reference = reference;
     }
 }
 
@@ -523,6 +819,29 @@ internal sealed class FakeModifierRecord
         GetValueCalls++;
         return calculatedValue;
     }
+
+    /// <summary>
+    /// Purpose-built support for the research fake's native evaluator. The regression fixture uses
+    /// the authored challenge shape: one passive raw adjustment. Other modifier kinds are rejected
+    /// instead of turning this test double into a second implementation of native modifier math.
+    /// </summary>
+    internal int AdjustRawLevel(int value)
+    {
+        BigDouble adjusted = value;
+        foreach (var modifier in passiveModifiers.Values)
+        {
+            if (modifier.type != FakeModifierKind.Raw)
+                throw new InvalidOperationException("The research fake only models raw requirement adjustments.");
+            adjusted += modifier.adjustReal;
+        }
+        foreach (var modifier in activeModifiers.Values)
+        {
+            if (modifier.type != FakeModifierKind.Raw)
+                throw new InvalidOperationException("The research fake only models raw requirement adjustments.");
+            adjusted += modifier.adjustReal;
+        }
+        return adjusted.ToInt();
+    }
 }
 
 internal sealed class FakeValueModifierList
@@ -541,6 +860,7 @@ internal sealed class FakeModifierListVariable
 internal sealed class FakeModifierListRef
 {
     public FakeModifierListVariable? variable = new();
+    public FakeValueModifierList GetValue() => variable?.value ?? new FakeValueModifierList();
 }
 
 internal sealed class FakeGlobalValues
@@ -582,10 +902,10 @@ internal sealed class FakeInstanceScalingRef
 }
 
 internal sealed class FakeAlchemyRecipe
+    : FakeIdRegistry, global::IDiscoverable
 {
     public static readonly List<FakeAlchemyRecipe> All = new();
 
-    public Guid Identity = Guid.NewGuid();
     public bool discovered;
     public int maxLevel;
     public int advancementLevel;
@@ -594,7 +914,6 @@ internal sealed class FakeAlchemyRecipe
     public int masteryLevel;
     public BigDouble recipeTime;
 
-    public Guid GetGuid() => Identity;
     public bool isRequiredDiscovery;
     public bool isCompletionRecipe;
     public bool isAdvancementRecipe;
@@ -619,17 +938,36 @@ internal sealed class FakeAlchemyRecipe
     public BigDouble cachedRequiredXp;
     public FakeExperienceContainer experienceContainer = new();
     public FakeSpellCostList drainCost = new();
+    public FakeCraftingResourceCostList usageCost = new();
     public FakeSpellCostList bandwidthCost = new();
     public FakeModifierListRef completionCostAdvanceMod = new();
     public FakeModifierListRef drainCostLevelMod = new();
     public FakePrerequisiteContainer usagePrerequisites = new();
     public FakeInstanceScalingRef instanceScaling = new();
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::GlyphSO> genericDiscoveryGlyphs = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
     public FakeAlchemyType coreType = new();
 
     public FakeAlchemyType GetCoreType() => coreType;
+    public bool IsDiscovered() => discovered;
+    public FakeCraftingResourceCostList GetUsageCost() => usageCost;
+    public int GetFreeUsageSlots() => freeUsageSlots.GetValue().ToInt();
 
     public BigDouble GetRequiredExperience() =>
         experienceContainer.GetRequiredExperience();
+
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => discovered;
+    bool global::IDiscoverable.IsDiscoverRequired() => isRequiredDiscovery;
+    void global::IDiscoverable.Discover() => discovered = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
 
     public int GetMaxUsageSlots()
     {
@@ -648,14 +986,46 @@ internal sealed class FakeExperienceContainer
 
 internal sealed class FakeAlchemyRecipeList
 {
-    public List<FakeAlchemyRecipe> value = new();
+    internal FakeAlchemyRecipeList()
+        : this(new List<FakeAlchemyRecipe>())
+    {
+    }
+
+    internal FakeAlchemyRecipeList(List<FakeAlchemyRecipe> value) => this.value = value;
+
+    public List<FakeAlchemyRecipe> value;
 }
 
 internal sealed class FakeAlchemyInstanceList
 {
     public List<FakeAlchemyInstance> value = new();
+    public int maximum = 8;
 
     public bool CanAddInstance(FakeAlchemyRecipe recipe) => true;
+    public int GetMax() => maximum;
+
+    public FakeLoadoutRecord<FakeAlchemyRecipe> CreateStackedRecord()
+    {
+        var result = new FakeLoadoutRecord<FakeAlchemyRecipe>();
+        foreach (var instance in value)
+            if (instance.reference is not null && instance.quantity > 0)
+                result.Set(instance.reference, instance.quantity);
+        return result;
+    }
+
+    public void FromStackedRecord(FakeLoadoutRecord<FakeAlchemyRecipe> record)
+    {
+        value.Clear();
+        foreach (var entry in record.GetEntries())
+            value.Add(new FakeAlchemyInstance(entry.Item1) { quantity = entry.Item2 });
+    }
+}
+
+internal sealed class FakeAlchemyManager
+{
+    public static FakeAlchemyManager instance = new();
+    public FakeAlchemyInstanceList activeAlchemy = new();
+    public FakeAlchemyRecipeList allAlchemy = new(FakeAlchemyRecipe.All);
 }
 
 internal class FakeAbstractRefInstance<T>
@@ -684,6 +1054,11 @@ internal class FakeAlchemyInstance : FakeAbstractRefInstance<FakeAlchemyRecipe>
     public int queuedQuantity;
     public FakeAlchemyDrain resourceDrain = new();
 
+    public int GetQueuedQuantity() => queuedQuantity;
+    public int GetRemainingFreeUsageSlots() =>
+        Math.Max((reference?.GetFreeUsageSlots() ?? 0) - queuedQuantity, 0);
+    public int GetRemainingMaxUsageSlots() =>
+        Math.Max((reference?.GetMaxUsageSlots() ?? 0) - queuedQuantity, 0);
     public FakeConceptDrainMultiplier GetDrainCostMod() =>
         new(new BigDouble(quantity));
 }
@@ -763,6 +1138,8 @@ internal sealed class FakeGuidContainer
     }
 
     internal FakeGuidContainer(Guid guid) => _guid = guid;
+
+    public Guid get_guid() => _guid;
 }
 
 /// <summary>
@@ -773,20 +1150,19 @@ internal sealed class FakeSpellLoadout
 {
     public Guid Identity = Guid.NewGuid();
     public List<FakeSpell?> value = new();
+    public int maximum = 8;
 
     public Guid GetGuid() => Identity;
-}
-
-internal static class FakeSpellManager
-{
-    internal static bool NativeCanCast = true;
-
-    public static bool CanCastASpell() => NativeCanCast;
+    public List<FakeSpell?> GetAll() => value;
+    public int GetUsedSpots() => value.Count(spell => spell is not null);
+    public int GetMax() => maximum;
+    public bool HasEmptySpot() => GetUsedSpots() < maximum;
 }
 
 /// <summary>One equipped spell, answering exactly what the loadout reader asks it.</summary>
 internal sealed class FakeSpell
 {
+    public FakeReferencedEntity guidContainer = new();
     public FakeSpellRecipe? spellReference;
     public bool empty;
     public bool casting;
@@ -803,8 +1179,16 @@ internal sealed class FakeSpell
     public BigDouble cooldownRemaining;
     public FakeSpellCostList cost = new();
     public FakeSpellCostList drainCost = new();
+    public int outputLevel = 1;
+    public int effectiveLevel = 1;
+    public int requiredMasteryLevel;
+    public bool durationSpell;
+    public bool usageRequirementsMet = true;
+    public int CanRemoveCalls { get; private set; }
+    public List<FakeGlyph> augmentGlyphs = new();
 
     public FakeSpellRecipe? get_reference() => spellReference;
+    public Guid GetId() => guidContainer.Identity;
 
     public bool IsEmpty() => empty;
     public bool IsCasting() => casting;
@@ -815,12 +1199,26 @@ internal sealed class FakeSpell
     public bool CanCharge() => chargeable;
     public bool CanCast() => castReady;
     public bool IsChargeAvailable() => chargeAvailable;
+    public bool CanRemove()
+    {
+        CanRemoveCalls++;
+        return IsChargeAvailable() && !IsCasting();
+    }
     public bool HasEnoughResources() => resourcesCovered;
     public int GetCurrSpellCharges() => currentCharges;
     public int GetMaxSpellCharges() => maximumCharges;
     public BigDouble GetCooldownTimeRemaining() => cooldownRemaining;
     public FakeSpellCostList GetCost() => cost;
     public FakeSpellCostList GetDrainCost() => drainCost;
+    public int GetOutputLevel() => outputLevel;
+    public int GetLevel() => effectiveLevel;
+    public int GetRequiredLevel() => requiredMasteryLevel;
+    public int GetRecipeMasteryLevel() => spellReference?.masteryLevel ?? 0;
+    public bool IsDurationSpell() => durationSpell;
+    public bool HasMetUsageRequirements() => usageRequirementsMet;
+    public List<FakeGlyph> GetAugmentGlyphs() => new(augmentGlyphs);
+    public int GetQuantityOfGlyph(FakeGlyph glyph) =>
+        augmentGlyphs.Count(candidate => ReferenceEquals(candidate, glyph));
 }
 
 /// <summary>What a spell answers when asked its price, in the game's own cost-list shape.</summary>
@@ -860,11 +1258,10 @@ internal struct FakeSpellCostEntry
     }
 }
 
-internal sealed class FakeSpellRecipe
+internal sealed class FakeSpellRecipe : FakeIdRegistry, global::IDiscoverable
 {
     public static readonly List<FakeSpellRecipe> All = new();
 
-    public Guid Identity = Guid.NewGuid();
     public bool discovered;
     public int discRarityLevel;
     public BigDouble masteryExperience;
@@ -877,7 +1274,6 @@ internal sealed class FakeSpellRecipe
     public FakeSpellCostList baseUsageCost = new();
     public FakeSpellCostList holdDrain = new();
     public List<FakeReferencedEntity> spellTypes = new();
-    public List<FakeReferencedEntity> coreRecipe = new();
     public FakeRecipeBookList recipeBookList = new();
     public FakeSpellCastType castType;
     public FakeDurationEntry baseRecharge = new();
@@ -896,11 +1292,86 @@ internal sealed class FakeSpellRecipe
     public FakeModifierRecord spellSpecialMod = new(0d);
     public FakeModifierRecord spellXpMod = new(0d);
     public bool hasAlertedThisMastery;
+    public List<FakeGlyph> coreRecipe = new();
+    public FakeSpellWorkbenchCostList discoveryCost = new();
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
 
-    public Guid GetGuid() => Identity;
 
     public bool IsReadyToLevelMastery() => readyToLevel;
+    public List<FakeGlyph> GetGlyphRecipe() => new(coreRecipe);
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe()
+    {
+        var result = new List<global::GlyphSO>();
+        foreach (var component in coreRecipe)
+        {
+            var glyph = new global::GlyphSO();
+            glyph.SetGuid(component.Identity);
+            result.Add(glyph);
+        }
+        return result;
+    }
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() =>
+        new(genericDiscoveryResources);
+    public FakeSpellWorkbenchCostList GetDiscoverCost() => discoveryCost;
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost()
+    {
+        if (genericDiscoveryCost.costs.Count > 0 || discoveryCost.costs.Count == 0)
+            return genericDiscoveryCost;
+        var translated = new global::ResourceCostList { affordable = discoveryCost.affordable };
+        foreach (var cost in discoveryCost.costs)
+        {
+            var resource = new global::ResourceSO { quantity = cost.resource.amount };
+            resource.SetGuid(cost.resource.Identity);
+            translated.costs.Add(new global::ResourceTuple(resource, cost.amount));
+        }
+        return translated;
+    }
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => discovered;
+    bool global::IDiscoverable.IsDiscoverRequired() => isRequiredDiscovery;
+    void global::IDiscoverable.Discover() => discovered = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
     public FakeSpellLevelCost GetLevelCost() => levelCost;
+}
+
+internal sealed class FakeSpellManager
+{
+    public static FakeSpellManager? instance;
+    internal static bool NativeCanCast = true;
+
+    public FakeSpellLoadout activeSpells = new();
+    public static bool CanCastASpell() => NativeCanCast;
+}
+
+internal sealed class FakeSpellWorkbenchCostList
+{
+    public List<FakeSpellWorkbenchCost> costs = new();
+    public bool affordable = true;
+
+    public bool HasEnough() => affordable;
+    public List<FakeSpellWorkbenchCost> GetEntries() => costs;
+}
+
+internal sealed class FakeSpellWorkbenchCost
+{
+    public FakeSpellWorkbenchResource resource = new();
+    public BigDouble amount;
+
+    public BigDouble GetValue() => amount;
+}
+
+internal sealed class FakeSpellWorkbenchResource
+{
+    public Guid Identity = Guid.NewGuid();
+    public BigDouble amount;
+
+    public Guid GetGuid() => Identity;
+    public BigDouble GetQuantity() => amount;
+    public BigDouble GetTrueQuantity() => amount;
 }
 
 internal sealed class FakeRecipeBookList
@@ -970,13 +1441,13 @@ internal sealed class FakeSpellType
     public Guid GetGuid() => Identity;
 }
 
-internal sealed class FakeEquipment
+internal sealed class FakeEquipment : FakeIdRegistry, global::IDiscoverable
 {
     public static readonly List<FakeEquipment> All = new();
 
-    public Guid Identity = Guid.NewGuid();
     public bool isCreated;
     public int discRarityLevel;
+    public FakeEquipmentType equipmentType = new();
     public BigDouble masteryXp;
     public int masteryLevel;
     public bool isRequiredDiscovery;
@@ -987,8 +1458,25 @@ internal sealed class FakeEquipment
     public int attuningLevel;
     public double attunementTimeLeft;
     public BigDouble baseXpRate;
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::GlyphSO> genericDiscoveryGlyphs = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
+    public FakeCraftingResourceCostList usageCost = new();
+    public int maximumStacks = 4;
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
 
-    public Guid GetGuid() => Identity;
+    public int GetMaxLevel() => maximumStacks;
+    public FakeCraftingResourceCostList GetUsageCost() => usageCost;
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => isCreated;
+    bool global::IDiscoverable.IsDiscoverRequired() => isRequiredDiscovery;
+    void global::IDiscoverable.Discover() => isCreated = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
 }
 
 internal sealed class FakeEquipmentType
@@ -1003,8 +1491,66 @@ internal sealed class FakeEquipmentType
     public FakeModifierRecord maxTypeSlots = new(0d);
     public FakeModifierRecord powerMod = new(0d);
     public FakeModifierRecord experienceRateMod = new(0d);
+    public bool NativeCanLevel = true;
+    public FakeCraftingResourceCostList LevelCost = new();
+    public FakeCraftingResourceCostList BonusLevelCost = new();
 
     public Guid GetGuid() => Identity;
+    public int GetMaxTypeSlots() => (int)maxTypeSlots.GetValue().ToDouble();
+    public int GetLevel() => level + freeLevels;
+    public int GetFreeLevels() => freeLevels;
+    public bool CanLevel() => NativeCanLevel;
+    public FakeCraftingResourceCostList GetLevelCost() => LevelCost;
+    public FakeCraftingResourceCostList GetFreeLevelCost() => BonusLevelCost;
+    public void PurchaseLevel() => level++;
+    public void PurchaseFreeLevel() => freeLevels++;
+}
+
+internal sealed class FakeEquipmentList
+{
+    private readonly Dictionary<FakeEquipment, int> stacks = new();
+
+    public List<FakeEquipment> value = new();
+    public int maximum = 4;
+
+    public int GetMax() => maximum;
+    public bool IsAtMax() => value.Count >= maximum;
+    public int GetStacks(FakeEquipment equipment) =>
+        stacks.TryGetValue(equipment, out var quantity) ? quantity : 0;
+    public int GetTypesEquipped(FakeEquipmentType equipmentType) =>
+        value.Count(equipment => ReferenceEquals(equipment.equipmentType, equipmentType));
+
+    internal void SetStacks(FakeEquipment equipment, int quantity)
+    {
+        if (quantity <= 0)
+        {
+            stacks.Remove(equipment);
+            value.Remove(equipment);
+            return;
+        }
+        stacks[equipment] = quantity;
+        if (!value.Contains(equipment)) value.Add(equipment);
+    }
+
+    public FakeLoadoutRecord<FakeEquipment> GetStackedRecord()
+    {
+        var result = new FakeLoadoutRecord<FakeEquipment>();
+        foreach (var pair in stacks) result.Set(pair.Key, pair.Value);
+        return result;
+    }
+
+    public void SetStack(FakeLoadoutRecord<FakeEquipment> record)
+    {
+        stacks.Clear();
+        value.Clear();
+        foreach (var entry in record.GetEntries()) SetStacks(entry.Item1, entry.Item2);
+    }
+}
+
+internal sealed class FakeEquipmentManager
+{
+    public static FakeEquipmentManager instance = new();
+    public FakeEquipmentList equippedEquipment = new();
 }
 
 internal sealed class FakeResourceType
@@ -1042,6 +1588,17 @@ internal sealed class FakeResourceType
     public FakeModifierRecord replenishTimeMod = new(0d);
     public FakeModifierRecord decayRatio = new(0d);
     public FakeModifierRecord decayTimeMod = new(0d);
+    public bool NativeCanLevel = true;
+    public FakeCraftingResourceCostList LevelCost = new();
+    public FakeCraftingResourceCostList BonusLevelCost = new();
+
+    public int GetLevel() => level + freeLevels;
+    public int GetFreeLevels() => freeLevels;
+    public bool CanLevel() => NativeCanLevel;
+    public FakeCraftingResourceCostList GetLevelCost() => LevelCost;
+    public FakeCraftingResourceCostList GetFreeLevelCost() => BonusLevelCost;
+    public void PurchaseLevel() => level++;
+    public void PurchaseFreeLevel() => freeLevels++;
 }
 
 internal sealed class FakeCraftingRecipeType
@@ -1143,6 +1700,8 @@ internal sealed class FakeResource
 
     public BigDouble GetQuantity() => Quantity;
 
+    public BigDouble GetTrueQuantity() => Quantity;
+
     public BigDouble GetTrueRate() =>
         ThrowOnRate ? throw new InvalidOperationException("rate unavailable") : Rate;
 
@@ -1173,6 +1732,11 @@ internal sealed class FakeHarvestElement
     public FakeModifierRecord actionCostMod = new(0d);
     public BigDouble harvestRate;
     public BigDouble lastOutputRate;
+    public bool Visible = true;
+    public bool Available = true;
+    public int MaximumAdditional = 8;
+    public FakeCraftingResourceCostList usageCost = new();
+    public List<FakeHarvestActionInstance> ActionInstances = new();
     /// <summary>
     /// Private, created by the element rather than registered — the shape that keeps it out of the
     /// resource registry and makes reading it through its owner the only path.
@@ -1183,9 +1747,57 @@ internal sealed class FakeHarvestElement
 
 
     public Guid GetGuid() => Identity;
+    public bool IsVisible() => Visible;
+    public bool IsAvailable() => Available;
+    public BigDouble MaximumNumberInstances() => new(MaximumAdditional);
+    public List<FakeHarvestActionInstance> GetActionInstances() => ActionInstances;
 }
 
-internal sealed class FakeTimeRune
+internal sealed class FakeHarvestAction
+{
+    public Guid Identity = Guid.NewGuid();
+    public bool Visible = true;
+    public FakeCraftingResourceCostList DrainCost = new();
+    public BigDouble NextDrainPercent = new(100);
+    public Guid GetGuid() => Identity;
+}
+
+internal sealed class FakeHarvestActionInstance
+{
+    public FakeHarvestElement Element = null!;
+    public FakeHarvestAction Action = null!;
+    public int instances;
+    public int Maximum = 1;
+
+    public FakeHarvestAction GetAction() => Action;
+    public FakeHarvestElement GetElement() => Element;
+    public bool IsVisible() => Action.Visible;
+    public int GetMaximumInstances() => Maximum;
+    public FakeScribeScalingInfo GetScalingInfo(int count) => new()
+    {
+        DrainCostMod = Action.NextDrainPercent,
+    };
+    private FakeCraftingResourceCostList ComputeResourceCost() => Action.DrainCost;
+}
+
+internal sealed class FakeHarvestElementList
+{
+    private readonly Dictionary<FakeHarvestElement, int> _stacks = new();
+    public bool HasSpace = true;
+    public bool HasEmptySpot() => HasSpace;
+    public int GetStacks(FakeHarvestElement element) =>
+        _stacks.TryGetValue(element, out var count) ? count : 0;
+    public void SetStacks(FakeHarvestElement element, int count) => _stacks[element] = count;
+}
+
+internal sealed class FakeHarvestActionList
+{
+    public List<FakeHarvestActionInstance> value = new();
+    public bool HasSpace = true;
+    public bool HasEmptySpot() => HasSpace;
+}
+
+internal sealed class FakeTimeRune : global::IDiscoverable
 {
     public static readonly List<FakeTimeRune> All = new();
 
@@ -1201,11 +1813,31 @@ internal sealed class FakeTimeRune
     public FakeModifierRecord power = new(0d);
     public FakeModifierRecord powerScalingMod = new(0d);
     public FakeModifierRecord masteryXpMod = new(0d);
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::GlyphSO> genericDiscoveryGlyphs = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
+    public bool NativeCanLevel = true;
+    public FakeCraftingResourceCostList LevelCost = new();
 
     public Guid GetGuid() => Identity;
+    public int GetLevel() => level;
+    public bool CanLevel() => NativeCanLevel;
+    public FakeCraftingResourceCostList GetLevelCost() => LevelCost;
+    public void PurchaseLevel() => level++;
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => discovered;
+    bool global::IDiscoverable.IsDiscoverRequired() => isDiscoverRequired;
+    void global::IDiscoverable.Discover() => discovered = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
 }
 
-internal sealed class FakeGlyph
+internal sealed class FakeGlyph : global::IDiscoverable
 {
     public static readonly List<FakeGlyph> All = new();
 
@@ -1225,6 +1857,34 @@ internal sealed class FakeGlyph
     public FakeModifierRecord freeUsages = new(0d);
     public FakeModifierRecord freeLoadoutUsages = new(0d);
     public FakeModifierRecord maxUsages = new(0d);
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::GlyphSO> genericDiscoveryGlyphs = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
+    public bool NativeCanLevel = true;
+    public FakeCraftingResourceCostList LevelCost = new();
+    public FakeCraftingResourceCostList BonusLevelCost = new();
+
+    public bool NativeAvailable = true;
+    public bool IsAvailable() => NativeAvailable;
+    public int GetMaxUsages() => (int)maxUsages.GetValue().ToDouble();
+    public int GetLevel() => level + freeLevels;
+    public int GetFreeLevels() => freeLevels;
+    public bool CanLevel() => NativeCanLevel;
+    public FakeCraftingResourceCostList GetLevelCost() => LevelCost;
+    public FakeCraftingResourceCostList GetFreeLevelCost() => BonusLevelCost;
+    public void PurchaseLevel() => level++;
+    public void PurchaseFreeLevel() => freeLevels++;
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => discovered;
+    bool global::IDiscoverable.IsDiscoverRequired() => discoveryRequired;
+    void global::IDiscoverable.Discover() => discovered = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
 }
 
 internal sealed class FakeConsumable
@@ -1261,6 +1921,7 @@ internal sealed class FakeConsumable
     public bool hasDuration;
     public double durationBase;
     public bool queueOnStart;
+    public bool CanFire() => visible && quantity > 0 && consumeCost.HasEnough();
 }
 
 internal sealed class FakeConsumableType
@@ -1279,6 +1940,8 @@ internal sealed class FakeConsumableVariable
 internal sealed class FakeConsumableCostList
 {
     public List<FakeConsumableCost> costs = new();
+    public bool Affordable = true;
+    public bool HasEnough() => Affordable;
 }
 
 internal sealed class FakeConsumableCost
@@ -1291,6 +1954,7 @@ internal sealed class FakeConsumableCost
 
     public FakeConsumableResource resource;
     public BigDouble valueBig;
+    public BigDouble GetValue() => valueBig;
 }
 
 internal sealed class FakeConsumableResource
@@ -1324,7 +1988,7 @@ internal sealed class FakeConsumableCount
     public int GetQuantity() => Quantity;
 }
 
-internal sealed class FakeRitual
+internal sealed class FakeRitual : global::IDiscoverable
 {
     public static readonly List<FakeRitual> All = new();
 
@@ -1339,6 +2003,11 @@ internal sealed class FakeRitual
     public int critLevel;
     public int echoLevel;
     public int chainLevel;
+    public global::ResourceCostList genericDiscoveryCost = new();
+    public List<global::GlyphSO> genericDiscoveryGlyphs = new();
+    public List<global::ResourceSO> genericDiscoveryResources = new();
+    public bool NativeDiscoverVisible = true;
+    public bool NativeCanDiscover = true;
 
     /// <summary>Left null unless a test fills it, so the null-reads-as-zero path stays exercised.</summary>
     public List<object>? ritualInstances;
@@ -1360,6 +2029,15 @@ internal sealed class FakeRitual
     public ValueModifierRecord completionRateMod = new(new BigDouble(0.0, 0));
 
     public Guid GetGuid() => Identity;
+    global::ResourceCostList global::IDiscoverable.GetDiscoverCost() => genericDiscoveryCost;
+    List<global::GlyphSO> global::IDiscoverable.GetGlyphRecipe() => new(genericDiscoveryGlyphs);
+    List<global::ResourceSO> global::IDiscoverable.GetResourceRecipe() => new(genericDiscoveryResources);
+    bool global::IDiscoverable.IsDiscoverVisible() => NativeDiscoverVisible;
+    bool global::IDiscoverable.CanDiscover() => NativeCanDiscover;
+    bool global::IDiscoverable.IsDiscovered() => discovered;
+    bool global::IDiscoverable.IsDiscoverRequired() => isDiscoverRequired;
+    void global::IDiscoverable.Discover() => discovered = true;
+    Guid global::IHasGuid.GetGuid() => GetGuid();
     public bool hideEndScreenResults;
     public bool isDiscoverRequired;
     public bool forceLevel;
@@ -1368,6 +2046,46 @@ internal sealed class FakeRitual
     public int maxWaves;
     public double baseWeight;
     public int minimumEffectLevel;
+    public int maximumSelectedLevel = 1;
+    public bool usageRequirementsMet = true;
+    public FakeCraftingResourceCostList activationCost = new();
+    public FakeCraftingResourceCostList completionCost = new();
+    public FakeModifierListRef completionCostPerLevel = new();
+    public GameWorldCollectorTests.FakeResearchFillList resourceFillList = new();
+
+    public int GetMaxSelectedLevel() => maximumSelectedLevel;
+    public bool HasMetUsageRequirements() => usageRequirementsMet;
+    public FakeCraftingResourceCostList GetActivationCost() => activationCost;
+    public FakeCraftingResourceCostList GetSelectedCompletionCost() => completionCost;
+
+    /// <summary>The results screen's own record, and the verdict End() reads before showing it.</summary>
+    public List<FakeSpoilsRecordEntry> currentSpoils = new();
+
+    public bool IsFailedRun() => wavesCompleted < 5;
+}
+
+internal sealed class FakeSpoilsRecordEntry
+{
+    public FakeSpoilsRecordEntry(FakeResource resource, BigDouble quantity)
+    {
+        this.resource = resource;
+        this.quantity = quantity;
+    }
+
+    public BigDouble quantity;
+    public FakeResource resource { get; }
+}
+
+internal sealed class FakeRitualVariable
+{
+    public FakeRitual? value;
+    public bool IsItem(FakeRitual ritual) => ReferenceEquals(value, ritual);
+}
+
+internal sealed class FakeRitualManager
+{
+    public static FakeRitualManager instance = new();
+    public FakeRitualVariable selectedRitual = new();
 }
 
 internal sealed class FakeAchievement
@@ -1414,6 +2132,11 @@ internal sealed class FakeChallenge
     public double baseReward;
 
     public Guid GetGuid() => Identity;
+    public bool IsAvailableToRun() => maxLevel < 0 || level < maxLevel;
+    public bool IsCompletedOnce() => level > 0 || (int)state == 3;
+    public bool IsMaxLevel() => maxLevel >= 0 && level >= maxLevel;
+    public BigDouble GetDifficulty() => new(difficulty);
+    public BigDouble GetNextInstanceBaseReward() => new(baseReward);
 }
 
 internal sealed class FakeThoughtStream
@@ -1545,6 +2268,13 @@ internal sealed class FakePrerequisites
 {
     public bool available;
     public List<object> prerequisites = new();
+
+    /// <summary>
+    /// The read-only parameterized overload world collection binds as a differential oracle. This
+    /// traversal fake intentionally answers only the unconditional case; requirement arithmetic is
+    /// covered by the native-shaped shared stubs and evaluator tests.
+    /// </summary>
+    public bool Check(Requirements.ConditionInfo conditionInfo) => prerequisites.Count == 0;
 }
 
 internal sealed class FakePassiveAbility
@@ -1592,10 +2322,17 @@ internal sealed class FakeDiscoveryTree
     public bool usedRerollsLastDiscover;
     public FakeState actionMode;
     public FakeGuidContainer selectedChoiceId = new();
+    public List<FakeGuidContainer> currentChoiceIds = new();
     public FakeReferencedEntity? overrideDiscoveryRerolls;
     public FakeReferencedEntity? overrideDiscoveryChoices;
+    public bool visible = true;
+    public bool immediateRequired;
+    public FakeDiscoveryCostList nextItemCost = new();
 
     public Guid GetGuid() => Identity;
+    public bool IsVisible() => visible;
+    public bool HasImmediateRequiredDiscover() => immediateRequired;
+    public FakeDiscoveryCostList GetNextItemCost() => nextItemCost;
     public int additionalDiscoveryChoices;
     public int discoveryBonusLevelCost;
     public bool debugMode;
@@ -1604,6 +2341,28 @@ internal sealed class FakeDiscoveryTree
     public bool hasRequiredDiscovery;
     public bool hasRemainingDiscovery;
     public bool hasCompletedAllDiscoveries;
+}
+
+internal sealed class FakeDiscoveryCostList
+{
+    public bool affordable = true;
+    public List<FakeDiscoveryCost> costs = new();
+
+    public bool HasEnough() => affordable;
+    public List<FakeDiscoveryCost> GetEntries() => costs;
+}
+
+internal sealed class FakeDiscoveryCost
+{
+    public FakeDiscoveryCost(FakeResource resource, BigDouble amount)
+    {
+        this.resource = resource;
+        Amount = amount;
+    }
+
+    public FakeResource resource;
+    internal BigDouble Amount { get; }
+    public BigDouble GetValue() => Amount;
 }
 
 internal sealed class FakeRecipeBook

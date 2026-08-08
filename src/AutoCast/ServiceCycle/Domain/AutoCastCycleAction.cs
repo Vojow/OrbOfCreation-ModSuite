@@ -2,7 +2,7 @@ using System;
 
 namespace OrbAutomata;
 
-/// <summary>Which of the two things Auto Cast asks the game to do.</summary>
+/// <summary>Which spell-button operation the shared cast boundary asks the game to do.</summary>
 internal enum AutoCastActionKind
 {
     /// <summary>
@@ -14,6 +14,9 @@ internal enum AutoCastActionKind
 
     /// <summary>Let go of a full-charge hold this service is holding.</summary>
     ReleaseCharge = 1,
+
+    /// <summary>Press an active toggle spell's native cast button again to turn it off.</summary>
+    ToggleOff = 2,
 }
 
 /// <summary>
@@ -85,7 +88,8 @@ internal readonly struct AutoCastCycleAction
         long collectedAtEpoch,
         AutoCastPlanBelief belief)
     {
-        if (kind is not (AutoCastActionKind.Fire or AutoCastActionKind.ReleaseCharge))
+        if (kind is not (AutoCastActionKind.Fire or AutoCastActionKind.ReleaseCharge or
+            AutoCastActionKind.ToggleOff))
             throw new ArgumentOutOfRangeException(nameof(kind));
         if (slotIndex < 0)
             throw new ArgumentOutOfRangeException(

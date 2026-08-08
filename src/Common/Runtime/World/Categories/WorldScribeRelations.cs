@@ -295,7 +295,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
                 {
                     if (scriptValue is null || !native.InstantScriptType.IsInstanceOfType(scriptValue))
                         throw new InvalidOperationException(
-                            $"Scribe recipe {recipeId:D} contained a non-IInstantEffectScript output.");
+                            $"Scribe recipe {EntityIdentityFormatter.Format(recipeId)} contained a non-IInstantEffectScript output.");
                     if (scriptValue.GetType() != native.ConsumableGainType) continue;
                     var output = RequireExact(
                         native.GainConsumable.GetValue(scriptValue),
@@ -307,7 +307,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             }
             if (typeCount != 1 || outputCount != 1)
                 throw new InvalidOperationException(
-                    $"Scribe recipe {recipeId:D} had {typeCount} recipe types and " +
+                    $"Scribe recipe {EntityIdentityFormatter.Format(recipeId)} had {typeCount} recipe types and " +
                     $"{outputCount} ConsumableGainEffect outputs; exactly one of each is required.");
 
             frame.ScribeRecipes.Append(new WorldScribeRecipe(
@@ -335,10 +335,14 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             var values = RequireList(
                 native.InstanceListValue.GetValue(queue),
                 "CraftingInstance list value");
+            var isAutomatic = Require<bool>(native.AutoList.GetValue(queue),
+                "CraftingInstanceListVariable.isAutoList");
+            if (isAutomatic != (queueId == KnownEntities.AutoScribeInstances.Uuid))
+                throw new InvalidOperationException(
+                    $"Scribe queue {EntityIdentityFormatter.Format(queueId)} contradicted its native automation role.");
             frame.ScribeQueues.Append(new WorldScribeQueue(
                 queueId,
-                Require<bool>(native.AutoList.GetValue(queue),
-                    "CraftingInstanceListVariable.isAutoList"),
+                isAutomatic,
                 CountNonNull(values),
                 Invoke<int>(native.ListMaximum, queue)));
             sampled++;
@@ -346,11 +350,15 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             {
                 if (value is null) continue;
                 var instance = RequireExact(value, native.InstanceType, "CraftingInstance");
+                var instanceAutomatic = Invoke<bool>(native.InstanceAutomatic, instance);
+                if (instanceAutomatic != isAutomatic)
+                    throw new InvalidOperationException(
+                        $"CraftingInstance.IsAuto() contradicted containing Scribe queue {EntityIdentityFormatter.Format(queueId)}.");
                 frame.ScribeWork.Append(new WorldScribeWork(
                     queueId,
                     Invoke<Guid>(native.InstanceRecipe, instance),
                     Level(InvokeObject(native.InstanceQuantity, instance)),
-                    Invoke<bool>(native.InstanceAutomatic, instance),
+                    instanceAutomatic,
                     Invoke<bool>(native.InstanceExpired, instance)));
                 sampled++;
             }
@@ -474,9 +482,9 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
         }
         if (requestCount != 1 || enchantCount != 1 || enchantment != expectedEnchantment)
             throw new InvalidOperationException(
-                $"Scroll {Invoke<Guid>(native.ConsumableIdentity, consumable):D} had {requestCount} target " +
-                $"requests, {enchantCount} enchant effects, and enchantment {enchantment:D}; " +
-                $"expected exactly one of each and {expectedEnchantment:D}.");
+                $"Scroll {EntityIdentityFormatter.Format(Invoke<Guid>(native.ConsumableIdentity, consumable))} had {requestCount} target " +
+                $"requests, {enchantCount} enchant effects, and enchantment {EntityIdentityFormatter.Format(enchantment)}; " +
+                $"expected exactly one of each and {EntityIdentityFormatter.Format(expectedEnchantment)}.");
         var exactOptions = RequireExact(options, native.OptionsType, "TargetSelectOptions");
         var targeting = InvokeObject(native.GetTargeting, exactOptions);
         return RequireExact(targeting, native.TargetStructureType, "TargetStructure");
@@ -484,11 +492,11 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
 
     private static object Resolve(BindingSet native, Guid id, Type exactType)
     {
-        if (native.Registry.GetValue(null) is not IDictionary registry ||
-            !registry.Contains(id))
+        var source = native.Registry.Read();
+        if (!source.IsReady || source.Registry is null || !source.Registry.Contains(id))
             throw new InvalidOperationException(
-                $"The identity registry did not contain {exactType.Name} {id:D}.");
-        return RequireExact(registry[id], exactType, exactType.Name);
+                $"The identity registry did not contain {exactType.Name} {EntityIdentityFormatter.Format(id)}.");
+        return RequireExact(source.Registry[id], exactType, exactType.Name);
     }
 
     private static int CountNonNull(IList values)
@@ -591,7 +599,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
             Type optionsType,
             Type targetStructureType,
             Type enchantScriptType,
-            FieldInfo registry,
+            RuntimeIdentityRegistryBinding registry,
             FieldInfo recipeListValue,
             FieldInfo instanceListValue,
             FieldInfo recipeTypes,
@@ -694,7 +702,7 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
         internal Type OptionsType { get; }
         internal Type TargetStructureType { get; }
         internal Type EnchantScriptType { get; }
-        internal FieldInfo Registry { get; }
+        internal RuntimeIdentityRegistryBinding Registry { get; }
         internal FieldInfo RecipeListValue { get; }
         internal FieldInfo InstanceListValue { get; }
         internal FieldInfo RecipeTypes { get; }
@@ -777,7 +785,8 @@ internal sealed class WorldScribeRelationReader : IWorldCategoryReader
                     options,
                     target,
                     enchantScript,
-                    Field(id, "RuntimeLookup", Static, typeof(Dictionary<Guid, object>), allowDictionary: true),
+                    new RuntimeIdentityRegistryBinding(
+                        () => id, requireStableIdentityContract: false),
                     GenericListValue(recipeList, recipe),
                     GenericListValue(instanceList, instance),
                     CollectionField(recipe, "craftingTypes", recipeType),

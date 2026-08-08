@@ -371,7 +371,7 @@ internal sealed class NativePurchaseViewAdmissionResolver
             snapshot.Add(
                 new CandidateKey(candidate.Kind, candidate.Id),
                 new NativePurchaseViewResolution(
-                    in relation, routes, DiagnosticName(candidate.Native)));
+                    in relation, routes, DiagnosticName(candidate.Id)));
             if (status != WorldPurchaseViewRelationStatus.Resolved) unresolved++;
         }
         _snapshot = snapshot;
@@ -549,9 +549,9 @@ internal sealed class NativePurchaseViewAdmissionResolver
                 if (!duplicate)
                     candidate.Routes.Add(new NativePurchaseViewRoute(
                         listId,
-                        DiagnosticName(value),
+                        DiagnosticName(listId),
                         viewId,
-                        DiagnosticName(view),
+                        DiagnosticName(viewId),
                         view));
             }
         }
@@ -851,7 +851,7 @@ internal sealed class NativePurchaseViewAdmissionResolver
                 resolution = new NativePurchaseViewResolution(
                     in relation,
                     resolution.Routes,
-                    DiagnosticName(candidate));
+                    DiagnosticName(id));
             }
             output.Append(resolution.Relation);
             for (var routeIndex = 0; routeIndex < resolution.Routes.Length; routeIndex++)
@@ -919,7 +919,7 @@ internal sealed class NativePurchaseViewAdmissionResolver
         return new NativePurchaseViewResolution(
             in relation,
             routes.ToArray(),
-            DiagnosticName(candidate));
+            DiagnosticName(candidateId));
     }
 
     private void MatchLists(
@@ -981,9 +981,9 @@ internal sealed class NativePurchaseViewAdmissionResolver
             if (duplicate) continue;
             routes.Add(new NativePurchaseViewRoute(
                 listId,
-                DiagnosticName(value),
+                DiagnosticName(listId),
                 viewId,
-                DiagnosticName(view),
+                DiagnosticName(viewId),
                 view));
         }
     }
@@ -1027,10 +1027,10 @@ internal sealed class NativePurchaseViewAdmissionResolver
         return new NativePurchaseViewResolution(in relation, Array.Empty<NativePurchaseViewRoute>(), string.Empty);
     }
 
-    private static string DiagnosticName(object value)
+    private static string DiagnosticName(Guid uuid)
     {
 #if SERVICE_CYCLE_PROFILE
-        return OrbModding.Common.ReflectionUtil.ReadDisplayName(value) ?? value.GetType().Name;
+        return OrbModding.Common.EntityIdentityFormatter.Format(uuid);
 #else
         return string.Empty;
 #endif

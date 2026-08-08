@@ -141,6 +141,7 @@ internal sealed class AutomataRequirementVerifier
         for (var offset = 0; offset < count; offset++)
         {
             ref readonly var row = ref rows[start + offset];
+            if (row.NodeKind == WorldRequirementNodeKind.Group) continue;
             if (WorldRequirementEvaluator.Evaluate(world, in row, level) !=
                 WorldRequirementVerdict.Unevaluable)
             {

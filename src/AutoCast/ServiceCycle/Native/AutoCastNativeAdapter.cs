@@ -36,6 +36,15 @@ internal enum AutoCastPreflight
 
     /// <summary>A full-charge hold was wanted and could not be taken, so no cast was submitted.</summary>
     ChargeHoldRefused,
+
+    /// <summary>The requested active spell is not a toggle spell.</summary>
+    NotToggleable,
+
+    /// <summary>The requested toggle spell is not currently active.</summary>
+    AlreadyInactive,
+
+    /// <summary>The player's Cancellable Spells setting disables the native toggle-off path.</summary>
+    CancellationDisabled,
 }
 
 /// <summary>
@@ -126,6 +135,8 @@ internal interface IAutoCastNativePort
 
     AutoCastSubmission ReleaseCharge(int slotIndex, Guid spellRecipeId);
 
+    AutoCastSubmission ToggleOff(int slotIndex, Guid spellRecipeId);
+
     /// <summary>Whether the game currently has a target request open.</summary>
     bool IsTargeting();
 
@@ -149,6 +160,7 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
     private Type? _managerType;
     private Type? _spellType;
     private Type? _targetingType;
+    private Type? _settingsType;
     private object? _manager;
     private object? _activeSpells;
     private FieldInfo? _activeSpellsValue;
@@ -158,6 +170,10 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
     private MethodInfo? _getTargetingLink;
     private MethodInfo? _submitTarget;
     private MethodInfo? _canCast;
+    private MethodInfo? _canFire;
+    private MethodInfo? _isCasting;
+    private MethodInfo? _isToggled;
+    private MethodInfo? _canCancelSpells;
     private MethodInfo? _getReference;
     private MethodInfo? _setChargeInput;
     private MethodInfo? _getScalingInfo;
@@ -253,6 +269,65 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
         }
     }
 
+    public AutoCastSubmission ToggleOff(int slotIndex, Guid spellRecipeId)
+    {
+        if (!TryInitialize(out var reason))
+            return AutoCastSubmission.Rejected(AutoCastPreflight.ContractUnavailable, reason);
+
+        try
+        {
+            if (!TryResolveSlot(slotIndex, spellRecipeId, out var spell, out var identityReason))
+                return AutoCastSubmission.Rejected(
+                    AutoCastPreflight.SlotIdentityChanged, identityReason);
+            if (_blockedSpells.TryGetValue(spellRecipeId, out var blocked))
+                return AutoCastSubmission.Rejected(AutoCastPreflight.ContractUnavailable, blocked);
+            if (_isToggled!.Invoke(spell, Array.Empty<object>()) is not true)
+                return AutoCastSubmission.Rejected(
+                    AutoCastPreflight.NotToggleable,
+                    "the equipped spell is not a toggle spell");
+            if (_isCasting!.Invoke(spell, Array.Empty<object>()) is not true)
+                return AutoCastSubmission.Rejected(
+                    AutoCastPreflight.AlreadyInactive,
+                    "the toggle spell is already off");
+            if (_canCancelSpells!.Invoke(null, Array.Empty<object>()) is not true)
+                return AutoCastSubmission.Rejected(
+                    AutoCastPreflight.CancellationDisabled,
+                    "enable Cancellable Spells in the game's settings before turning this spell off");
+            if (_canFire!.Invoke(spell, Array.Empty<object>()) is not true)
+                return AutoCastSubmission.Rejected(
+                    AutoCastPreflight.NotReady,
+                    "the spell's visible cast button is not available right now");
+
+            var nativeCalls = 0;
+            var evidence = NativeMutationVerifier.Execute(
+                "toggle spell off",
+                EntityIdentityFormatter.Format(spellRecipeId),
+                "Spell.IsCasting true to false",
+                () => _isCasting.Invoke(spell, Array.Empty<object>()) is true,
+                () =>
+                {
+                    using (AutoCastManualSignal.EnterAutomatedFire())
+                    {
+                        nativeCalls++;
+                        _fireSpellIndex!.Invoke(_manager, new object[] { slotIndex });
+                    }
+                },
+                (before, after) => before && !after);
+            if (!evidence.IsVerified && evidence.MutationWasAttempted)
+            {
+                _blockedSpells[spellRecipeId] =
+                    "native toggle-off blocked until the next lifecycle: " + evidence.Format();
+            }
+            return AutoCastSubmission.Attempted(evidence, nativeCalls);
+        }
+        catch (Exception ex) when (IsReflectionFailure(ex))
+        {
+            return AutoCastSubmission.Rejected(
+                AutoCastPreflight.ContractUnavailable,
+                "toggle-off submission failed: " + ex.GetBaseException().Message);
+        }
+    }
+
     public bool IsTargeting()
     {
         // Fails closed. A targeting contract that cannot be read is reported as "a request is open",
@@ -295,6 +370,7 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
         _managerType = null;
         _spellType = null;
         _targetingType = null;
+        _settingsType = null;
         _manager = null;
         _activeSpells = null;
         _activeSpellsValue = null;
@@ -304,6 +380,10 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
         _getTargetingLink = null;
         _submitTarget = null;
         _canCast = null;
+        _canFire = null;
+        _isCasting = null;
+        _isToggled = null;
+        _canCancelSpells = null;
         _getReference = null;
         _setChargeInput = null;
         _getScalingInfo = null;
@@ -325,7 +405,7 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
         var failure = string.Empty;
         var evidence = NativeMutationVerifier.Execute(
             "Auto Cast fire",
-            spellRecipeId.ToString("D"),
+            EntityIdentityFormatter.Format(spellRecipeId),
             "Spell.Fire hook epoch exact delta +1",
             () => AutoCastManualSignal.FireEpoch,
             () =>
@@ -607,7 +687,9 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
             _managerType = ReflectionUtil.FindLoadedType("SpellManager");
             _spellType = ReflectionUtil.FindLoadedType("Spell");
             _targetingType = ReflectionUtil.FindLoadedType("TargetingManager");
-            if (_managerType is null || _spellType is null || _targetingType is null)
+            _settingsType = ReflectionUtil.FindLoadedType("SettingsManager");
+            if (_managerType is null || _spellType is null || _targetingType is null ||
+                _settingsType is null)
                 return Retry("native cast types are not registered yet", out reason);
 
             _manager = _managerType.GetField("instance", StaticFlags)?.GetValue(null);
@@ -626,6 +708,11 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
             _submitTarget = _targetingType.GetMethods(StaticFlags)
                 .FirstOrDefault(method => method.Name == "SubmitTarget" && method.GetParameters().Length == 1);
             _canCast = FindMethod(_spellType, "CanCast");
+            _canFire = FindMethod(_spellType, "CanFire");
+            _isCasting = FindMethod(_spellType, "IsCasting");
+            _isToggled = FindMethod(_spellType, "IsToggledSpell");
+            _canCancelSpells = _settingsType.GetMethod(
+                "CanCancelSpells", StaticFlags, null, Type.EmptyTypes, null);
             _getReference = FindMethod(_spellType, "get_reference");
             _getScalingInfo = FindMethod(_spellType, "GetScalingInfo");
             _setChargeInput = _spellType.GetMethod(
@@ -637,7 +724,8 @@ internal sealed class AutoCastNativeAdapter : IAutoCastNativePort, IDisposable
 
             if (_activeSpellsValue is null || _fireSpellIndex is null || _canCastASpell is null ||
                 _isTargeting is null || _getTargetingLink is null || _submitTarget is null ||
-                _canCast is null || _setChargeInput is null)
+                _canCast is null || _canFire is null || _isCasting is null ||
+                _isToggled is null || _canCancelSpells is null || _setChargeInput is null)
             {
                 return Block("native cast accessors are unavailable", out reason);
             }
