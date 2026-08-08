@@ -1622,21 +1622,45 @@ internal static class GameMcpWorldQuery
                 hasPrevious ? previous.SelfBonusLevels : (int?)null,
                 current.SelfBonusLevels,
                 "bonusLevel");
-        return new JObject
+        // What a develop, cancel, pause, or resume settles is the queue and the entry's state. A
+        // level takes research time to finish, so the level count is not what these verbs move —
+        // publishing it as an unconditional pair meant every commit reported the same number twice
+        // while the count that did move was nowhere on the wire. It is carried only when it moved,
+        // which is what an instantly-finishing level looks like.
+        var result = new JObject
         {
             ["uuid"] = command.TargetId.ToString("D"),
-            ["totalLevel"] = new JObject
-            {
-                ["before"] = hasPrevious ? previous.Level : (int?)null,
-                ["after"] = current.Level,
-            },
             ["state"] = new JObject
             {
                 ["before"] = hasPrevious ? ResearchState(previous) : null,
                 ["after"] = ResearchState(current),
             },
-        }.Freeze();
+            ["queuedLevels"] = new JObject
+            {
+                ["before"] = hasPrevious ? ResearchQueuedLevels(previous) : (int?)null,
+                ["after"] = ResearchQueuedLevels(current),
+            },
+        };
+        if (hasPrevious && previous.TotalLevel != current.TotalLevel)
+        {
+            result["totalLevel"] = new JObject
+            {
+                ["before"] = previous.TotalLevel,
+                ["after"] = current.TotalLevel,
+            };
+        }
+        return result.Freeze();
     }
+
+    /// <summary>
+    /// The queue count a research row publishes: the decision's own number where the decision was
+    /// collected, and otherwise the game's own <c>GetQueuedLevels()</c> composition — the queued
+    /// levels plus the one in flight.
+    /// </summary>
+    private static int ResearchQueuedLevels(in WorldResearch research) =>
+        research.Decision.Available
+            ? research.Decision.QueuedLevels
+            : Math.Max(research.QueuedLevels + (research.IsDeveloping ? 1 : 0), 0);
 
     private static string ResearchState(in WorldResearch research) =>
         research.Complete ? "complete" :
@@ -3006,9 +3030,7 @@ internal static class GameMcpWorldQuery
     private static GameMcpValue ProjectResearch(GameWorldState world, in WorldResearch research)
     {
         var decision = research.Decision;
-        var queued = decision.Available
-            ? decision.QueuedLevels
-            : Math.Max(research.QueuedLevels + (research.IsDeveloping ? 1 : 0), 0);
+        var queued = ResearchQueuedLevels(in research);
         var result = new JObject
         {
             ["entityId"] = research.EntityId.ToString("D"),

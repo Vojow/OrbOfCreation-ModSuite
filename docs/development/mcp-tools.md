@@ -1087,8 +1087,13 @@ pause, resume, cancel, and bonus call their exact native methods. Success is onl
 identity/outcome: active development or increased total queued levels, paused/resumed state, idle
 with an empty queue, or one added self-bonus level. Cost, investment, resource, type-counter, and
 progress-clock movements never gate success. A missing transition faults that attempt; a throw
-after the exact outcome commits. Every committed mode returns the changed level or state with no
-receipt, payment stanza, or read-back.
+after the exact outcome commits. A committed `develop`, `pause`, `resume`, or `cancel` returns the
+two facts those verbs move — `state` and `queuedLevels`, in the same queue coordinate the research
+row publishes — and carries `totalLevel {before, after}` only when the level count genuinely moved,
+which is what a level finishing inside the call looks like. A level takes research time, so an
+unconditional level pair on a develop reported the same number twice while the queue it grew went
+unpublished. `bonus` returns its own `bonusLevel` pair. No mode returns a receipt, payment stanza,
+or read-back.
 
 No MCP fault installs a persistent family quarantine. A faulted or refused request leaves nothing
 behind: the next call returns to the same action boundary and revalidates current identity, native

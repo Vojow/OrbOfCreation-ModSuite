@@ -202,6 +202,50 @@ public sealed class GameMcpResearchTests
         Assert.Null(response["payment"]);
     }
 
+    /// <summary>
+    /// A level takes research time, so a develop moves the queue and leaves the level count alone.
+    /// The response has to name the count that moved instead of a level pair reading as a no-op.
+    /// </summary>
+    [Fact]
+    public void A_develop_commit_publishes_the_queue_it_moved_and_omits_the_level_it_did_not()
+    {
+        var before = World(queuedLevels: 3);
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Research, 41, 8, "develop", ResearchId, Guid.Empty,
+            "ResearchSO", 1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 51));
+        var after = World(queuedLevels: 4);
+
+        var delta = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after, generation: 52),
+            command,
+            GameMcpCommandResult.Committed("committed", 41, 8)), after);
+
+        Assert.Equal(3, (int)delta["queuedLevels"]!["before"]!);
+        Assert.Equal(4, (int)delta["queuedLevels"]!["after"]!);
+        Assert.Equal("active", (string?)delta["state"]!["after"]);
+        Assert.Null(delta["totalLevel"]);
+    }
+
+    [Fact]
+    public void A_level_that_finished_inside_the_commit_is_the_one_case_that_carries_totalLevel()
+    {
+        var before = World(totalLevel: 1, queuedLevels: 4);
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Research, 41, 8, "develop", ResearchId, Guid.Empty,
+            "ResearchSO", 1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 51));
+        var after = World(totalLevel: 2, queuedLevels: 4);
+
+        var delta = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after, generation: 52),
+            command,
+            GameMcpCommandResult.Committed("committed", 41, 8)), after);
+
+        Assert.Equal(1, (int)delta["totalLevel"]!["before"]!);
+        Assert.Equal(2, (int)delta["totalLevel"]!["after"]!);
+    }
+
     [Fact]
     public void OrdinaryDevelopSettlementUsesTheActionSentinelInsteadOfWaitingForCompletion()
     {
@@ -279,12 +323,14 @@ public sealed class GameMcpResearchTests
         long? collectedAtUtcTicks = null,
         bool queueMode = true,
         bool complete = false,
-        double? heldAmount = null)
+        double? heldAmount = null,
+        int queuedLevels = 3,
+        int totalLevel = 1)
     {
         var decision = new WorldResearchDecision(
             queueMode,
             3,
-            3,
+            queuedLevels,
             developmentCostAffordable ? 2 : 0,
             1,
             new BigDouble(30), new BigDouble(30), new BigDouble(0.5), true, 2,
@@ -309,7 +355,7 @@ public sealed class GameMcpResearchTests
             new BigDouble(100), BigDouble.Zero, BigDouble.Zero);
         var research = new WorldResearch(ResearchId, 1, 2, 0, 0, 10, 60,
             isDeveloping, true, false, true, true, complete, true, true, true, true, true, true,
-            1, 1, 0, 1, 10, false, 2, 1, new BigDouble(60), 1, 1,
+            1, 1, 0, totalLevel, 10, false, 2, 1, new BigDouble(60), 1, 1,
             PublicationTable<WorldResearchRequirementAdjustment>.Empty, in modifiers, in decision);
         var identities = GameMcpTestHarness.EntityCatalog.Rows.AsSpan().ToArray().Concat(new[]
         {
