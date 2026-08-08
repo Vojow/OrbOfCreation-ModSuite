@@ -877,6 +877,12 @@ display name, on a row and on a reference from another row's field alike; a refe
 name, and that conditional `internalName`, while a row adds the classifying facts a row needs
 (`nameSource`, `nativeType`, `category`).
 
+A committed purchase reports the two counts the screen owns, `level` and `queuedLevels`, each as a
+`{before, after}` pair. Which one moved is the answer: a level that lands immediately moves the
+badge, a level that has to be built moves the queue and leaves the badge where it was. Publishing
+their sum under one name — the retired `committedLevel` — put a number on the wire that no screen
+shows and hid which of the two the purchase actually did.
+
 A committed purchase reports what it paid: `game_purchase` carries `paid[]`, and a mutation that was
 never admitted against a price — the free `game_structure` toggle on the same priced attribute —
 does not. Per resource the price named, `paid[]` carries the `resource` identity, `cost` — the price

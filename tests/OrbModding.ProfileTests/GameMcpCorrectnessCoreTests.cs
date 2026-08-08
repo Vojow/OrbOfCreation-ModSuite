@@ -561,9 +561,60 @@ public sealed class GameMcpCorrectnessCoreTests
             GameMcpCommandResult.Committed("committed", 9, 3)));
 
         Assert.Equal(attributeId.ToString("D"), (string?)delta["uuid"]);
-        Assert.Equal("632", (string?)delta["committedLevel"]!["before"]);
-        Assert.Equal("633", (string?)delta["committedLevel"]!["after"]);
-        Assert.Equal(2, delta.Count);
+        Assert.Equal(632, (int)delta["level"]!["before"]!);
+        Assert.Equal(633, (int)delta["level"]!["after"]!);
+        Assert.Equal(0, (int)delta["queuedLevels"]!["before"]!);
+        Assert.Equal(0, (int)delta["queuedLevels"]!["after"]!);
+        Assert.Equal(3, delta.Count);
+    }
+
+    /// <summary>
+    /// A purchase that has to be built leaves the badge alone, so the response has to name the
+    /// count that actually moved rather than a level pair that reads as a no-op.
+    /// </summary>
+    [Fact]
+    public void APurchaseThatOnlyQueuesLevelsReportsTheQueueMoving()
+    {
+        var attributeId = Guid.Parse("f2000000-0000-0000-0000-00000000000d");
+        var before = new GameWorldState
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 632),
+            }),
+        };
+        var command = new GameMcpCommand(
+            1,
+            GameMcpCommandKind.Purchase,
+            expectedLifecycleGeneration: 9,
+            expectedConfigurationGeneration: 3,
+            mode: "structure",
+            targetId: attributeId,
+            secondaryId: Guid.Empty,
+            derivedNativeType: "StructureSO",
+            amount: 1,
+            payloadKey: string.Empty,
+            payloadValue: string.Empty,
+            capture: false,
+            saveCapture: false,
+            frameContext: GameMcpTestHarness.Context(before));
+        var after = new GameWorldState
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 632, queued: 1),
+            }),
+        };
+
+        var delta = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3)));
+
+        Assert.Equal(632, (int)delta["level"]!["before"]!);
+        Assert.Equal(632, (int)delta["level"]!["after"]!);
+        Assert.Equal(0, (int)delta["queuedLevels"]!["before"]!);
+        Assert.Equal(1, (int)delta["queuedLevels"]!["after"]!);
     }
 
     [Fact]
@@ -625,7 +676,7 @@ public sealed class GameMcpCorrectnessCoreTests
                 GameMcpCommandResult.Committed("committed", 9, 3)),
             identities));
 
-        Assert.Equal("633", (string?)delta["committedLevel"]!["after"]);
+        Assert.Equal(633, (int)delta["level"]!["after"]!);
         var paid = Assert.IsType<JObject>(Assert.Single(delta["paid"]!.Values<JObject>()));
         Assert.Equal("Glyph Upgrades", (string?)paid["resource"]!["name"]);
         Assert.Equal("2", (string?)paid["cost"]);

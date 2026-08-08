@@ -814,25 +814,54 @@ internal static class GameMcpWorldQuery
         if (command.Mode == "structure" &&
             WorldLookup.TryFind(after.Structures, command.TargetId, out var afterStructure))
         {
-            var beforeLevel = before is not null &&
-                WorldLookup.TryFind(before.Structures, command.TargetId, out var old)
-                ? (object)new GameMcpDomainValue(old.CommittedLevel)
-                : null;
-            return Change(command.TargetId, beforeLevel,
-                new GameMcpDomainValue(afterStructure.CommittedLevel), "committedLevel");
+            WorldStructure oldStructure = default;
+            var hadStructure = before is not null &&
+                WorldLookup.TryFind(before.Structures, command.TargetId, out oldStructure);
+            return PurchaseChange(
+                command.TargetId,
+                hadStructure ? oldStructure.Reading.Quantity : null,
+                afterStructure.Reading.Quantity,
+                hadStructure ? oldStructure.Reading.QueuedLevels.ToInt() : null,
+                afterStructure.Reading.QueuedLevels.ToInt());
         }
         if (WorldLookup.TryFind(after.Upgrades, command.TargetId, out var afterUpgrade))
         {
-            var beforeLevel = before is not null &&
-                WorldLookup.TryFind(before.Upgrades, command.TargetId, out var old)
-                ? (object)old.CommittedLevel
-                : null;
-            return Change(command.TargetId, beforeLevel, afterUpgrade.CommittedLevel,
-                "committedLevel");
+            WorldUpgrade oldUpgrade = default;
+            var hadUpgrade = before is not null &&
+                WorldLookup.TryFind(before.Upgrades, command.TargetId, out oldUpgrade);
+            return PurchaseChange(
+                command.TargetId,
+                hadUpgrade ? oldUpgrade.Reading.Level : null,
+                afterUpgrade.Reading.Level,
+                hadUpgrade ? oldUpgrade.Reading.QueuedLevels : null,
+                afterUpgrade.Reading.QueuedLevels);
         }
         return PostStateUnavailable("post_state_not_published",
             "the settled world has no purchased target row");
     }
+
+    /// <summary>
+    /// What a purchase settled, in the two counts the screen owns. A level that lands immediately
+    /// moves <c>level</c>; a level that has to be built moves <c>queuedLevels</c> and leaves the
+    /// badge where it was, so publishing only one of them is how a caller ends up reading a pair
+    /// that never moved. <c>level</c> keeps the single meaning it carries on every read — the
+    /// badge's own count, never the sum of built and building behind it.
+    /// </summary>
+    private static GameMcpValue PurchaseChange(
+        Guid uuid,
+        int? levelBefore,
+        int levelAfter,
+        int? queuedBefore,
+        int queuedAfter) => new JObject
+    {
+        ["uuid"] = uuid.ToString("D"),
+        ["level"] = new JObject { ["before"] = levelBefore, ["after"] = levelAfter },
+        ["queuedLevels"] = new JObject
+        {
+            ["before"] = queuedBefore,
+            ["after"] = queuedAfter,
+        },
+    }.Freeze();
 
     private static GameMcpValue ProjectStructureLifecycleDelta(
         GameMcpFrameContext state,
@@ -2538,8 +2567,9 @@ internal static class GameMcpWorldQuery
             ["level"] = upgrade.Reading.Level,
         };
         if (upgrade.IsExhausted) result["reasonCode"] = "already_maxed";
-        if (upgrade.Reading.QueuedLevels != 0)
-            result["queuedLevels"] = upgrade.Reading.QueuedLevels;
+
+        // Nothing developing is a fact about the upgrade, not a missing reading, so zero ships.
+        result["queuedLevels"] = upgrade.Reading.QueuedLevels;
         if (upgrade.IsBounded)
         {
             result["maxLevel"] = upgrade.Reading.MaxLevel;
