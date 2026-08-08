@@ -228,6 +228,24 @@ only when the upgrade has a ceiling: a negative native maximum is the uncapped s
 fields are absent together rather than reading `0`. An exhausted upgrade reads `already_maxed` and
 publishes no `affordable`, because a level that cannot be bought has no price to be short of.
 
+Every purchasable counts levels, and no two of them count the same thing. One name means one thing
+across the whole surface, reads and commits alike:
+
+| Surface | Field | Native source | What the number is |
+| --- | --- | --- | --- |
+| `structures` (Attributes) | `level` | `StructureSO.GetBaseLevel()` | the exact count the badge draws |
+| `structures` | `queuedLevels` | `StructureSO.GetQueuedQuantity()` | bought and still building; the badge shows these as `+N` |
+| `upgrades` | `level` | `UpgradeSO.GetPurchaseLevel()` | levels bought. The upgrade screen labels the first one `Lv 1`, so its badge reads one above this count |
+| `upgrades` | `queuedLevels` | `UpgradeSO.queuedLevels` | bought and still developing |
+| every `game_level` target (glyphs, equipment types, resource types, time runes) | `paidLevel` / `bonusLevel` / `totalLevel` | the levelable's total and its granted levels | bought, granted, and their sum. `bonusLevel` is absent where the surface has no bonus concept, exactly as its `bonus` block is |
+| `glyphs` | `usableCount` | the glyph's maximum usages | the uses the glyph screen counts — what a level buys |
+| `research` | `purchasedLevel` / `baseLevel` / `bonusLevel` / `totalLevel` | the game's four distinct level accessors | completion is judged on `baseLevel`, never on `totalLevel` |
+| `research` | `queuedLevels` | the develop decision's queue count | levels waiting, including the one in flight |
+| `rituals` | `setLevel.current` | the ritual's selected starting level | where the ritual's own starting-level control stands |
+
+No surface publishes the sum of built and building levels under a single name: the retired
+`committedLevel` was exactly that, and a number no screen shows cannot be checked against one.
+
 `purchase-costs` is the only modifier-adjusted live cost category. Spell and alchemy cost rows are
 immediate/drain observations and are not mislabeled as purchase prices. Every displayed cost is in
 the screen's spend units: ordinary nominal costs are divided by the resource quality percent through
@@ -899,9 +917,12 @@ A committed purchase reports what it paid: `game_purchase` carries `paid[]`, and
 never admitted against a price — the free `game_structure` toggle on the same priced attribute —
 does not. Per resource the price named, `paid[]` carries the `resource` identity, `cost` — the price
 the action was admitted at, the same number that resource's cost row showed, charged by the game's
-own transaction — and `remaining`, read from the settled world. There is no delta field: the
-difference between two worlds also contains every income stream and every other spender in that
-window, so it is not a price and is not computed.
+own transaction — and `remaining`, read from the settled world in the same spendable coordinate
+every cost row's `spendableAmount` uses, which is headroom for a bandwidth resource rather than
+stored quantity. There is no delta field: the difference between two worlds also contains every
+income stream and every other spender in that window, so it is not a price and is not computed. On
+a volatile resource `remaining` will not reconcile with `cost` against a balance read at any other
+instant, and that is the resource moving, not the field drifting.
 
 JSON tool data is emitted once in `structuredContent`; `content` appears only for actual inline media
 such as screenshots, and success omits the false `isError` default. The server does not repeat the
