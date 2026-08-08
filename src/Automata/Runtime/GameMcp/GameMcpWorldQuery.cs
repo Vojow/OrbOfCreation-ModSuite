@@ -677,11 +677,16 @@ internal static class GameMcpWorldQuery
         WithPaid(state, command, ProjectChangedFact(state, command, committed));
 
     /// <summary>
-    /// What a committed purchase cost and what the settled world leaves. <c>cost</c> is the price the
-    /// action was admitted at — the same admission-capture number the caller's cost row and the
-    /// unaffordable sentence read — because the game owns charging it; <c>remaining</c> is read from
-    /// the settled world. Neither is derived by subtracting one world from another: an income stream
-    /// or a second spender in the same window would land in that difference.
+    /// What a committed purchase was priced at and what the settled world leaves.
+    /// <c>costPerLevel</c> is the admission capture's next-level price — the same number the
+    /// caller's cost row and the unaffordable sentence read — and it is per level on purpose: a
+    /// call may commit up to its whole requested amount, and the price rises with every level it
+    /// takes. The capture prices the levels the game's own multi-buy variable was set to, never the
+    /// count this call ended up committing, so the sum for that count is not a number the suite
+    /// holds; <c>level {before, after}</c> is what says how many levels were bought.
+    /// <c>remaining</c> is read from the settled world. Neither is derived by subtracting one world
+    /// from another: an income stream or a second spender in the same window would land in that
+    /// difference.
     /// </summary>
     private static GameMcpValue WithPaid(
         GameMcpFrameContext state,
@@ -704,7 +709,7 @@ internal static class GameMcpWorldQuery
             paid.Add(new JObject
             {
                 ["resource"] = cost.ResourceId.ToString("D"),
-                ["cost"] = new GameMcpDomainValue(AdmittedCost(before, in cost)),
+                ["costPerLevel"] = new GameMcpDomainValue(AdmittedCost(before, in cost)),
                 ["remaining"] = new GameMcpDomainValue(
                     SpendableAmount(after, cost.ResourceId, BigDouble.Zero)),
             });

@@ -1017,16 +1017,28 @@ badge, a level that has to be built moves the queue and leaves the badge where i
 their sum under one name — the retired `committedLevel` — put a number on the wire that no screen
 shows and hid which of the two the purchase actually did.
 
-A committed purchase reports what it paid: `game_purchase` carries `paid[]`, and a mutation that was
-never admitted against a price — the free `game_structure` toggle on the same priced attribute —
-does not. Per resource the price named, `paid[]` carries the `resource` identity, `cost` — the price
-the action was admitted at, the same number that resource's cost row showed, charged by the game's
-own transaction — and `remaining`, read from the settled world in the same spendable coordinate
-every cost row's `spendableAmount` uses, which is headroom for a bandwidth resource rather than
-stored quantity. There is no delta field: the difference between two worlds also contains every
-income stream and every other spender in that window, so it is not a price and is not computed. On
-a volatile resource `remaining` will not reconcile with `cost` against a balance read at any other
-instant, and that is the resource moving, not the field drifting.
+A committed purchase reports what it was priced at: `game_purchase` carries `paid[]`, and a mutation
+that was never admitted against a price — the free `game_structure` toggle on the same priced
+attribute — does not. Per resource the price named, `paid[]` carries the `resource` identity,
+`costPerLevel`, and `remaining`.
+
+`costPerLevel` is **one level's** price — the admission capture's next-level amount, the same number
+that resource's cost row showed. It is not the total a call charged, and multiplying it by the
+levels committed is wrong in the other direction: the cost curve rises with every level, so an
+`amount=25` call charges twenty-five successively higher prices. The suite does not publish their
+sum, because it does not hold one: the world's grouped pricing is computed for the game's own
+multi-buy setting at capture time, not for the count this call turned out to commit, and a total
+assembled any other way would be suite arithmetic wearing a transaction's name. `level
+{before, after}` is what says how many levels were actually bought, and re-reading the row's cost
+after the commit is what prices the next one.
+
+`remaining` is read from the settled world in the same spendable coordinate every cost row's
+`spendableAmount` uses, which is headroom for a bandwidth resource rather than stored quantity.
+
+There is no delta field: the difference between two worlds also contains every income stream and
+every other spender in that window, so it is not a price and is not computed. On a volatile resource
+`remaining` will not reconcile with any price against a balance read at another instant, and that is
+the resource moving, not the field drifting.
 
 JSON tool data is emitted once in `structuredContent`; `content` appears only for actual inline media
 such as screenshots, and success omits the false `isError` default. The server does not repeat the

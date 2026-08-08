@@ -679,9 +679,81 @@ public sealed class GameMcpCorrectnessCoreTests
         Assert.Equal(633, (int)delta["level"]!["after"]!);
         var paid = Assert.IsType<JObject>(Assert.Single(delta["paid"]!.Values<JObject>()));
         Assert.Equal("Glyph Upgrades", (string?)paid["resource"]!["name"]);
-        Assert.Equal("2", (string?)paid["cost"]);
+        Assert.Equal("2", (string?)paid["costPerLevel"]);
         Assert.Equal("108", (string?)paid["remaining"]);
         Assert.Null(paid["amount"]);
+        Assert.Null(paid["cost"]);
+    }
+
+    /// <summary>
+    /// A multi-level purchase charges a rising curve the suite does not hold a sum for. The price
+    /// field names one level and only one, and the level pair is what says how many were bought —
+    /// so nothing on the wire invites multiplying the two.
+    /// </summary>
+    [Fact]
+    public void AMultiLevelPurchasePricesOneLevelAndSaysSoInTheFieldName()
+    {
+        var attributeId = Guid.Parse("f2000000-0000-0000-0000-00000000000f");
+        var resourceId = Guid.Parse("f2000000-0000-0000-0000-000000000010");
+        var identities = EntityIdentityCatalogSnapshot.Bound(1, new[]
+        {
+            new EntityIdentityName(resourceId, "ResourceSO", "Glyph Upgrades", "GlyphUpgrades"),
+        });
+        var before = new GameWorldState
+        {
+            EntityIdentities = identities,
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 100),
+            }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                Stock(resourceId, 1000),
+            }),
+            PurchaseCosts = PublicationTable<WorldPurchaseCost>.Create(new[]
+            {
+                new WorldPurchaseCost(attributeId, resourceId, new BigDouble(2)),
+            }),
+        };
+        var command = new GameMcpCommand(
+            1,
+            GameMcpCommandKind.Purchase,
+            expectedLifecycleGeneration: 9,
+            expectedConfigurationGeneration: 3,
+            mode: "structure",
+            targetId: attributeId,
+            secondaryId: Guid.Empty,
+            derivedNativeType: "StructureSO",
+            amount: 25,
+            payloadKey: string.Empty,
+            payloadValue: string.Empty,
+            capture: false,
+            saveCapture: false,
+            frameContext: GameMcpTestHarness.Context(before));
+        var after = before with
+        {
+            Structures = PublicationTable<WorldStructure>.Create(new[]
+            {
+                Structure(attributeId, 125),
+            }),
+            Resources = PublicationTable<WorldResource>.Create(new[]
+            {
+                Stock(resourceId, 400),
+            }),
+        };
+
+        var delta = Assert.IsType<JObject>(GameMcpDocumentJsonEncoder.Encode(
+            GameMcpWorldQuery.ProjectGameplayPostState(
+                GameMcpTestHarness.Context(after),
+                command,
+                GameMcpCommandResult.Committed("committed", 9, 3)),
+            identities));
+
+        Assert.Equal(100, (int)delta["level"]!["before"]!);
+        Assert.Equal(125, (int)delta["level"]!["after"]!);
+        var paid = Assert.IsType<JObject>(Assert.Single(delta["paid"]!.Values<JObject>()));
+        Assert.Equal("2", (string?)paid["costPerLevel"]);
+        Assert.Null(paid["cost"]);
     }
 
     /// <summary>
@@ -741,7 +813,7 @@ public sealed class GameMcpCorrectnessCoreTests
             GameMcpCommandResult.Committed("committed", 9, 3)));
 
         var paid = Assert.IsType<JObject>(Assert.Single(delta["paid"]!.Values<JObject>()));
-        Assert.Equal("2", (string?)paid["cost"]);
+        Assert.Equal("2", (string?)paid["costPerLevel"]);
         Assert.Equal("130", (string?)paid["remaining"]);
     }
 
