@@ -94,7 +94,7 @@ public sealed class WorldCraftingDecisionReaderTests : IDisposable
         Assert.True(decision.CanCancelManual);
         Assert.True(decision.CanCancelAutomation);
         Assert.True(decision.CanAutomate);
-        Assert.Equal(3, decision.AutomationQuantity);
+        Assert.Equal(3, decision.AutomationRepetitions);
         Assert.Equal(1, decision.AutomationUsed);
         Assert.Equal(2, decision.AutomationMaximum);
         Assert.Equal(page.craftingQueueInstances.GetGuid(), decision.QueueId);

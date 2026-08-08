@@ -125,6 +125,10 @@ public sealed class ResearchGameActionTests : IDisposable
 
         Assert.Equal(ResearchPreflight.AmountUnavailable, result.Preflight);
         Assert.Contains("at most 1 level", result.Reason, StringComparison.Ordinal);
+
+        // The cap is this call's, not a budget: the sentence names the mode that caps it.
+        Assert.Contains("this call takes", result.Reason, StringComparison.Ordinal);
+        Assert.Contains("Research Queue Mode is off", result.Reason, StringComparison.Ordinal);
         Assert.Equal(0, permits);
         Assert.False(target.isDeveloping);
     }

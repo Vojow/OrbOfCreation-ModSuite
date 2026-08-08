@@ -858,7 +858,7 @@ sentence was written from, so the two can never disagree.
 | `already_maxed` | The target has no level, use, or purchase left to buy | `game_purchase`, read-side develop and purchase decisions |
 | `cannot_level` | The game's own per-type level gate is shut. `game_level` has no ceiling code because none of its four types has a ceiling: every one answers `ILevelable.CanLevel()` unconditionally true, so an exhausted level target is not a state this surface can reach | `game_level` |
 | `unaffordable` | One or more named resources fall short. The sentence names every one of them: `Needs <cost> <Resource> (have <held>); …` | every purchase-shaped mutation and every read-side cost decision |
-| `amount_unavailable` | The exact amount asked for exceeds what the game allows right now. Carries `maximumAmount` | `game_research develop`, `game_concept`, `game_equipment`, `game_alchemy`, `game_agromancy` |
+| `amount_unavailable` | The exact amount asked for exceeds what this call admits. Carries `maximumAmount` | `game_research develop`, `game_concept`, `game_equipment`, `game_alchemy`, `game_agromancy` |
 | `automation_full` | Every automation slot on the queue is in use. Only a queue genuinely out of room answers this; an undiscovered recipe answers `hidden_or_undiscovered` | `explain_entity`/`world_get` crafting rows, `game_craft automate` |
 | `switch_blocked` | The game refuses a loadout swap right now (`LoadoutManager.CanSwapLoadouts()`) | `game_loadout select`, the `canSelect` read |
 | `saved_entry_unavailable` | A saved snapshot's stored entry cannot be restored | `game_loadout snapshot_save`, `game_loadout snapshot_load` |
@@ -870,6 +870,15 @@ sentence was written from, so the two can never disagree.
 for answers with that account's own code. `investment_unavailable` is retired — the game never
 consults the resource fill list for develop admission — and `amount_unavailable` is the name for an
 exact-amount over-ask.
+
+`maximumAmount` is the largest `amount` **this one call** admits, re-derived from live native state
+every call. It is never a remaining budget, and a later call routinely admits more: an idle game's
+income moves affordability between calls, and some caps are structural per action rather than a
+supply — with Research Queue Mode off, one `game_research develop` starts exactly one development,
+so its `maximumAmount` is 1 no matter how many levels are actually within reach. Every refusal
+carrying the field says in prose which of the two capped it, because a caller that read "at most 1"
+as a budget stopped five admissible calls short. Read-side `maximumAmount` (consumable stock, an
+agromancy add, an equipment equip or unequip) carries the same meaning for the next call.
 
 ### Presence semantics
 

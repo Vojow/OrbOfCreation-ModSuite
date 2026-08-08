@@ -387,7 +387,8 @@ public sealed class GameMcpResearchTests
             GameMcpResearchProjection.Project(
                 ResearchSubmission.Reject(
                     ResearchPreflight.AmountUnavailable,
-                    "This research can develop at most 1 level right now.",
+                    "Research Queue Mode is off, so one develop starts one level and this " +
+                    "call takes at most 1 level.",
                     1)),
             EntityIdentityCatalogSnapshot.Unbound(1)));
 

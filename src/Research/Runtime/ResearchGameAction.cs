@@ -125,8 +125,20 @@ internal sealed class ResearchGameAction : IDisposable
             case ResearchActionKind.Develop:
                 if (state.MultiBuy > state.LevelsAvailable)
                 {
-                    reason = "This research can develop at most " + state.LevelsAvailable +
-                        (state.LevelsAvailable == 1 ? " level" : " levels") + " right now.";
+                    // The ceiling is what this one call admits, and the two modes cap it for
+                    // different reasons: with the queue off a develop starts exactly one
+                    // development, and with it on the cap is what the levels cost together at this
+                    // instant. Neither is a remaining budget, and a sentence that only said "right
+                    // now" was read as one — a caller stopped at "at most 1" with five more single
+                    // develops waiting to be admitted.
+                    var levels = state.LevelsAvailable +
+                        (state.LevelsAvailable == 1 ? " level" : " levels");
+                    reason = state.QueueMode
+                        ? "This call can queue at most " + levels +
+                            " with what is held now; a later call is admitted against what is " +
+                            "affordable then."
+                        : "Research Queue Mode is off, so one develop starts one level and this " +
+                            "call takes at most " + levels + ".";
                     return ResearchPreflight.AmountUnavailable;
                 }
                 if (state.QueueMode)
