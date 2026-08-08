@@ -62,8 +62,9 @@ public sealed class GameMcpGenericLevelTests
     public void Settled_delta_is_observed_from_the_new_world_for_each_level_kind()
     {
         var before = World(total: 5, bonus: 2, purchaseAffordable: true);
-        var afterPaid = World(total: 6, bonus: 2, purchaseAffordable: true);
-        var afterBonus = World(total: 6, bonus: 3, purchaseAffordable: true);
+        var afterPaid = World(
+            total: 6, bonus: 2, purchaseAffordable: true, maximumUsages: 4);
+        var afterBonus = World(total: 6, bonus: 3, purchaseAffordable: true, maximumUsages: 4);
         var purchase = Command("purchase", before);
         var bonus = Command("bonus", before);
 
@@ -79,6 +80,11 @@ public sealed class GameMcpGenericLevelTests
         Assert.Equal(2, (int)bonusDelta["bonusLevel"]!["before"]!);
         Assert.Equal(3, (int)bonusDelta["bonusLevel"]!["after"]!);
         Assert.Equal(6, (int)bonusDelta["totalLevel"]!["after"]!);
+
+        // The glyph screen counts uses, so the count it draws travels with the level that bought it.
+        Assert.Equal(3, (int)paidDelta["usableCount"]!["before"]!);
+        Assert.Equal(4, (int)paidDelta["usableCount"]!["after"]!);
+        Assert.Equal(4, (int)bonusDelta["usableCount"]!["after"]!);
     }
 
     [Fact]
@@ -184,7 +190,8 @@ public sealed class GameMcpGenericLevelTests
         bool glyphLearned = true,
         bool glyphDiscoverable = true,
         bool resourceTypeHidden = false,
-        bool levelsAreFree = false)
+        bool levelsAreFree = false,
+        int maximumUsages = 3)
     {
         var paidCosts = levelsAreFree
             ? PublicationTable<WorldLevelableCost>.Empty
@@ -202,7 +209,7 @@ public sealed class GameMcpGenericLevelTests
             new BigDouble(8), 0, 0, withBonus);
         var glyph = new WorldGlyph(GlyphId, total - bonus, bonus, 0, glyphLearned,
             glyphDiscoverable, false, false, false, false, 0, BigDouble.Zero,
-            BigDouble.Zero, BigDouble.Zero, 3, levelDecision: withBonus);
+            BigDouble.Zero, BigDouble.Zero, maximumUsages, levelDecision: withBonus);
         var resourceType = new WorldResourceType(
             resourceTypeId: ResourceTypeId,
             level: total - bonus,

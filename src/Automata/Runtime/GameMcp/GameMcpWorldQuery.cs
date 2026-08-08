@@ -1109,6 +1109,21 @@ internal static class GameMcpWorldQuery
             ["before"] = hadBefore ? previous.TotalLevel : (int?)null,
             ["after"] = current.TotalLevel,
         };
+
+        // A glyph screen counts uses, not levels — levels buy uses through the mastery requirement,
+        // so the number the player watched move is the one the row already publishes as usableCount.
+        if (command.DerivedNativeType == "GlyphSO" &&
+            WorldLookup.TryFind(state.World.Snapshot.Glyphs, command.TargetId, out var glyph))
+        {
+            WorldGlyph priorGlyph = default;
+            var hadGlyph = oldWorld is not null &&
+                WorldLookup.TryFind(oldWorld.Glyphs, command.TargetId, out priorGlyph);
+            result["usableCount"] = new JObject
+            {
+                ["before"] = hadGlyph ? priorGlyph.MaximumUsages : (int?)null,
+                ["after"] = glyph.MaximumUsages,
+            };
+        }
         return result.Freeze();
     }
 
