@@ -343,7 +343,10 @@ An automated recipe has two numbers and they are not the same number. `automatio
 badge the automation strip draws — the queued instance's own quantity — and `automation.repetitions`
 is the exponent behind it, because the game stores `quantity = 2^(repetitions - 1)`. They agree at 1
 and 2 and diverge exponentially after that, so they never share a name: the strip's number is always
-`amount`, the count of presses is always `repetitions`.
+`amount`, the count of presses is always `repetitions`. The badge is joined from the queue entry
+that draws it, so a recipe with repetitions but no collected entry publishes `amountUnavailable`
+with that reason instead of an `amount` of `0` beside a positive `repetitions` — a pair the screen
+never shows. The committed `automate` and `cancel_automation` deltas follow the same rule.
 
 `world_search` deliberately indexes only categories whose identity mode is
 `stable_entity_uuid`. It does not pretend that an owner/resource UUID uniquely identifies a

@@ -1898,16 +1898,27 @@ internal static class GameMcpWorldQuery
         if (command.Mode is "automate" or "cancel_automation")
         {
             // The screen's number, not the repetition count behind it: one cancel on a doubled
-            // entry moves the badge 8 to 4 while the repetitions move 4 to 3.
-            return Change(
-                command.TargetId,
-                hasBefore && oldWorld is not null
-                    ? new GameMcpDomainValue(AutomationAmount(
-                        oldWorld, previous.AutomationQueueId, command.TargetId))
-                    : null,
-                new GameMcpDomainValue(AutomationAmount(
-                    state.World.Snapshot, current.AutomationQueueId, command.TargetId)),
-                "amount");
+            // entry moves the badge 8 to 4 while the repetitions move 4 to 3. A side whose queue
+            // entry was not collected while the recipe still repeats says so rather than reporting
+            // the zero the lookup returned.
+            var result = new JObject { ["uuid"] = command.TargetId.ToString("D") };
+            var priorBadge = BigDouble.Zero;
+            var hasAfter = TryAutomationBadge(state.World.Snapshot, current.AutomationQueueId,
+                command.TargetId, current.AutomationRepetitions, out var afterBadge);
+            var hasPrior = !hasBefore || oldWorld is null ||
+                TryAutomationBadge(oldWorld, previous.AutomationQueueId, command.TargetId,
+                    previous.AutomationRepetitions, out priorBadge);
+            if (hasAfter && hasPrior)
+                result["amount"] = new JObject
+                {
+                    ["before"] = hasBefore && oldWorld is not null
+                        ? new GameMcpDomainValue(priorBadge)
+                        : null,
+                    ["after"] = new GameMcpDomainValue(afterBadge),
+                };
+            else
+                result["amountUnavailable"] = AutomationAmountUnavailable();
+            return result.Freeze();
         }
         if (command.Mode == "cancel_manual")
         {
@@ -5354,21 +5365,52 @@ internal static class GameMcpWorldQuery
     /// <c>quantity = 2^(n-1)</c>. The two coincide at 1 and 2 and diverge exponentially after that,
     /// so only the badge's number is published as <c>amount</c>.
     /// </summary>
-    private static BigDouble AutomationAmount(
+    /// <remarks>
+    /// A miss is only "nothing is automated" while the repetition count agrees. A recipe the game
+    /// says is repeating some number of times has an entry drawing that badge, so failing to find
+    /// it means the queue-entry collection did not arrive — a different answer from zero, and the
+    /// caller is told which one it got.
+    /// </remarks>
+    private static bool TryAutomationAmount(
         GameWorldState world,
         Guid automationQueueId,
-        Guid recipeId)
+        Guid recipeId,
+        out BigDouble amount)
     {
+        amount = BigDouble.Zero;
         if (!WorldCraftingDecisionLookup.TryFindQueueRange(
                 world.CraftingQueueEntries, automationQueueId, out var start, out var count))
-            return BigDouble.Zero;
+            return false;
         for (var index = 0; index < count; index++)
         {
             var entry = world.CraftingQueueEntries[start + index];
-            if (entry.RecipeId == recipeId) return entry.Amount;
+            if (entry.RecipeId == recipeId)
+            {
+                amount = entry.Amount;
+                return true;
+            }
         }
-        return BigDouble.Zero;
+        return false;
     }
+
+    /// <summary>
+    /// The badge amount, or false when the entry that draws it is missing from a recipe the game
+    /// says is repeating. Zero repetitions need no entry, and zero is that recipe's honest badge.
+    /// </summary>
+    private static bool TryAutomationBadge(
+        GameWorldState world,
+        Guid automationQueueId,
+        Guid recipeId,
+        int repetitions,
+        out BigDouble amount) =>
+        TryAutomationAmount(world, automationQueueId, recipeId, out amount) || repetitions <= 0;
+
+    private static JObject AutomationAmountUnavailable() => new()
+    {
+        ["reasonCode"] = "automation_entry_not_published",
+        ["reason"] = "the recipe repeats but no queue entry for it was collected, " +
+            "so the badge amount behind those repetitions is unknown",
+    };
 
     private static string AutomationRefusal(string reasonCode) => reasonCode switch
     {
@@ -5420,12 +5462,15 @@ internal static class GameMcpWorldQuery
                 var automation = new JObject
                 {
                     ["queueId"] = decision.AutomationQueueId.ToString("D"),
-                    ["amount"] = new GameMcpDomainValue(AutomationAmount(
-                        world, decision.AutomationQueueId, recipe.EntityId)),
-                    ["repetitions"] = decision.AutomationRepetitions,
-                    ["available"] = decision.CanAutomate,
-                    ["slots"] = QueueSlots(world, decision.AutomationQueueId),
                 };
+                if (TryAutomationBadge(world, decision.AutomationQueueId, recipe.EntityId,
+                        decision.AutomationRepetitions, out var badge))
+                    automation["amount"] = new GameMcpDomainValue(badge);
+                else
+                    automation["amountUnavailable"] = AutomationAmountUnavailable();
+                automation["repetitions"] = decision.AutomationRepetitions;
+                automation["available"] = decision.CanAutomate;
+                automation["slots"] = QueueSlots(world, decision.AutomationQueueId);
                 if (decision.CanCancelAutomation) automation["canCancel"] = true;
                 if (decision.AutomationMaximum > 0)
                 {

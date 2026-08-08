@@ -193,6 +193,42 @@ public sealed class GameMcpCraftingTests
     }
 
     [Fact]
+    public void A_repeating_recipe_whose_queue_entry_is_missing_says_so_instead_of_reading_zero()
+    {
+        // amount is joined from the entry that draws the badge. A skipped or partially collected
+        // queue-entry category would otherwise ship amount 0 beside repetitions 3 — a pair the
+        // strip never shows, and one no caller can tell from a genuinely idle recipe.
+        var automation = Json(GameMcpWorldQuery.GetRow(
+            Context(withQueueEntries: false),
+            "crafting-recipes",
+            RecipeId.ToString("D")))["row"]!["automation"]!;
+
+        Assert.Null(automation["amount"]);
+        Assert.Equal(3, (int)automation["repetitions"]!);
+        Assert.Equal(
+            "automation_entry_not_published",
+            (string?)automation["amountUnavailable"]!["reasonCode"]);
+    }
+
+    [Fact]
+    public void An_automation_commit_whose_entry_is_missing_publishes_no_settled_pair()
+    {
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Crafting, 15, 8, "automate", RecipeId, Guid.Empty,
+            "CraftingRecipeSO", 1, string.Empty, string.Empty,
+            false, false, frameContext: Context(automationRepetitions: 3));
+        var committed = GameMcpCommandResult.Committed("committed", 15, 8);
+
+        var postState = Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            Context(automationRepetitions: 5, withQueueEntries: false), command, committed));
+
+        Assert.Null(postState["amount"]);
+        Assert.Equal(
+            "automation_entry_not_published",
+            (string?)postState["amountUnavailable"]!["reasonCode"]);
+    }
+
+    [Fact]
     public void QueueContentsAreOrderedNamedAndOmitManualAutomationFields()
     {
         var result = Json(GameMcpWorldQuery.ListRows(
