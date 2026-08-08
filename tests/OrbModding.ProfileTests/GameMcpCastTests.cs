@@ -141,6 +141,45 @@ public sealed class GameMcpCastTests
         Assert.True((bool)delta["active"]!["after"]!);
     }
 
+    [Fact]
+    public void A_non_toggle_spell_whose_casting_state_moved_still_reports_the_pair()
+    {
+        // Narrowing the pair to toggles dropped a real transition: a duration or channelled spell
+        // that started casting has a running state, and it is the same fact under the same name.
+        var before = World(casting: false, cancellationEnabled: true, charges: 2, toggled: false);
+        var after = World(casting: true, cancellationEnabled: true, charges: 2, toggled: false);
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Cast, 9, 3, "fire", RecipeId, Guid.Empty,
+            "SpellRecipeSO", 1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 55));
+
+        var delta = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after, generation: 56),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3)));
+
+        Assert.False((bool)delta["active"]!["before"]!);
+        Assert.True((bool)delta["active"]!["after"]!);
+    }
+
+    [Fact]
+    public void An_idle_non_toggle_spell_reports_no_running_state_it_never_entered()
+    {
+        var before = World(casting: false, cancellationEnabled: true, charges: 2, toggled: false);
+        var after = World(casting: false, cancellationEnabled: true, charges: 2, toggled: false);
+        var command = new GameMcpCommand(
+            1, GameMcpCommandKind.Cast, 9, 3, "fire", RecipeId, Guid.Empty,
+            "SpellRecipeSO", 1, string.Empty, string.Empty, false, false,
+            frameContext: GameMcpTestHarness.Context(before, generation: 57));
+
+        var delta = GameMcpTestHarness.Json(GameMcpWorldQuery.ProjectGameplayPostState(
+            GameMcpTestHarness.Context(after, generation: 58),
+            command,
+            GameMcpCommandResult.Committed("committed", 9, 3)));
+
+        Assert.Null(delta["active"]);
+    }
+
     private static GameMcpCommand Command(GameMcpFrameContext before) => new(
         1,
         GameMcpCommandKind.Cast,
@@ -163,7 +202,8 @@ public sealed class GameMcpCastTests
         long collectedAtUtcTicks = 0,
         int charges = 1,
         Guid immediateCostResource = default,
-        BigDouble immediateCost = default) => new()
+        BigDouble immediateCost = default,
+        bool toggled = true) => new()
     {
         CollectedAtEpoch = 9,
         CollectedAtUtcTicks = collectedAtUtcTicks,
@@ -178,7 +218,7 @@ public sealed class GameMcpCastTests
                 readyingCast: false,
                 attuning: false,
                 channeled: false,
-                toggled: true,
+                toggled,
                 chargeable: false,
                 castReady: true,
                 chargeAvailable: true,

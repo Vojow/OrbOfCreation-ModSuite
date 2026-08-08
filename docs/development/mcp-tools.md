@@ -1147,7 +1147,8 @@ state. Detailed `spell-slots` rows expose `toggleOff.available` so the setting n
 learned by attempting the action. `fire` on a toggle spell reports the same `active` pair whether
 or not the press moved it: whether a toggle is running is the fact that mode is about, and a pair
 that appears only on change cannot distinguish a spell that was already on from one that never
-started.
+started. A non-toggle spell reports the pair exactly when its casting state moved, and carries no
+`active` key while it is idle, because an idle one-shot has no running state to report.
 
 `game_casting_dial` requires `dial` plus a positive `value` and takes no UUID at all, because both
 Output Level and Reserve Level are single global variables. The boundary reads the exact global

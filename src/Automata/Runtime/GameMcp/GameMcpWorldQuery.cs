@@ -812,10 +812,12 @@ internal static class GameMcpWorldQuery
                 state.World.Snapshot, slotIndex, WorldSpellCostKind.Immediate);
             if (costs.Count > 0) result["costs"] = costs;
         }
-        // A toggle spell always says whether it is running. Publishing the pair only when it moved
+        // A toggle spell always says whether it is running: publishing the pair only when it moved
         // meant a second fire on an already-running spell said nothing, and silence there is
-        // indistinguishable from a response that does not carry the fact at all.
-        if (after.Toggled)
+        // indistinguishable from a response that does not carry the fact at all. A non-toggle spell
+        // has no running state to report while it sits idle, so it reports one exactly when it
+        // moved — the fact still ships wherever it exists.
+        if (after.Toggled || (hasBefore && prior.Casting != after.Casting))
         {
             result["active"] = new JObject
             {
