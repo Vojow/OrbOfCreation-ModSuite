@@ -1038,6 +1038,23 @@ public sealed class RitualSO : IdScriptableObject, IDiscoverable
     public int maxWaves;
     public double baseWeight;
     public int minimumEffectLevel;
+
+    /// <summary>The results screen's own record: what the run banked, and the game's verdict on it.</summary>
+    public List<SpoilsRecordEntry> currentSpoils = new List<SpoilsRecordEntry>();
+
+    public bool IsFailedRun() => wavesCompleted < 5;
+}
+
+public sealed class SpoilsRecordEntry
+{
+    public SpoilsRecordEntry(ResourceSO resource, BigDouble quantity)
+    {
+        this.resource = resource;
+        this.quantity = quantity;
+    }
+
+    public BigDouble quantity;
+    public ResourceSO resource { get; }
 }
 
 public sealed class RitualVariable

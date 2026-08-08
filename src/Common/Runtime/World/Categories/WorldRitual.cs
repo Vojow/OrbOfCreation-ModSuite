@@ -8,9 +8,10 @@ using OrbModding.Common.Runtime.ServiceCycle.Contracts;
 namespace OrbModding.Common.Runtime.World;
 
 /// <summary>
-/// One ritual as published. The rolled effects themselves (<c>ritualInstances</c>) and the spoils on
-/// offer (<c>currentSpoils</c>) are variable-size and stay behind; how many effects are running does
-/// not, because that is the game's own definition of a ritual being active.
+/// One ritual as published. The rolled effects themselves (<c>ritualInstances</c>) are variable-size
+/// and stay behind; how many effects are running does not, because that is the game's own definition
+/// of a ritual being active. The spoils the results screen lists are carried, because a run that
+/// ended has no other record of what it won.
 /// </summary>
 internal readonly struct WorldRitual : IWorldEntity
 {
@@ -38,6 +39,8 @@ internal readonly struct WorldRitual : IWorldEntity
         int maxWaves,
         double baseWeight,
         int minimumEffectLevel,
+        bool failedRun,
+        WorldRitualSpoil[]? spoils = null,
         WorldDiscoverableDecision discovery = default,
         WorldRitualDecision decision = default,
         WorldRitualCompletionFormula completionFormula = default)
@@ -65,6 +68,10 @@ internal readonly struct WorldRitual : IWorldEntity
         MaxWaves = maxWaves;
         BaseWeight = baseWeight;
         MinimumEffectLevel = minimumEffectLevel;
+        FailedRun = failedRun;
+        Spoils = spoils is null || spoils.Length == 0
+            ? PublicationTable<WorldRitualSpoil>.Empty
+            : PublicationTable<WorldRitualSpoil>.Create(spoils);
         Discovery = discovery;
         Decision = decision;
         CompletionFormula = completionFormula;
@@ -145,6 +152,16 @@ internal readonly struct WorldRitual : IWorldEntity
 
     internal int MinimumEffectLevel { get; }
 
+    /// <summary>
+    /// The game's own verdict on the run that just ended: <c>RitualSO.IsFailedRun()</c>, which
+    /// <c>End()</c> consults to decide between the failure popup and the rewards, and which is
+    /// <c>wavesCompleted &lt; 5</c> rather than anything derived from the ritual's own wave count.
+    /// </summary>
+    internal bool FailedRun { get; }
+
+    /// <summary>What the run banked, exactly as the results screen lists it.</summary>
+    internal PublicationTable<WorldRitualSpoil> Spoils { get; }
+
     internal WorldDiscoverableDecision Discovery { get; }
 
     /// <summary>The currently staged player decision; prices exist only for the selected row.</summary>
@@ -156,13 +173,28 @@ internal readonly struct WorldRitual : IWorldEntity
     internal WorldRitual WithDecision(in WorldRitualDecision decision)
     {
         var modifiers = Modifiers;
+        var spoils = new WorldRitualSpoil[Spoils.Count];
+        for (var index = 0; index < spoils.Length; index++) spoils[index] = Spoils[index];
         return new(
             RitualId, Discovered, InBattle, ActiveInstances, ReachedLevel, LastReachedLevel,
             SelectedLevel, WavesCompleted, DiscoveryRarityLevel, CritLevel, EchoLevel, ChainLevel,
             DurationRewardBlocks, BattleTotalWeight, in modifiers, HideEndScreenResults,
             IsDiscoverRequired, ForceLevel, ForceLevelValue, BaseWaves, MaxWaves, BaseWeight,
-            MinimumEffectLevel, Discovery, decision, CompletionFormula);
+            MinimumEffectLevel, FailedRun, spoils, Discovery, decision, CompletionFormula);
     }
+}
+
+/// <summary>One resource line of a ritual run's spoils, as the results screen lists it.</summary>
+internal readonly struct WorldRitualSpoil
+{
+    internal WorldRitualSpoil(Guid resourceId, BigDouble quantity)
+    {
+        ResourceId = resourceId;
+        Quantity = quantity;
+    }
+
+    internal Guid ResourceId { get; }
+    internal BigDouble Quantity { get; }
 }
 
 internal readonly struct WorldRitualCost
@@ -398,6 +430,11 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
     private Func<object, int>? _maxWaves;
     private Func<object, double>? _baseWeight;
     private Func<object, int>? _minimumEffectLevel;
+    private Func<object, bool>? _failedRun;
+    private Func<object, IList?>? _currentSpoils;
+    private Func<object, object?>? _spoilResource;
+    private Func<object, BigDouble>? _spoilQuantity;
+    private Func<object, Guid>? _spoilResourceId;
     private WorldDiscoverableBinding? _discovery;
     private readonly Func<string, Type?> _resolveType;
     private WorldRitualDecisionBinding? _decision;
@@ -453,10 +490,24 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
         _maxWaves = bind.Field<int>("maxWaves");
         _baseWeight = bind.Field<double>("baseWeight");
         _minimumEffectLevel = bind.Field<int>("minimumEffectLevel");
+
+        // The game's own verdict and the exact lines its results screen lists. A run that ended has
+        // no other record of either, so both are captured rather than inferred from wave counts.
+        _failedRun = bind.Call<bool>("IsFailedRun");
+        _currentSpoils = bind.CollectionField("currentSpoils");
+        var spoilResourceType = _resolveType("ResourceSO");
+        var spoil = bind.Elements(
+            bind.CollectionElementType("currentSpoils"), "RitualSO.currentSpoils[]");
+        _spoilResource = spoil.CallObject("get_resource", spoilResourceType);
+        _spoilQuantity = spoil.Field<BigDouble>("quantity");
+        var spoilResource = new WorldMemberBinding(spoilResourceType!, "ResourceSO");
+        _spoilResourceId = spoilResource.Call<Guid>("GetGuid");
         _discovery = new WorldDiscoverableBinding(type, TypeName);
         _decision = new WorldRitualDecisionBinding(type, _resolveType);
         _completionFormula = new WorldRitualCompletionFormulaBinding(type, _resolveType);
-        return Join(bind.Failure, _discovery.Failure, _decision.Failure, _completionFormula.Failure);
+        return Join(
+            bind.Failure, spoilResource.Failure,
+            _discovery.Failure, _decision.Failure, _completionFormula.Failure);
     }
 
     internal override WorldRitual Read(object entity) =>
@@ -497,9 +548,32 @@ internal sealed class WorldRitualBinder : WorldPlainBinder<WorldRitual>
             _maxWaves!(entity),
             _baseWeight!(entity),
             _minimumEffectLevel!(entity),
+            _failedRun!(entity),
+            ReadSpoils(entity),
             _discovery!.Read(entity),
             _decision!.Read(entity),
             _completionFormula!.Read(entity));
+
+    private WorldRitualSpoil[] ReadSpoils(object entity)
+    {
+        var source = _currentSpoils!(entity) ??
+            throw new InvalidOperationException("RitualSO.currentSpoils was null");
+        if (source.Count == 0) return Array.Empty<WorldRitualSpoil>();
+        var result = new WorldRitualSpoil[source.Count];
+        for (var index = 0; index < source.Count; index++)
+        {
+            var entry = source[index] ??
+                throw new InvalidOperationException("RitualSO.currentSpoils contained null");
+            var resource = _spoilResource!(entry) ??
+                throw new InvalidOperationException("SpoilsRecordEntry.resource was null");
+            var resourceId = _spoilResourceId!(resource);
+            if (resourceId == Guid.Empty)
+                throw new InvalidOperationException(
+                    "SpoilsRecordEntry.resource had no stable UUID");
+            result[index] = new WorldRitualSpoil(resourceId, _spoilQuantity!(entry));
+        }
+        return result;
+    }
 
     private static string Join(params string[] values)
     {

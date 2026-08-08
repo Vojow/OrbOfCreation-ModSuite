@@ -196,7 +196,9 @@ public sealed class GameMcpRitualLifecycleTests
         var before = World(
             selected: true, level: 4, activeInstances: 0, inBattle: true, wavesCompleted: 7);
         var after = World(
-            selected: true, level: 4, activeInstances: 2, inBattle: false, wavesCompleted: 0);
+            selected: true, level: 4, activeInstances: 2, inBattle: false, wavesCompleted: 0,
+            failedRun: true,
+            spoils: new[] { new WorldRitualSpoil(ResourceId, new BigDouble(12)) });
         var command = new GameMcpCommand(1, GameMcpCommandKind.RitualLifecycle,
             9, 3, "end", RitualId, Guid.Empty, "RitualSO",
             1, string.Empty, string.Empty, false, false,
@@ -211,6 +213,13 @@ public sealed class GameMcpRitualLifecycleTests
         Assert.Equal(5, (int)delta["reachedLevel"]!);
         Assert.Equal(2, (int)delta["activeInstances"]!);
 
+        // The results modal says the run failed and lists what it banked; the wire said neither,
+        // and a wave count alone cannot separate a clean win from a run stopped on the last wave.
+        Assert.Equal("failed", (string?)delta["result"]);
+        var spoil = Assert.Single(delta["spoils"]!.Values<JObject>());
+        Assert.Equal("Knowledge", (string?)spoil!["resource"]!["name"]);
+        Assert.Equal("12", (string?)spoil["amount"]);
+
         // Parity with select, deselect, set_level and activate: end says what is possible next.
         Assert.True((bool)delta["next"]!["selected"]!);
         Assert.Equal(4, (int)delta["next"]!["setLevel"]!["current"]!);
@@ -222,7 +231,9 @@ public sealed class GameMcpRitualLifecycleTests
         int level,
         int activeInstances,
         bool inBattle = false,
-        int wavesCompleted = 0)
+        int wavesCompleted = 0,
+        bool failedRun = false,
+        WorldRitualSpoil[]? spoils = null)
     {
         var activation = selected
             ? PublicationTable<WorldRitualCost>.Create(new[]
@@ -237,7 +248,7 @@ public sealed class GameMcpRitualLifecycleTests
         var modifiers = default(RawRitualModifiers);
         var ritual = new WorldRitual(RitualId, true, inBattle, activeInstances,
             6, 5, level, wavesCompleted, 0, 0, 0, 0, 1, BigDouble.Zero, in modifiers,
-            false, false, false, 0, 1, 20, 1d, 0, decision: decision);
+            false, false, false, 0, 1, 20, 1d, 0, failedRun, spoils, decision: decision);
         var rateInputs = default(RawResourceRateInputs);
         var traits = default(RawResourceTraits);
         var resourceModifiers = default(RawResourceModifiers);

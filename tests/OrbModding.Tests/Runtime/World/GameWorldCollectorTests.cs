@@ -2539,8 +2539,13 @@ public sealed class GameWorldCollectorTests : IDisposable
             echoLevel = 1,
             chainLevel = 3,
             battleTotalWeight = new BigDouble(4200d),
+            wavesCompleted = 3,
             ritualInstances = new List<object> { new(), new() },
             durationRewardBlocks = { new object() },
+            currentSpoils =
+            {
+                new FakeSpoilsRecordEntry(knowledge, new BigDouble(12)),
+            },
             maximumSelectedLevel = 12,
             activationCost = new FakeCraftingResourceCostList()
                 .With(knowledge, new BigDouble(5)),
@@ -2583,6 +2588,14 @@ public sealed class GameWorldCollectorTests : IDisposable
         Assert.Equal(1, running.EchoLevel);
         Assert.Equal(3, running.ChainLevel);
         Assert.Equal(4200d, running.BattleTotalWeight.ToDouble());
+
+        // The results screen's own two facts. A run that has ended leaves no other record of the
+        // verdict End() showed or of what it banked, and neither is derivable from a wave count.
+        Assert.True(running.FailedRun);
+        Assert.Equal(1, running.Spoils.Count);
+        Assert.Equal(knowledge.GetGuid(), running.Spoils[0].ResourceId);
+        Assert.Equal(new BigDouble(12), running.Spoils[0].Quantity);
+        Assert.Equal(0, quiet.Spoils.Count);
     }
 
     /// <summary>

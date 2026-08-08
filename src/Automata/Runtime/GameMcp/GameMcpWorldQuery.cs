@@ -1011,6 +1011,13 @@ internal static class GameMcpWorldQuery
                 // caller has to guess what the results modal said.
                 postState["reachedLevel"] = current.LastReachedLevel;
                 postState["activeInstances"] = current.ActiveInstances;
+
+                // The results modal says "Ritual failed." in words and lists the spoils. Both are
+                // native facts, so the response carries the same verdict the game showed rather
+                // than leaving a caller to infer one from a wave count that cannot distinguish a
+                // clean win from a run stopped on the last wave.
+                postState["result"] = current.FailedRun ? "failed" : "succeeded";
+                postState["spoils"] = ProjectRitualSpoils(current.Spoils);
             }
 
             // Every other ritual mode answers with what the caller can do next. End is the mode that
@@ -5071,6 +5078,26 @@ internal static class GameMcpWorldQuery
                     ? "no_active_duration_reward"
                     : "not_a_duration_ritual",
             };
+    }
+
+    /// <summary>
+    /// What the run banked, exactly as the results screen lists it. An empty list is written, not
+    /// omitted: a run that won nothing is a different answer from a response that does not carry
+    /// spoils at all.
+    /// </summary>
+    private static JArray ProjectRitualSpoils(PublicationTable<WorldRitualSpoil> spoils)
+    {
+        var result = new JArray();
+        for (var index = 0; index < spoils.Count; index++)
+        {
+            var spoil = spoils[index];
+            result.Add(new JObject
+            {
+                ["resourceId"] = spoil.ResourceId.ToString("D"),
+                ["amount"] = new GameMcpDomainValue(spoil.Quantity),
+            });
+        }
+        return result;
     }
 
     private static JArray ProjectRitualCosts(

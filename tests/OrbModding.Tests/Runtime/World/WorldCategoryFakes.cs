@@ -2057,6 +2057,23 @@ internal sealed class FakeRitual : global::IDiscoverable
     public bool HasMetUsageRequirements() => usageRequirementsMet;
     public FakeCraftingResourceCostList GetActivationCost() => activationCost;
     public FakeCraftingResourceCostList GetSelectedCompletionCost() => completionCost;
+
+    /// <summary>The results screen's own record, and the verdict End() reads before showing it.</summary>
+    public List<FakeSpoilsRecordEntry> currentSpoils = new();
+
+    public bool IsFailedRun() => wavesCompleted < 5;
+}
+
+internal sealed class FakeSpoilsRecordEntry
+{
+    public FakeSpoilsRecordEntry(FakeResource resource, BigDouble quantity)
+    {
+        this.resource = resource;
+        this.quantity = quantity;
+    }
+
+    public BigDouble quantity;
+    public FakeResource resource { get; }
 }
 
 internal sealed class FakeRitualVariable

@@ -11033,6 +11033,80 @@
       "place": "capture"
     },
     {
+      "id": "ritual.is-failed-run",
+      "assembly": "assembly-csharp",
+      "type": "RitualSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsFailedRun",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "ritual.current-spoils",
+      "assembly": "assembly-csharp",
+      "type": "RitualSO",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "currentSpoils",
+      "visibility": "public",
+      "static": false,
+      "valueType": "System.Collections.Generic.List`1<SpoilsRecordEntry>",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spoils-record-entry.resource",
+      "assembly": "assembly-csharp",
+      "type": "SpoilsRecordEntry",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "get_resource",
+      "visibility": "public",
+      "static": false,
+      "returnType": "ResourceSO",
+      "parameters": [],
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
+      "id": "spoils-record-entry.quantity",
+      "assembly": "assembly-csharp",
+      "type": "SpoilsRecordEntry",
+      "typeVisibility": "public",
+      "kind": "field",
+      "member": "quantity",
+      "visibility": "public",
+      "static": false,
+      "valueType": "BigDouble",
+      "owners": [
+        "Automata world collection"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "capture"
+    },
+    {
       "id": "save-state-manager.implement-loaded-json",
       "assembly": "assembly-csharp",
       "type": "SaveStateManager",
