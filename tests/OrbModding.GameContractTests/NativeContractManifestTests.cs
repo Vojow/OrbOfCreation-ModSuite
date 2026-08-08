@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using OrbModding.Common;
 using Xunit;
@@ -181,7 +182,11 @@ public sealed class NativeContractManifestTests
         var repositoryRoot = RepositoryPaths.RequireRoot();
 
         Assert.Equal(3, manifest.SchemaVersion);
-        Assert.Equal(1590, manifest.Contracts.Count);
+
+        // Reconciled against the file, never pinned to a number. A literal is a second place to
+        // remember when a contract lands, and it silently drifted for nine of them; what has to
+        // hold is that every declaration written into the manifest survives into the loaded model.
+        Assert.Equal(DeclaredContractCount(), manifest.Contracts.Count);
         Assert.Equal(10, manifest.SourceAudit.Exemptions.Count);
         Assert.False(string.IsNullOrWhiteSpace(manifest.AuditedAt));
         Assert.False(string.IsNullOrWhiteSpace(manifest.GameBuild));
@@ -750,4 +755,18 @@ public sealed class NativeContractManifestTests
     }
 
     private static string NormalizePath(string path) => path.Replace('\\', '/');
+
+    /// <summary>
+    /// How many contracts the checked-in manifest declares, read straight from the file with a
+    /// second parser rather than through the typed model the assertion is about.
+    /// </summary>
+    private static int DeclaredContractCount()
+    {
+        var path = Path.Combine(
+            RepositoryPaths.RequireRoot(), "data", "native-contracts.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var declared = document.RootElement.GetProperty("contracts").GetArrayLength();
+        Assert.True(declared > 0, $"The manifest at {path} declares no contracts.");
+        return declared;
+    }
 }
