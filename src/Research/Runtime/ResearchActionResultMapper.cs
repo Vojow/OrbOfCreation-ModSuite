@@ -33,6 +33,11 @@ internal static class ResearchActionResultMapper
         ResearchPreflight.PostCommitFault => ResearchActionResultCodes.PostCommitFault,
         ResearchPreflight.VerificationFailed => ResearchActionResultCodes.VerificationFailed,
         ResearchPreflight.AmountUnavailable => ResearchActionResultCodes.AmountUnavailable,
+        ResearchPreflight.AlreadyMaxed => ResearchActionResultCodes.AlreadyMaxed,
+        ResearchPreflight.Unaffordable => ResearchActionResultCodes.Unaffordable,
+        ResearchPreflight.RequirementsUnmet => ResearchActionResultCodes.RequirementsUnmet,
+        ResearchPreflight.LeewayExhausted => ResearchActionResultCodes.LeewayExhausted,
+        ResearchPreflight.AlreadyDeveloping => ResearchActionResultCodes.AlreadyDeveloping,
         _ => ResearchActionResultCodes.ContractUnavailable,
     };
 }

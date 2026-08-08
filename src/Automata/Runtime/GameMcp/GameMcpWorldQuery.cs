@@ -3174,27 +3174,30 @@ internal static class GameMcpWorldQuery
         if (developAvailable) develop["affordable"] = decision.DevelopmentCostAffordable;
         if (!developAvailable)
         {
+            // The queue-mode gates come first because they are about the batch, not the level.
+            // Everything after them asks ResearchSO.IsWithinDevelopRange's own gates in its own
+            // order — completion, cost, level requirements, then leeway falling back to both caps
+            // together. Leeway is one gate with the caps, not three: native develops on leeway OR
+            // on being below both caps, so an exhausted leeway beside an open cap blocks nothing.
+            var leewayBlocked = !research.StillHasLeeway &&
+                !(research.BelowArtificialMaxLevel && research.BelowMaxInvestmentLevel);
             var reasonCode = research.Complete
                 ? "already_maxed"
                 : decision.QueueMode && decision.MultiBuy <= 0
                     ? "multi_buy_unavailable"
                     : decision.QueueMode && queueRoom <= 0
                         ? "research_queue_full"
-                        : !research.MeetsLevelRequirements
-                            ? "requirements_unmet"
-                            : !research.StillHasLeeway
-                                ? "research_leeway_exhausted"
-                                : !research.BelowArtificialMaxLevel
-                                    ? "research_cap_reached"
-                                    : !research.BelowMaxInvestmentLevel
-                                        ? "research_investment_cap_reached"
-                                        : !decision.DevelopmentCostAffordable
-                                            ? "unaffordable"
-                                            : research.IsDeveloping && !decision.QueueMode
-                                                ? "already_developing"
-                                                : !research.WithinDevelopRange
-                                                    ? "develop_range_refused"
-                                                    : "native_develop_refused";
+                        : !decision.DevelopmentCostAffordable
+                            ? "unaffordable"
+                            : !research.MeetsLevelRequirements
+                                ? "requirements_unmet"
+                                : leewayBlocked
+                                    ? "research_leeway_exhausted"
+                                    : research.IsDeveloping && !decision.QueueMode
+                                        ? "already_developing"
+                                        : !research.WithinDevelopRange
+                                            ? "develop_range_refused"
+                                            : "native_develop_refused";
             develop["reasonCode"] = reasonCode;
 
             // The cost verdict is published exactly when the cost is what decides. A row refused

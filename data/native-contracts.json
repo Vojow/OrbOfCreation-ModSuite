@@ -21699,6 +21699,101 @@
       "place": "action"
     },
     {
+      "id": "research-action.is-complete-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsComplete",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.meets-requirements-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "MeetsLevelRequirements",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.still-has-leeway-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "StillHasLeeway",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.below-artificial-max-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsBelowArtificialMaxLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
+      "id": "research-action.below-investment-max-action",
+      "assembly": "assembly-csharp",
+      "type": "ResearchSO",
+      "typeVisibility": "public",
+      "kind": "method",
+      "member": "IsBelowMaxInvestmentLevel",
+      "visibility": "public",
+      "static": false,
+      "returnType": "System.Boolean",
+      "parameters": [],
+      "owners": [
+        "Automata research GameAction"
+      ],
+      "usages": [
+        "reflection"
+      ],
+      "place": "action"
+    },
+    {
       "id": "research-decision.tuple.type-capture",
       "assembly": "assembly-csharp",
       "type": "ResourceTuple",

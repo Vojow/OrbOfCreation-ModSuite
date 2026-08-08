@@ -16,4 +16,13 @@ internal static class ResearchActionResultCodes
     internal static ServiceActionResultCode PostCommitFault => new(5411);
     internal static ServiceActionResultCode VerificationFailed => new(5412);
     internal static ServiceActionResultCode AmountUnavailable => new(5413);
+
+    // One vocabulary for "why can this research not develop". These are the gates
+    // ResearchSO.IsWithinDevelopRange consults, in its order, so the action answers with the same
+    // cause the row already publishes instead of collapsing all of them into one amount refusal.
+    internal static ServiceActionResultCode AlreadyMaxed => new(5414);
+    internal static ServiceActionResultCode Unaffordable => new(5415);
+    internal static ServiceActionResultCode RequirementsUnmet => new(5416);
+    internal static ServiceActionResultCode LeewayExhausted => new(5417);
+    internal static ServiceActionResultCode AlreadyDeveloping => new(5418);
 }

@@ -24,6 +24,9 @@ internal sealed class ResearchNativeBindings
         "research-action.cancel-action", "research-action.submit-bonus-action",
         "research-action.has-max-level-action", "research-action.development-cost-at-level-action",
         "research-action.within-range-at-action", "research-action.cost-add-action",
+        "research-action.is-complete-action", "research-action.meets-requirements-action",
+        "research-action.still-has-leeway-action", "research-action.below-artificial-max-action",
+        "research-action.below-investment-max-action",
     };
 
     private ResearchNativeBindings(Type researchType,
@@ -36,8 +39,14 @@ internal sealed class ResearchNativeBindings
         Action<object> purchase, Action<object> pause, Action<object> resume,
         Action<object> cancel, Action<object> submitBonus, Func<object, bool> hasMaxLevel,
         Func<object, int, object?> developmentCostAtLevel,
-        Func<object, int, bool> withinRangeAt, Func<object, object, object?> addCost)
+        Func<object, int, bool> withinRangeAt, Func<object, object, object?> addCost,
+        Func<object, bool> complete, Func<object, bool> meetsLevelRequirements,
+        Func<object, bool> stillHasLeeway, Func<object, bool> belowArtificialMaxLevel,
+        Func<object, bool> belowMaxInvestmentLevel)
     {
+        Complete = complete; MeetsLevelRequirements = meetsLevelRequirements;
+        StillHasLeeway = stillHasLeeway; BelowArtificialMaxLevel = belowArtificialMaxLevel;
+        BelowMaxInvestmentLevel = belowMaxInvestmentLevel;
         ResearchType = researchType; Level = level;
         SelfBonusLevels = selfBonus; IsActive = active; IsDeveloping = developing;
         MaxLevel = maximum; CanDevelop = canDevelop;
@@ -72,6 +81,14 @@ internal sealed class ResearchNativeBindings
     internal Func<object, int, object?> DevelopmentCostAtLevel { get; }
     internal Func<object, int, bool> WithinDevelopRangeAt { get; }
     internal Func<object, object, object?> AddCost { get; }
+
+    // The four gates ResearchSO.IsWithinDevelopRange evaluates, bound individually so a refusal
+    // can name the one that closed rather than only that the aggregate said no.
+    internal Func<object, bool> Complete { get; }
+    internal Func<object, bool> MeetsLevelRequirements { get; }
+    internal Func<object, bool> StillHasLeeway { get; }
+    internal Func<object, bool> BelowArtificialMaxLevel { get; }
+    internal Func<object, bool> BelowMaxInvestmentLevel { get; }
 
     internal static bool TryCreate(out ResearchNativeBindings? bindings, out string reason,
         Func<string, Type?>? resolveType = null, Func<string, bool>? includeContract = null)
@@ -112,7 +129,12 @@ internal sealed class ResearchNativeBindings
                     includeContract, typeof(int))),
                 IntFunc<bool>(Method(22, research, "IsWithinDevelopRangeAt", typeof(bool),
                     includeContract, typeof(int))),
-                ObjectObjectFunc(Method(23, cost, "Add", cost, includeContract, cost)));
+                ObjectObjectFunc(Method(23, cost, "Add", cost, includeContract, cost)),
+                Func<bool>(Method(24, research, "IsComplete", typeof(bool), includeContract)),
+                Func<bool>(Method(25, research, "MeetsLevelRequirements", typeof(bool), includeContract)),
+                Func<bool>(Method(26, research, "StillHasLeeway", typeof(bool), includeContract)),
+                Func<bool>(Method(27, research, "IsBelowArtificialMaxLevel", typeof(bool), includeContract)),
+                Func<bool>(Method(28, research, "IsBelowMaxInvestmentLevel", typeof(bool), includeContract)));
             reason = string.Empty;
             return true;
         }

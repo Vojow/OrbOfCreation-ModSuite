@@ -1754,12 +1754,16 @@ public class ResearchSO : ILevelable
     public bool IsMaxLevel() => HasMaxLevel() && GetBaseLevel() >= maxLevel;
     public bool MeetsLevelRequirements() =>
         levelPrerequisites.Check(new Requirements.ConditionInfo(GetRequirementLevel()));
-    public bool StillHasLeeway() => true;
-    public bool IsBelowArtificialMaxLevel() => true;
+    public bool stillHasLeeway = true;
+    public bool belowArtificialMaxLevel = true;
+    public bool StillHasLeeway() => stillHasLeeway;
+    public bool IsBelowArtificialMaxLevel() => belowArtificialMaxLevel;
     public bool IsBelowMaxInvestmentLevel() => !IsComplete();
+
+    // The game develops on leeway OR on being below both caps, never on all three together.
     public bool IsWithinDevelopRange() =>
-        !IsComplete() && MeetsLevelRequirements() && StillHasLeeway() &&
-        IsBelowArtificialMaxLevel() && IsBelowMaxInvestmentLevel();
+        !IsComplete() && MeetsLevelRequirements() &&
+        (StillHasLeeway() || (IsBelowArtificialMaxLevel() && IsBelowMaxInvestmentLevel()));
     public bool CanDevelop() => IsWithinDevelopRange() && !IsDeveloping();
     public void PurchaseLevel()
     {

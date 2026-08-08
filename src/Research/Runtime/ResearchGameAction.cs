@@ -116,6 +116,36 @@ internal sealed class ResearchGameAction : IDisposable
         }
     }
 
+    /// <summary>
+    /// Which native gate closed, in the order <c>ResearchSO.IsWithinDevelopRange</c> asks:
+    /// completion, affordability, level requirements, then leeway falling back to the artificial
+    /// and investment caps. <c>CanDevelop</c> adds the in-flight development on top of that.
+    /// Returns <c>Proceeded</c> when every gate is open and the zero came from somewhere else.
+    /// </summary>
+    private static ResearchPreflight DevelopBlocker(
+        in ResearchAdmissionState state, out string reason)
+    {
+        reason = string.Empty;
+        if (state.Complete)
+        { reason = "This research is already maxed."; return ResearchPreflight.AlreadyMaxed; }
+        if (!state.CostAffordable)
+        { reason = "The next research level costs more than is held."; return ResearchPreflight.Unaffordable; }
+        if (!state.MeetsLevelRequirements)
+        { reason = "This research does not meet its level requirements yet."; return ResearchPreflight.RequirementsUnmet; }
+        // Leeway alone does not close the gate: native accepts leeway OR both caps being open, so
+        // this is one gate with one code, and the sentence names the cap that also ran out.
+        if (!state.StillHasLeeway &&
+            !(state.BelowArtificialMaxLevel && state.BelowMaxInvestmentLevel))
+        {
+            reason = "This research has no leeway left and is at its " +
+                (state.BelowArtificialMaxLevel ? "investment" : "level") + " cap.";
+            return ResearchPreflight.LeewayExhausted;
+        }
+        if (state.IsDeveloping && !state.QueueMode)
+        { reason = "A development is already running on this research."; return ResearchPreflight.AlreadyDeveloping; }
+        return ResearchPreflight.Proceeded;
+    }
+
     private static ResearchPreflight Preflight(ResearchActionKind kind,
         in ResearchAdmissionState state, out string reason)
     {
@@ -123,6 +153,15 @@ internal sealed class ResearchGameAction : IDisposable
         switch (kind)
         {
             case ResearchActionKind.Develop:
+                // Zero available levels is never an over-ask: no amount would have been admitted,
+                // and the caller needs the gate that closed, not the number it closed at. The row
+                // already publishes that gate, so the action reads it from the same native
+                // predicates rather than folding every cause into one amount refusal.
+                if (state.LevelsAvailable <= 0)
+                {
+                    var blocked = DevelopBlocker(in state, out reason);
+                    if (blocked != ResearchPreflight.Proceeded) return blocked;
+                }
                 if (state.MultiBuy > state.LevelsAvailable)
                 {
                     // The ceiling is what this one call admits, and the two modes cap it for
@@ -206,7 +245,10 @@ internal sealed class ResearchGameAction : IDisposable
             native.Level(target), native.QueuedLevels(target), native.SelfBonusLevels(target),
             native.IsActive(target), native.IsDeveloping(target), native.CanDevelop(target),
             native.CanApplyBonusLevel(target), native.FreeBonusLevels(target),
-            native.HasEnough(cost), native.MaxLevel(target), QueueableLevels(native, target, amount));
+            native.HasEnough(cost), native.MaxLevel(target), QueueableLevels(native, target, amount),
+            native.Complete(target), native.MeetsLevelRequirements(target),
+            native.StillHasLeeway(target), native.BelowArtificialMaxLevel(target),
+            native.BelowMaxInvestmentLevel(target));
     }
 
     private static int QueueableLevels(ResearchNativeBindings native, object target, int amount)

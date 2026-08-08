@@ -145,23 +145,23 @@ internal static class GameMcpEntityExplainer
                 result["available"] = Verdict(
                     research.Available,
                     research.Complete ? "research_complete" : "native_unavailable");
+                // ResearchSO.IsWithinDevelopRange's own gates, in its own order. Leeway and the two
+                // caps are one gate: native develops on leeway OR on being below both caps, so an
+                // exhausted leeway beside an open cap is not what refused.
                 var reason = research.Complete
                     ? "research_complete"
                     : research.IsDeveloping
                         ? "already_developing"
                         : !research.MeetsLevelRequirements
                             ? "level_requirements_unmet"
-                            : !research.StillHasLeeway
+                            : !research.StillHasLeeway &&
+                              !(research.BelowArtificialMaxLevel && research.BelowMaxInvestmentLevel)
                                 ? "research_leeway_exhausted"
-                                : !research.BelowArtificialMaxLevel
-                                    ? "artificial_research_cap_reached"
-                                    : !research.BelowMaxInvestmentLevel
-                                        ? "research_investment_cap_reached"
-                                        : !research.WithinDevelopRange
-                                            ? "native_development_range_refused"
-                                            : research.CanDevelop
-                                                ? "can_develop"
-                                                : "native_can_develop_refused";
+                                : !research.WithinDevelopRange
+                                    ? "native_development_range_refused"
+                                    : research.CanDevelop
+                                        ? "can_develop"
+                                        : "native_can_develop_refused";
                 result["canDevelop"] = Verdict(
                     research.CanDevelop,
                     reason);
@@ -722,8 +722,11 @@ internal static class GameMcpEntityExplainer
             var slack = research.Modifiers.LeewayPoints.ToInt();
             var committed = research.BaseLevel + research.QueuedLevels +
                 (research.IsDeveloping ? 1 : 0);
+            // Leeway blocks only together with the caps: native develops on leeway OR on being
+            // below both caps, so an exhausted leeway beside an open cap is not a blocker.
             var leeway = Blocker(
-                !research.StillHasLeeway,
+                !research.StillHasLeeway &&
+                !(research.BelowArtificialMaxLevel && research.BelowMaxInvestmentLevel),
                 research.StillHasLeeway
                     ? "native_leeway_available"
                     : "native_leeway_exhausted");

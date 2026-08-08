@@ -97,7 +97,7 @@ public sealed class ResearchGameActionTests : IDisposable
     }
 
     [Fact]
-    public void Zero_available_levels_refuse_the_requested_amount_before_the_mutation_permit()
+    public void Zero_available_levels_name_the_native_gate_that_closed()
     {
         var target = Research();
         target.researchCost.affordable = false;
@@ -107,10 +107,46 @@ public sealed class ResearchGameActionTests : IDisposable
 
         var result = Submit(boundary, target, ResearchActionKind.Develop);
 
-        Assert.Equal(ResearchPreflight.AmountUnavailable, result.Preflight);
-        Assert.Contains("at most 0 levels", result.Reason, StringComparison.Ordinal);
+        // No amount would have been admitted, so the answer is the cause, not the ceiling.
+        Assert.Equal(ResearchPreflight.Unaffordable, result.Preflight);
+        Assert.DoesNotContain("at most", result.Reason, StringComparison.Ordinal);
         Assert.Equal(0, permits);
         Assert.False(target.isDeveloping);
+    }
+
+    [Fact]
+    public void Exhausted_leeway_refuses_only_once_a_cap_is_also_reached()
+    {
+        var target = Research();
+        target.stillHasLeeway = false;
+        Register(target);
+        using var boundary = Boundary();
+
+        // Leeway alone is not the gate: the game develops on leeway OR on both caps being open.
+        var openCaps = Submit(boundary, target, ResearchActionKind.Develop);
+
+        target.isDeveloping = false;
+        target.isActive = false;
+        target.belowArtificialMaxLevel = false;
+        var closedCap = Submit(boundary, target, ResearchActionKind.Develop);
+
+        Assert.True(openCaps.Verified, openCaps.Reason);
+        Assert.Equal(ResearchPreflight.LeewayExhausted, closedCap.Preflight);
+        Assert.Contains("leeway", closedCap.Reason, StringComparison.Ordinal);
+        Assert.Contains("level cap", closedCap.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_running_development_is_named_as_the_reason_a_second_develop_is_refused()
+    {
+        var target = Research();
+        Register(target);
+        using var boundary = Boundary();
+
+        Assert.True(Submit(boundary, target, ResearchActionKind.Develop).Verified);
+        var second = Submit(boundary, target, ResearchActionKind.Develop);
+
+        Assert.Equal(ResearchPreflight.AlreadyDeveloping, second.Preflight);
     }
 
     [Fact]
