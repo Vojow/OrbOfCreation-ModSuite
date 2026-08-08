@@ -124,6 +124,48 @@ public sealed class RitualLifecycleContractTests
             contract => contract.Id == id));
     }
 
+    /// <summary>
+    /// The published starting-level floor is a suite constant, and this is what binds it to the
+    /// control it quotes.
+    /// </summary>
+    /// <remarks>
+    /// <c>RitualSO.ChangeStartingLevel</c> accepts 0; only the screen's value selector stops at 1,
+    /// so the floor cannot be read from the setter behind it. That selector clamps in
+    /// <c>UIValueSelectButton.SetClamp(min, max)</c>, which stores <c>minValue</c>, and
+    /// <c>Decrement()</c> is <c>Math.Max(value - GetChange(), minValue)</c> — the floor is that
+    /// stored minimum and nothing else. A game update that renamed the call, changed its arity, or
+    /// stopped the decrement consulting <c>minValue</c> would leave the wire advertising a bound no
+    /// control enforces; this is the assertion that fails first instead.
+    /// </remarks>
+    [GameAssemblyFact]
+    public void TheStartingLevelFloorIsTheValueSelectorsOwnStoredMinimum()
+    {
+        using var assembly = new GameAssemblyMetadata(GameAssemblyPaths.Require().AssemblyCSharp);
+
+        Assert.Contains(
+            assembly.GetMethods("UIValueSelectButton"),
+            method => method.Name == "SetClamp" &&
+                method.Visibility == "public" &&
+                !method.IsStatic &&
+                method.ReturnType == "UIValueSelectButton" &&
+                method.ParameterTypes.SequenceEqual(
+                    new[] { "System.Int32", "System.Int32" }));
+        Assert.Equal("System.Int32", assembly.GetFieldType("UIValueSelectButton", "minValue"));
+        Assert.Contains(
+            References(assembly, "UIValueSelectButton", "SetClamp", "System.Int32", "System.Int32"),
+            reference => reference.DeclaringType == "UIValueSelectButton" &&
+                         reference.MemberName == "minValue");
+        Assert.Contains(References(assembly, "UIValueSelectButton", "Decrement"),
+            reference => reference.DeclaringType == "UIValueSelectButton" &&
+                         reference.MemberName == "minValue");
+
+        Assert.Contains(References(assembly, "UIRitual", "RenderContent"),
+            reference => reference.DeclaringType == "UIValueSelectButton" &&
+                         reference.MemberName == "SetClamp");
+        Assert.True(assembly.MethodReferencesMethod(
+            "UIRitual", "RenderContent", "RitualSO", "GetMaxSelectedLevel"));
+    }
+
     private static MethodBodyDefinitionReference[] References(
         GameAssemblyMetadata assembly,
         string type,

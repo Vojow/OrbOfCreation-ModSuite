@@ -974,6 +974,16 @@ carries `minimumSlot` and `maximumSlot` read from the live list the sentence was
 `maximumAmount` is the live per-call admission ceiling described above. A caller can act on these:
 they are what the game will accept this instant.
 
+Two floors are the exception and are named here rather than left to look like the rest. The ritual
+`setLevel.minimum` and the two `casting` dial minimums are both the constant `1`, held by the suite
+and matching the control the player presses rather than read from it each time. Both controls are a
+`UIValueSelectButton`, whose floor is the `minValue` its `SetClamp(min, max)` stores and whose
+decrement is `Math.Max(value - change, minValue)`; the ritual screen passes the literal `1`, which
+the contract gate pins, and the casting dials take theirs from a prefab-serialized clamp that no
+audit can read without an asset dump. So the shape of the bound is audited and the ritual value is
+quoted, while the dial value rests on every value selector in the game flooring at 1. Anything else
+the suite publishes as a bound is read live.
+
 A **schema bound** is the range the JSON input schema declares, and it is the suite's own policy on
 what is worth sending in one call — not a native fact. `game_purchase` and `game_level` cap `amount`
 at 1,000, `game_concept` at 1,000,000, and `game_agromancy` at 10,000; the paging tools cap `limit`
@@ -985,7 +995,8 @@ running budget, and none of them appears in any response. A value inside the sch
 therefore not admitted yet: the action boundary re-reads the native bound and refuses with
 `amount_unavailable` and the live `maximumAmount` when the two disagree.
 
-The two kinds never mix in one number. A published bound is native or it does not ship: an
+The two kinds never mix in one number. A published bound quotes the control or it does not ship, and
+a schema ceiling is never folded into one: an
 agromancy `maximumAdditional` is the game's remaining-instance count alone, never that count
 clamped by the tool's per-call ceiling, because a blend of the two is a third number that answers
 neither question. The consequence is that a published native bound is not always a sendable amount:
